@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+label {
+  @apply text-lg font-semibold text-gray-300 block;
+}
+
+input,
+select,
+textarea {
+  @apply appearance-none block px-3 shadow focus:outline-none 
+    rounded-lg border-2 border-gray-800 
+     focus:border-thiR my-2 p-2;
+}
+
+.btn {
+  @apply bg-thiR p-2 rounded-lg;
+}
+
+th,
+td {
+  @apply border p-2;
+}
+
+.activeLink {
+  @apply dark:bg-sec-dark mx-2 text-gray-100 rounded-lg py-1  px-4 flex gap-3 
+  items-center hover:bg-thiR dark:text-pri;
+}
+
+.inactiveLink {
+  @apply text-gray-300 mx-2 rounded-lg py-1  px-4 flex gap-3 items-center hover:bg-thiR;
+}
