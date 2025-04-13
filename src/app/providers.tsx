@@ -9,7 +9,6 @@ import { Provider as ReduxProvider } from "react-redux";
 import { UserProvider } from "./context/UserContext";
 import { CartProvider } from "./context/CartContext";
 import { store } from "./store/store";
-import { PersistGate } from "redux-persist/integration/react";
 
 interface ProviderProps {
   children: ReactNode;

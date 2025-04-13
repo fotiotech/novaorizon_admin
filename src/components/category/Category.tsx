@@ -1,13 +1,15 @@
 import { getCategory } from "@/app/actions/category";
-import { updateCategoryId } from "@/app/store/slices/productSlice";
 import { Category as Cat } from "@/constant/types";
 import React, { useEffect, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
+import { addCategory } from "@/app/store/slices/categorySlice";
 
 const Category = () => {
   const dispatch = useAppDispatch();
   const [category, setCategory] = useState<Cat[]>([]);
-  const { category_id } = useAppSelector((state) => state.product);
+  const products = useAppSelector((state) => state.product);
+  const id = products.allIds[0];
+  const category_id = products.byId[id]?.category_id;
   const [parentId, setParentId] = useState<string>(category_id);
 
   useEffect(() => {
@@ -40,9 +42,8 @@ const Category = () => {
   // Handle category selection
   const handleSelect = (catId: string) => {
     setParentId(catId); // Update local state with the selected category ID
-    dispatch(updateCategoryId(catId)); // Update Redux store with selected category ID
+    dispatch(addCategory({categoryId: catId})); // Dispatch action to update Redux store
   };
-
 
   return (
     <div className="p-2 mt-4">
@@ -78,9 +79,7 @@ const Category = () => {
       </ul>
 
       {/* Next button */}
-      <div className="text-end mt-4">
-        
-      </div>
+      <div className="text-end mt-4"></div>
     </div>
   );
 };

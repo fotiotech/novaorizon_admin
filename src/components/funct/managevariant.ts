@@ -1,6 +1,6 @@
 import { useAppSelector } from "@/app/hooks";
 import { useMemo } from "react";
-const { variantAttributes } = useAppSelector((state) => state.product);
+const { variantAttributes } = useAppSelector((state) => state.product.byId);
 
 const memoizedVariantAttributes = useMemo(
   () => variantAttributes,

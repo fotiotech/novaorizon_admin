@@ -8,7 +8,7 @@ import {
   createCategory,
 } from "@/app/actions/category";
 import { Category as Cat } from "@/constant/types";
-import { useFileUploader } from "@/hooks/useFileUploader ";
+import { useFileUploader } from "@/hooks/useFileUploader";
 import Spinner from "@/components/Spinner";
 
 const Categories = () => {
@@ -140,7 +140,6 @@ const Categories = () => {
           </div>
         </div>
         <div>
-          
           <FilesUploader files={files} addFiles={addFiles} />
         </div>
 

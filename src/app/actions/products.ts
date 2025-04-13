@@ -9,7 +9,6 @@ import { revalidatePath } from "next/cache";
 import slugify from "slugify";
 import { Variant } from "@/models/Variant";
 import { VariantAttribute } from "@/models/VariantAttributes";
-import { ProductState } from "../store/slices/productSlice";
 
 // Generate a slug from the product name and department
 function generateSlug(name: string, department: string | null) {
@@ -229,7 +228,7 @@ export async function findVariantDetails(
   }
 }
 
-export async function createProduct(formData: ProductState) {
+export async function createProduct(formData: any) {
   const {
     category_id,
     attributes,
@@ -322,7 +321,7 @@ export async function createProduct(formData: ProductState) {
   console.log(variants);
 
   const variantsSaved = await Promise.all(
-    variants.map(async (variant) => {
+    variants.map(async (variant: any) => {
       const newVariant = new Variant({
         product_id: savedProduct?._id.toString(), // Map relevant IDs
         url_slug: generateDsin(),
@@ -354,7 +353,7 @@ export async function createProduct(formData: ProductState) {
   return { product: savedProduct, variantAttributesSaved, variantsSaved };
 }
 
-export async function updateProduct(id: string, formData: ProductState) {
+export async function updateProduct(id: string, formData: any) {
   try {
     if (!id || !formData) throw new Error("Invalid product ID or formData");
 
@@ -451,7 +450,7 @@ export async function updateProduct(id: string, formData: ProductState) {
     // Update or create variants if provided
     if (variants?.length > 0) {
       await Promise.all(
-        variants.map(async (variant) => {
+        variants.map(async (variant: any) => {
           await Variant.findByIdAndUpdate(
             { product_id: id?.toString() },
             {

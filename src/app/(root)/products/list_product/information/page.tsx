@@ -2,38 +2,42 @@
 
 import React, { useState } from "react";
 import Select from "react-select";
-import { ProductState, updateProduct } from "@/app/store/slices/productSlice"; // Assuming correct path to redux actions
 import { RootState } from "@/app/store/store";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import Link from "next/link";
+import { addProduct } from "@/app/store/slices/productSlice";
 
 const Information: React.FC = () => {
   const dispatch = useAppDispatch();
 
-  // Select the current product state from the Redux store
-  const { sku, productCode } = useAppSelector(
-    (state: RootState) => state.product
-  );
+  // Access normalized product state
+  const productState = useAppSelector((state: RootState) => state.product);
+  const productId = productState.allIds[0]; // Assuming the first product is being edited
+  const product = productState.byId[productId] || {}; // Get the product by ID or fallback to an empty object
+
+    console.log("product:", product);
+  
 
   // Local component state for product code type and value
   const [codeType, setCodeType] = useState("sku");
-  const [codeValue, setCodeValue] = useState<string>(sku || "");
+  const [codeValue, setCodeValue] = useState<string>(product[codeType] || "");
 
   // Handle product code type change with react-select
   const handleCodeTypeChange = (selectedOption: any) => {
     const newCodeType = selectedOption.value;
     setCodeType(newCodeType);
     // Reset the code value when the type changes
-    setCodeValue("");
+    setCodeValue(product[newCodeType] || "");
   };
 
   // Handle product code value change
   const handleCodeValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCodeValue(e.target.value);
+    const value = e.target.value;
+    setCodeValue(value);
     dispatch(
-      updateProduct({
-        field: codeType as keyof ProductState,
-        value: e.target.value,
+      addProduct({
+        ...product,
+        [codeType]: value,
       })
     );
   };
@@ -106,7 +110,7 @@ const Information: React.FC = () => {
           Back
         </Link>
         <Link
-          href={codeValue ? "/products/list_product/offer" : ""}
+          href={codeValue ? "/products/list_product/offer" : "/products/list_product/offer"}
           className="bg-blue-500 text-white p-2 rounded"
         >
           Next

@@ -4,8 +4,8 @@ import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import React, { useEffect, useState } from "react";
 import { Product } from "@/constant/types";
 import Link from "next/link";
+import { RootState } from "@/app/store/store";
 // import { persistor } from "@/app/store/store";
-import { clearProduct, ProductState } from "@/app/store/slices/productSlice";
 
 const AddProduct = () => {
   const {
@@ -28,9 +28,8 @@ const AddProduct = () => {
     status,
     variants,
     variantAttributes,
-  } = useAppSelector((state) => state.product);
+  } = useAppSelector((state) => state.product.byId);
 
-  const dispatch = useAppDispatch();
   const validateForm = () => {
     return (
       category_id &&
@@ -67,7 +66,7 @@ const AddProduct = () => {
           stockQuantity,
           status,
           variantAttributes,
-        } as unknown as ProductState);
+        } as unknown as any);
         if (res) {
           alert("Product updated successfully!");
 
@@ -95,7 +94,7 @@ const AddProduct = () => {
           stockQuantity,
           status,
           variantAttributes,
-        } as unknown as ProductState);
+        } as unknown as any);
         if (res) {
           alert("Product submitted successfully!");
 
@@ -117,7 +116,7 @@ const AddProduct = () => {
     <div>
       <div className="flex justify-between items-center space-x-4 mt-6">
         <Link
-          href={finalPrice ? "/products/list_product/information" : ""}
+          href={"/products/list_product/variant"}
           className="bg-blue-500 text-white p-2 rounded"
         >
           Back

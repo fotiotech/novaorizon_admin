@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from "react";
 import { AttachFile } from "@mui/icons-material";
 import { useDropzone } from "react-dropzone";
 import Image from "next/image";
-import { useFileUploader } from "@/hooks/useFileUploader ";
+import { useFileUploader } from "@/hooks/useFileUploader";
 import Spinner from "./Spinner";
 
 type FilesUploaderProps = {

@@ -3,7 +3,7 @@
 import { createHeroContent } from "@/app/actions/content_management";
 import FilesUploader from "@/components/FilesUploader";
 import Spinner from "@/components/Spinner";
-import { useFileUploader } from "@/hooks/useFileUploader ";
+import { useFileUploader } from "@/hooks/useFileUploader";
 import React, { useState } from "react";
 
 const AddHeroContent = () => {
@@ -19,7 +19,6 @@ const AddHeroContent = () => {
         <h2>Add Hero Content</h2>
       </div>
       <div>
-        
         <FilesUploader files={files} addFiles={addFiles} />
       </div>
       <form action={toCreateHeroContent}>

@@ -7,7 +7,7 @@ import {
 import FilesUploader from "@/components/FilesUploader";
 import Spinner from "@/components/Spinner";
 import { HeroSection } from "@/constant/types";
-import { useFileUploader } from "@/hooks/useFileUploader ";
+import { useFileUploader } from "@/hooks/useFileUploader";
 import { useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 
@@ -56,7 +56,7 @@ const EditHeroContent = () => {
         <h2>Add Hero Content</h2>
       </div>
       <div>
-      <FilesUploader files={files} addFiles={addFiles} />
+        <FilesUploader files={files} addFiles={addFiles} />
       </div>
       <form action={toUpdateHeroContent}>
         <div>

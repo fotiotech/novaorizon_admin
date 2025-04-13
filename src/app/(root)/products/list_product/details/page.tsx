@@ -21,16 +21,21 @@ type AttributeType = {
 
 const Details = () => {
   const dispatch = useAppDispatch();
-  const { category_id, getVariant } = useAppSelector(
-    (state: RootState) => state.product
-  );
+
+  // Access normalized product state
+  const productState = useAppSelector((state: RootState) => state.product);
+  const productId = productState.allIds[0]; // Assuming the first product is being edited
+  const product = productState.byId[productId] || {}; // Get the product by ID or fallback to an empty object
+  console.log("product:", product);
+
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
-  const [isVariant, setIsVariant] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchAttributes = async () => {
-      if (category_id !== "") {
-        const response = await findCategoryAttributesAndValues(category_id);
+      if (product.category_id) {
+        const response = await findCategoryAttributesAndValues(
+          product.category_id
+        );
         if (response?.length > 0) {
           const formattedAttributes = response[0].groupedAttributes
             ?.filter((group: any) => group.groupName === "General")
@@ -49,7 +54,7 @@ const Details = () => {
     };
 
     fetchAttributes();
-  }, [category_id]);
+  }, [product.category_id]);
 
   const handleAttributeChange = (
     groupName: string,
@@ -58,13 +63,13 @@ const Details = () => {
   ) => {
     dispatch(
       updateAttributes({
+        productId,
         groupName,
         attrName,
         selectedValues: selectedValues || [],
       })
     );
   };
-
 
   const customStyles = {
     control: (provided: any) => ({
@@ -83,15 +88,16 @@ const Details = () => {
     }),
   };
 
-
   return (
-    <div className="p-6  rounded-lg shadow-md">
+    <div className="p-6 rounded-lg shadow-md">
       <label className="inline-flex items-center">
         <input
           type="checkbox"
           className="form-checkbox"
-          checked={getVariant}
-          onChange={(e) => dispatch(updateGetVariant(e.target.checked))}
+          checked={product.getVariant || false}
+          onChange={(e) =>
+            dispatch(updateGetVariant({ productId, value: e.target.checked }))
+          }
         />
         <span className="ml-2">Is it get Variant?</span>
       </label>
@@ -131,7 +137,10 @@ const Details = () => {
             </div>
           ))}
 
-          <div className="flex justify-between items-center mt-6">
+          
+        </>
+      )}
+      <div className="flex justify-between items-center mt-6">
             {/* Back Button */}
             <Link
               href={"/products/list_product/offer"}
@@ -140,18 +149,12 @@ const Details = () => {
               Back
             </Link>
             <Link
-              href={
-                getVariant
-                  ? "/products/list_product/variants"
-                  : "/products/list_product/inventory"
-              }
+              href={"/products/list_product/variants"}
               className="bg-blue-500 text-white p-2 rounded"
             >
               Next
             </Link>
           </div>
-        </>
-      )}
     </div>
   );
 };

@@ -1,38 +1,47 @@
 "use client";
 
-import {
-  setProductPrice,
-  updateDiscount,
-} from "@/app/store/slices/productSlice"; // Assuming correct path to redux actions
 import React, { useState, useEffect } from "react";
 import { RootState } from "@/app/store/store";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import Link from "next/link";
+import { addProduct } from "@/app/store/slices/productSlice";
 
 const Offer: React.FC = () => {
   const dispatch = useAppDispatch();
 
-  // Select the current product state from the Redux store
-  const { basePrice, taxRate, stockQuantity, discount, currency } =
-    useAppSelector((state: RootState) => state.product);
+  // Access normalized product state
+  const productState = useAppSelector((state: RootState) => state.product);
+  const productId = productState.allIds[0]; // Assuming the first product is being edited
+  const product = productState.byId[productId] || {}; // Get the product by ID or fallback to an empty object
 
   // Local component state for inputs
-  const [price, setPrice] = useState<number>(basePrice || 0);
-  const [tax, setTax] = useState<number>(taxRate || 0);
-  const [quantity, setQuantity] = useState<number>(stockQuantity || 0);
-  const [discountValue, setDiscountValue] = useState<number>(discount || 0);
-  const [finalPrice, setFinalPrice] = useState<number>(basePrice || 0); // Local state for finalPrice
+  const [price, setPrice] = useState<number>(product.basePrice || 0);
+  const [tax, setTax] = useState<number>(product.taxRate || 0);
+  const [quantity, setQuantity] = useState<number>(product.stockQuantity || 0);
+  const [discountValue, setDiscountValue] = useState<number>(
+    product.discount || 0
+  );
+  const [finalPrice, setFinalPrice] = useState<number>(product.basePrice || 0); // Local state for finalPrice
 
   // Calculate final price based on price, tax, and discount
   useEffect(() => {
     const calculatedFinalPrice =
       price + (price * tax) / 100 - (price * discountValue) / 100;
     setFinalPrice(calculatedFinalPrice);
+  }, [price, tax, discountValue]);
 
-    // Dispatch updates to Redux store for price and discount
-    dispatch(setProductPrice({ basePrice: price, taxRate: tax }));
-    dispatch(updateDiscount(discountValue));
-  }, [price, tax, discountValue, dispatch]); // Recalculate final price when these change
+  // Dispatch updates to Redux store for price, tax, and discount
+  useEffect(() => {
+    dispatch(
+      addProduct({
+        ...product,
+        basePrice: price,
+        taxRate: tax,
+        discount: discountValue,
+        stockQuantity: quantity,
+      })
+    );
+  }, [price, tax, discountValue, quantity, dispatch]);
 
   // Handle changes to price
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,7 +131,7 @@ const Offer: React.FC = () => {
       <div className="mb-4">
         <label className="block text-sm font-medium">Final Price</label>
         <p className="mt-1 block w-full text-gray-900 font-semibold bg-gray-100 rounded-md p-2">
-          {finalPrice.toFixed(2)} {currency}
+          {finalPrice.toFixed(2)} {product.currency || "USD"}
         </p>
       </div>
 

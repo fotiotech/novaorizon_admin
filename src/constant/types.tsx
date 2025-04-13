@@ -1,5 +1,4 @@
 import { CartItem } from "@/app/reducer/cartReducer";
-import { VariantState } from "@/app/store/slices/productSlice";
 
 export type Users = {
   _id?: string;
@@ -84,7 +83,7 @@ export type Product = {
     groupName: string; // Name of the attribute group
     attributes: Record<string, string[]>; // Map of attribute names to string arrays
   }[];
-  variants: VariantState[];
+  variants: any[];
   variantAttributes: VariantAttribute[];
   offerId?: string; // Optional ID of an associated offer
   status?: "active" | "inactive"; // Status of the product
