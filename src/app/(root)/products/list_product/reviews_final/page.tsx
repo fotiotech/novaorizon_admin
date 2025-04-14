@@ -8,8 +8,12 @@ import { RootState } from "@/app/store/store";
 // import { persistor } from "@/app/store/store";
 
 const AddProduct = () => {
+  const productState = useAppSelector((state: RootState) => state.product);
+  const id = productState?.allIds[0]; // Assuming the first product is being edited
+  const product = productState?.byId[id] || {};
+  console.log("product data:", product);
   const {
-    productId,
+    _id,
     sku,
     product_name,
     brand_id,
@@ -28,7 +32,7 @@ const AddProduct = () => {
     status,
     variants,
     variantAttributes,
-  } = useAppSelector((state) => state.product.byId);
+  } = product;
 
   const validateForm = () => {
     return (
@@ -46,8 +50,8 @@ const AddProduct = () => {
   const handleSubmit = async () => {
     // if (validateForm()) {
     try {
-      if (productId) {
-        const res = await updateProduct(productId, {
+      if (_id) {
+        const res = await updateProduct( _id, {
           category_id,
           attributes,
           variants,
@@ -116,7 +120,7 @@ const AddProduct = () => {
     <div>
       <div className="flex justify-between items-center space-x-4 mt-6">
         <Link
-          href={"/products/list_product/variant"}
+          href={"/products/list_product/variants"}
           className="bg-blue-500 text-white p-2 rounded"
         >
           Back

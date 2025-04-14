@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import FilesUploader from "@/components/FilesUploader";
 import { useFileUploader } from "@/hooks/useFileUploader";
+import { RootState } from "@/app/store/store";
 
 type AttributeType = {
   groupName: string;
@@ -30,9 +31,9 @@ const Variant = () => {
   const dispatch = useAppDispatch();
 
   // Access normalized product state
-  const productState = useAppSelector((state) => state.product);
-  const productId = productState.allIds[0]; // Assuming the first product is being edited
-  const product = productState.byId[productId] || {}; // Get the product by ID or fallback to an empty object
+  const productState = useAppSelector((state: RootState) => state.product);
+  const productId = productState?.allIds[0]; // Assuming the first product is being edited
+  const product = productState?.byId[productId] || {}; // Get the product by ID or fallback to an empty object
   const { category_id, variants, variantAttributes } = product;
 
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
@@ -107,6 +108,25 @@ const Variant = () => {
       })
     );
 
+    // Generate new variants based on updated attributes
+    const updatedVariants = generateVariations({
+      ...variantAttributes,
+      [groupName]: {
+        ...variantAttributes[groupName],
+        [attrName]: selectedValues || [],
+      },
+    });
+
+    // Dispatch each variant to Redux using addVariant
+    updatedVariants.forEach((variant) => {
+      dispatch(
+        addVariant({
+          productId,
+          variant,
+        })
+      );
+    });
+
     // Optionally synchronize with parent
     dispatch(syncVariantWithParent({ productId }));
   };
@@ -121,40 +141,47 @@ const Variant = () => {
       return []; // Return an empty array if input is empty or undefined
     }
 
-    // Step 1: Flatten the attributes from all groups
-    const flattenedAttributes = Object.values(variantAttributesData).reduce(
-      (acc, groupAttributes) => {
-        Object.entries(groupAttributes).forEach(([attrName, attrValues]) => {
-          acc[attrName] = attrValues; // Combine attributes from all groups
-        });
-        return acc;
-      },
-      {} as { [attrName: string]: string[] }
+    // Step 1: Flatten the attributes into an array of attribute groups
+    const attributeGroups = Object.entries(variantAttributesData).flatMap(
+      ([groupName, attributes]) =>
+        Object.entries(attributes).map(([attrName, attrValues]) => ({
+          groupName,
+          attrName,
+          attrValues,
+        }))
     );
 
-    // Step 2: Generate separate objects for each attribute and value
-    const result = Object.entries(flattenedAttributes).flatMap(
-      ([attrName, attrValues]) => {
-        if (attrName && Array.isArray(attrValues)) {
-          return attrValues.map((value) => ({
-            [attrName]: value,
-            variantName: "",
-            sku: "",
-            basePrice: 0,
-            finalPrice: 0,
-            taxRate: 0,
-            discount: 0,
-            currency: "",
-            stockQuantity: 0,
-            imageUrls: [],
-            status: "active",
-          }));
-        }
-        return [];
-      }
-    );
+    // Step 2: Generate Cartesian product of attribute values
+    const cartesianProduct = (arrays: string[][]): string[][] =>
+      arrays.reduce(
+        (acc, curr) => acc.flatMap((a) => curr.map((b) => [...a, b])),
+        [[]] as string[][]
+      );
 
-    return result;
+    const attributeValues = attributeGroups.map((group) => group.attrValues);
+    const combinations = cartesianProduct(attributeValues);
+
+    // Step 3: Map combinations to variant objects
+    return combinations.map((combination) => {
+      const variant: Record<string, string> = {};
+      combination.forEach((value, index) => {
+        const { attrName } = attributeGroups[index];
+        variant[attrName] = value;
+      });
+      return {
+        ...variant,
+        variantName: "",
+        sku: "",
+        basePrice: 0,
+        finalPrice: 0,
+        taxRate: 0,
+        discount: 0,
+        currency: "",
+        stockQuantity: 0,
+        imageUrls: [],
+        status: "active",
+      };
+    });
   }
 
   const handleRemoveVariant = (index: number) => {
@@ -164,20 +191,23 @@ const Variant = () => {
   const handleVariantChange = (
     index: number,
     field: string,
-    value: string | React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-    subField?: string
+    value: string | React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const finalValue =
       typeof value === "string"
         ? value
         : (value.target as HTMLInputElement).value;
 
+    if (!productId) {
+      console.error("Product ID is undefined. Cannot update variant field.");
+      return;
+    }
+
     dispatch(
       updateVariantField({
         productId,
         index,
         field,
-        ...(subField ? { subField } : {}),
         value: finalValue,
       })
     );
@@ -214,6 +244,11 @@ const Variant = () => {
     { value: "ean", label: "EAN" },
     { value: "gtin", label: "GTIN" },
   ];
+
+  console.log("variants:", variants);
+  console.log("AttributesVariants:", AttributesVariants);
+  console.log("attributes:", attributes);
+  console.log("variantAttributes:", variantAttributes);
 
   return (
     <div className="p-3 rounded-lg shadow-md">
@@ -267,6 +302,7 @@ const Variant = () => {
 
         {variants?.map((variant: any, index: number) => (
           <div key={index} className="mt-10">
+            {/* File Uploader for Images */}
             <FilesUploader
               files={variant.imageUrls || []}
               addFiles={(newFiles) => {
@@ -274,6 +310,8 @@ const Variant = () => {
                 addFiles(newFiles);
               }}
             />
+
+            {/* SKU Field */}
             <div className="mt-4">
               <label className="block text-sm font-medium">SKU</label>
               <input
@@ -284,6 +322,61 @@ const Variant = () => {
                 placeholder="Enter SKU"
               />
             </div>
+
+            {/* Base Price Field */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium">Base Price</label>
+              <input
+                type="number"
+                value={variant.basePrice || 0}
+                onChange={(e) => handleVariantChange(index, "basePrice", e)}
+                className="mt-1 block w-full border-gray-300 bg-transparent rounded-md shadow-sm"
+                placeholder="Enter Base Price"
+              />
+            </div>
+
+            {/* Final Price Field */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium">Final Price</label>
+              <input
+                type="number"
+                value={variant.finalPrice || 0}
+                onChange={(e) => handleVariantChange(index, "finalPrice", e)}
+                className="mt-1 block w-full border-gray-300 bg-transparent rounded-md shadow-sm"
+                placeholder="Enter Final Price"
+              />
+            </div>
+
+            {/* Stock Quantity Field */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium">
+                Stock Quantity
+              </label>
+              <input
+                type="number"
+                value={variant.stockQuantity || 0}
+                onChange={(e) => handleVariantChange(index, "stockQuantity", e)}
+                className="mt-1 block w-full border-gray-300 bg-transparent rounded-md shadow-sm"
+                placeholder="Enter Stock Quantity"
+              />
+            </div>
+
+            {/* Status Field */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium">Status</label>
+              <select
+                name="status"
+                title='status'
+                value={variant.status || "active"}
+                onChange={(e) =>
+                  handleVariantChange(index, "status", e.target.value)
+                }
+                className="mt-1 block w-full border-gray-300 bg-transparent rounded-md shadow-sm"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
           </div>
         ))}
       </div>
@@ -291,13 +384,13 @@ const Variant = () => {
       {/* Navigation Buttons */}
       <div className="flex justify-between items-center mt-6">
         <Link
-          href={variants ? "/products/list_product/details" : ""}
+          href={"/products/list_product/details"}
           className="bg-blue-500 text-white p-2 rounded"
         >
           Back
         </Link>
         <Link
-          href={variants ? "/products/list_product/inventory" : ""}
+          href={"/products/list_product/inventory"}
           className="bg-blue-500 text-white p-2 rounded"
         >
           Next

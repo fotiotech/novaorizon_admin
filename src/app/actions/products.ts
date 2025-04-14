@@ -289,6 +289,8 @@ export async function createProduct(formData: any) {
     // productCode,
     stockQuantity,
     attributes: cleanedAttributes.length > 0 ? cleanedAttributes : null,
+    variantAttributes,
+    variants,
     imageUrls: imageUrls || [],
     status,
     created_at: new Date().toISOString(),
@@ -299,58 +301,7 @@ export async function createProduct(formData: any) {
 
   if (!savedProduct) throw new Error("Failed to save the product.");
 
-  const flattenedAttributes = Object.entries(variantAttributes?.general!).map(
-    ([name, values]) => ({
-      name,
-      values,
-    })
-  );
-
-  const variantAttributesSaved = await Promise.all(
-    flattenedAttributes.map(async (attribute) => {
-      const variantAttribute = new VariantAttribute({
-        product_id: savedProduct?._id.toString(),
-        name: attribute.name,
-        values: attribute.values,
-      });
-
-      return await variantAttribute.save();
-    })
-  );
-
-  console.log(variants);
-
-  const variantsSaved = await Promise.all(
-    variants.map(async (variant: any) => {
-      const newVariant = new Variant({
-        product_id: savedProduct?._id.toString(), // Map relevant IDs
-        url_slug: generateDsin(),
-        dsin: generateDsin(),
-        sku: generateDsin(),
-        productName: variant?.productName,
-        variantName: variant?.variantName,
-        brand_id: variant?.brand_id ? variant?.brand_id.toString() : null,
-        category_id: variant?.category_id?.toString(),
-        department: variant.department,
-        description: variant.description || "",
-        basePrice: variant.basePrice,
-        finalPrice: variant.finalPrice,
-        taxRate: variant.taxRate || 0,
-        discount: variant.discount || null,
-        currency: variant.currency || "CFA",
-        stockQuantity: variant.stockQuantity,
-        attributes: variant.attributes || [],
-        variantAttributes: variant.variantAttributes || [],
-        imageUrls: variant.imageUrls || [],
-        // VProductCode: generateDsin(),
-        status: variant.status || "active",
-      });
-
-      return await newVariant.save();
-    })
-  );
-
-  return { product: savedProduct, variantAttributesSaved, variantsSaved };
+  return { product: savedProduct };
 }
 
 export async function updateProduct(id: string, formData: any) {
@@ -402,15 +353,15 @@ export async function updateProduct(id: string, formData: any) {
           url_slug: urlSlug || "",
           sku,
           productName: product_name,
-          category_id: category_id
-            ? new mongoose.Types.ObjectId(category_id)
-            : null,
-          brand_id: brand_id ? new mongoose.Types.ObjectId(brand_id) : null,
+          category_id: category_id ? category_id.toString() : null,
+          brand_id: brand_id ? brand_id.toString() : null,
           department,
           description,
           basePrice,
           finalPrice,
           attributes: cleanedAttributes.length > 0 ? cleanedAttributes : null,
+          variantAttributes,
+          variants,
           imageUrls: imageUrls || [],
           taxRate,
           discount,
@@ -424,49 +375,6 @@ export async function updateProduct(id: string, formData: any) {
     );
 
     if (!updatedProduct) throw new Error("Product not found");
-
-    // Update variant attributes if provided
-    if (variantAttributes) {
-      const flattenedAttributes = Object.entries(
-        variantAttributes?.general || {}
-      ).map(([name, values]) => ({
-        name,
-        values,
-      }));
-
-      await Promise.all(
-        flattenedAttributes.map(async (attribute) => {
-          await VariantAttribute.findByIdAndUpdate(
-            { product_id: id },
-            {
-              name: attribute.name,
-              values: attribute.values,
-            }
-          );
-        })
-      );
-    }
-
-    // Update or create variants if provided
-    if (variants?.length > 0) {
-      await Promise.all(
-        variants.map(async (variant: any) => {
-          await Variant.findByIdAndUpdate(
-            { product_id: id?.toString() },
-            {
-              $set: {
-                ...variant,
-                url_slug: variant.url_slug || generateDsin(),
-                dsin: variant.dsin || generateDsin(),
-                VProductCode: variant.VProductCode || generateDsin(),
-                updated_at: new Date().toISOString(),
-              },
-            },
-            { new: true, upsert: true }
-          );
-        })
-      );
-    }
 
     // Revalidate cache for updated product list
     revalidatePath("/admin/products/products_list");

@@ -22,17 +22,34 @@ const productSlice = createSlice({
       state.allIds = action.payload.allIds;
     },
     addProduct: (state, action: PayloadAction<any | null>) => {
-      const { productId, ...productData } = action.payload;
+      const { _id, ...productData } = action.payload;
+
+      // Validate productId
+      if (!_id) {
+        console.error("Product ID is undefined. Payload:", action.payload);
+        return;
+      }
+
+      // Validate productData
+      if (!productData || typeof productData !== "object") {
+        console.error(
+          "Invalid product data. Skipping addProduct. Payload:",
+          action.payload
+        );
+        return;
+      }
 
       // Check if the product already exists in the state
-      if (!state.byId[productId]) {
+      if (!state.byId[_id]) {
         // If not, initialize the product in the state
-        state.byId[productId] = productData;
-        state.allIds.push(productId); // Add the productId to the allIds array
+        if (!state.allIds.includes(_id)) {
+          state.allIds.push(_id); // Add the productId to the allIds array
+        }
+        state.byId[_id] = productData;
       } else {
         // If the product exists, update its fields
-        state.byId[productId] = {
-          ...state.byId[productId],
+        state.byId[_id] = {
+          ...state.byId[_id],
           ...productData,
         };
       }
@@ -97,6 +114,7 @@ const productSlice = createSlice({
       }>
     ) => {
       const { productId, index, field, value } = action.payload;
+      
       if (productId && state.byId[productId]?.variants?.[index]) {
         state.byId[productId].variants[index][field] = value;
       }

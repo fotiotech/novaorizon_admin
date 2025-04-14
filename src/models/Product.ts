@@ -1,6 +1,4 @@
 import { Schema, model, models } from "mongoose";
-import { VariantAttribute } from "./VariantAttributes";
-import { Variant } from "./Variant";
 
 const ProductSchema = new Schema(
   {
@@ -46,7 +44,7 @@ const ProductSchema = new Schema(
     },
     basePrice: {
       type: Number,
-      required: [true, "Base price is required"],
+      required: [false, "Base price is required"],
       min: [0, "Base price must be a positive number"],
     },
     taxRate: {
@@ -55,7 +53,7 @@ const ProductSchema = new Schema(
     },
     finalPrice: {
       type: Number,
-      required: [true, "Final price is required"],
+      required: [false, "Final price is not required for now!"],
       min: [0, "Final price must be a positive number"],
     },
     discount: {
@@ -104,6 +102,51 @@ const ProductSchema = new Schema(
         },
       },
     ],
+
+    variantAttributes: {
+      type: Map,
+      of: {
+        type: Map,
+        of: [String], // Each attribute group maps to attribute names, which map to arrays of string values
+      },
+      default: {}, // Default to an empty object
+    },
+
+    variants: {
+      type: [
+        {
+          Color: { type: String, required: false }, // Example attribute
+          Sizes: { type: String, required: false }, // Example attribute
+          variantName: { type: String, default: "" },
+          sku: { type: String, required: true },
+          basePrice: {
+            type: Number,
+            required: true,
+            min: [0, "Base price must be positive"],
+          },
+          finalPrice: {
+            type: Number,
+            required: true,
+            min: [0, "Final price must be positive"],
+          },
+          taxRate: { type: Number, default: 0 },
+          discount: { type: Number, default: 0 },
+          currency: { type: String, default: "XAF" },
+          stockQuantity: {
+            type: Number,
+            required: true,
+            min: [0, "Stock quantity cannot be negative"],
+          },
+          imageUrls: { type: [String], default: [] },
+          status: {
+            type: String,
+            enum: ["active", "inactive"],
+            default: "active",
+          },
+        },
+      ],
+      default: [], // Default to an empty array
+    },
     offerId: {
       type: Schema.Types.ObjectId,
       ref: "Offer",
@@ -123,13 +166,6 @@ const ProductSchema = new Schema(
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
   }
 );
-
-ProductSchema.pre("findOneAndDelete", async function (next) {
-  const productId = this.getQuery()._id;
-  await Variant.deleteMany({ product_id: productId });
-  await VariantAttribute.deleteMany({ product_id: productId });
-  next();
-});
 
 const Product = models.Product || model("Product", ProductSchema);
 

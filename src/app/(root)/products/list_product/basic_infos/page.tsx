@@ -20,7 +20,6 @@ const BasicInformation = () => {
   const productId = productState.allIds[0]; // Assuming the first product is being edited
   const product = productState.byId[productId] || {}; // Get the product by ID or fallback to an empty object
 
-
   const [brands, setBrands] = useState<Brand[]>([]);
   const [selectedBrand, setSelectedBrand] = useState<{
     value: string;
@@ -43,7 +42,7 @@ const BasicInformation = () => {
     const value = event.target.value;
     dispatch(
       addProduct({
-        productId,
+        _id: productId,
         [field]: value,
       })
     );
@@ -52,20 +51,28 @@ const BasicInformation = () => {
   useEffect(() => {
     if (files.length > 0) {
       const uploadedUrls = files.map((file: any) => file.url || file); // Adjust for file structure
-      dispatch(
-        addProduct({
-          productId,
-          imageUrls: uploadedUrls,
-        })
-      );
+      console.log("uploadedUrls:", uploadedUrls);
+
+      // Check if the uploadedUrls are different from the current imageUrls in the Redux state
+      if (
+        JSON.stringify(uploadedUrls) !==
+        JSON.stringify(productState.byId[productId]?.imageUrls || [])
+      ) {
+        dispatch(
+          addProduct({
+            _id: productId,
+            imageUrls: uploadedUrls,
+          })
+        );
+      }
     }
-  }, [files, dispatch, product]);
+  }, [files, dispatch, productId, productState.byId]);
 
   const handleBrandChange = (selectedOption: any) => {
     setSelectedBrand(selectedOption);
     dispatch(
       addProduct({
-        productId,
+        _id: productId,
         brand_id: selectedOption.value,
       })
     );

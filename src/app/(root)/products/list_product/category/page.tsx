@@ -8,15 +8,18 @@ import Link from "next/link";
 import { addCategory } from "@/app/store/slices/categorySlice";
 import { addProduct } from "@/app/store/slices/productSlice";
 // import { persistor } from "@/app/store/store";
+import { v4 as uuidv4 } from "uuid";
 
 const Category = () => {
   const dispatch = useAppDispatch();
   const [category, setCategory] = useState<Cat[]>([]);
   const products = useAppSelector((state) => state.product);
-  const id = products.allIds[0];
+  const id = products.allIds.length
+  ? products.allIds[0]
+  : uuidv4();
   const category_id = products.byId[id]?.category_id; // Get category_id from the product state
   const [parentId, setParentId] = useState<string>(category_id);
-
+ 
   useEffect(() => {
     // Update parentId whenever categoryId changes
     setParentId(category_id);
@@ -46,7 +49,7 @@ const Category = () => {
   const handleSelect = (catId: string) => {
     setParentId(catId); // Update local state with the selected category ID
     dispatch(addCategory({categoryId: catId})); // Dispatch action to update Redux store
-    dispatch(addProduct({category_id: catId})); // Dispatch action to update Redux store
+    dispatch(addProduct({_id: id, category_id: catId})); // Dispatch action to update Redux store
   };
 
   return (

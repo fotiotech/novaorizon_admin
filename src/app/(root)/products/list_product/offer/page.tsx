@@ -34,7 +34,7 @@ const Offer: React.FC = () => {
   useEffect(() => {
     dispatch(
       addProduct({
-        ...product,
+        _id: productId,
         basePrice: price,
         taxRate: tax,
         discount: discountValue,
