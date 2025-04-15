@@ -43,7 +43,7 @@ const ProductList = () => {
                   height={50}
                   className="rounded-lg"
                 />
-                <p className="text-lg font-medium">{product.productName}</p>
+                <p className="text-lg font-medium line-clamp-1">{product.productName}</p>
               </div>
 
               {/* Menu Actions */}

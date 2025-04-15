@@ -36,6 +36,7 @@ const Offer: React.FC = () => {
       addProduct({
         _id: productId,
         basePrice: price,
+        finalPrice: finalPrice,
         taxRate: tax,
         discount: discountValue,
         stockQuantity: quantity,

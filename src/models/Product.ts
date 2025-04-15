@@ -44,7 +44,7 @@ const ProductSchema = new Schema(
     },
     basePrice: {
       type: Number,
-      required: [false, "Base price is required"],
+      required: [true, "Base price is required"],
       min: [0, "Base price must be a positive number"],
     },
     taxRate: {
@@ -53,7 +53,7 @@ const ProductSchema = new Schema(
     },
     finalPrice: {
       type: Number,
-      required: [false, "Final price is not required for now!"],
+      required: [true, "Final price is not required for now!"],
       min: [0, "Final price must be a positive number"],
     },
     discount: {

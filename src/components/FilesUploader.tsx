@@ -1,4 +1,3 @@
-// FilesUploader.tsx
 import React, { useEffect, useRef } from "react";
 import { AttachFile } from "@mui/icons-material";
 import { useDropzone } from "react-dropzone";
@@ -13,6 +12,7 @@ type FilesUploaderProps = {
 
 const FilesUploader: React.FC<FilesUploaderProps> = ({ files, addFiles }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null); // Ref for the container
 
   const { loading, removeFile } = useFileUploader();
 
@@ -30,8 +30,18 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({ files, addFiles }) => {
 
   const handleClick = () => inputRef.current?.click();
 
+  // Scroll to the left when files are updated
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollLeft = 0; // Scroll to the left
+    }
+  }, [files]);
+
   return (
-    <div className="whitespace-nowrap w-full overflow-clip overflow-x-auto scrollbar-none my-4 space-x-3">
+    <div
+      ref={containerRef} // Attach the ref to the container
+      className="flex flex-wrap gap-2 w-full overflow-x-auto scrollbar-none my-4"
+    >
       {files.map((file, index) => (
         <div
           key={index}
