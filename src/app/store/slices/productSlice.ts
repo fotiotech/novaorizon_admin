@@ -149,6 +149,7 @@ const productSlice = createSlice({
         state.byId[productId].variants = state.byId[productId].variants.map(
           (variant: any) => ({
             ...variant,
+            variantName: state.byId[productId].product_name,
             basePrice: state.byId[productId].basePrice,
             taxRate: state.byId[productId].taxRate,
             discount: state.byId[productId].discount,
