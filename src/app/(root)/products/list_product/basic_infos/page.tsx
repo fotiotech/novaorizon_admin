@@ -127,9 +127,9 @@ const BasicInformation = () => {
         <input
           id="product_name"
           type="text"
-          value={product.product_name || ""}
+          value={product.productName || ""}
           placeholder="Enter Product Name"
-          onChange={(e) => handleChange("product_name", e)}
+          onChange={(e) => handleChange("productName", e)}
           className="border rounded p-2 mt-1 bg-transparent"
         />
       </div>

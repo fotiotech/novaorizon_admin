@@ -236,7 +236,7 @@ export async function createProduct(formData: any) {
     variantAttributes,
     imageUrls,
     sku,
-    product_name,
+    productName,
     brand_id,
     department,
     description,
@@ -250,11 +250,11 @@ export async function createProduct(formData: any) {
     status,
   } = formData;
 
-  if (!product_name || !category_id) {
+  if (!productName || !category_id) {
     throw new Error("Product name and category ID are required.");
   }
 
-  const urlSlug = generateSlug(product_name, department);
+  const urlSlug = generateSlug(productName, department);
   const dsin = generateDsin();
 
   const cleanedAttributes = Object.entries(attributes || {})
@@ -272,7 +272,7 @@ export async function createProduct(formData: any) {
     url_slug: urlSlug,
     dsin,
     sku,
-    productName: product_name,
+    productName,
     category_id: category_id.toString(),
     brand_id: brand_id
       ? typeof brand_id === "string"
@@ -301,7 +301,7 @@ export async function createProduct(formData: any) {
 
   if (!savedProduct) throw new Error("Failed to save the product.");
 
-  return { product: savedProduct };
+  return "Ok!";
 }
 
 export async function updateProduct(id: string, formData: any) {
@@ -315,7 +315,7 @@ export async function updateProduct(id: string, formData: any) {
       variantAttributes,
       imageUrls,
       sku,
-      product_name,
+      productName,
       brand_id,
       department,
       description,
@@ -333,7 +333,7 @@ export async function updateProduct(id: string, formData: any) {
     await connection();
 
     // Generate a slug for the product based on updated information
-    const urlSlug = generateSlug(product_name, department);
+    const urlSlug = generateSlug(productName, department);
 
     // Clean up the attributes
     const cleanedAttributes = Object.entries(attributes || {})
@@ -352,7 +352,7 @@ export async function updateProduct(id: string, formData: any) {
         $set: {
           url_slug: urlSlug || "",
           sku,
-          productName: product_name,
+          productName,
           category_id: category_id ? category_id.toString() : null,
           brand_id: brand_id ? brand_id.toString() : null,
           department,
@@ -379,7 +379,7 @@ export async function updateProduct(id: string, formData: any) {
     // Revalidate cache for updated product list
     revalidatePath("/admin/products/products_list");
 
-    return updatedProduct;
+    return "Ok!";
   } catch (error) {
     console.error("Error updating product:", error);
     throw error; // Rethrow the error so it can be handled by the caller

@@ -15,7 +15,7 @@ const AddProduct = () => {
   const {
     _id,
     sku,
-    product_name,
+    productName,
     brand_id,
     department,
     description,
@@ -40,7 +40,7 @@ const AddProduct = () => {
       attributes &&
       imageUrls.length > 0 &&
       sku &&
-      product_name &&
+      productName &&
       brand_id &&
       department &&
       description
@@ -57,7 +57,7 @@ const AddProduct = () => {
           variants,
           imageUrls,
           sku,
-          product_name,
+          productName,
           brand_id,
           department,
           description,
@@ -85,7 +85,7 @@ const AddProduct = () => {
           variants,
           imageUrls,
           sku,
-          product_name,
+          productName,
           brand_id,
           department,
           description,
