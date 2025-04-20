@@ -4,6 +4,8 @@ import { useDropzone } from "react-dropzone";
 import Image from "next/image";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import Spinner from "./Spinner";
+import { useAppSelector } from "@/app/hooks";
+import { RootState } from "@/app/store/store";
 
 type FilesUploaderProps = {
   files: string[];
@@ -13,6 +15,8 @@ type FilesUploaderProps = {
 const FilesUploader: React.FC<FilesUploaderProps> = ({ files, addFiles }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null); // Ref for the container
+  const productState = useAppSelector((state: RootState) => state.product);
+  const productId = productState.allIds[0];
 
   const { loading, removeFile } = useFileUploader();
 
@@ -60,7 +64,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({ files, addFiles }) => {
           )}
           <button
             type="button"
-            onClick={() => removeFile(index, files)}
+            onClick={() => removeFile(productId, index, files)}
             className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-1 hover:bg-opacity-70"
             title="Remove Image"
           >

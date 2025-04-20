@@ -1,14 +1,15 @@
 "use server";
 
-import { Product as Prod } from "@/constant/types";
 import Product from "@/models/Product";
 import "@/models/Brand";
 import { connection } from "@/utils/connection";
-import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 import slugify from "slugify";
 import { Variant } from "@/models/Variant";
 import { VariantAttribute } from "@/models/VariantAttributes";
+import { ref, deleteObject } from "firebase/storage";
+import { storage } from "@/utils/firebaseConfig";
+import mongoose from "mongoose";
 
 // Generate a slug from the product name and department
 function generateSlug(name: string, department: string | null) {
@@ -387,6 +388,112 @@ export async function updateProduct(id: string, formData: any) {
 }
 
 export async function deleteProduct(id: string) {
-  await connection();
-  await Product.findByIdAndDelete(id);
+  try {
+    await connection();
+    const deletedProduct = id ? await Product.findByIdAndDelete(id) : null;
+    if (!deletedProduct) {
+      throw new Error("Product not found");
+    }
+
+    await revalidatePath("/admin/products/products_list");
+
+    return "Product deleted successfully";
+  } catch (error) {
+    console.error("Error deleting product:", error);
+  }
+}
+
+/**
+ * Deletes one or all image URLs of a product.
+ * @param productId - The ID of the product.
+ * @param imageUrl - The specific image URL to delete (optional). If not provided, all images will be deleted.
+ */
+
+function isUUID(value: string): boolean {
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(value);
+}
+
+export async function deleteProductImages(
+  productId: string,
+  imageUrl?: string
+) {
+  try {
+    // Ensure database connection
+    await connection();
+    if (!productId && !imageUrl) {
+      return { success: false, message: "No productId or imageUrl provided" };
+    }
+    // Validate the productId
+    if (isUUID(productId)) {
+      // Delete the image from Firebase Storage
+      const url = imageUrl ? new URL(imageUrl) : new URL("");
+      const encodedFileName = url.pathname.split("/").pop();
+      if (encodedFileName) {
+        const fileName = decodeURIComponent(encodedFileName);
+        const storageRef = ref(
+          storage,
+          fileName.startsWith("uploads/") ? fileName : `uploads/${fileName}`
+        );
+        await deleteObject(storageRef);
+      }
+    } else if (mongoose.isValidObjectId(productId)) {
+      // Find the product by ID
+      const product = await Product.findById(productId);
+      if (!product) {
+        console.log("Product not found");
+      }
+
+      // If `imageUrl` is provided, delete the specific image
+      if (imageUrl) {
+        // Check if the image exists in the product's imageUrls
+        if (!product.imageUrls.includes(imageUrl)) {
+          console.log("Image URL not found in product");
+        }
+
+        // Remove the image URL from the product's imageUrls array
+        product.imageUrls = product.imageUrls.filter(
+          (url: string) => url !== imageUrl
+        );
+
+        // Delete the image from Firebase Storage
+        const url = new URL(imageUrl);
+        const encodedFileName = url.pathname.split("/").pop();
+        if (encodedFileName) {
+          const fileName = decodeURIComponent(encodedFileName);
+          const storageRef = ref(
+            storage,
+            fileName.startsWith("uploads/") ? fileName : `uploads/${fileName}`
+          );
+          await deleteObject(storageRef);
+        }
+
+        // Save the updated product
+        await product.save();
+      }
+    }
+    // else {
+    //   // If no `imageUrl` is provided, delete all images
+    //   for (const url of product.imageUrls) {
+    //     const fileUrl = new URL(url);
+    //     const encodedFileName = fileUrl.pathname.split("/").pop();
+    //     if (encodedFileName) {
+    //       const fileName = decodeURIComponent(encodedFileName);
+    //       const storageRef = ref(
+    //         storage,
+    //         fileName.startsWith("uploads/") ? fileName : `uploads/${fileName}`
+    //       );
+    //       await deleteObject(storageRef);
+    //     }
+    //   }
+
+    //   // Clear the imageUrls array
+    //   product.imageUrls = [];
+    // }
+
+    return { success: true, message: "Image(s) deleted successfully" };
+  } catch (error: any) {
+    console.error("Error deleting product images:", error);
+  }
 }

@@ -67,7 +67,7 @@ const ProductList = () => {
                       Edit
                     </li>
                   </Link>
-                  <Link href={`/products/delete/${product._id}`}>
+                  <Link href={`/products/delete?id=${product._id}`}>
                     <li className="p-2 border rounded-lg border-gray-800 cursor-pointer">
                       Delete
                     </li>

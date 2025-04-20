@@ -6,6 +6,7 @@ import {
   deleteObject,
 } from "firebase/storage";
 import { storage } from "@/utils/firebaseConfig";
+import { deleteProductImages } from "@/app/actions/products";
 
 export const useFileUploader = (initialFiles: string[] = []) => {
   const [imgFiles, setImgFiles] = useState<File[]>([]);
@@ -13,7 +14,6 @@ export const useFileUploader = (initialFiles: string[] = []) => {
   const [loading, setLoading] = useState(false);
 
   // Monitor changes to the `files` state
-
   const upload = useCallback(async () => {
     if (imgFiles.length === 0) return;
 
@@ -40,24 +40,28 @@ export const useFileUploader = (initialFiles: string[] = []) => {
     if (imgFiles.length > 0) {
       upload();
     }
-  }, [imgFiles]);
+  }, [imgFiles, upload]);
 
   const addFiles = (newFiles: File[]) => {
     setImgFiles((prev) => [...prev, ...newFiles]);
   };
 
-  const handleRemoveFile = async (index: number, filesContent?: string[]) => {
-    if (filesContent?.length === 0) {
+  const handleRemoveFile = async (
+    id: string,
+    index: number,
+    filesContent?: string[]
+  ) => {
+    if (!filesContent || filesContent.length === 0) {
       console.error("No files to remove.");
       return;
     }
 
-    if (index < 0 || index >= filesContent?.length!) {
+    if (index < 0 || index >= filesContent.length) {
       console.error("Index out of bounds:", index);
       return;
     }
 
-    const fileToRemove = filesContent?.[index && index];
+    const fileToRemove = filesContent[index];
 
     if (!fileToRemove) {
       console.error("No file found at the given index.");
@@ -65,33 +69,27 @@ export const useFileUploader = (initialFiles: string[] = []) => {
     }
 
     try {
-      const url = new URL(fileToRemove);
-      const encodedFileName = url.pathname.split("/").pop();
+      const res = await deleteProductImages(id, fileToRemove);
 
-      if (!encodedFileName) {
-        throw new Error("Unable to extract file name from URL.");
+      console.log(`Files content: ${filesContent}`);
+
+      if (res?.success) {
+        setFiles(() => {
+          const updatedFiles = filesContent.filter((_, i) => i !== index);
+          console.log("Updated files:", updatedFiles);
+          return updatedFiles;
+        });
       }
-
-      const fileName = decodeURIComponent(encodedFileName);
-      const storageRef = ref(
-        storage,
-        fileName.startsWith("uploads/") ? fileName : `uploads/${fileName}`
-      );
-
-      // Delete the object from Firebase Storage
-      await deleteObject(storageRef);
-      console.log(`Deleted ${fileToRemove} from storage.`);
     } catch (error) {
-      console.error("Error deleting file from storage:", error);
+      console.error(
+        `Error deleting file "${fileToRemove}" for product ID "${id}":`,
+        error
+      );
     }
-
-    setFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
   };
 
-  const removeFile = (index: number, filesContent?: string[]) => {
-    setTimeout(() => {
-      handleRemoveFile(index, filesContent);
-    }, 1000); // Delays execution to allow state to update
+  const removeFile = (id: string, index: number, filesContent?: string[]) => {
+    handleRemoveFile(id, index, filesContent);
   };
 
   return {
