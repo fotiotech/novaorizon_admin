@@ -11,44 +11,63 @@ import {
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import Link from "next/link";
 
-type AttributeType = {
+type AttributeValue = {
+  _id: string;
+  attribute_id: string;
+  value: string;
+  __v: number;
+};
+
+type Attribute = {
+  id: string;
+  name: string;
+  values: AttributeValue[];
+  isBaseAttribute?: boolean;
+  isVariant?: boolean;
+};
+
+type AttributeGroup = {
   groupName: string;
-  attributes: {
-    attrName: string;
-    attrValue: string[];
-  }[];
+  attributes: Attribute[];
+};
+
+type CategoryAttributes = {
+  categoryId: string;
+  categoryName: string;
+  groupedAttributes: AttributeGroup[];
 };
 
 const Details = () => {
   const dispatch = useAppDispatch();
 
-  // Access normalized product state
   const productState = useAppSelector((state: RootState) => state.product);
-  const productId = productState.allIds[0]; // Assuming the first product is being edited
-  const product = productState.byId[productId] || {}; // Get the product by ID or fallback to an empty object
-  console.log("product:", product);
+  const productId = productState.allIds[0];
+  const product = productState.byId[productId] || {};
 
-  const [attributes, setAttributes] = useState<AttributeType[]>([]);
+  const [attributes, setAttributes] = useState<AttributeGroup[]>([]);
 
   useEffect(() => {
     const fetchAttributes = async () => {
       if (product.category_id) {
+        // Fetch all attributes without filtering
         const response = await findCategoryAttributesAndValues(
           product.category_id
         );
         if (response?.length > 0) {
-          const formattedAttributes = response[0].groupedAttributes
-            ?.filter((group: any) => group.groupName === "General")
-            ?.map((group: any) => ({
-              groupName: group.groupName
-                ? group.groupName.toLowerCase()
-                : "additional details",
-              attributes: group.attributes?.map((attr: any) => ({
-                attrName: attr.attributeName,
-                attrValue: attr.attributeValues?.map((val: any) => val.value),
+          // Transform the attributes to show main product attributes
+          const transformedGroups = response[0].groupedAttributes.map(
+            (group: AttributeGroup) => ({
+              ...group,
+              // For the details page, we show all attributes since the main product can have both types
+              attributes: group.attributes.map((attr: Attribute) => ({
+                ...attr,
+                // Mark if this is a variant attribute (will be used for UI hints)
+                isBaseAttribute:
+                  attr.isVariant === undefined ? true : !attr.isVariant,
               })),
-            }));
-          setAttributes(formattedAttributes);
+            })
+          );
+          setAttributes(transformedGroups);
         }
       }
     };
@@ -71,6 +90,16 @@ const Details = () => {
     );
   };
 
+  // Update the helper function to handle undefined values
+  const getAttributeStyle = (isBaseAttribute: boolean | undefined) => ({
+    label:
+      isBaseAttribute !== false // treat undefined as true (base attribute)
+        ? "text-blue-600 font-medium"
+        : "text-green-600 font-medium",
+    hint:
+      isBaseAttribute !== false ? "(Base Attribute)" : "(Variant Attribute)",
+  });
+
   const customStyles = {
     control: (provided: any) => ({
       ...provided,
@@ -88,9 +117,11 @@ const Details = () => {
     }),
   };
 
+  console.log("Attributes:", attributes);
+
   return (
     <div className="p-6 rounded-lg shadow-md">
-      <label className="inline-flex items-center">
+      <label className="inline-flex items-center mb-4">
         <input
           type="checkbox"
           className="form-checkbox"
@@ -99,7 +130,7 @@ const Details = () => {
             dispatch(updateGetVariant({ productId, value: e.target.checked }))
           }
         />
-        <span className="ml-2">Is it get Variant?</span>
+        <span className="ml-2">Enable Variants</span>
       </label>
 
       {attributes.length > 0 && (
@@ -107,54 +138,56 @@ const Details = () => {
           {attributes.map((group) => (
             <div key={group.groupName} className="mb-6">
               <h3 className="text-lg font-semibold text-pri capitalize mb-4">
-                Details
+                {group.groupName}
               </h3>
-              {group.attributes.map((attribute) => (
-                <div key={attribute.attrName} className="mb-4">
-                  <label className="block text-sm font-medium mb-2">
-                    {attribute.attrName}
-                  </label>
-                  <Select
-                    options={attribute.attrValue.map((value) => ({
-                      label: value,
-                      value,
-                    }))}
-                    isMulti
-                    styles={customStyles}
-                    className="bg-none text-sec border-gray-100"
-                    classNamePrefix="select"
-                    onChange={(selected) =>
-                      handleAttributeChange(
-                        group.groupName,
-                        attribute.attrName,
-                        selected?.map((option) => option.value) || null
-                      )
-                    }
-                    placeholder={`Select ${attribute.attrName}`}
-                  />
-                </div>
-              ))}
+              {group.attributes.map((attribute) => {
+                const style = getAttributeStyle(attribute.isBaseAttribute);
+                return (
+                  <div key={attribute.id} className="mb-4">
+                    <label className={`block text-sm mb-2 ${style.label}`}>
+                      {attribute.name}{" "}
+                      <span className="text-xs ml-2">{style.hint}</span>
+                    </label>
+                    <Select
+                      options={attribute.values.map((value) => ({
+                        label: value.value,
+                        value: value.value,
+                      }))}
+                      isMulti
+                      styles={customStyles}
+                      className="bg-none text-sec border-gray-100"
+                      classNamePrefix="select"
+                      onChange={(selected) =>
+                        handleAttributeChange(
+                          group.groupName,
+                          attribute.name,
+                          selected?.map((option) => option.value) || null
+                        )
+                      }
+                      placeholder={`Select ${attribute.name}`}
+                    />
+                  </div>
+                );
+              })}
             </div>
           ))}
-
-          
         </>
       )}
+
       <div className="flex justify-between items-center mt-6">
-            {/* Back Button */}
-            <Link
-              href={"/products/list_product/offer"}
-              className="bg-blue-500 text-white p-2 rounded"
-            >
-              Back
-            </Link>
-            <Link
-              href={"/products/list_product/variants"}
-              className="bg-blue-500 text-white p-2 rounded"
-            >
-              Next
-            </Link>
-          </div>
+        <Link
+          href={"/products/list_product/offer"}
+          className="bg-blue-500 text-white p-2 rounded"
+        >
+          Back
+        </Link>
+        <Link
+          href={"/products/list_product/variants"}
+          className="bg-blue-500 text-white p-2 rounded"
+        >
+          Next
+        </Link>
+      </div>
     </div>
   );
 };

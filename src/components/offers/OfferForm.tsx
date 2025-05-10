@@ -4,12 +4,17 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { updateOffer, createOffer } from "@/app/actions/offers";
 import { Offer } from "@/constant/types"; // assuming Offer is your type
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { v4 as uuidv4 } from "uuid";
 
 type OfferFormProps = {
   initialData?: Offer; // Assuming Offer type exists
 };
 
 const OfferForm = ({ initialData }: OfferFormProps) => {
+  const dispatch = useAppDispatch();
+    const offer = useAppSelector((state) => state.offer);
+    const id = offer.allIds.length ? offer.allIds[0] : uuidv4();
   // Use react-hook-form to manage form state
   const {
     register,

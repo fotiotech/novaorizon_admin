@@ -1,19 +1,18 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Select from "react-select";
-import { findCategoryAttributesAndValues } from "@/app/actions/attributes";
+import { findCategoryVariantAttributes } from "@/app/actions/attributes";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import {
   removeVariant,
-  syncVariantWithParent,
   addVariant,
   updateVariantField,
   updateVariantAttributes,
+  syncVariantWithParent,
 } from "@/app/store/slices/productSlice";
 import Link from "next/link";
-import FilesUploader from "@/components/FilesUploader";
-import { useFileUploader } from "@/hooks/useFileUploader";
+import VariantFileUploader from "@/components/products/VariantFileUploader";
 import { RootState } from "@/app/store/store";
 
 type AttributeType = {
@@ -21,84 +20,111 @@ type AttributeType = {
   attributes: {
     attrName: string;
     attrValue: string[];
+    isVariant?: boolean;
   }[];
 };
 
-type OptionType = { value: string; label: string };
+interface VariantType {
+  sku: string;
+  variantName: string;
+  basePrice: number;
+  finalPrice: number;
+  taxRate: number;
+  discount: number;
+  currency: string;
+  stockQuantity: number;
+  imageUrls: string[];
+  status: "active" | "inactive";
+  [key: string]: any;
+}
 
-const Variant = () => {
-  const { files, addFiles } = useFileUploader();
+const Variants = () => {
   const dispatch = useAppDispatch();
 
-  // Access normalized product state
+  // Access product from Redux store
   const productState = useAppSelector((state: RootState) => state.product);
-  const productId = productState?.allIds[0]; // Assuming the first product is being edited
-  const product = productState?.byId[productId] || {}; // Get the product by ID or fallback to an empty object
-  const { category_id, variants, variantAttributes } = product;
+  const productId = productState?.allIds[0];
+  const product = productState?.byId[productId] || {};
+  const { category_id, variants = [], variantAttributes = {} } = product;
 
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
-  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
-  const [imageIndex, setImageIndex] = useState<number | null>(null);
 
-  const memoizedVariantAttributes = useMemo(
-    () => variantAttributes,
-    [variantAttributes]
-  );
-
-  const AttributesVariants = useMemo(() => {
-    if (
-      !memoizedVariantAttributes ||
-      Object.keys(memoizedVariantAttributes).length === 0
-    ) {
-      return []; // Return an empty array if no data
-    }
-    return generateVariations(memoizedVariantAttributes);
-  }, [memoizedVariantAttributes]);
-
-  useEffect(() => {
-    if (files.length > 0 && imageIndex !== null) {
-      const uploadedUrls = files.map((file: any) => file.url || file); // Adjust for file structure
-      dispatch(
-        updateVariantField({
-          productId,
-          index: imageIndex,
-          field: "imageUrls",
-          value: uploadedUrls,
-        })
-      );
-    }
-  }, [files, imageIndex, dispatch]);
-
+  // Fetch variant attributes when category changes
   useEffect(() => {
     const fetchAttributes = async () => {
       if (category_id) {
-        const response = await findCategoryAttributesAndValues(category_id);
-        if (response?.length > 0) {
-          const formattedAttributes = response[0].groupedAttributes
-            ?.filter((group: any) => group.groupName === "General")
-            ?.map((group: any) => ({
-              groupName: group.groupName
-                ? group.groupName.toLowerCase()
-                : "additional details",
-              attributes: group.attributes?.map((attr: any) => ({
-                attrName: attr.attributeName,
-                attrValue: attr.attributeValues?.map((val: any) => val.value),
-              })),
-            }));
-          setAttributes(formattedAttributes);
+        const response = await findCategoryVariantAttributes(category_id);
+        if (response?.[0]?.groupedAttributes) {
+          setAttributes(
+            response[0].groupedAttributes.map((group: any) => ({
+              groupName: group.groupName,
+              attributes: group.attributes
+                .filter((attr: any) => attr.isVariant)
+                .map((attr: any) => ({
+                  attrName: attr.name,
+                  attrValue: attr.values.map((v: any) => v.value),
+                  isVariant: true,
+                })),
+            }))
+          );
         }
       }
     };
-
-    fetchAttributes().catch((error) => console.error(error));
+    fetchAttributes();
   }, [category_id]);
 
+  const generateVariantCombinations = (selectedAttributes: {
+    [key: string]: { [key: string]: string[] };
+  }) => {
+    // Get all groups and their attributes
+    const allAttributes: { [key: string]: string[] } = {};
+
+    // Flatten the nested structure into a single level of attributes
+    Object.values(selectedAttributes).forEach((group) => {
+      Object.entries(group).forEach(([attrName, values]) => {
+        if (Array.isArray(values) && values.length > 0) {
+          allAttributes[attrName] = values;
+        }
+      });
+    });
+
+    const attributeNames = Object.keys(allAttributes);
+    if (attributeNames.length === 0) return [];
+
+    const combinations = [{}];
+    attributeNames.forEach((attrName) => {
+      const values = allAttributes[attrName];
+      if (!Array.isArray(values) || values.length === 0) return;
+
+      const newCombinations: any[] = [];
+      combinations.forEach((combo) => {
+        values.forEach((value) => {
+          newCombinations.push({ ...combo, [attrName]: value });
+        });
+      });
+      combinations.length = 0;
+      combinations.push(...newCombinations);
+    });
+
+    return combinations;
+  };
+
   const handleAttributeChange = (
-    idx: number,
     groupName: string,
     attrName: string,
     selectedValues: string[] | null
   ) => {
+    if (!productId) return;
+
+    // Initialize the group if it doesn't exist
+    const currentAttributes = {
+      ...variantAttributes,
+      [groupName]: {
+        ...(variantAttributes[groupName] || {}),
+      },
+    };
+
+    // Update variant attributes in Redux
     dispatch(
       updateVariantAttributes({
         productId,
@@ -108,101 +134,61 @@ const Variant = () => {
       })
     );
 
-    // Generate new variants based on updated attributes
-    const updatedVariants = generateVariations({
-      ...variantAttributes,
+    // Create new variants based on all selected attributes
+    const updatedAttributes = {
+      ...currentAttributes,
       [groupName]: {
-        ...variantAttributes[groupName],
+        ...currentAttributes[groupName],
         [attrName]: selectedValues || [],
       },
-    });
+    };
 
-    // Dispatch each variant to Redux using addVariant
-    updatedVariants.forEach((variant) => {
-      dispatch(
-        addVariant({
-          productId,
-          variant,
-        })
-      );
-    });
+    // Generate variant combinations only if there are selected values
+    if (selectedValues && selectedValues.length > 0) {
+      const combinations = generateVariantCombinations(updatedAttributes);
 
-    // Optionally synchronize with parent
-    dispatch(syncVariantWithParent({ productId }));
+      // Create variant objects and update Redux
+      combinations.forEach((combination) => {
+        const variant: VariantType = {
+          ...combination,
+          sku: "",
+          variantName: Object.entries(combination)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join(" - "),
+          basePrice: product.basePrice || 0,
+          finalPrice: product.finalPrice || 0,
+          taxRate: product.taxRate || 0,
+          discount: product.discount || 0,
+          currency: product.currency || "",
+          stockQuantity: 0,
+          imageUrls: [],
+          status: "active",
+        };
+
+        dispatch(addVariant({ productId, variant }));
+      });
+
+      // Sync variants with parent product
+      dispatch(syncVariantWithParent({ productId }));
+    }
   };
 
-  function generateVariations(variantAttributesData: {
-    [groupName: string]: { [attributeName: string]: string[] };
-  }) {
-    if (
-      !variantAttributesData ||
-      Object.keys(variantAttributesData).length === 0
-    ) {
-      return []; // Return an empty array if input is empty or undefined
-    }
-
-    // Step 1: Flatten the attributes into an array of attribute groups
-    const attributeGroups = Object.entries(variantAttributesData).flatMap(
-      ([groupName, attributes]) =>
-        Object.entries(attributes).map(([attrName, attrValues]) => ({
-          groupName,
-          attrName,
-          attrValues,
-        }))
-    );
-
-    // Step 2: Generate Cartesian product of attribute values
-    const cartesianProduct = (arrays: string[][]): string[][] =>
-      arrays.reduce(
-        (acc, curr) => acc.flatMap((a) => curr.map((b) => [...a, b])),
-        [[]] as string[][]
-      );
-
-    const attributeValues = attributeGroups.map((group) => group.attrValues);
-    const combinations = cartesianProduct(attributeValues);
-
-    // Step 3: Map combinations to variant objects
-    return combinations.map((combination) => {
-      const variant: Record<string, string> = {};
-      combination.forEach((value, index) => {
-        const { attrName } = attributeGroups[index];
-        variant[attrName] = value;
-      });
-      return {
-        ...variant,
-        variantName: "",
-        sku: "",
-        basePrice: 0,
-        finalPrice: 0,
-        taxRate: 0,
-        discount: 0,
-        currency: "",
-        stockQuantity: 0,
-        imageUrls: [],
-        status: "active",
-      };
-    });
-  }
-
   const handleRemoveVariant = (index: number) => {
+    if (!productId) return;
     dispatch(removeVariant({ productId, index }));
   };
 
   const handleVariantChange = (
     index: number,
     field: string,
-    value: string | React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    value:
+      | string
+      | number
+      | React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    const finalValue =
-      typeof value === "string"
-        ? value
-        : (value.target as HTMLInputElement).value;
+    if (!productId) return;
 
-    if (!productId) {
-      console.error("Product ID is undefined. Cannot update variant field.");
-      return;
-    }
-
+    const finalValue = typeof value === "object" ? value.target.value : value;
     dispatch(
       updateVariantField({
         productId,
@@ -213,184 +199,170 @@ const Variant = () => {
     );
   };
 
-  const handleAttributeSelect = (attrName: string) => {
-    setSelectedAttributes((prevSelected) => {
-      if (prevSelected.includes(attrName)) {
-        return prevSelected.filter((name) => name !== attrName); // Deselect
-      } else {
-        return [...prevSelected, attrName]; // Select
-      }
-    });
-  };
-
   const customStyles = {
-    control: (provided: any) => ({
-      ...provided,
+    control: (base: any) => ({
+      ...base,
       backgroundColor: "transparent",
     }),
-    menu: (provided: any) => ({
-      ...provided,
+    menu: (base: any) => ({
+      ...base,
       backgroundColor: "#f0f9ff",
     }),
-    option: (provided: any, state: any) => ({
-      ...provided,
+    option: (base: any, state: any) => ({
+      ...base,
       backgroundColor: state.isFocused ? "#e0f2fe" : "#f0f9ff",
     }),
   };
 
-  const codeTypeOptions: OptionType[] = [
-    { value: "sku", label: "SKU" },
-    { value: "upc", label: "UPC" },
-    { value: "ean", label: "EAN" },
-    { value: "gtin", label: "GTIN" },
-  ];
-
-  console.log("variants:", variants);
-  console.log("AttributesVariants:", AttributesVariants);
-  console.log("attributes:", attributes);
-  console.log("variantAttributes:", variantAttributes);
-
   return (
     <div className="p-3 rounded-lg shadow-md">
       <h3 className="text-lg font-semibold text-pri capitalize mb-4">
-        Variant
+        Variants
       </h3>
 
       {/* Attribute Selection */}
       <div>
-        {attributes.length > 0 && (
-          <>
-            {attributes.map((group) => (
-              <div key={group.groupName} className="mb-6">
-                {group.attributes.map((attribute) => (
-                  <div key={attribute.attrName} className="mb-4">
-                    <label className="block text-sm font-medium mb-2">
-                      {attribute.attrName}
-                    </label>
-                    <Select
-                      options={attribute.attrValue.map((value) => ({
-                        label: value,
-                        value,
-                      }))}
-                      isMulti
-                      styles={customStyles}
-                      className="bg-none text-sec border-gray-100"
-                      classNamePrefix="select"
-                      onChange={(selected) =>
-                        handleAttributeChange(
-                          0,
-                          group.groupName,
-                          attribute.attrName,
-                          selected?.map((option) => option.value) || null
-                        )
-                      }
-                      placeholder={`Select ${attribute.attrName}`}
-                    />
-                  </div>
-                ))}
+        {attributes.map((group) => (
+          <div key={group.groupName} className="mb-6">
+            <h4 className="font-medium mb-2">{group.groupName}</h4>
+            {group.attributes.map((attribute) => (
+              <div key={attribute.attrName} className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  {attribute.attrName}
+                </label>
+                <Select
+                  options={attribute.attrValue.map((value) => ({
+                    label: value,
+                    value,
+                  }))}
+                  isMulti
+                  styles={customStyles}
+                  className="bg-none text-sec border-gray-100"
+                  onChange={(selected) =>
+                    handleAttributeChange(
+                      group.groupName,
+                      attribute.attrName,
+                      selected?.map((option) => option.value) || null
+                    )
+                  }
+                  placeholder={`Select ${attribute.attrName}`}
+                />
               </div>
             ))}
-          </>
-        )}
+          </div>
+        ))}
       </div>
 
-      {/* Variant Management */}
-      <div className="rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold text-pri capitalize mb-4">
-          Variant Management
-        </h3>
-
-        {variants?.map((variant: any, index: number) => (
-          <div key={index} className="mt-10">
-            {/* File Uploader for Images */}
-            <FilesUploader
-              files={variant.imageUrls || []}
-              addFiles={(newFiles) => {
-                setImageIndex(index);
-                addFiles(newFiles);
-              }}
-            />
-
-            {/* SKU Field */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium">SKU</label>
-              <input
-                type="text"
-                value={variant.sku || ""}
-                onChange={(e) => handleVariantChange(index, "sku", e)}
-                className="mt-1 block w-full border-gray-300 bg-transparent rounded-md shadow-sm"
-                placeholder="Enter SKU"
-              />
-            </div>
-
-            {/* Base Price Field */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium">Base Price</label>
-              <input
-                type="number"
-                value={variant.basePrice || 0}
-                onChange={(e) => handleVariantChange(index, "basePrice", e)}
-                className="mt-1 block w-full border-gray-300 bg-transparent rounded-md shadow-sm"
-                placeholder="Enter Base Price"
-              />
-            </div>
-
-            {/* Final Price Field */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium">Final Price</label>
-              <input
-                type="number"
-                value={variant.finalPrice || 0}
-                onChange={(e) => handleVariantChange(index, "finalPrice", e)}
-                className="mt-1 block w-full border-gray-300 bg-transparent rounded-md shadow-sm"
-                placeholder="Enter Final Price"
-              />
-            </div>
-
-            {/* Stock Quantity Field */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium">
-                Stock Quantity
-              </label>
-              <input
-                type="number"
-                value={variant.stockQuantity || 0}
-                onChange={(e) => handleVariantChange(index, "stockQuantity", e)}
-                className="mt-1 block w-full border-gray-300 bg-transparent rounded-md shadow-sm"
-                placeholder="Enter Stock Quantity"
-              />
-            </div>
-
-            {/* Status Field */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium">Status</label>
-              <select
-                name="status"
-                title='status'
-                value={variant.status || "active"}
-                onChange={(e) =>
-                  handleVariantChange(index, "status", e.target.value)
-                }
-                className="mt-1 block w-full border-gray-300 bg-transparent rounded-md shadow-sm"
+      {/* Variant List */}
+      <div className="mt-8">
+        <h4 className="font-medium mb-4">Generated Variants</h4>
+        {variants.map((variant: VariantType, index: number) => (
+          <div key={index} className="border p-4 rounded-lg mb-4">
+            <div className="flex justify-between mb-4">
+              <h5 className="font-medium">{variant.variantName}</h5>
+              <button
+                onClick={() => handleRemoveVariant(index)}
+                className="text-red-500"
               >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
+                Remove
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <VariantFileUploader
+                productId={productId}
+                variantIndex={index}
+                initialFiles={variant.imageUrls || []}
+              />
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium">SKU</label>
+                  <input
+                    type="text"
+                    value={variant.sku}
+                    onChange={(e) => handleVariantChange(index, "sku", e)}
+                    className="mt-1 block w-full rounded-md border-gray-300 bg-transparent"
+                    placeholder="Enter SKU"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium">
+                    Base Price
+                  </label>
+                  <input
+                    type="number"
+                    value={variant.basePrice}
+                    onChange={(e) => handleVariantChange(index, "basePrice", e)}
+                    className="mt-1 block w-full rounded-md border-gray-300 bg-transparent"
+                    title="Base price for variant"
+                    placeholder="Enter base price"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium">
+                    Final Price
+                  </label>
+                  <input
+                    type="number"
+                    value={variant.finalPrice}
+                    onChange={(e) =>
+                      handleVariantChange(index, "finalPrice", e)
+                    }
+                    className="mt-1 block w-full rounded-md border-gray-300 bg-transparent"
+                    title="Final price for variant"
+                    placeholder="Enter final price"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium">
+                    Stock Quantity
+                  </label>
+                  <input
+                    type="number"
+                    value={variant.stockQuantity}
+                    onChange={(e) =>
+                      handleVariantChange(index, "stockQuantity", e)
+                    }
+                    className="mt-1 block w-full rounded-md border-gray-300 bg-transparent"
+                    title="Stock quantity for variant"
+                    placeholder="Enter stock quantity"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium">Status</label>
+                  <select
+                    value={variant.status}
+                    onChange={(e) =>
+                      handleVariantChange(index, "status", e.target.value)
+                    }
+                    className="mt-1 block w-full rounded-md border-gray-300 bg-transparent"
+                    title="Status of variant"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Navigation Buttons */}
-      <div className="flex justify-between items-center mt-6">
+      {/* Navigation */}
+      <div className="flex justify-between mt-6">
         <Link
-          href={"/products/list_product/details"}
+          href="/products/list_product/details"
           className="bg-blue-500 text-white p-2 rounded"
         >
           Back
         </Link>
         <Link
-          href={"/products/list_product/inventory"}
+          href="/products/list_product/inventory"
           className="bg-blue-500 text-white p-2 rounded"
         >
           Next
@@ -400,4 +372,4 @@ const Variant = () => {
   );
 };
 
-export default Variant;
+export default Variants;

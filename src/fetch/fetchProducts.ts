@@ -39,7 +39,6 @@ export const fetchProducts = (id?: string) => async (dispatch: AppDispatch) => {
     const normalizedData = normalizeProducts(
       Array.isArray(sanitizedData) ? sanitizedData : [sanitizedData]
     );
-    console.log("Normalized data:", normalizedData);
 
     // Validate normalized data
     if (!normalizedData.result || normalizedData.result.includes(undefined)) {
@@ -51,7 +50,7 @@ export const fetchProducts = (id?: string) => async (dispatch: AppDispatch) => {
     dispatch(
       setProducts({
         byId: normalizedData.entities.products || {},
-        allIds: normalizedData.result,
+        allIds: normalizedData.result || [],
       })
     );
 

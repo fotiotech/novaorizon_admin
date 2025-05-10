@@ -6,14 +6,28 @@ import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 
 // Function to find all available attribute groups
-export async function findAllAttributeGroups() {
+export async function findAllAttributeGroups(categoryId?: string) {
   await connection();
 
-  // Find distinct groups from the Attribute model
-  const groups = await AttributeGroup.find();
-
-  // Return the list of groups
-  return groups;
+  try {
+    let attributeGroups;
+    if (categoryId) {
+      attributeGroups = await AttributeGroup.find({
+        category_id: categoryId,
+      }).populate("category_id", "name");
+      return attributeGroups;
+    } else {
+      attributeGroups = await AttributeGroup.find({}).populate(
+        "category_id",
+        "name"
+      );
+      console.log("All attribute groups:", attributeGroups);
+      return attributeGroups;
+    }
+  } catch (error) {
+    console.error("Error fetching attribute groups:", error);
+    return null;
+  }
 }
 
 // Function to create a new attribute group

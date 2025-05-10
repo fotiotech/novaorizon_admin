@@ -7,89 +7,116 @@ import { useAppSelector, useAppDispatch } from "@/app/hooks";
 import Link from "next/link";
 import { addCategory } from "@/app/store/slices/categorySlice";
 import { addProduct } from "@/app/store/slices/productSlice";
-// import { persistor } from "@/app/store/store";
 import { v4 as uuidv4 } from "uuid";
+import { fetchCategory } from "@/fetch/fetchCategory";
 
 const Category = () => {
   const dispatch = useAppDispatch();
-  const [category, setCategory] = useState<Cat[]>([]);
+  const category = useAppSelector((state) => state.category);
   const products = useAppSelector((state) => state.product);
-  const id = products.allIds.length
-  ? products.allIds[0]
-  : uuidv4();
-  const category_id = products.byId[id]?.category_id; // Get category_id from the product state
-  const [parentId, setParentId] = useState<string>(category_id);
- 
-  useEffect(() => {
-    // Update parentId whenever categoryId changes
-    setParentId(category_id);
-  }, [category_id]); // Trigger whenever categoryId changes in the Redux store
 
-  // Fetch categories on mount or when parentId changes
+  // Get existing product ID or generate new one
+  const id = products.allIds.length ? products.allIds[0] : uuidv4();
+
+  // Initialize product in Redux if it doesn't exist
+  useEffect(() => {
+    if (!products.allIds.length) {
+      dispatch(addProduct({ _id: id }));
+    }
+  }, [dispatch, id, products.allIds.length]);
+
+  // Get the category_id from the product state
+  const category_id = products.byId[id]?.category_id || "";
+  const [parentId, setParentId] = useState<string>(category_id);
+
+  // Update local state when Redux category_id changes
+  useEffect(() => {
+    setParentId(category_id);
+  }, [category_id]);
+
+  // Fetch categories based on selected parent
   useEffect(() => {
     const fetchData = async () => {
       try {
-        if (parentId) {
-          const res = await getCategory(undefined, parentId, undefined);
-          if (res.length === 0) return null;
-          setCategory(res || []);
-        } else {
-          const res = await getCategory();
-          setCategory(res || []);
-        }
+        // If we have a parentId, fetch its subcategories, otherwise fetch all categories
+        dispatch(fetchCategory(null, parentId || null, null));
       } catch (error) {
         console.error("Error fetching categories:", error);
       }
     };
 
     fetchData();
-  }, [parentId]); // Ensure it re-fetches whenever parentId changes
+  }, [parentId, dispatch]);
 
-  // Handle category selection
   const handleSelect = (catId: string) => {
-    setParentId(catId); // Update local state with the selected category ID
-    dispatch(addCategory({categoryId: catId})); // Dispatch action to update Redux store
-    dispatch(addProduct({_id: id, category_id: catId})); // Dispatch action to update Redux store
+    if (!catId) return;
+
+    setParentId(catId);
+
+    // Update both category and product states
+    dispatch(addCategory({ categoryId: catId }));
+    dispatch(
+      addProduct({
+        _id: id,
+        category_id: catId,
+      })
+    );
   };
 
   return (
     <div className="p-2 mt-4">
-      <ul
-        className="flex flex-col gap-2 bg-[#eee]
-        h-[500px] scrollbar-none overflow-clip 
-        overflow-y-auto dark:bg-sec-dark"
-      >
-        {category.map((item) => (
-          <li
-            key={item._id}
-            className="flex justify-between items-center rounded-lg bg-slate-600 p-2"
-          >
-            <p
-              onClick={() => handleSelect(item?._id as string)} // Ensure handleSelect is called
-              className="flex-1 cursor-pointer"
-            >
-              {item.categoryName}
-            </p>
-            <span
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent event propagation to parent <li> on button click
-                handleSelect(item?._id as string); // Ensure the category is selected
-              }}
-              className={`${
-                parentId === item._id ? "bg-blue-400" : ""
-              } px-2 rounded-lg border`}
-            >
-              Select This
-            </span>
-          </li>
-        ))}
+      <h3 className="text-lg font-semibold mb-4">Select Category</h3>
+      <ul className="flex flex-col gap-2 bg-[#eee] h-[500px] scrollbar-none overflow-clip overflow-y-auto dark:bg-sec-dark">
+        {category?.allIds.length > 0 &&
+          category?.allIds.map((idx) => {
+            const categoryData = category.byId[idx];
+            if (!categoryData) return null;
+
+            return (
+              <li
+                key={idx}
+                className="flex justify-between items-center rounded-lg bg-slate-600 p-2"
+              >
+                <p
+                  onClick={() => handleSelect(categoryData._id)}
+                  className="flex-1 cursor-pointer"
+                >
+                  {categoryData?.categoryName}
+                </p>
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelect(categoryData._id);
+                  }}
+                  className={`${
+                    parentId === categoryData._id ? "bg-blue-400" : ""
+                  } px-2 rounded-lg border`}
+                >
+                  Select
+                </span>
+              </li>
+            );
+          })}
       </ul>
 
-      {/* Next button */}
-      <div className="text-end mt-4">
+      <div className="flex justify-between mt-6">
+        <div className="text-sm text-gray-500">
+          {parentId
+            ? "Category selected"
+            : "Please select a category to continue"}
+        </div>
         <Link
-          href={parentId ? "/products/list_product/basic_infos" : ""}
-          className="bg-blue-500 text-white p-2 rounded"
+          href={parentId ? "/products/list_product/basic_infos" : "#"}
+          className={`${
+            parentId
+              ? "bg-blue-500 hover:bg-blue-600"
+              : "bg-gray-400 cursor-not-allowed"
+          } text-white p-2 rounded transition-colors`}
+          onClick={(e) => {
+            if (!parentId) {
+              e.preventDefault();
+            }
+          }}
         >
           Next
         </Link>

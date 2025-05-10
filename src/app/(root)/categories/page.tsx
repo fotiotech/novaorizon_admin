@@ -9,9 +9,14 @@ import {
 } from "@/app/actions/category";
 import { Category as Cat } from "@/constant/types";
 import { useFileUploader } from "@/hooks/useFileUploader";
+import { v4 as uuidv4 } from "uuid";
 import Spinner from "@/components/Spinner";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
 
 const Categories = () => {
+  const dispatch = useAppDispatch();
+  const category = useAppSelector((state) => state.category);
+  const id = category.allIds.length ? category.allIds[0] : uuidv4();
   const { files, loading, addFiles, removeFile } = useFileUploader();
 
   const [categoryData, setCategoryData] = useState<Cat>({

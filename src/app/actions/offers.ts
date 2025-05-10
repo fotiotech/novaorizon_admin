@@ -22,8 +22,15 @@ export async function createOffer(data: {
   revalidatePath("/admin/discounts_coupons");
 }
 
-export async function readOffers() {
+export async function readOffers(id?: string) {
   await connection();
+  if (id) {
+    const offer = await Offer.findById(id);
+    if (!offer) {
+      throw new Error("Offer not found");
+    }
+    return offer;
+  }
   return await Offer.find();
 }
 

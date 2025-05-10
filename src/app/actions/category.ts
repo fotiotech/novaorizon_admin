@@ -44,7 +44,8 @@ export async function getCategory(
     }
   } else if (parentId) {
     const subCategories = await Category.find({ parent_id: parentId });
-    if (subCategories.length) {
+    console.log("Subcategories:", subCategories);
+    if (subCategories.length > 0) {
       return subCategories.map((subCategory) => ({
         ...subCategory?.toObject(),
         _id: subCategory._id?.toString(),

@@ -96,8 +96,7 @@ const ProductSchema = new Schema(
           trim: true,
         },
         attributes: {
-          type: Map,
-          of: [String], // Each attribute maps to an array of string values
+          type: Object, // Change to Object instead of Map
           required: true,
         },
       },

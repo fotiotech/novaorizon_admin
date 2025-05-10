@@ -497,3 +497,92 @@ export async function deleteProductImages(
     console.error("Error deleting product images:", error);
   }
 }
+
+export async function updateVariantAttributes(
+  productId: string,
+  variantData: {
+    groupName: string;
+    attributes: { name: string; value: string }[];
+    imageUrls?: string[];
+  }
+) {
+  await connection();
+  try {
+    const variant = await VariantAttribute.findOneAndUpdate(
+      {
+        product_id: new mongoose.Types.ObjectId(productId),
+        groupName: variantData.groupName,
+      },
+      {
+        $set: {
+          attributes: variantData.attributes,
+          ...(variantData.imageUrls && { imageUrls: variantData.imageUrls }),
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    return variant;
+  } catch (error) {
+    console.error("Error updating variant attributes:", error);
+    throw error;
+  }
+}
+
+export async function deleteVariantImages(
+  productId: string,
+  groupName: string,
+  imageUrls?: string[]
+) {
+  await connection();
+  try {
+    const variant = await VariantAttribute.findOne({
+      product_id: new mongoose.Types.ObjectId(productId),
+      groupName,
+    });
+
+    if (!variant) {
+      throw new Error("Variant not found");
+    }
+
+    // Delete specific images or all images
+    if (imageUrls?.length) {
+      // Delete specific images from storage
+      for (const url of imageUrls) {
+        try {
+          const imageRef = ref(storage, url);
+          await deleteObject(imageRef);
+        } catch (e) {
+          console.error(`Error deleting image ${url}:`, e);
+        }
+      }
+
+      // Remove URLs from variant
+      interface VariantWithImages {
+        imageUrls: string[];
+      }
+
+            variant.imageUrls = variant.imageUrls.filter(
+              (url: string) => !imageUrls.includes(url)
+            );
+    } else {
+      // Delete all images from storage
+      for (const url of variant.imageUrls) {
+        try {
+          const imageRef = ref(storage, url);
+          await deleteObject(imageRef);
+        } catch (e) {
+          console.error(`Error deleting image ${url}:`, e);
+        }
+      }
+
+      variant.imageUrls = [];
+    }
+
+    await variant.save();
+    return variant;
+  } catch (error) {
+    console.error("Error deleting variant images:", error);
+    throw error;
+  }
+}

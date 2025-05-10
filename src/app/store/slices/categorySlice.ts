@@ -24,7 +24,37 @@ const categorySlice = createSlice({
     },
     // Updates the selected category in the state
     addCategory: (state, action: PayloadAction<any | null>) => {
-      state.byId = action.payload;
+      const { _id, ...categoryData } = action.payload;
+
+      // Validate categoryId
+      if (!_id) {
+        console.error("Category ID is undefined. Payload:", action.payload);
+        return;
+      }
+
+      // Validate categoryData
+      if (!categoryData || typeof categoryData !== "object") {
+        console.error(
+          "Invalid Category data. Skipping addCategory. Payload:",
+          action.payload
+        );
+        return;
+      }
+
+      // Check if the Category already exists in the state
+      if (!state.byId[_id]) {
+        // If not, initialize the Category in the state
+        if (!state.allIds.includes(_id)) {
+          state.allIds.push(_id); // Add the CategoryId to the allIds array
+        }
+        state.byId[_id] = categoryData;
+      } else {
+        // If the category exists, update its fields
+        state.byId[_id] = {
+          ...state.byId[_id],
+          ...categoryData,
+        };
+      }
     },
   },
 });

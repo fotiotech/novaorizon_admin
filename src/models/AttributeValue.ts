@@ -17,7 +17,7 @@ interface IAttributeValue extends Document {
       required: [true, "Attribute value is required"],
     },
   });
-  
+
   // Attribute Value Model
   const AttributeValue = models.AttributeValue || model<IAttributeValue>("AttributeValue", AttributeValueSchema);
   export default AttributeValue;

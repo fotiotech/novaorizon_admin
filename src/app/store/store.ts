@@ -1,13 +1,40 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { persistStore, persistReducer } from "redux-persist";
+import storage from "redux-persist/lib/storage";
+import { combineReducers } from "redux";
 import userReducer from "./slices/userSlice";
 import productReducer from "./slices/productSlice";
 import categoryReducer from "./slices/categorySlice";
+import offerReducer from "./slices/offerSlice";
+import attributeReducer from "./slices/attributeSlice";
+import attributeGroupReducer from "./slices/attributeGroupSlice";
 
-export const store = configureStore({
-  reducer: { product: productReducer, category: categoryReducer, user: userReducer },
+const persistConfig = {
+  key: "root",
+  storage,
+  whitelist: ["category", "product"], // Only persist category and product states
+};
+
+const rootReducer = combineReducers({
+  user: userReducer,
+  category: categoryReducer,
+  product: productReducer,
+  offer: offerReducer,
+  attribute: attributeReducer,
+  attributeGroup: attributeGroupReducer,
 });
 
-// export const persistor = persistStore(store);
-// TypeScript types for store
+const persistedReducer = persistReducer(persistConfig, rootReducer);
+
+export const store = configureStore({
+  reducer: persistedReducer,
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: false, // Disable serializable check for redux-persist
+    }),
+});
+
+export const persistor = persistStore(store);
+
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

@@ -1,9 +1,9 @@
 "use client";
-import Category from "./category/page";
-import { useAppDispatch } from "@/app/hooks";
-import React, { useEffect } from "react";
-import { useSearchParams } from "next/navigation";
 
+import React, { useEffect } from "react";
+import { useAppDispatch } from "@/app/hooks";
+import { useSearchParams } from "next/navigation";
+import Category from "./category/page";
 import { fetchProducts } from "@/fetch/fetchProducts";
 
 const ListProduct = () => {
@@ -11,7 +11,7 @@ const ListProduct = () => {
   const id = searchParams.get("id")?.toLowerCase();
   const dispatch = useAppDispatch();
 
-
+  // Only fetch product data if we're editing an existing product
   useEffect(() => {
     if (id) {
       dispatch(fetchProducts(id));
@@ -19,13 +19,11 @@ const ListProduct = () => {
   }, [dispatch, id]);
 
   return (
-    <div>
-      <h3 className="text-lg font-bold mb-4">
-        {id ? "Edit product" : "Add Product"}
+    <div className="p-4">
+      <h3 className="text-2xl font-semibold mb-6">
+        {id ? "Edit Product" : "Add New Product"}
       </h3>
-      <div>
-        <Category />
-      </div>
+      <Category />
     </div>
   );
 };

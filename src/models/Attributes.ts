@@ -3,8 +3,9 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 // Attribute Interface
 interface IAttribute extends Document {
   group: string;
-  getVariant?: boolean;
+  isVariant?: boolean;
   name: string;
+  type: "select" | "multiselect" | "text" | "number" | "boolean"; // Added the missing 'type' property
   category_id: mongoose.Types.ObjectId;
 }
 
@@ -17,10 +18,14 @@ const AttributeSchema = new Schema<IAttribute>({
     type: String,
     required: [true, "Attribute name is required"],
   },
-  getVariant: {
+  isVariant: {
     type: Boolean,
     default: false,
   },
+  type: {
+    type: String,
+    enum: ["select", "multiselect", "text", "number", "boolean"],
+  }, // Added the missing 'type' property},
   category_id: {
     type: Schema.Types.ObjectId,
     ref: "Category",

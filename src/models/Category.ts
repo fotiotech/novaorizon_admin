@@ -4,6 +4,7 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 interface ICategory extends Document {
   url_slug: string;
   categoryName: string;
+  department_id?: mongoose.Types.ObjectId;
   parent_id?: mongoose.Types.ObjectId;
   description?: string;
   imageUrl?: string[];
@@ -29,6 +30,10 @@ const CategorySchema = new Schema<ICategory>({
     unique: true,
     required: [true, "Category name is required"],
   },
+  department_id: {
+    type: mongoose.Types.ObjectId,
+    ref: "Department",
+  },
   parent_id: {
     type: mongoose.Types.ObjectId,
     ref: "Category",
@@ -39,7 +44,8 @@ const CategorySchema = new Schema<ICategory>({
       type: String,
       validate: {
         validator: (v: string) => /^https?:\/\/.+\..+$/.test(v),
-        message: (props: { value: string }) => `${props.value} is not a valid URL!`,
+        message: (props: { value: string }) =>
+          `${props.value} is not a valid URL!`,
       },
     },
   ],
@@ -59,5 +65,6 @@ CategorySchema.pre("save", function (next) {
 });
 
 // Category Model
-const Category = models.Category || model<ICategory>("Category", CategorySchema);
+const Category =
+  models.Category || model<ICategory>("Category", CategorySchema);
 export default Category;

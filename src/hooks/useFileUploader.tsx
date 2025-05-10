@@ -8,7 +8,10 @@ import {
 import { storage } from "@/utils/firebaseConfig";
 import { deleteProductImages } from "@/app/actions/products";
 
-export const useFileUploader = (initialFiles: string[] = []) => {
+export const useFileUploader = (
+  instanceId?: string,
+  initialFiles: string[] = []
+) => {
   const [imgFiles, setImgFiles] = useState<File[]>([]);
   const [files, setFiles] = useState<string[]>(initialFiles);
   const [loading, setLoading] = useState(false);
@@ -22,7 +25,11 @@ export const useFileUploader = (initialFiles: string[] = []) => {
 
     for (const file of imgFiles) {
       try {
-        const storageRef = ref(storage, `uploads/${file.name}`);
+        // Include instanceId in the storage path to keep files separate
+        const path = instanceId
+          ? `uploads/${instanceId}/${file.name}`
+          : `uploads/${file.name}`;
+        const storageRef = ref(storage, path);
         await uploadBytes(storageRef, file);
         const downloadURL = await getDownloadURL(storageRef);
         urls.push(downloadURL);
@@ -34,7 +41,7 @@ export const useFileUploader = (initialFiles: string[] = []) => {
     setFiles((prev) => [...prev, ...urls]);
     setImgFiles([]);
     setLoading(false);
-  }, [imgFiles]);
+  }, [imgFiles, instanceId]);
 
   useEffect(() => {
     if (imgFiles.length > 0) {
@@ -44,6 +51,11 @@ export const useFileUploader = (initialFiles: string[] = []) => {
 
   const addFiles = (newFiles: File[]) => {
     setImgFiles((prev) => [...prev, ...newFiles]);
+  };
+
+  const clearFiles = () => {
+    setFiles([]);
+    setImgFiles([]);
   };
 
   const handleRemoveFile = async (
@@ -71,14 +83,8 @@ export const useFileUploader = (initialFiles: string[] = []) => {
     try {
       const res = await deleteProductImages(id, fileToRemove);
 
-      console.log(`Files content: ${filesContent}`);
-
       if (res?.success) {
-        setFiles(() => {
-          const updatedFiles = filesContent.filter((_, i) => i !== index);
-          console.log("Updated files:", updatedFiles);
-          return updatedFiles;
-        });
+        setFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
       }
     } catch (error) {
       console.error(
@@ -97,5 +103,6 @@ export const useFileUploader = (initialFiles: string[] = []) => {
     loading,
     addFiles,
     removeFile,
+    clearFiles,
   };
 };

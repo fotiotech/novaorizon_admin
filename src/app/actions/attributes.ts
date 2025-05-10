@@ -6,12 +6,39 @@ import Category from "@/models/Category";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 
+// Add TypeScript interfaces
+interface AttributeFormData {
+  catId: string;
+  groupName: string;
+  names: string[];
+  values: string[][];
+  isVariants: boolean[];
+}
 
+interface AttributeUpdateParams {
+  name: string;
+  group: string;
+  category_id?: string;
+  isVariant: boolean;
+}
 
+// Cache map for category attributes
+const categoryAttributesCache = new Map<string, any>();
 
-// Function to fetch category attributes and values
-export async function findCategoryAttributesAndValues(categoryId: string) {
+// Function to fetch only variant attributes and their values
+export async function findCategoryVariantAttributes(categoryId: string) {
   await connection();
+
+  // Check cache first with a variant-specific key
+  const cacheKey = `variant-${categoryId}`;
+  const cached = categoryAttributesCache.get(cacheKey);
+  if (cached) {
+    const cacheAge = Date.now() - cached.timestamp;
+    if (cacheAge < 30000) {
+      // Cache valid for 30 seconds
+      return cached.data;
+    }
+  }
 
   const response = await Category.aggregate([
     // Match the specified category by _id
@@ -57,10 +84,21 @@ export async function findCategoryAttributesAndValues(categoryId: string) {
       },
     },
 
-    // Unwind allAttributes to fetch attribute values per attribute
-    { $unwind: "$allAttributes" },
+    // Filter to only include variant attributes
+    {
+      $addFields: {
+        allAttributes: {
+          $filter: {
+            input: "$allAttributes",
+            as: "attr",
+            cond: { $eq: ["$$attr.isVariant", true] },
+          },
+        },
+      },
+    },
 
-    // Lookup attribute values for each attribute
+    // Continue with the existing pipeline but only for variant attributes
+    { $unwind: "$allAttributes" },
     {
       $lookup: {
         from: "attributevalues",
@@ -70,25 +108,26 @@ export async function findCategoryAttributesAndValues(categoryId: string) {
       },
     },
 
-    // Group attributes by the 'group' field to organize by attribute groups
+    // Group attributes by their groups
     {
       $group: {
         _id: {
           categoryId: "$_id",
           groupName: "$allAttributes.group",
         },
-        categoryName: { $first: "$categoryName" },
+        categoryName: { $first: "$name" },
         attributes: {
           $push: {
-            attributeId: "$allAttributes._id",
-            attributeName: "$allAttributes.name",
-            attributeValues: "$allAttributes.attributeValues",
+            id: "$allAttributes._id",
+            name: "$allAttributes.name",
+            values: "$allAttributes.attributeValues",
+            isVariant: true,
           },
         },
       },
     },
 
-    // Group again to combine all groups under the category
+    // Final grouping to structure the response
     {
       $group: {
         _id: "$_id.categoryId",
@@ -102,7 +141,149 @@ export async function findCategoryAttributesAndValues(categoryId: string) {
       },
     },
 
-    // Project the final format
+    // Clean up the output format
+    {
+      $project: {
+        _id: 0,
+        categoryId: "$_id",
+        categoryName: 1,
+        groupedAttributes: {
+          $map: {
+            input: "$groupedAttributes",
+            as: "group",
+            in: {
+              groupName: "$$group.groupName",
+              attributes: {
+                $map: {
+                  input: "$$group.attributes",
+                  as: "attr",
+                  in: {
+                    id: "$$attr.id",
+                    name: "$$attr.name",
+                    values: {
+                      $map: {
+                        input: "$$attr.values",
+                        as: "val",
+                        in: {
+                          id: "$$val._id",
+                          value: "$$val.value",
+                        },
+                      },
+                    },
+                    isVariant: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  ]);
+
+  // Update cache
+  categoryAttributesCache.set(cacheKey, {
+    data: response,
+    timestamp: Date.now(),
+  });
+
+  return response;
+}
+
+// Function to fetch category attributes and values
+export async function findCategoryAttributesAndValues(
+  categoryId: string,
+  variantsOnly: boolean = false
+) {
+  if (variantsOnly) {
+    return findCategoryVariantAttributes(categoryId);
+  }
+
+  await connection();
+
+  // Check cache first
+  const cached = categoryAttributesCache.get(categoryId);
+  if (cached) {
+    const cacheAge = Date.now() - cached.timestamp;
+    if (cacheAge < 30000) {
+      // Cache valid for 30 seconds
+      return cached.data;
+    }
+  }
+
+  const response = await Category.aggregate([
+    // Similar pipeline as findCategoryVariantAttributes but without variant filtering
+    { $match: { _id: new mongoose.Types.ObjectId(categoryId) } },
+    {
+      $lookup: {
+        from: "attributes",
+        localField: "_id",
+        foreignField: "category_id",
+        as: "directAttributes",
+      },
+    },
+    {
+      $graphLookup: {
+        from: "categories",
+        startWith: "$parent_id",
+        connectFromField: "parent_id",
+        connectToField: "_id",
+        as: "ancestry",
+      },
+    },
+    {
+      $lookup: {
+        from: "attributes",
+        localField: "ancestry._id",
+        foreignField: "category_id",
+        as: "inheritedAttributes",
+      },
+    },
+    {
+      $addFields: {
+        allAttributes: {
+          $concatArrays: ["$directAttributes", "$inheritedAttributes"],
+        },
+      },
+    },
+    { $unwind: "$allAttributes" },
+    {
+      $lookup: {
+        from: "attributevalues",
+        localField: "allAttributes._id",
+        foreignField: "attribute_id",
+        as: "allAttributes.attributeValues",
+      },
+    },
+    {
+      $group: {
+        _id: {
+          categoryId: "$_id",
+          groupName: "$allAttributes.group",
+        },
+        categoryName: { $first: "$name" },
+        attributes: {
+          $push: {
+            id: "$allAttributes._id",
+            name: "$allAttributes.name",
+            values: "$allAttributes.attributeValues",
+            isVariant: "$allAttributes.isVariant",
+          },
+        },
+      },
+    },
+    {
+      $group: {
+        _id: "$_id.categoryId",
+        categoryName: { $first: "$categoryName" },
+        groupedAttributes: {
+          $push: {
+            groupName: "$_id.groupName",
+            attributes: "$attributes",
+          },
+        },
+      },
+    },
     {
       $project: {
         _id: 0,
@@ -113,81 +294,226 @@ export async function findCategoryAttributesAndValues(categoryId: string) {
     },
   ]);
 
+  // Update cache
+  categoryAttributesCache.set(categoryId, {
+    data: response,
+    timestamp: Date.now(),
+  });
+
   return response;
 }
 
-// Function to create or update attributes and their values
-export async function createAttribute(formData: FormData) {
+// Function to create new attributes
+export async function createAttribute(formData: AttributeFormData) {
+  const { catId, groupName, names, values, isVariants } = formData;
+
+  if (!catId || !groupName || !Array.isArray(names) || names.length === 0) {
+    throw new Error("Missing required fields");
+  }
+
   await connection();
-
-  const categoryId = formData.get("catId") as string;
-  const groupName = formData.get("groupName") as string; // Group name
-  const attrNames: string[] = [];
-  const attrValues: string[][] = []; // Array of arrays to hold multiple values per attribute
-
-  // Collect attribute names and values
-  for (const [key, value] of formData.entries() as unknown as any) {
-    if (key.startsWith("attrName")) {
-      attrNames.push(value as string);
-    } else if (key.startsWith("attrValue")) {
-      const values = (value as string)
-        .split(",")
-        .map((v) => v.trim())
-        .filter((v) => v); // Filter out empty values
-      attrValues.push(values);
-    }
-  }
-
-  if (!categoryId || !groupName || !attrNames.length || !attrValues.length) {
-    console.error("Missing required data:", {
-      categoryId,
-      groupName,
-      attrNames,
-      attrValues,
-    });
-    return;
-  }
+  const session = await mongoose.startSession();
 
   try {
-    for (let i = 0; i < attrNames.length; i++) {
-      const attributeName = attrNames[i];
-      const attributeValues = attrValues[i];
+    await session.withTransaction(async () => {
+      const attributes = await Promise.all(
+        names.map(async (name, index) => {
+          const attribute = await Attribute.findOneAndUpdate(
+            {
+              group: groupName,
+              name,
+              category_id: new mongoose.Types.ObjectId(catId),
+            },
+            {
+              $set: {
+                isVariant: isVariants[index] || false,
+              },
+            },
+            {
+              upsert: true,
+              new: true,
+              session,
+            }
+          );
 
-      // Check if the attribute already exists
-      let attribute = await Attribute.findOne({
-        group: groupName,
-        name: attributeName,
-        category_id: new mongoose.Types.ObjectId(categoryId),
+          // Create attribute values if provided
+          if (values[index]?.length) {
+            await AttributeValue.insertMany(
+              values[index].map((value) => ({
+                attribute_id: attribute._id,
+                value,
+              })),
+              { session }
+            );
+          }
+
+          return attribute;
+        })
+      );
+
+      // Clear cache for this category
+      categoryAttributesCache.delete(catId);
+      categoryAttributesCache.delete(`variant-${catId}`);
+
+      return attributes;
+    });
+  } finally {
+    session.endSession();
+  }
+}
+
+// Function to update attribute
+export async function updateAttribute(
+  id: string,
+  params: AttributeUpdateParams
+) {
+  await connection();
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      const updatedAttribute = await Attribute.findByIdAndUpdate(
+        id,
+        {
+          name: params.name,
+          group: params.group,
+          ...(params.category_id && {
+            category_id: new mongoose.Types.ObjectId(params.category_id),
+          }),
+          isVariant: params.isVariant,
+        },
+        { new: true, session }
+      );
+
+      if (!updatedAttribute) {
+        throw new Error("Attribute not found");
+      }
+
+      // Clear cache for the affected category
+      if (params.category_id) {
+        categoryAttributesCache.delete(params.category_id);
+        categoryAttributesCache.delete(`variant-${params.category_id}`);
+      }
+
+      return updatedAttribute;
+    });
+  } finally {
+    session.endSession();
+  }
+}
+
+// Function to update attribute value
+export async function updateAttributeValue(id: string, params: any) {
+  await connection();
+
+  try {
+    if (params.action === "addValue") {
+      // Handle adding a new value
+      const attribute = await Attribute.findById(id);
+      if (!attribute) {
+        throw new Error("Attribute not found");
+      }
+
+      const newAttributeValue = await AttributeValue.create({
+        attribute_id: attribute._id,
+        value: params.value,
       });
 
+      // Clear cache for the affected category
+      categoryAttributesCache.delete(attribute.category_id.toString());
+      categoryAttributesCache.delete(
+        `variant-${attribute.category_id.toString()}`
+      );
+
+      return newAttributeValue;
+    } else {
+      // Handle updating existing value
+      const { value } = params;
+      const attributeValue = await AttributeValue.findById(id);
+      if (!attributeValue) {
+        throw new Error("Attribute value not found");
+      }
+
+      const updatedAttributeValue = await AttributeValue.findByIdAndUpdate(
+        id,
+        { value },
+        { new: true }
+      );
+
+      // Clear cache for the affected category
+      const attribute = await Attribute.findById(attributeValue.attribute_id);
+      if (attribute) {
+        categoryAttributesCache.delete(attribute.category_id.toString());
+        categoryAttributesCache.delete(
+          `variant-${attribute.category_id.toString()}`
+        );
+      }
+
+      return updatedAttributeValue;
+    }
+  } catch (error) {
+    console.error("Error updating attribute value:", error);
+    throw error;
+  }
+}
+
+// Function to delete attribute
+export async function deleteAttribute(name: string) {
+  await connection();
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      const attribute = await Attribute.findOne({ name }).session(session);
       if (!attribute) {
-        // Create a new attribute if it doesn't exist
-        attribute = await Attribute.create({
-          group: groupName,
-          name: attributeName,
-          category_id: new mongoose.Types.ObjectId(categoryId),
-        });
+        throw new Error("Attribute not found");
       }
 
-      // Add or update attribute values in the AttributeValue collection
-      for (const value of attributeValues) {
-        const existingValue = await AttributeValue.findOne({
-          attribute_id: attribute._id,
-          value,
-        });
+      // Delete all associated values
+      await AttributeValue.deleteMany(
+        { attribute_id: attribute._id },
+        { session }
+      );
 
-        if (!existingValue) {
-          // Create a new attribute value if it doesn't exist
-          await AttributeValue.create({
-            attribute_id: attribute._id,
-            value,
-          });
-        }
+      await Attribute.findByIdAndDelete(attribute._id).session(session);
+
+      // Clear cache for the affected category
+      if (attribute.category_id) {
+        categoryAttributesCache.delete(attribute.category_id.toString());
+        categoryAttributesCache.delete(
+          `variant-${attribute.category_id.toString()}`
+        );
       }
+    });
+  } finally {
+    session.endSession();
+  }
+}
+
+// Function to delete attribute value
+export async function deleteAttributeValue(id: string) {
+  await connection();
+
+  try {
+    const attributeValue = await AttributeValue.findById(id);
+    if (!attributeValue) {
+      throw new Error("Attribute value not found");
     }
 
-    console.log("Attributes and their values successfully created or updated");
+    await AttributeValue.findByIdAndDelete(id);
+
+    // Clear cache for the affected category
+    const attribute = await Attribute.findById(attributeValue.attribute_id);
+    if (attribute) {
+      categoryAttributesCache.delete(attribute.category_id.toString());
+      categoryAttributesCache.delete(
+        `variant-${attribute.category_id.toString()}`
+      );
+    }
+
+    return { message: "Attribute value deleted successfully" };
   } catch (error) {
-    console.error("Error creating or updating attributes and values:", error);
+    console.error("Error deleting attribute value:", error);
+    throw error;
   }
 }
