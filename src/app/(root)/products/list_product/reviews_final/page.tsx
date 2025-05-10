@@ -1,17 +1,19 @@
 "use client";
 import { createProduct, updateProduct } from "@/app/actions/products";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import React, { useEffect, useState } from "react";
-import { Product } from "@/constant/types";
+import React from "react";
 import Link from "next/link";
 import { RootState } from "@/app/store/store";
-// import { persistor } from "@/app/store/store";
+import { clearProduct } from "@/app/store/slices/productSlice";
+import { persistor } from "@/app/store/store";
+import { useRouter } from "next/navigation";
 
 const AddProduct = () => {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
   const productState = useAppSelector((state: RootState) => state.product);
-  const id = productState?.allIds[0]; // Assuming the first product is being edited
+  const id = productState?.allIds[0];
   const product = productState?.byId[id] || {};
-  console.log("product data:", product);
   const {
     _id,
     sku,
@@ -38,7 +40,7 @@ const AddProduct = () => {
     return (
       category_id &&
       attributes &&
-      imageUrls.length > 0 &&
+      imageUrls?.length > 0 &&
       sku &&
       productName &&
       brand_id &&
@@ -47,11 +49,24 @@ const AddProduct = () => {
     );
   };
 
+  const clearStoreAndRedirect = async () => {
+    // Clear Redux persisted data
+    await persistor.purge();
+    // Clear product state
+    dispatch(clearProduct());
+    // Redirect to products list
+    router.push("/products/list_product");
+  };
+
   const handleSubmit = async () => {
-    // if (validateForm()) {
+    if (!validateForm()) {
+      alert("Please fill all required fields!");
+      return;
+    }
+
     try {
       if (_id) {
-        const res = await updateProduct( _id, {
+        const res = await updateProduct(_id, {
           category_id,
           attributes,
           variants,
@@ -70,13 +85,10 @@ const AddProduct = () => {
           stockQuantity,
           status,
           variantAttributes,
-        } as unknown as any);
+        });
         if (res) {
           alert("Product updated successfully!");
-
-          // Clear Redux persisted data and reset state
-          //persistor.purge(); // Clear persisted data
-          //dispatch(clearProduct()); // Reset Redux state
+          await clearStoreAndRedirect();
         }
       } else {
         const res = await createProduct({
@@ -98,22 +110,16 @@ const AddProduct = () => {
           stockQuantity,
           status,
           variantAttributes,
-        } as unknown as any);
+        });
         if (res) {
           alert("Product submitted successfully!");
-
-          // Clear Redux persisted data and reset state
-          //persistor.purge(); // Clear persisted data
-          //dispatch(clearProduct()); // Reset Redux state
+          await clearStoreAndRedirect();
         }
       }
     } catch (error) {
       console.error("Error submitting product:", error);
       alert("Failed to submit the product. Please try again.");
     }
-    // } else {
-    //   alert("Please fill all required fields!");
-    // }
   };
 
   return (

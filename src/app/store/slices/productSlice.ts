@@ -114,7 +114,7 @@ const productSlice = createSlice({
       }>
     ) => {
       const { productId, index, field, value } = action.payload;
-      
+
       if (productId && state.byId[productId]?.variants?.[index]) {
         state.byId[productId].variants[index][field] = value;
       }
@@ -157,6 +157,11 @@ const productSlice = createSlice({
         );
       }
     },
+    clearProduct: (state) => {
+      // Reset to initial state
+      state.byId = {};
+      state.allIds = [];
+    },
   },
 });
 
@@ -170,5 +175,6 @@ export const {
   updateVariantField,
   updateVariantAttributes,
   syncVariantWithParent,
+  clearProduct,
 } = productSlice.actions;
 export default productSlice.reducer;
