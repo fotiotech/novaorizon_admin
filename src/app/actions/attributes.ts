@@ -315,41 +315,63 @@ export async function createAttribute(formData: AttributeFormData) {
   const session = await mongoose.startSession();
 
   try {
-    await session.withTransaction(async () => {
-      const attributes = await Promise.all(
-        names.map(async (name, index) => {
-          const attribute = await Attribute.findOneAndUpdate(
-            {
-              group: groupName,
-              name,
-              category_id: new mongoose.Types.ObjectId(catId),
-            },
-            {
-              $set: {
-                isVariant: isVariants[index] || false,
-              },
-            },
-            {
-              upsert: true,
-              new: true,
-              session,
-            }
-          );
+    const createdAttributes = await session.withTransaction(async () => {
+      const attributes = [];
 
-          // Create attribute values if provided
-          if (values[index]?.length) {
-            await AttributeValue.insertMany(
-              values[index].map((value) => ({
-                attribute_id: attribute._id,
-                value,
-              })),
-              { session }
-            );
+      // Process attributes sequentially
+      for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        if (!name.trim()) {
+          throw new Error(`Invalid attribute name at index ${i}`);
+        }
+
+        // Create or update the attribute
+        const attribute = await Attribute.findOneAndUpdate(
+          {
+            group: groupName,
+            name: name.trim(),
+            category_id: new mongoose.Types.ObjectId(catId),
+          },
+          {
+            $set: {
+              isVariant: isVariants[i] || false,
+            },
+          },
+          {
+            upsert: true,
+            new: true,
+            session,
           }
+        );
 
-          return attribute;
-        })
-      );
+        // Process values sequentially
+        const attributeValues = values[i] || [];
+        for (const value of attributeValues) {
+          if (value && value.trim()) {
+            try {
+              await AttributeValue.create(
+                [
+                  {
+                    attribute_id: attribute._id,
+                    value: value.trim(),
+                  },
+                ],
+                { session }
+              );
+            } catch (valueError) {
+              console.error(
+                `Error creating value "${value}" for attribute "${name}":`,
+                valueError
+              );
+              throw new Error(
+                `Failed to create value "${value}" for attribute "${name}"`
+              );
+            }
+          }
+        }
+
+        attributes.push(attribute);
+      }
 
       // Clear cache for this category
       categoryAttributesCache.delete(catId);
@@ -357,8 +379,13 @@ export async function createAttribute(formData: AttributeFormData) {
 
       return attributes;
     });
+
+    return createdAttributes;
+  } catch (error) {
+    console.error("Error in createAttribute:", error);
+    throw new Error("Failed to create attributes: " + (error as Error).message);
   } finally {
-    session.endSession();
+    await session.endSession();
   }
 }
 

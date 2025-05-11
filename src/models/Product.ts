@@ -72,17 +72,25 @@ const ProductSchema = new Schema(
       type: String,
       default: "XAF", // Default currency (Central African CFA Franc)
     },
-    // productCode: {
-    //   type: Object,
-    //   // unique: true,
-    //   sparse: true, // Optional but unique if present
-    //   trim: true,
-    // },
-
     stockQuantity: {
       type: Number,
-      // required: [true, "Stock quantity is required"],
+      required: [true, "Stock quantity is required"],
       min: [0, "Stock quantity cannot be negative"],
+      default: 0,
+    },
+    lowStockThreshold: {
+      type: Number,
+      default: 10,
+      min: [0, "Low stock threshold cannot be negative"],
+    },
+    stockStatus: {
+      type: String,
+      enum: ["in_stock", "low_stock", "out_of_stock"],
+      default: "out_of_stock",
+    },
+    lastInventoryUpdate: {
+      type: Date,
+      default: Date.now,
     },
     imageUrls: {
       type: [String],

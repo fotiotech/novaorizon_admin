@@ -60,9 +60,7 @@ const AdminSideBar = ({
               <Link
                 href={"/"}
                 onClick={handleCloseSideBar}
-                className={
-                  pathname === "/" ? "activeLink" : "inactiveLink"
-                }
+                className={pathname === "/" ? "activeLink" : "inactiveLink"}
               >
                 <li>Overview</li>
               </Link>
@@ -118,9 +116,7 @@ const AdminSideBar = ({
                 href={"/brands"}
                 onClick={handleCloseSideBar}
                 className={
-                  pathname.includes("/brands")
-                    ? "activeLink"
-                    : "inactiveLink"
+                  pathname.includes("/brands") ? "activeLink" : "inactiveLink"
                 }
               >
                 <li>Brands</li>
@@ -136,6 +132,17 @@ const AdminSideBar = ({
               >
                 <li>Attributes & Tags</li>
               </Link>
+              <Link
+                href={"/inventory"}
+                onClick={handleCloseSideBar}
+                className={
+                  pathname.includes("/inventory")
+                    ? "activeLink"
+                    : "inactiveLink"
+                }
+              >
+                <li>Inventory</li>
+              </Link>
             </ul>
           </li>
 
@@ -146,9 +153,7 @@ const AdminSideBar = ({
                 href={"/orders"}
                 onClick={handleCloseSideBar}
                 className={
-                  pathname.includes("/orders")
-                    ? "activeLink"
-                    : "inactiveLink"
+                  pathname.includes("/orders") ? "activeLink" : "inactiveLink"
                 }
               >
                 <li>All Orders</li>
@@ -190,9 +195,7 @@ const AdminSideBar = ({
                 href={"/returns"}
                 onClick={handleCloseSideBar}
                 className={
-                  pathname.includes("/returns")
-                    ? "activeLink"
-                    : "inactiveLink"
+                  pathname.includes("/returns") ? "activeLink" : "inactiveLink"
                 }
               >
                 <li>Returns</li>
@@ -207,9 +210,7 @@ const AdminSideBar = ({
                 href={"/shipping"}
                 onClick={handleCloseSideBar}
                 className={
-                  pathname.includes("/shipping")
-                    ? "activeLink"
-                    : "inactiveLink"
+                  pathname.includes("/shipping") ? "activeLink" : "inactiveLink"
                 }
               >
                 <li>Overview</li>
@@ -300,9 +301,7 @@ const AdminSideBar = ({
                 href={"/blogs"}
                 onClick={handleCloseSideBar}
                 className={
-                  pathname.includes("/blogs")
-                    ? "activeLink"
-                    : "inactiveLink"
+                  pathname.includes("/blogs") ? "activeLink" : "inactiveLink"
                 }
               >
                 <li>Blogs</li>
@@ -338,9 +337,7 @@ const AdminSideBar = ({
                 href={"/users"}
                 onClick={handleCloseSideBar}
                 className={
-                  pathname.includes("/users")
-                    ? "activeLink"
-                    : "inactiveLink"
+                  pathname.includes("/users") ? "activeLink" : "inactiveLink"
                 }
               >
                 <li className="flex items-center gap-2">
