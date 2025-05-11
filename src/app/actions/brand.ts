@@ -8,21 +8,28 @@ import slugify from "slugify";
 
 // Fetch all brands
 export async function getBrands(brandId?: string) {
-  await connection();
+  try {
+    await connection();
 
-  if (brandId) {
-    const brand = await Brand.findOne({ _id: brandId });
-    return {
+    if (brandId) {
+      const brand = await Brand.findOne({ _id: brandId });
+      return {
+        ...brand?.toObject(),
+        _id: brand?._id?.toString(),
+      };
+    }
+
+    const brands = await Brand.find().sort({ created_at: -1 });
+
+    console.log("brands:", brands);
+    return brands.map((brand) => ({
       ...brand?.toObject(),
       _id: brand?._id?.toString(),
-    };
+    }));
+  } catch (error) {
+    console.error("Error fetching brands:", error);
+    throw error;
   }
-
-  const brands = await Brand.find().sort({ created_at: -1 });
-  return brands.map((brand) => ({
-    ...brand?.toObject(),
-    _id: brand?._id?.toString(),
-  }));
 }
 
 export async function findProductsByBrand(brandId: string) {

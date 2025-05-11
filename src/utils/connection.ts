@@ -18,7 +18,9 @@ export async function connection() {
       process.env.MONGODB_URI?.substring(0, 20) + "..." // Only show start of URI for security
     );
 
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGODB_URI as string, {
+      dbName: "fotiodb",
+    });
     isConnected = true;
     console.log("[MongoDB] Successfully connected to database");
 

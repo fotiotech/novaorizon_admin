@@ -56,6 +56,7 @@ export async function getCategory(
     }
   } else {
     const categories = await Category.find();
+    console.log("Categories:", categories);
     return categories.map((category) => ({
       ...category.toObject(),
       _id: category._id.toString(),
