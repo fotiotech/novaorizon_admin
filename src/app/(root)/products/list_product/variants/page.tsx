@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import Select from "react-select";
-import { findCategoryVariantAttributes } from "@/app/actions/attributes";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import {
   removeVariant,
@@ -50,28 +49,7 @@ const Variants = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
 
   // Fetch variant attributes when category changes
-  useEffect(() => {
-    const fetchAttributes = async () => {
-      if (category_id) {
-        const response = await findCategoryVariantAttributes(category_id);
-        if (response?.[0]?.groupedAttributes) {
-          setAttributes(
-            response[0].groupedAttributes.map((group: any) => ({
-              groupName: group.groupName,
-              attributes: group.attributes
-                .filter((attr: any) => attr.isVariant)
-                .map((attr: any) => ({
-                  attrName: attr.name,
-                  attrValue: attr.values.map((v: any) => v.value),
-                  isVariant: true,
-                })),
-            }))
-          );
-        }
-      }
-    };
-    fetchAttributes();
-  }, [category_id]);
+
 
   const generateVariantCombinations = (selectedAttributes: {
     [key: string]: { [key: string]: string[] };

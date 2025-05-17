@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Select from "react-select"; // Import react-select
-import { findCategoryAttributesAndValues } from "@/app/actions/attributes";
+import { findAttributesAndValues } from "@/app/actions/attributes";
 import { RootState } from "@/app/store/store";
 import {
   updateGetVariant,
@@ -50,24 +50,12 @@ const Details = () => {
     const fetchAttributes = async () => {
       if (product.category_id) {
         // Fetch all attributes without filtering
-        const response = await findCategoryAttributesAndValues(
+        const response = await findAttributesAndValues(
           product.category_id
         );
         if (response?.length > 0) {
-          // Transform the attributes to show main product attributes
-          const transformedGroups = response[0].groupedAttributes.map(
-            (group: AttributeGroup) => ({
-              ...group,
-              // For the details page, we show all attributes since the main product can have both types
-              attributes: group.attributes.map((attr: Attribute) => ({
-                ...attr,
-                // Mark if this is a variant attribute (will be used for UI hints)
-                isBaseAttribute:
-                  attr.isVariant === undefined ? true : !attr.isVariant,
-              })),
-            })
-          );
-          setAttributes(transformedGroups);
+          
+          setAttributes(response as any[]);
         }
       }
     };

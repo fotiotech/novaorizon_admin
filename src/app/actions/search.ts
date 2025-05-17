@@ -32,7 +32,7 @@ export async function getSearch(
     });
 
     return {
-      products: products.map((prod) => ({
+      products: products.map((prod:any) => ({
         ...prod.toObject(),
         _id: prod._id.toString(),
         category_id: prod.category_id?.toString(),

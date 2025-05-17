@@ -1,4 +1,4 @@
-import { findCategoryAttributesAndValues } from "@/app/actions/attributes";
+import { findAttributesAndValues } from "@/app/actions/attributes";
 import { setAttributes } from "@/app/store/slices/attributeSlice";
 import { normalizeAttribute } from "@/app/store/slices/normalizedData";
 import { AppDispatch } from "@/app/store/store";
@@ -43,36 +43,14 @@ const convertMapToObject = (data: any): any => {
 };
 
 export const fetchAttributes =
-  (catId: string) => async (dispatch: AppDispatch) => {
+  (id: string) => async (dispatch: AppDispatch) => {
     try {
-      const response = (await findCategoryAttributesAndValues(
-        catId
-      )) as CategoryAttributesResponse[];
+      const response = (await findAttributesAndValues(
+        )) as any[];
 
-      console.log("Fetched attributes:", response);
-
-      // 1) Ensure we actually got groups back
-      const groups = response?.[0]?.groupedAttributes;
-      if (!groups || groups.length === 0) {
-        console.warn(`No attribute groups found for category ${catId}`);
-        return;
-      }
-
-      // 2) Flatten into an array of plain { id, name, values, groupName }
-      const flatAttrs = groups.flatMap((group) =>
-        group.attributes.map((attr) => ({
-          id: attr.id,
-          name: attr.name,
-          values: attr.values,
-          groupName: group.groupName,
-        }))
-      );
-
-      // 3) Sanitize any Map instances (if your backend ever returns them)
-      const sanitized = flatAttrs.map((item) => convertMapToObject(item));
 
       // 4) Normalize into { entities.attributes: { [id]: ... }, result: [id] }
-      const normalized = normalizeAttribute(sanitized);
+      const normalized = normalizeAttribute(response);
 
       // 5) Guard against a bad schema
       if (

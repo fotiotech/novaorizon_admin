@@ -1,6 +1,5 @@
 "use server";
 
-import Product from "@/models/Product";
 import "@/models/Brand";
 import { connection } from "@/utils/connection";
 import { revalidatePath } from "next/cache";
@@ -10,6 +9,7 @@ import { VariantAttribute } from "@/models/VariantAttributes";
 import { ref, deleteObject } from "firebase/storage";
 import { storage } from "@/utils/firebaseConfig";
 import mongoose from "mongoose";
+import Product from "@/models/Product";
 
 // Generate a slug from the product name and department
 function generateSlug(name: string, department: string | null) {
@@ -97,7 +97,7 @@ export async function findProducts(id?: string) {
       .populate("brand_id")
       .exec();
 
-    return products.map((prod) => ({
+    return products.map((prod: any) => ({
       ...prod.toObject(),
       _id: prod._id.toString(),
       category_id: prod.category_id?.toString() ?? null,

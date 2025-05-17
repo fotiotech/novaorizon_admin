@@ -38,7 +38,7 @@ export async function findProductsByBrand(brandId: string) {
   if (brandId) {
     const products = await Product.find({ brand_id: brandId });
     if (products) {
-      return products.map((product) => ({
+      return products.map((product:any) => ({
         ...product.toObject(),
         _id: product._id?.toString(),
         category_id: product.category_id?.toString(),

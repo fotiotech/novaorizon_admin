@@ -20,7 +20,7 @@ export async function getInventory() {
       }
     ).lean();
 
-    return inventoryData.map((item) => ({
+    return inventoryData.map((item:any) => ({
       product_id: item?._id?.toString(),
       productName: item.productName,
       sku: item.sku,
@@ -113,7 +113,7 @@ export async function getInventoryStats() {
       .lean();
 
     return {
-      stats: stats.reduce((acc: any, curr) => {
+      stats: stats.reduce((acc: any, curr:any) => {
         acc[curr._id] = {
           count: curr.count,
           totalStock: curr.totalStock,

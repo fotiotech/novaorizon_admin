@@ -1,18 +1,20 @@
+
 import mongoose, { Schema, model, models, Document } from "mongoose";
 
 // Attribute Interface
 interface IAttribute extends Document {
-  group: string;
+  groupId: Schema.Types.ObjectId;
   isVariant?: boolean;
   name: string;
   type: "select" | "multiselect" | "text" | "number" | "boolean"; // Added the missing 'type' property
-  category_id: mongoose.Types.ObjectId;
 }
 
 // Attribute Schema
 const AttributeSchema = new Schema<IAttribute>({
-  group: {
-    type: String,
+  groupId: {
+    type: Schema.Types.ObjectId,
+    ref: "AttributeGroup",
+    required: [true, "Group ID is required"],
   },
   name: {
     type: String,
@@ -24,13 +26,9 @@ const AttributeSchema = new Schema<IAttribute>({
   },
   type: {
     type: String,
-    enum: ["select", "multiselect", "text", "number", "boolean"],
+    enum: ["select", "multiselect", "text", "number", "boolean", 'file', 'textarea', 'date'], // Added the missing 'type' property
   }, // Added the missing 'type' property},
-  category_id: {
-    type: Schema.Types.ObjectId,
-    ref: "Category",
-    required: true,
-  },
+ 
 });
 
 // Attribute Model

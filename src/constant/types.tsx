@@ -19,12 +19,7 @@ export type Category = {
   categoryName?: string;
   description?: string;
   imageUrl?: string[];
-  attributes?: [
-    {
-      attrName: string;
-      attrValue: string[];
-    }
-  ];
+  attributes?: any[];
   seo_title?: string;
   seo_desc?: string;
   keywords?: string;

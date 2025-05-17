@@ -12,6 +12,7 @@ import { useFileUploader } from "@/hooks/useFileUploader";
 import { v4 as uuidv4 } from "uuid";
 import Spinner from "@/components/Spinner";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import CategoryAttribute from "@/components/category/CategoryAttribute";
 
 const Categories = () => {
   const dispatch = useAppDispatch();
@@ -31,10 +32,15 @@ const Categories = () => {
     categoryName: "",
     description: "",
     imageUrl: [],
+    attributes: [],
   });
   const [subCategory, setSubcategory] = useState<Cat[] | null>([]);
   const [catId, setCatId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attributes, setAttributes] = useState<any | null>(null);
+  const [toggleCreateAttribute, setToggleCreateAttribute] =
+    useState<boolean>(false);
 
   // Define an action function that either posts a new category or updates an existing one
   const action = async (formData: Cat) => {
@@ -82,6 +88,7 @@ const Categories = () => {
         setCategories(res);
       }
     };
+
     fetchData();
   }, [editId, catId]);
 
@@ -98,8 +105,8 @@ const Categories = () => {
     e.preventDefault();
     const images = files?.length! > 1 ? files : files?.[0];
     const formData = editId
-      ? { ...categoryEdit, imageUrl: images as string[] }
-      : { ...categoryData, imageUrl: images as string[] };
+      ? { ...categoryEdit, imageUrl: images as string[], attributes }
+      : { ...categoryData, imageUrl: images as string[], attributes };
     await action(formData);
   };
 
@@ -130,6 +137,7 @@ const Categories = () => {
               </select>
             </div>
           </div>
+
           <div>
             <label htmlFor="category">New Category:</label>
             <input
@@ -141,6 +149,23 @@ const Categories = () => {
               }
               onChange={handleCategoryData}
               className="w-full bg-[#eee] dark:bg-sec-dark"
+            />
+          </div>
+
+          {/* Group Selection */}
+          <div className="w-full space-y-4">
+            <span
+              onClick={() => setToggleCreateAttribute((prev) => !prev)}
+              className="my-2"
+            >
+              Map Groups And Attributes for this Category?
+            </span>
+
+            <CategoryAttribute
+              toggleCreateAttribute={toggleCreateAttribute}
+              setToggleCreateAttribute={setToggleCreateAttribute}
+              attributes={attributes}
+              setAttributes={setAttributes}
             />
           </div>
         </div>

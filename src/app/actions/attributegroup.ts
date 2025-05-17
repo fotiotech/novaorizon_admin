@@ -11,18 +11,17 @@ function serializeGroup(group: any) {
     _id: group._id.toString(),
     name: group.name,
     parent_id: group.parent_id ? group.parent_id.toString() : "",
-    category_id: group.category_id.toString(),
+    group_order: group.group_order,
+    sort_order: group.sort_order,
   };
 }
 
 // Function to find all available attribute groups
-export async function findAllAttributeGroups(categoryId?: string) {
+export async function findAllAttributeGroups(id?: string) {
   await connection();
 
   try {
-    const filter = categoryId
-      ? { category_id: new mongoose.Types.ObjectId(categoryId) }
-      : {};
+    const filter = id ? { _id: new mongoose.Types.ObjectId(id) } : {};
 
     const attributeGroups = await AttributeGroup.find(filter).lean();
 
@@ -38,7 +37,9 @@ export async function findAllAttributeGroups(categoryId?: string) {
 export async function createAttributeGroup(
   name: string,
   parent_id: string,
-  catId: string
+  group_order: number,
+  sort_order: number,
+  
 ) {
   await connection();
 
@@ -51,8 +52,9 @@ export async function createAttributeGroup(
     // Create a new attribute group
     const newGroup = new AttributeGroup({
       name: name.trim(),
-      parent_id: parent_id ? new mongoose.Types.ObjectId(parent_id) : undefined,
-      category_id: new mongoose.Types.ObjectId(catId),
+      parent_id: mongoose.Types.ObjectId.isValid(parent_id) ? new mongoose.Types.ObjectId(parent_id) : undefined,
+      group_order: group_order || 0,
+      sort_order: sort_order || 0,
     });
 
     await newGroup.save();

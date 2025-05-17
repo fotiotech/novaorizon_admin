@@ -56,7 +56,6 @@ export async function getCategory(
     }
   } else {
     const categories = await Category.find();
-    console.log("Categories:", categories);
     return categories.map((category) => ({
       ...category.toObject(),
       _id: category._id.toString(),
@@ -73,11 +72,13 @@ export async function createCategory(
     categoryName?: string;
     description?: string;
     imageUrl?: string[];
+    attributes?: any[];
   },
-  id?: string | null
+  id?: string | null,
+  updateAttField?: string | null
 ) {
   try {
-    const { _id, categoryName, description, imageUrl } = formData;
+    const { _id, categoryName, description, imageUrl, attributes } = formData;
 
     if (!categoryName) return { error: "Category name is required." };
 
@@ -87,8 +88,14 @@ export async function createCategory(
 
     const parent_id = _id ? new mongoose.Types.ObjectId(_id) : undefined;
 
+    const existingCategory = await Category.findOne({ _id: id });
+
+    const updAttField = existingCategory?.attributes?.filter(
+      (attr: string) => attr !== updateAttField
+    );
+
     if (id) {
-      const updatedCategory = await Category.updateOne(
+      await Category.updateOne(
         { _id: new mongoose.Types.ObjectId(id) },
         {
           $set: {
@@ -97,6 +104,22 @@ export async function createCategory(
             parent_id,
             description,
             imageUrl: imageUrl || undefined,
+            attributes: attributes?.map((ids) => ids.toString()) || undefined,
+          },
+        }
+      );
+    } else if (updateAttField && id) {
+      await Category.updateOne(
+        { _id: new mongoose.Types.ObjectId(id) },
+        {
+          $set: {
+            url_slug,
+            categoryName,
+            parent_id,
+            description,
+            imageUrl: imageUrl || undefined,
+            attributes:
+              updAttField?.map((ids: any) => ids.toString()) || undefined,
           },
         }
       );
@@ -107,6 +130,7 @@ export async function createCategory(
         parent_id,
         description,
         imageUrl: imageUrl || undefined,
+        attributes: attributes || undefined,
       });
       await newCategory.save();
     }
