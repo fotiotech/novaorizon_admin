@@ -4,6 +4,8 @@ import slugify from "slugify";
 import { connection } from "@/utils/connection";
 import Category from "@/models/Category";
 import mongoose from "mongoose";
+import CategoryAttribute from "@/models/CategoryAttribute";
+import { revalidatePath } from "next/cache";
 
 function generateSlug(name: string) {
   return slugify(name, { lower: true });
@@ -152,5 +154,148 @@ export async function deleteCategory(id: string) {
   } catch (error) {
     console.error("Error deleting category:", error);
     return { error: "Could not delete the category." };
+  }
+}
+
+export async function create_update_mapped_attributes_ids(
+  id?: string | null,
+  categoryId?: string | null,
+  attributes?: any[]
+) {
+  await connection();
+
+  if (id) {
+    // Update existing CategoryAttribute doc
+    await CategoryAttribute.findOneAndUpdate(
+      { _id: id },
+      { $set: { attributes } },
+      { new: true, runValidators: true }
+    ).exec();
+
+    revalidatePath("/admin/categories");
+  }
+
+  if (!categoryId) {
+    console.warn("Neither id nor categoryId provided—nothing to upsert.");
+    return null;
+  }
+
+  // Check if CategoryAttribute doc already exists for the given categoryId
+  const existingCategoryAttribute = await CategoryAttribute.findOne({
+    category_id: categoryId,
+  });
+
+  if (existingCategoryAttribute) {
+    // Update existing CategoryAttribute doc by adding new attributes to existing ones
+    const updatedAttributes = Array.from(
+      new Set([...existingCategoryAttribute.attributes, ...(attributes || [])])
+    );
+
+    await CategoryAttribute.findOneAndUpdate(
+      { category_id: categoryId },
+      { $set: { attributes: updatedAttributes } },
+      { new: true, runValidators: true }
+    ).exec();
+
+    revalidatePath("/admin/categories");
+  }
+
+  // Create a new CategoryAttribute doc
+  const newCategoryAttribute = new CategoryAttribute({
+    category_id: categoryId,
+    attributes,
+  });
+
+  await newCategoryAttribute.save();
+
+  revalidatePath("/admin/categories");
+}
+
+export async function find_mapped_attributes_ids(
+  id?: string | null,
+  categoryId?: string | null
+) {
+  await connection();
+
+  console.log("categoryId :", categoryId);
+
+  if (id) {
+    const categoryAttribute = await CategoryAttribute.findById(id).populate(
+      "attributes"
+    );
+    if (categoryAttribute) {
+      return categoryAttribute.attributes;
+    }
+  }
+  if (categoryId) {
+     // Ensure ObjectId
+  const catObjectId =
+    typeof categoryId === 'string'
+      ? new mongoose.Types.ObjectId(categoryId)
+      : categoryId;
+
+  // 1. Retrieve this category and its ancestors via graphLookup
+  const [{ allIds } = { allIds: [catObjectId] }] =
+    (await Category.aggregate([
+      { $match: { _id: catObjectId } },
+      {
+        $graphLookup: {
+          from: 'categories',
+          startWith: '$parent_id',
+          connectFromField: 'parent_id',
+          connectToField: '_id',
+          as: 'ancestors',
+        },
+      },
+      {
+        $project: {
+          allIds: { $concatArrays: [['$_id'], '$ancestors._id'] },
+        },
+      },
+    ]).exec()) as any[];
+
+  // 2. Fetch CategoryAttribute docs for all related categories
+  const attributeDocs = await CategoryAttribute.find({
+    category_id: { $in: allIds },
+  })
+    .populate({
+      path: 'attributes',
+      model: 'Attribute',
+      populate: { path: 'groupId', model: 'AttributeGroup' },
+    })
+    .lean()
+    .exec();
+
+
+  // Merge all attributes
+  const merged = attributeDocs.flatMap(doc => doc.attributes || []);
+
+  // Deduplicate by _id
+  const seen = new Set<string>();
+  const unique = merged.filter((attr: any) => {
+    const id = String(attr._id);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
+  // Sort by group_order, then sort_order
+  unique.sort((a: any, b: any) => {
+    const ag = a.groupId?.group_order ?? 0;
+    const bg = b.groupId?.group_order ?? 0;
+    if (ag !== bg) return ag - bg;
+    const asort = a.groupId?.sort_order ?? 0;
+    const bsort = b.groupId?.sort_order ?? 0;
+    return asort - bsort;
+  });
+  console.log("uniqueAttributes :", unique);
+  return unique;
+
+  }
+  const categoryAttribute = await CategoryAttribute.find().populate(
+    "attributes"
+  );
+  if (categoryAttribute) {
+    return categoryAttribute.map((attr) => attr.attributes);
   }
 }

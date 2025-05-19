@@ -11,23 +11,23 @@ export async function getInventory() {
       {},
       {
         _id: 1,
-        productName: 1,
+        title: 1,
         sku: 1,
-        stockQuantity: 1,
-        lowStockThreshold: 1,
-        stockStatus: 1,
-        lastInventoryUpdate: 1,
+        stock_quantity: 1,
+        low_stock_threshold: 1,
+        stock_status: 1,
+        last_inventory_update: 1,
       }
     ).lean();
 
     return inventoryData.map((item:any) => ({
       product_id: item?._id?.toString(),
-      productName: item.productName,
+      productName: item.title,
       sku: item.sku,
-      stockQuantity: item.stockQuantity || 0,
-      lowStockThreshold: item.lowStockThreshold || 10,
-      stockStatus: item.stockStatus || "out_of_stock",
-      lastUpdated: item.lastInventoryUpdate || new Date(),
+      stockQuantity: item.stock_quantity || 0,
+      lowStockThreshold: item.low_stock_threshold || 10,
+      stockStatus: item.stock_status || "out_of_stock",
+      lastUpdated: item.last_inventory_update || new Date(),
     }));
   } catch (error) {
     console.error("Error fetching inventory:", error);

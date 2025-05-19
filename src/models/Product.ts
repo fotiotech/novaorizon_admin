@@ -1,29 +1,9 @@
 // models/Product.js
-const mongoose = require("mongoose");
-const { Schema } = mongoose;
 
-// Sub-schema to represent grouped attributes
-const GroupSchema = new Schema(
-  {
-    groupId: {
-      type: Schema.Types.ObjectId,
-      ref: "Group",
-      required: true,
-    },
-    groupName: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    fields: {
-      // All product properties are dynamic attributes
-      type: Map,
-      of: Schema.Types.Mixed,
-      default: {},
-    },
-  },
-  { _id: false }
-);
+import mongoose, { Schema } from "mongoose";
+
+
+
 
 // Core Product Schema treating all fields as attributes
 const ProductSchema = new Schema(
@@ -34,11 +14,23 @@ const ProductSchema = new Schema(
       ref: "Category",
       required: true,
     },
-    // Dynamic, grouped attributes container
-    groups: {
-      type: [GroupSchema],
-      default: [],
+    sku: {type: String},
+    title: {type: String},
+    price: {type: String},
+    brand: {type: Schema.Types.ObjectId, ref:'Brand'},
+    department: {type: String},
+    short_desc: {type: String},
+    media: {type: [String]},
+    fields: {
+      type: Map,
+      of: Schema.Types.Mixed,
+      default: {},
     },
+    stock_quantity: {type: Number},
+    low_stock_threshold: {type: Number},
+    stock_status: {type: String},
+    last_inventory_update: {type: Date},
+
   },
   {
     timestamps: true, // createdAt, updatedAt
@@ -46,9 +38,9 @@ const ProductSchema = new Schema(
 );
 
 // Example: index a few hot fields nested inside groups
-ProductSchema.index({ "groups.fields.sku": 1 });
-ProductSchema.index({ "groups.fields.name": 1 });
-ProductSchema.index({ "groups.fields.price": 1 });
+ProductSchema.index({ "fields.sku": 1 });
+ProductSchema.index({ "fields.title": 1 });
+ProductSchema.index({ "fields.price": 1 });
 
 const Product = mongoose.models.Product || mongoose.model("Product", ProductSchema);
 export default Product;

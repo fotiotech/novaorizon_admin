@@ -10,8 +10,10 @@ import {
   findAttributesAndValues,
   updateAttribute,
 } from "@/app/actions/attributes";
+import GroupSelector from "@/components/category/groupSelection";
 import { Delete, Edit } from "@mui/icons-material";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import Select from "react-select";
 
 // Update the AttributeType interface to include isVariant
 type AttributeType = {
@@ -41,6 +43,11 @@ type EditingAttributeType = {
   isVariant: boolean;
 };
 
+interface Option {
+  value: string;
+  label: string;
+}
+
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
   const [formData, setFormData] = useState<AttributeType[]>([
@@ -48,17 +55,25 @@ const Attributes = () => {
   ]);
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
   const [newGroupName, setNewGroupName] = useState<string>("");
+  const [code, setCode] = useState<string>("");
   const [groupOrder, setGroupOrder] = useState<number>(0);
   const [sortOrder, setSortOrder] = useState<number>(0);
   const [groupId, setGroupId] = useState<string>("");
+  const [parentGroupId, setParentGroupId] = useState<string>("");
   const [editingAttribute, setEditingAttribute] =
     useState<EditingAttributeType | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [filterText, setFilterText] = useState<string>("");
+  const [sortAttrOrder, setSortAttrOrder] = useState<Option>({
+    value: "asc",
+    label: "A → Z",
+  });
+  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await findAttributesAndValues();
+        const response = await findAttributesAndValues(groupId);
         if (response?.length > 0) {
           setAttributes(response as unknown as AttributeType[]);
           setError(null); // Clear any previous errors on success
@@ -73,7 +88,7 @@ const Attributes = () => {
 
     async function getGroups() {
       try {
-        const groupResponse = await findAllAttributeGroups();
+        const groupResponse = await findAllAttributeGroups(groupId);
         console.log("[Attributes] Group response:", groupResponse);
         if (groupResponse) {
           setGroups(groupResponse as unknown as AttributesGroup[]);
@@ -120,7 +135,8 @@ const Attributes = () => {
 
     const response = await createAttributeGroup(
       newGroupName,
-      groupId,
+      code,
+      parentGroupId,
       groupOrder,
       sortOrder
     );
@@ -219,6 +235,16 @@ const Attributes = () => {
     }
   };
 
+  useEffect(() => {
+    if(editingAttribute) {
+      setEditingAttribute({
+                              ...editingAttribute,
+                              groupId,
+                            })
+    }
+    
+  }, [editingAttribute])
+
   const handleUpdateAttribute = async (
     id: string,
     name: string,
@@ -257,6 +283,25 @@ const Attributes = () => {
     }
   };
 
+  const sortOptions: Option[] = [
+    { value: "asc", label: "A → Z" },
+    { value: "desc", label: "Z → A" },
+  ];
+
+  const visibleAttributes = useMemo(() => {
+    const filtered = attributes.filter((a) =>
+      a.name.toLowerCase().includes(filterText.toLowerCase())
+    );
+    const sorted = filtered.sort((a, b) =>
+      sortAttrOrder.value === "asc"
+        ? a.name.localeCompare(b.name)
+        : b.name.localeCompare(a.name)
+    );
+    return sorted;
+  }, [attributes, filterText, sortAttrOrder]);
+
+  console.log("groupId:", groupId);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
       <h2 className="font-bold text-xl my-2">Attributes</h2>
@@ -271,39 +316,24 @@ const Attributes = () => {
       <div className="grid gap-4 mb-6">
         {/* Group Selection */}
         <div className="w-full space-y-4">
-          <div className="flex flex-col md:flex-row gap-2 items-start md:items-center">
-            <label htmlFor="group" className="whitespace-nowrap">
-              Group:
-            </label>
-            <select
-              id="group"
-              title="group"
-              name="groupId"
-              value={groupId}
-              onChange={(e) => {
-                setGroupId(e.target.value);
-              }}
-              className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
-            >
-              <option value="">Select or Create New Group</option>
-              {groups?.length > 0 &&
-                groups.map((group) => (
-                  <option key={group._id} value={group._id}>
-                    {group.name}
-                  </option>
-                ))}
-              <option value="create">Create New Group</option>
-            </select>
+          <div className="flex flex-col gap-2 ">
+            <p className="">Group:</p>
+
+            <GroupSelector
+              groups={groups}
+              groupId={groupId}
+              setGroupId={setGroupId}
+            />
           </div>
 
           {groupId === "create" && (
             <div className="space-y-4 pl-0 md:pl-4">
               <select
                 title="group"
-                name="groupId"
-                value={groupId}
+                name="parentGroupId"
+                value={parentGroupId}
                 onChange={(e) => {
-                  setGroupId(e.target.value);
+                  setParentGroupId(e.target.value);
                 }}
                 className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
               >
@@ -317,6 +347,14 @@ const Attributes = () => {
               </select>
 
               <div className="flex flex-col md:flex-row gap-2">
+                <input
+                  type="text"
+                  name="code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="Enter new group code e.g. name_top10"
+                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+                />
                 <input
                   type="text"
                   name="newGroupName"
@@ -397,6 +435,7 @@ const Attributes = () => {
                   }
                   className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
                 >
+                  <option value="">select type</option>
                   <option value="text">text</option>
                   <option value="select">select</option>
                   <option value="checkbox">checkbox</option>
@@ -442,8 +481,23 @@ const Attributes = () => {
       {/* Attributes List */}
       <div>
         <h3 className="font-bold text-lg mb-4">Attributes List</h3>
+        <div className="my-3 flex md:flex-row gap-2 items-center">
+          <input
+            type="text"
+            placeholder="Filter attributes..."
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            className="w-full md:w-1/2 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+          />
+          <Select
+            options={sortOptions}
+            value={sortAttrOrder}
+            onChange={(opt) => setSortAttrOrder(opt as Option)}
+            className="w-1/3 md:w-1/4 dark:bg-sec-dark"
+          />
+        </div>
         <ul className="grid gap-4 max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600">
-          {attributes.map((attr) => (
+          {visibleAttributes.map((attr) => (
             <li
               key={`${attr.name}-${attr._id || "nogroup"}`}
               className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 space-y-4"
@@ -514,24 +568,10 @@ const Attributes = () => {
                       </select>
                       <div className="flex items-center gap-2">
                         <p>Group:</p>
-                        <select
-                          value={editingAttribute.groupId}
-                          onChange={(e) =>
-                            setEditingAttribute({
-                              ...editingAttribute,
-                              groupId: e.target.value,
-                            })
-                          }
-                          className="p-1 rounded bg-gray-400 dark:bg.gray-700 w-44"
-                          title="Selected attribute group"
-                          aria-label="Selected attribute group"
-                        >
-                          {groups.map((group) => (
-                            <option key={group._id} value={group._id}>
-                              {group.name}
-                            </option>
-                          ))}
-                        </select>
+                        <GroupSelector groups={groups}
+              groupId={groupId}
+              setGroupId={setGroupId} />
+
                       </div>
 
                       <div className="flex items-center gap-2">

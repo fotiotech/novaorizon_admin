@@ -1,7 +1,8 @@
-import mongoose, { Schema, model, Document, models } from "mongoose";
+import mongoose, { Schema, Document } from "mongoose";
 
 interface IAttributeGroup extends Document {
   _id: string;
+  code: string;
   name: string;
   parent_id?: mongoose.Types.ObjectId;
   group_order: number;
@@ -11,6 +12,7 @@ interface IAttributeGroup extends Document {
 const attributeGroupSchema = new Schema<IAttributeGroup>(
   {
     name: { type: String, required: true },
+    code: { type: String, required: true, unique: true },
     parent_id: {
       type: Schema.Types.ObjectId,
       ref: "AttributeGroup",
@@ -23,9 +25,11 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
   }
 );
 
+// Indexing for faster queries
+attributeGroupSchema.index({ code: 1 });
 
 const AttributeGroup =
-  models.AttributeGroup ||
-  model<IAttributeGroup>("AttributeGroup", attributeGroupSchema);
+  mongoose.models.AttributeGroup ||
+  mongoose.model<IAttributeGroup>("AttributeGroup", attributeGroupSchema);
 
 export default AttributeGroup;

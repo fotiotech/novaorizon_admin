@@ -54,6 +54,8 @@ const Categories = () => {
     }
   };
 
+  
+
   const handleCategoryData = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -166,6 +168,7 @@ const Categories = () => {
               setToggleCreateAttribute={setToggleCreateAttribute}
               attributes={attributes}
               setAttributes={setAttributes}
+              categoryId={categoryData._id || ''}
             />
           </div>
         </div>

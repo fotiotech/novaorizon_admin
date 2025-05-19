@@ -1,6 +1,7 @@
 "use server";
 
 import Attribute from "@/models/Attributes";
+import AttributeGroup from "@/models/AttributesGroup";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
@@ -22,22 +23,22 @@ interface AttributeUpdateParams {
 
 // Function to fetch category attributes and values
 export async function findAttributesAndValues(id?: string) {
-  await connection();
+  try {
+    connection();
+    // Build the base query—either find() or findOne({_id: id})
+    let query = id ? Attribute.findOne({ _id: id }) : Attribute.find();
 
-  // Build the base query—either find() or findOne({_id: id})
-  let query = id
-    ? Attribute.findOne({ _id: id })
-    : Attribute.find();
+    // Populate only `groupId` and select specific fields, then return plain objects
+    const response = await query
+      .populate("groupId", "name group_order sort_order")
+      .lean();
 
-  // Populate only `groupId` and select specific fields, then return plain objects
-  const response = await query
-    .populate("groupId", "name group_order sort_order")
-    .lean();
-
-  console.log("Response from findAttributesAndValues:", response);
-  return response;
+    console.log("Response from findAttributesAndValues:", response);
+    return response;
+  } catch (error) {
+    console.error("Error in findAttributesAndValues:", error);
+  }
 }
-
 
 // Function to create new attributes
 export async function createAttribute(formData: AttributeFormData) {
@@ -81,8 +82,6 @@ export async function createAttribute(formData: AttributeFormData) {
             session,
           }
         );
-
-        
 
         attributes.push(attribute);
       }
@@ -129,7 +128,6 @@ export async function updateAttribute(
   }
 }
 
-
 // Function to delete attribute
 export async function deleteAttribute(name: string) {
   await connection();
@@ -148,4 +146,3 @@ export async function deleteAttribute(name: string) {
     session.endSession();
   }
 }
-

@@ -10,6 +10,7 @@ import { getBrands } from "@/app/actions/brand";
 import { Brand } from "@/constant/types";
 import Link from "next/link";
 import { useFileUploader } from "@/hooks/useFileUploader";
+import { find_mapped_attributes_ids } from "@/app/actions/category";
 
 const BasicInformation = () => {
   const { files, addFiles } = useFileUploader();
@@ -25,6 +26,24 @@ const BasicInformation = () => {
     value: string;
     label: string;
   } | null>(null);
+  const [attributes, setAttributes] = useState<any[]>([]);
+  
+    useEffect(() => {
+      const fetchAttributes = async () => {
+        if (product.category_id) {
+          // Fetch all attributes without filtering
+          const response = await find_mapped_attributes_ids(null,
+            product.category_id
+          );
+          if (response?.length > 0) {
+            
+            setAttributes(response as any[]);
+          }
+        }
+      };
+  
+      fetchAttributes();
+    }, [product.category_id]);
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -100,8 +119,11 @@ const BasicInformation = () => {
     }),
   };
 
+  console.log('attributes:', attributes);
+
   return (
     <div className="space-y-6 mb-10">
+      {}
       <div>
         <FilesUploader files={product.imageUrls || []} addFiles={addFiles} />
       </div>

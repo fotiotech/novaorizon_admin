@@ -6,6 +6,7 @@ interface IAttribute extends Document {
   groupId: Schema.Types.ObjectId;
   isVariant?: boolean;
   name: string;
+  // code: string;
   type: "select" | "multiselect" | "text" | "number" | "boolean"; // Added the missing 'type' property
 }
 
@@ -16,6 +17,11 @@ const AttributeSchema = new Schema<IAttribute>({
     ref: "AttributeGroup",
     required: [true, "Group ID is required"],
   },
+  // code: {
+  //   type: String,
+  //   unique: true,
+  //   required: [true, "Attribute name is required"],
+  // },
   name: {
     type: String,
     required: [true, "Attribute name is required"],
