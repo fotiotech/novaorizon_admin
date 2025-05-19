@@ -104,7 +104,7 @@ const Information: React.FC = () => {
       {/* Save Button */}
       <div className="flex justify-between items-center space-x-4 mt-6">
         <Link
-          href={codeValue ? "/products/list_product/basic_infos" : ""}
+          href={codeValue ? "/products/list_product/variant" : ""}
           className="bg-blue-500 text-white p-2 rounded"
         >
           Back

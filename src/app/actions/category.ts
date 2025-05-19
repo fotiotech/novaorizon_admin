@@ -1,6 +1,7 @@
 "use server";
 
 import slugify from "slugify";
+import "@/models/Attributes";
 import { connection } from "@/utils/connection";
 import Category from "@/models/Category";
 import mongoose from "mongoose";

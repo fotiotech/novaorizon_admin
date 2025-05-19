@@ -340,7 +340,7 @@ const Variants = () => {
           Back
         </Link>
         <Link
-          href="/products/list_product/inventory"
+          href="/products/list_product/information"
           className="bg-blue-500 text-white p-2 rounded"
         >
           Next

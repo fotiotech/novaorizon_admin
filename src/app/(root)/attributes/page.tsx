@@ -570,10 +570,11 @@ const Attributes = () => {
                         <p>Group:</p>
                         <GroupSelector groups={groups}
               groupId={groupId}
-              setGroupId={setGroupId} />
+              setGroupId={setGroupId} placeholder={'Editing attribute group'}/>
 
+                      
+                      
                       </div>
-
                       <div className="flex items-center gap-2">
                         <label
                           htmlFor={`edit-isVariant-${editingAttribute.id}`}

@@ -26,24 +26,7 @@ const BasicInformation = () => {
     value: string;
     label: string;
   } | null>(null);
-  const [attributes, setAttributes] = useState<any[]>([]);
   
-    useEffect(() => {
-      const fetchAttributes = async () => {
-        if (product.category_id) {
-          // Fetch all attributes without filtering
-          const response = await find_mapped_attributes_ids(null,
-            product.category_id
-          );
-          if (response?.length > 0) {
-            
-            setAttributes(response as any[]);
-          }
-        }
-      };
-  
-      fetchAttributes();
-    }, [product.category_id]);
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -119,11 +102,9 @@ const BasicInformation = () => {
     }),
   };
 
-  console.log('attributes:', attributes);
-
   return (
     <div className="space-y-6 mb-10">
-      {}
+      
       <div>
         <FilesUploader files={product.imageUrls || []} addFiles={addFiles} />
       </div>
@@ -204,8 +185,8 @@ const BasicInformation = () => {
         <Link
           href={
             product.product_name
-              ? "/products/list_product/information"
-              : "/products/list_product/information"
+              ? "/products/list_product/details"
+              : "/products/list_product/details"
           }
           className="bg-blue-500 text-white p-2 rounded"
         >
