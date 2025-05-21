@@ -11,6 +11,7 @@ interface AttributeFormData {
   groupId: string;
   names: string[];
   type: string[];
+  isHighlight: boolean[];
   isVariants: boolean[];
 }
 
@@ -18,6 +19,7 @@ interface AttributeUpdateParams {
   name: string;
   type: string;
   groupId: string;
+  isHighlight: boolean;
   isVariant: boolean;
 }
 
@@ -42,7 +44,7 @@ export async function findAttributesAndValues(id?: string) {
 
 // Function to create new attributes
 export async function createAttribute(formData: AttributeFormData) {
-  const { groupId, names, type, isVariants } = formData;
+  const { groupId, names, type, isHighlight, isVariants } = formData;
 
   console.log("Creating attributes with formData:", formData);
 
@@ -51,10 +53,10 @@ export async function createAttribute(formData: AttributeFormData) {
   }
 
   await connection();
-  const session = await mongoose.startSession();
+  // const session = await mongoose.startSession();
 
   try {
-    await session.withTransaction(async () => {
+    // await session.withTransaction(async () => {
       const attributes = [];
 
       // Process attributes sequentially
@@ -74,12 +76,13 @@ export async function createAttribute(formData: AttributeFormData) {
           {
             $set: {
               isVariant: isVariants[i] || false,
+              is_highlight: isHighlight[i] || false,
             },
           },
           {
             upsert: true,
             new: true,
-            session,
+            // session,
           }
         );
 
@@ -87,14 +90,15 @@ export async function createAttribute(formData: AttributeFormData) {
       }
 
       revalidatePath("/admin/attributes");
-    });
+    // });
   } catch (error) {
     console.error("Error in createAttribute:", error);
     throw new Error("Failed to create attributes: " + (error as Error).message);
-  } finally {
-    await session.endSession();
-  }
-}
+  } 
+  // finally {
+  //   await session.endSession();
+  // }
+ }
 
 // Function to update attribute
 export async function updateAttribute(
@@ -105,16 +109,19 @@ export async function updateAttribute(
   const session = await mongoose.startSession();
 
   try {
-    await session.withTransaction(async () => {
+    // await session.withTransaction(async () => {
       const updatedAttribute = await Attribute.findByIdAndUpdate(
         id,
         {
           name: params.name,
           type: params.type,
           groupId: params.groupId.toString(),
+          is_highlight: params.isHighlight,
           isVariant: params.isVariant,
         },
-        { new: true, session }
+        { new: true,
+          //  session 
+          }
       );
 
       if (!updatedAttribute) {
@@ -122,9 +129,10 @@ export async function updateAttribute(
       }
 
       revalidatePath("/admin/attributes");
-    });
-  } finally {
-    session.endSession();
+    // });
+  } catch (error) {
+    console.error("Error in updateAttribute:", error);
+    // session.endSession();
   }
 }
 

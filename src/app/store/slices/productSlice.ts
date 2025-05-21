@@ -69,18 +69,19 @@ const productSlice = createSlice({
         productId: string;
         groupName: string;
         attrName: string;
-        selectedValues: string[];
+        selectedValues: any;
       }>
     ) => {
       const { productId, groupName, attrName, selectedValues } = action.payload;
-      if (state.byId[productId]) {
-        if (!state.byId[productId].attributes) {
-          state.byId[productId].attributes = {};
+      const product = state.byId[productId];
+      if (product) {
+        if (!product.attributes) {
+          product.attributes = {};
         }
-        if (!state.byId[productId].attributes[groupName]) {
-          state.byId[productId].attributes[groupName] = {};
+        if (!product.attributes[groupName]) {
+          product.attributes[groupName] = {} as Record<string, any>;
         }
-        state.byId[productId].attributes[groupName][attrName] = selectedValues;
+        product.attributes[groupName][attrName] = selectedValues;
       }
     },
     addVariant: (

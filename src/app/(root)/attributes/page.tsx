@@ -22,7 +22,7 @@ type AttributeType = {
   groupId?: any;
   name: string;
   type: string;
-
+  isHighlight?: boolean;
   isVariant?: boolean;
 };
 
@@ -40,6 +40,7 @@ type EditingAttributeType = {
   name: string;
   type: string;
   groupId?: string;
+  isHighlight: boolean;
   isVariant: boolean;
 };
 
@@ -51,7 +52,7 @@ interface Option {
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
   const [formData, setFormData] = useState<AttributeType[]>([
-    { name: "", type: "" },
+    { name: "", type: "", isVariant: false, isHighlight: false },
   ]);
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
   const [newGroupName, setNewGroupName] = useState<string>("");
@@ -107,7 +108,10 @@ const Attributes = () => {
   }, []);
 
   function addAttributes() {
-    setFormData((prev) => [...prev, { name: "", type: "" }]);
+    setFormData((prev) => [
+      ...prev,
+      { name: "", type: "", isVariant: false, isHighlight: false },
+    ]);
   }
 
   const handleInputChange = (
@@ -122,6 +126,8 @@ const Attributes = () => {
               ...attr,
               name: field === "name" ? (value as string) : attr.name,
               type: field === "type" ? (value as string) : attr.type,
+              isHighlight:
+                field === "isHighlight" ? (value as boolean) : attr.isHighlight,
               isVariant:
                 field === "isVariant" ? (value as boolean) : attr.isVariant,
             }
@@ -171,6 +177,9 @@ const Attributes = () => {
           groupId: groupId || "",
           names: formData.map((attr) => attr.name.trim()),
           type: formData.map((attr) => (attr.type.trim() ? attr.type : "text")),
+          isHighlight: formData.map((attr) =>
+            attr.isHighlight ? attr.isHighlight : false
+          ),
           isVariants: formData.map((attr) => Boolean(attr.isVariant)),
         };
 
@@ -213,6 +222,7 @@ const Attributes = () => {
             name: updateData.name.trim(),
             type: updateData.type.trim(),
             groupId: updateData.groupId,
+            isHighlight: updateData.isHighlight,
             isVariant: updateData.isVariant,
           });
         }
@@ -236,20 +246,20 @@ const Attributes = () => {
   };
 
   useEffect(() => {
-    if(editingAttribute) {
+    if (editingAttribute) {
       setEditingAttribute({
-                              ...editingAttribute,
-                              groupId,
-                            })
+        ...editingAttribute,
+        groupId,
+      });
     }
-    
-  }, [editingAttribute])
+  }, [editingAttribute]);
 
   const handleUpdateAttribute = async (
     id: string,
     name: string,
     type: string,
     groupId: string,
+    isHighlight: boolean,
     isVariant: boolean
   ) => {
     try {
@@ -257,6 +267,7 @@ const Attributes = () => {
         name,
         type,
         groupId,
+        isHighlight,
         isVariant,
       });
       setEditingAttribute(null);
@@ -278,6 +289,7 @@ const Attributes = () => {
         id: attr?._id || "",
         name: attr.name,
         type: attr.type || "",
+        isHighlight: attr.isHighlight || false,
         isVariant: attr.isVariant || false,
       });
     }
@@ -463,6 +475,21 @@ const Attributes = () => {
                   className="w-4 h-4"
                 />
               </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor={`isVariant-${index}`}>
+                  Is Highlight Attribute:
+                </label>
+                <input
+                  id={`isHighlight-${index}`}
+                  type="checkbox"
+                  name={`isHighlight-${index}`}
+                  checked={attr.isHighlight || false}
+                  onChange={(e) =>
+                    handleInputChange(index, "isHighlight", e.target.checked)
+                  }
+                  className="w-4 h-4"
+                />
+              </div>
             </div>
           ))}
         </div>
@@ -543,7 +570,8 @@ const Attributes = () => {
                       />
                       <select
                         title="Selected attribute type"
-                        value={editingAttribute.type}
+                        
+                        value={editingAttribute.type || ""}
                         onChange={(e) =>
                           setEditingAttribute({
                             ...editingAttribute,
@@ -553,6 +581,9 @@ const Attributes = () => {
                         className="p-1 rounded bg-gray-400 dark:bg-gray-700 w-44"
                         aria-label="Selected attribute type"
                       >
+                        <option value="" disabled>
+                          select type
+                        </option>
                         <option value="text">text</option>
                         <option value="select">select</option>
                         <option value="checkbox">checkbox</option>
@@ -568,12 +599,12 @@ const Attributes = () => {
                       </select>
                       <div className="flex items-center gap-2">
                         <p>Group:</p>
-                        <GroupSelector groups={groups}
-              groupId={groupId}
-              setGroupId={setGroupId} placeholder={'Editing attribute group'}/>
-
-                      
-                      
+                        <GroupSelector
+                          groups={groups}
+                          groupId={groupId}
+                          setGroupId={setGroupId}
+                          placeholder={"Editing attribute group"}
+                        />
                       </div>
                       <div className="flex items-center gap-2">
                         <label
@@ -596,6 +627,27 @@ const Attributes = () => {
                           title="Mark as variant attribute"
                         />
                       </div>
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor={`edit-isVariant-${editingAttribute.id}`}
+                          className="text-sm whitespace-nowrap"
+                        >
+                          Is Highlight Attribute:
+                        </label>
+                        <input
+                          id={`edit-highlight-${editingAttribute.id}`}
+                          type="checkbox"
+                          checked={editingAttribute.isHighlight}
+                          onChange={(e) =>
+                            setEditingAttribute({
+                              ...editingAttribute,
+                              isHighlight: e.target.checked,
+                            })
+                          }
+                          className="w-4 h-4"
+                          title="Mark as variant attribute"
+                        />
+                      </div>
                       <button
                         onClick={() =>
                           handleUpdateAttribute(
@@ -603,6 +655,7 @@ const Attributes = () => {
                             editingAttribute.name,
                             editingAttribute.type,
                             editingAttribute.groupId as string,
+                            editingAttribute.isHighlight,
                             editingAttribute.isVariant
                           )
                         }
@@ -612,6 +665,7 @@ const Attributes = () => {
                         Save
                       </button>
                       <button
+                        type="button"
                         onClick={() => setEditingAttribute(null)}
                         className="btn-sm bg-gray-500 hover:bg-gray-600 text-white rounded px-2"
                         aria-label="Cancel editing"

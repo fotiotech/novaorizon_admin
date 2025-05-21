@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Select from "react-select"; // Import react-select
-import { findAttributesAndValues } from "@/app/actions/attributes";
+import Select, { MultiValue } from "react-select";
+import { find_mapped_attributes_ids } from "@/app/actions/category";
 import { RootState } from "@/app/store/store";
 import {
   updateGetVariant,
@@ -11,7 +11,6 @@ import {
 } from "@/app/store/slices/productSlice";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import Link from "next/link";
-import { find_mapped_attributes_ids } from "@/app/actions/category";
 
 type AttributeValue = {
   _id: string;
@@ -20,185 +19,168 @@ type AttributeValue = {
   __v: number;
 };
 
-type Attribute = {
-  id: string;
+type AttributeDetail = {
+  _id: string;
   name: string;
-  values: AttributeValue[];
-  isBaseAttribute?: boolean;
-  isVariant?: boolean;
+  type: string;
+  values?: AttributeValue[];
+  groupId: { name: string; group_order: number };
 };
 
-type AttributeGroup = {
-  groupName: string;
-  attributes: Attribute[];
-};
-
-type CategoryAttributes = {
-  categoryId: string;
-  categoryName: string;
-  groupedAttributes: AttributeGroup[];
-};
-
-const Details = () => {
+const Details: React.FC = () => {
   const dispatch = useAppDispatch();
-
   const productState = useAppSelector((state: RootState) => state.product);
   const productId = productState.allIds[0];
   const product = productState.byId[productId] || {};
 
-  const [attributes, setAttributes] = useState<any[]>([]);
+  const [attributes, setAttributes] = useState<AttributeDetail[]>([]);
 
   useEffect(() => {
     const fetchAttributes = async () => {
       if (product.category_id) {
-        // Fetch all attributes without filtering
         const response = await find_mapped_attributes_ids(
           null,
           product.category_id
         );
         if (response?.length > 0) {
-          setAttributes(response as any[]);
+          setAttributes(response as AttributeDetail[]);
         }
       }
     };
-
     fetchAttributes();
   }, [product.category_id]);
 
   const handleAttributeChange = (
     groupName: string,
     attrName: string,
-    selectedValues: string[] | null
+    selectedValues: any
   ) => {
     dispatch(
-      updateAttributes({
-        productId,
-        groupName,
-        attrName,
-        selectedValues: selectedValues || [],
-      })
+      updateAttributes({ productId, groupName, attrName, selectedValues })
     );
   };
 
-  // Handle input changes (for text fields like sku, product_name, etc.)
   const handleChange = (
     field: keyof typeof product,
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    const value = event.target.value;
-    dispatch(
-      addProduct({
-        _id: productId,
-        [field]: value,
-      })
-    );
+    dispatch(addProduct({ _id: productId, [field]: event.target.value }));
   };
-
-  // Update the helper function to handle undefined values
-  const getAttributeStyle = (isBaseAttribute: boolean | undefined) => ({
-    label:
-      isBaseAttribute !== false // treat undefined as true (base attribute)
-        ? "text-blue-600 font-medium"
-        : "text-green-600 font-medium",
-    hint:
-      isBaseAttribute !== false ? "(Base Attribute)" : "(Variant Attribute)",
-  });
 
   const customStyles = {
     control: (provided: any) => ({
       ...provided,
-      backgroundColor: "transparent", // Change the input background
+      backgroundColor: "transparent",
     }),
-    menu: (provided: any) => ({
-      ...provided,
-      backgroundColor: "#bbb", // Change the dropdown menu background
-    }),
+    menu: (provided: any) => ({ ...provided, backgroundColor: "#bbb" }),
     option: (provided: any, state: any) => ({
       ...provided,
-      backgroundColor: state.isFocused
-        ? "#e0f2fe" // Background when option is focused
-        : "#f0f9ff", // Default background
+      backgroundColor: state.isFocused ? "#e0f2fe" : "#f0f9ff",
     }),
   };
 
   const attributeDetails = attributes.filter(
-    (detail) => detail.groupId.group_order === 40
+    (attr) => attr.groupId.group_order === 40
   );
 
-  console.log("Attributes:", attributes);
+  console.log("product:", product);
 
   return (
     <div className="p-6 rounded-lg shadow-md">
       {attributeDetails.length > 0 &&
-        attributeDetails.map((detail) => (
-          <div key={detail._id} className=" mb-2">
-            {detail.type === "text" && (
-              <div className="flex flex-col">
-                <label className="text-sm font-medium">{detail.name}:</label>
+        attributeDetails.map((detail) => {
+          const groupName = detail.groupId.name;
+          const attrName = detail.name;
+          // current stored value (could be single or array)
+          const stored = product.attributes?.[groupName]?.[attrName];
+
+          return (
+            <div key={detail._id} className="mb-4">
+              <label className="text-sm font-medium block mb-1">
+                {detail.name}:
+              </label>
+
+              {detail.type === "text" && (
                 <input
-                  title={detail.name}
+                  title="text"
                   type="text"
-                  className="border rounded p-2 mt-1 bg-transparent"
-                  value={detail.name || ""}
-                  onChange={(e) => handleChange(detail.name, e)}
+                  className="border rounded p-2 w-full bg-transparent"
+                  value={stored || ""}
+                  onChange={(e) =>
+                    handleAttributeChange(groupName, attrName, e.target.value)
+                  }
                 />
-              </div>
-            )}
-            {detail.type === "select" && (
-              <div className="flex flex-col">
-                <label className="text-sm font-medium">{detail.name}:</label>
+              )}
+
+              {detail.type === "number" && (
+                <input
+                  title="number"
+                  type="number"
+                  className="border rounded p-2 w-full bg-transparent"
+                  value={stored || 0}
+                  onChange={(e) =>
+                    handleAttributeChange(
+                      groupName,
+                      attrName,
+                      Number(e.target.value)
+                    )
+                  }
+                />
+              )}
+
+              {detail.type === "select" && detail.values && (
                 <Select
-                  id={detail.name}
-                  value={detail.name}
-                  // options={brandOptions as any}
-                  onChange={(e) => handleChange(detail.name, e)}
+                  isMulti
+                  options={detail.values.map((v) => ({
+                    value: v.value,
+                    label: v.value,
+                  }))}
+                  value={
+                    Array.isArray(stored)
+                      ? detail.values
+                          .filter((v) => (stored as any[]).includes(v.value))
+                          .map((v) => ({ value: v.value, label: v.value }))
+                      : []
+                  }
+                  onChange={(
+                    opts: MultiValue<{ value: string; label: string }>
+                  ) =>
+                    handleAttributeChange(
+                      groupName,
+                      attrName,
+                      opts.map((o) => o.value)
+                    )
+                  }
                   isClearable
                   styles={customStyles}
                   className="mt-1 text-sec"
                 />
-              </div>
-            )}
-            {detail.type === "number" && (
-              <div className="flex flex-col">
-                <label className="text-sm font-medium">{detail.name}:</label>
-                <input
-                  title={detail.name}
-                  type="text"
-                  className="border rounded p-2 mt-1 bg-transparent"
-                  value={detail.name || ""}
-                  onChange={(e) => handleChange(detail.name, e)}
-                />
-              </div>
-            )}
-            {detail.type === "checkbox" && (
-              <div>
-                <label className="inline-flex items-center mb-4">
-                  <input
-                    type="checkbox"
-                    className="form-checkbox"
-                    checked={product.getVariant || false}
-                    onChange={(e) =>
-                      dispatch(
-                        updateGetVariant({ productId, value: e.target.checked })
-                      )
-                    }
-                  />
-                  <span className="ml-2">Enable Variants</span>
-                </label>
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
+
+      <label className="inline-flex items-center">
+        <input
+          type="checkbox"
+          className="form-checkbox"
+          checked={product.getVariant || false}
+          onChange={(e) =>
+            dispatch(updateGetVariant({ productId, value: e.target.checked }))
+          }
+        />
+        <span className="ml-2">Enable Variants</span>
+      </label>
 
       <div className="flex justify-between items-center mt-6">
         <Link
-          href={"/products/list_product/offer"}
+          href="/products/list_product/offer"
           className="bg-blue-500 text-white p-2 rounded"
         >
           Back
         </Link>
         <Link
-          href={"/products/list_product/variant"}
+          href="/products/list_product/variants"
           className="bg-blue-500 text-white p-2 rounded"
         >
           Next

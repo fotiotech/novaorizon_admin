@@ -13,15 +13,7 @@ import {
 import Link from "next/link";
 import VariantFileUploader from "@/components/products/VariantFileUploader";
 import { RootState } from "@/app/store/store";
-
-type AttributeType = {
-  groupName: string;
-  attributes: {
-    attrName: string;
-    attrValue: string[];
-    isVariant?: boolean;
-  }[];
-};
+import { find_mapped_attributes_ids } from "@/app/actions/category";
 
 interface VariantType {
   sku: string;
@@ -37,6 +29,22 @@ interface VariantType {
   [key: string]: any;
 }
 
+type AttributeValue = {
+  _id: string;
+  attribute_id: string;
+  value: string;
+  __v: number;
+};
+
+type AttributeDetail = {
+  _id: string;
+  name: string;
+  type: string;
+  isVariant?: boolean;
+  values?: AttributeValue[];
+  groupId: { name: string; group_order: number };
+};
+
 const Variants = () => {
   const dispatch = useAppDispatch();
 
@@ -46,10 +54,23 @@ const Variants = () => {
   const product = productState?.byId[productId] || {};
   const { category_id, variants = [], variantAttributes = {} } = product;
 
-  const [attributes, setAttributes] = useState<AttributeType[]>([]);
+  const [attributes, setAttributes] = useState<AttributeDetail[]>([]);
 
   // Fetch variant attributes when category changes
-
+  useEffect(() => {
+    const fetchAttributes = async () => {
+      if (category_id) {
+        const response = await find_mapped_attributes_ids(
+          null,
+          product.category_id
+        );
+        if (response?.length > 0) {
+          setAttributes(response as AttributeDetail[]);
+        }
+      }
+    };
+    fetchAttributes();
+  }, [category_id]);
 
   const generateVariantCombinations = (selectedAttributes: {
     [key: string]: { [key: string]: string[] };
@@ -127,8 +148,10 @@ const Variants = () => {
 
       // Create variant objects and update Redux
       combinations.forEach((combination) => {
-        const variant: VariantType = {
+        Object.entries(combination).forEach(([key, value]) => {
+          const variant: VariantType = {
           ...combination,
+          [key]: value,
           sku: "",
           variantName: Object.entries(combination)
             .map(([key, value]) => `${key}: ${value}`)
@@ -142,8 +165,11 @@ const Variants = () => {
           imageUrls: [],
           status: "active",
         };
-
         dispatch(addVariant({ productId, variant }));
+        });
+        
+
+        
       });
 
       // Sync variants with parent product
@@ -192,6 +218,22 @@ const Variants = () => {
     }),
   };
 
+  const attributeVariants = attributes.filter(
+    (attr) => attr.isVariant === true
+  );
+
+
+
+  const variantName = Object.entries(variantAttributes).forEach((group) => {
+    Object.entries(group).forEach(([attrName, values]) => {
+      return attrName;
+    });
+  });
+
+  console.log("product:", product);
+
+
+
   return (
     <div className="p-3 rounded-lg shadow-md">
       <h3 className="text-lg font-semibold text-pri capitalize mb-4">
@@ -200,33 +242,53 @@ const Variants = () => {
 
       {/* Attribute Selection */}
       <div>
-        {attributes.map((group) => (
-          <div key={group.groupName} className="mb-6">
-            <h4 className="font-medium mb-2">{group.groupName}</h4>
-            {group.attributes.map((attribute) => (
-              <div key={attribute.attrName} className="mb-4">
-                <label className="block text-sm font-medium mb-2">
-                  {attribute.attrName}
+        {attributeVariants.map((attr, index) => (
+          <div key={index} className="mb-4">
+            {attr.type === "text" && (
+              <div>
+                <label className="text-sm font-medium block mb-1">
+                  {attr.name}:
                 </label>
-                <Select
-                  options={attribute.attrValue.map((value) => ({
-                    label: value,
-                    value,
-                  }))}
-                  isMulti
-                  styles={customStyles}
-                  className="bg-none text-sec border-gray-100"
-                  onChange={(selected) =>
-                    handleAttributeChange(
-                      group.groupName,
-                      attribute.attrName,
-                      selected?.map((option) => option.value) || null
-                    )
+                <input
+                  type="text"
+                  value={
+                    variantAttributes[attr.groupId.name]?.[attr.name] || ""
                   }
-                  placeholder={`Select ${attribute.attrName}`}
+                  onChange={(e) =>
+                    handleAttributeChange(attr.groupId.name, attr.name, [
+                      e.target.value,
+                    ])
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 bg-transparent"
+                  placeholder={`Enter ${attr.name}`}
                 />
               </div>
-            ))}
+            )}
+            {attr.type === "select" && (
+              <div>
+                <label className="text-sm font-medium block mb-1">
+                  {attr.name}:
+                </label>
+                <Select
+                  isMulti
+                  options={attr.values?.map((value) => ({
+                    value: value._id,
+                    label: value.value,
+                  }))}
+                  styles={customStyles}
+                  onChange={(selectedOptions) => {
+                    const selectedValues = selectedOptions.map(
+                      (option: any) => option.value
+                    );
+                    handleAttributeChange(
+                      attr.groupId.name,
+                      attr.name,
+                      selectedValues
+                    );
+                  }}
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>

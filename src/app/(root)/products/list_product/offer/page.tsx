@@ -145,7 +145,7 @@ const Offer: React.FC = () => {
           Back
         </Link>
         <Link
-          href={finalPrice ? "/products/list_product/review_final" : ""}
+          href={finalPrice ? "/products/list_product/reviews_final" : ""}
           className="bg-blue-500 text-white p-2 rounded"
         >
           Next

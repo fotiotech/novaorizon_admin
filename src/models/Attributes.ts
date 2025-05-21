@@ -5,6 +5,7 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 interface IAttribute extends Document {
   groupId: Schema.Types.ObjectId;
   isVariant?: boolean;
+  is_highlight?: boolean;
   name: string;
   // code: string;
   type: "select" | "multiselect" | "text" | "number" | "boolean"; // Added the missing 'type' property
@@ -25,6 +26,10 @@ const AttributeSchema = new Schema<IAttribute>({
   name: {
     type: String,
     required: [true, "Attribute name is required"],
+  },
+  is_highlight: {
+    type: Boolean,
+    default: false,
   },
   isVariant: {
     type: Boolean,
