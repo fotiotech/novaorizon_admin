@@ -230,161 +230,132 @@ export async function findVariantDetails(
 }
 
 export async function createProduct(formData: any) {
-  const {
-    category_id,
-    attributes,
-    variants,
-    variantAttributes,
-    imageUrls,
-    sku,
-    productName,
-    brand_id,
-    department,
-    description,
-    basePrice,
-    finalPrice,
-    taxRate,
-    discount,
-    currency,
-    productCode,
-    stockQuantity,
-    status,
-  } = formData;
+  const { category_id, attributes } = formData;
 
-  if (!productName || !category_id) {
-    throw new Error("Product name and category ID are required.");
+  if (!category_id) {
+    throw new Error("Category ID is required.");
   }
 
-  const urlSlug = generateSlug(productName, department);
-  const dsin = generateDsin();
-
-  const cleanedAttributes = Object.entries(attributes || {})
+  // 1. Clean out unwanted groups/keys
+  const cleanedGroups = Object.entries(attributes || {})
     .filter(([groupName]) => groupName !== "0")
     .map(([groupName, group]) => ({
       groupName,
-      attributes: Object.fromEntries(
-        Object.entries(group as any).filter(([key]) => key !== "undefined")
+      attrs: Object.fromEntries(
+        Object.entries(group as Record<string, any>).filter(
+          ([key]) => key !== "undefined"
+        )
       ),
     }));
 
+  if (cleanedGroups.length === 0) {
+    throw new Error("No valid attribute groups to save.");
+  }
+
+  // 2. Make sure we're connected
   await connection();
 
-  const newProduct = new Product({
-    url_slug: urlSlug,
-    dsin,
-    sku,
-    productName,
-    category_id: category_id.toString(),
-    brand_id: brand_id
-      ? typeof brand_id === "string"
-        ? brand_id.toString()
-        : brand_id?._id.toString()
-      : null,
-    department,
-    description,
-    basePrice,
-    finalPrice,
-    taxRate,
-    discount,
-    currency,
-    // productCode,
-    stockQuantity,
-    attributes: cleanedAttributes.length > 0 ? cleanedAttributes : null,
-    variantAttributes,
-    variants,
-    imageUrls: imageUrls || [],
-    status,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+  // 3. Build and save one document per group
+  const saves = cleanedGroups.map(({ groupName, attrs }, idx) => {
+    // Turn attrs into a Map for mongoose
+    const attrsMap = new Map<string, any>(Object.entries(attrs));
+
+    const doc = new Product({
+      category_id: new mongoose.Types.ObjectId(category_id),
+      group_name: groupName,
+      group_order: idx.toString(),
+      attributes: attrsMap,
+    });
+
+    return doc.save();
   });
 
-  const savedProduct = await newProduct.save();
+  // 4. Wait for all to persist
+  const savedDocs = await Promise.all(saves);
 
-  if (!savedProduct) throw new Error("Failed to save the product.");
+  // 5. Check failures
+  if (savedDocs.some((doc) => !doc)) {
+    throw new Error("Failed to save one or more product groups.");
+  }
 
-  return "Ok!";
+  // 6. Return plain JS objects
+  return savedDocs.map((doc) => doc.toObject());
 }
 
-export async function updateProduct(id: string, formData: any) {
-  try {
-    if (!id || !formData) throw new Error("Invalid product ID or formData");
-
-    const {
-      category_id,
-      attributes,
-      variants,
-      variantAttributes,
-      imageUrls,
-      sku,
-      productName,
-      brand_id,
-      department,
-      description,
-      basePrice,
-      finalPrice,
-      taxRate,
-      discount,
-      currency,
-      productCode,
-      stockQuantity,
-      status,
-    } = formData;
-
-    // Connect to the database
-    await connection();
-
-    // Generate a slug for the product based on updated information
-    const urlSlug = generateSlug(productName, department);
-
-    // Clean up the attributes
-    const cleanedAttributes = Object.entries(attributes || {})
-      .filter(([groupName]) => groupName !== "0")
-      .map(([groupName, group]) => ({
-        groupName,
-        attributes: Object.fromEntries(
-          Object.entries(group || {}).filter(([key]) => key !== "undefined")
-        ),
-      }));
-
-    // Update the product in the database
-    const updatedProduct = await Product.findByIdAndUpdate(
-      { _id: id },
-      {
-        $set: {
-          url_slug: urlSlug || "",
-          sku,
-          productName,
-          category_id: category_id ? category_id.toString() : null,
-          brand_id: brand_id ? brand_id.toString() : null,
-          department,
-          description,
-          basePrice,
-          finalPrice,
-          attributes: cleanedAttributes.length > 0 ? cleanedAttributes : null,
-          variantAttributes,
-          variants,
-          imageUrls: imageUrls || [],
-          taxRate,
-          discount,
-          currency,
-          stockQuantity,
-          status,
-          updated_at: new Date().toISOString(),
-        },
-      },
-      { new: true }
-    );
-
-    if (!updatedProduct) throw new Error("Product not found");
-
-    // Revalidate cache for updated product list
-    revalidatePath("/admin/products/products_list");
-
-    return "Ok!";
-  } catch (error) {
-    console.error("Error updating product:", error);
-    throw error; // Rethrow the error so it can be handled by the caller
+export async function updateProduct(categoryId: string, formData: any) {
+  const { attributes } = formData;
+  if (!categoryId) {
+    throw new Error("Invalid product (category) ID.");
   }
+
+  // 1. Clean incoming groups
+  const cleanedGroups = Object.entries(attributes || {})
+    .filter(([groupName]) => groupName !== "0")
+    .map(([groupName, group]) => ({
+      groupName,
+      attrs: Object.fromEntries(
+        Object.entries(group as Record<string, any>).filter(
+          ([key]) => key !== "undefined"
+        )
+      ),
+    }));
+
+  // 2. Connect & load existing
+  await connection();
+  const catObjId = new mongoose.Types.ObjectId(categoryId);
+  const existing = await Product.find({ category_id: catObjId });
+
+  // Index existing by group_name
+  const existingMap = existing.reduce<Record<string, (typeof existing)[0]>>(
+    (acc, doc) => {
+      acc[doc.group_name] = doc;
+      return acc;
+    },
+    {}
+  );
+
+  const toKeepIds = new Set<string>();
+  const upserted = await Promise.all(
+    cleanedGroups.map(async ({ groupName, attrs }, idx) => {
+      const attrsMap = new Map<string, any>(Object.entries(attrs));
+
+      if (existingMap[groupName]) {
+        // 3a. Update existing group‐doc
+        const doc = existingMap[groupName]!;
+        doc.attributes = attrsMap;
+        doc.group_order = idx.toString();
+        await doc.save();
+        toKeepIds.add(doc._id.toString());
+        return doc;
+      } else {
+        // 3b. Create brand‐new group‐doc
+        const doc = new Product({
+          category_id: catObjId,
+          group_name: groupName,
+          group_order: idx.toString(),
+          attributes: attrsMap,
+        });
+        await doc.save();
+        toKeepIds.add(doc._id.toString());
+        return doc;
+      }
+    })
+  );
+
+  // 4. Remove any groups the user deleted
+  const toDelete = existing
+    .filter((doc) => !toKeepIds.has(doc._id.toString()))
+    .map((doc) => doc._id);
+  if (toDelete.length) {
+    await Product.deleteMany({ _id: { $in: toDelete } });
+  }
+
+  // 5. Return all remaining in order
+  const finalList = await Product.find({ category_id: catObjId }).sort({
+    group_order: 1,
+  });
+
+  return finalList.map((doc) => doc.toObject());
 }
 
 export async function deleteProduct(id: string) {
@@ -402,12 +373,6 @@ export async function deleteProduct(id: string) {
     console.error("Error deleting product:", error);
   }
 }
-
-/**
- * Deletes one or all image URLs of a product.
- * @param productId - The ID of the product.
- * @param imageUrl - The specific image URL to delete (optional). If not provided, all images will be deleted.
- */
 
 function isUUID(value: string): boolean {
   const uuidRegex =
@@ -562,9 +527,9 @@ export async function deleteVariantImages(
         imageUrls: string[];
       }
 
-            variant.imageUrls = variant.imageUrls.filter(
-              (url: string) => !imageUrls.includes(url)
-            );
+      variant.imageUrls = variant.imageUrls.filter(
+        (url: string) => !imageUrls.includes(url)
+      );
     } else {
       // Delete all images from storage
       for (const url of variant.imageUrls) {

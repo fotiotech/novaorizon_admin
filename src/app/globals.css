@@ -3,11 +3,20 @@
 @tailwind utilities;
 
 label {
-  @apply text-lg font-semibold text-gray-300 block;
+  @apply text-sm font-medium block mb-1;
 }
 
-input,
-select,
+input {
+  @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
+    rounded-lg border-2 border-gray-800 
+     focus:border-thiR my-2 p-2;
+}
+select {
+  @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
+    rounded-lg border-2 border-gray-800 
+     focus:border-thiR my-2 p-2;
+}
+
 textarea {
   @apply appearance-none block px-3 shadow focus:outline-none 
     rounded-lg border-2 border-gray-800 
