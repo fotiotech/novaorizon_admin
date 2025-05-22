@@ -21,6 +21,7 @@ type AttributeType = {
   id?: string;
   groupId?: any;
   name: string;
+  option?: string;
   type: string;
   isHighlight?: boolean;
   isVariant?: boolean;
@@ -38,6 +39,7 @@ type AttributesGroup = {
 type EditingAttributeType = {
   id: string;
   name: string;
+  option?: string;
   type: string;
   groupId?: string;
   isHighlight: boolean;
@@ -69,7 +71,6 @@ const Attributes = () => {
     value: "asc",
     label: "A → Z",
   });
-  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -110,7 +111,7 @@ const Attributes = () => {
   function addAttributes() {
     setFormData((prev) => [
       ...prev,
-      { name: "", type: "", isVariant: false, isHighlight: false },
+      { name: "", option: "", type: "", isVariant: false, isHighlight: false },
     ]);
   }
 
@@ -125,6 +126,7 @@ const Attributes = () => {
           ? {
               ...attr,
               name: field === "name" ? (value as string) : attr.name,
+              option: field === "option" ? (value as string) : attr.option,
               type: field === "type" ? (value as string) : attr.type,
               isHighlight:
                 field === "isHighlight" ? (value as boolean) : attr.isHighlight,
@@ -176,6 +178,9 @@ const Attributes = () => {
         const attributeData = {
           groupId: groupId || "",
           names: formData.map((attr) => attr.name.trim()),
+          option: formData.map((attr) =>
+            attr.option?.split(",")
+          ) as unknown as string[][],
           type: formData.map((attr) => (attr.type.trim() ? attr.type : "text")),
           isHighlight: formData.map((attr) =>
             attr.isHighlight ? attr.isHighlight : false
@@ -183,16 +188,19 @@ const Attributes = () => {
           isVariants: formData.map((attr) => Boolean(attr.isVariant)),
         };
 
-        console.log(
-          "[Attributes] Creating attributes with data:",
-          attributeData
-        );
-
         try {
           await createAttribute(attributeData);
           console.log("[Attributes] Successfully created attributes");
           // Reset form after successful creation
-          setFormData([{ name: "", type: "" }]);
+          setFormData([
+            {
+              name: "",
+              option: "",
+              type: "",
+              isVariant: false,
+              isHighlight: false,
+            },
+          ]);
           setError(null);
 
           // Refresh attribute list
@@ -218,8 +226,10 @@ const Attributes = () => {
             setError("Attribute name cannot be empty");
             return;
           }
+
           await updateAttribute(id, {
             name: updateData.name.trim(),
+            option: updateData.option.split(","),
             type: updateData.type.trim(),
             groupId: updateData.groupId,
             isHighlight: updateData.isHighlight,
@@ -257,6 +267,7 @@ const Attributes = () => {
   const handleUpdateAttribute = async (
     id: string,
     name: string,
+    option: string,
     type: string,
     groupId: string,
     isHighlight: boolean,
@@ -265,6 +276,7 @@ const Attributes = () => {
     try {
       await manageAttribute("update", id, "attribute", {
         name,
+        option,
         type,
         groupId,
         isHighlight,
@@ -288,6 +300,7 @@ const Attributes = () => {
       setEditingAttribute({
         id: attr?._id || "",
         name: attr.name,
+        option: attr.option,
         type: attr.type || "",
         isHighlight: attr.isHighlight || false,
         isVariant: attr.isVariant || false,
@@ -312,7 +325,7 @@ const Attributes = () => {
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
 
-  console.log("groupId:", groupId);
+  console.log("editingAttributes:", editingAttribute);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
@@ -434,6 +447,7 @@ const Attributes = () => {
                   className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
                 />
               </div>
+
               <div>
                 <label htmlFor={`values-${index}`} className="block mb-1">
                   type:
@@ -462,6 +476,25 @@ const Attributes = () => {
                   <option value="multi-select">multi-select</option>
                 </select>
               </div>
+              {attr.type === "select" && (
+                <div>
+                  <label htmlFor={`option-${index}`} className="block mb-1">
+                    Options:
+                  </label>
+                  <input
+                    id={`option-${index}`}
+                    type="text"
+                    name={`option-${index}`}
+                    value={attr.option}
+                    placeholder="Options for select type separated by commas"
+                    onChange={(e) =>
+                      handleInputChange(index, "option", e.target.value)
+                    }
+                    className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+                  />
+                </div>
+              )}
+
               <div className="flex items-center gap-2">
                 <label htmlFor={`isVariant-${index}`}>Is Variant:</label>
                 <input
@@ -556,6 +589,7 @@ const Attributes = () => {
                     <div className="flex gap-2 items-center">
                       <input
                         type="text"
+                        name={editingAttribute.name}
                         value={editingAttribute.name}
                         onChange={(e) =>
                           setEditingAttribute({
@@ -568,9 +602,9 @@ const Attributes = () => {
                         placeholder="Enter attribute name"
                         aria-label="Edit attribute name"
                       />
+
                       <select
                         title="Selected attribute type"
-                        
                         value={editingAttribute.type || ""}
                         onChange={(e) =>
                           setEditingAttribute({
@@ -597,6 +631,23 @@ const Attributes = () => {
                         <option value="url">url</option>
                         <option value="multi-select">multi-select</option>
                       </select>
+
+                      {editingAttribute.type === "select" && (
+                        <input
+                          type="text"
+                          value={editingAttribute.option}
+                          onChange={(e) =>
+                            setEditingAttribute({
+                              ...editingAttribute,
+                              option: e.target.value,
+                            })
+                          }
+                          className="p-1 rounded bg-none border dark:bg-gray-400"
+                          title="Edit option"
+                          placeholder="Enter options for select type separated by commas"
+                          aria-label="Edit attribute option"
+                        />
+                      )}
                       <div className="flex items-center gap-2">
                         <p>Group:</p>
                         <GroupSelector
@@ -649,10 +700,12 @@ const Attributes = () => {
                         />
                       </div>
                       <button
+                        type="button"
                         onClick={() =>
                           handleUpdateAttribute(
                             editingAttribute.id,
                             editingAttribute.name,
+                            editingAttribute.option as string,
                             editingAttribute.type,
                             editingAttribute.groupId as string,
                             editingAttribute.isHighlight,

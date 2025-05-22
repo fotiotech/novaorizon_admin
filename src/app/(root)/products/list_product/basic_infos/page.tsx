@@ -17,19 +17,14 @@ import { useFileUploader } from "@/hooks/useFileUploader";
 import { updateProduct, createProduct } from "@/app/actions/products";
 import router from "next/router";
 import { v4 as uuidv4, validate, version } from "uuid";
-
-type AttributeValue = {
-  _id: string;
-  attribute_id: string;
-  value: string;
-  __v: number;
-};
+import Spinner from "@/components/Spinner";
+import { Box, CircularProgress } from "@mui/material";
 
 type AttributeDetail = {
   _id: string;
   name: string;
+  option?: string;
   type: string;
-  values?: AttributeValue[];
   groupId: { name: string; group_order: number };
 };
 
@@ -64,10 +59,12 @@ const ProductForm = () => {
   } | null>(null);
   const [attributes, setAttributes] = useState<AttributeDetail[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
   // fetch attributes
   useEffect(() => {
     const fetchAttributes = async () => {
+      setIsLoading(true);
       if (product.category_id) {
         const resp = await find_mapped_attributes_ids(
           null,
@@ -75,6 +72,7 @@ const ProductForm = () => {
         );
         if (Array.isArray(resp)) setAttributes(resp as AttributeDetail[]);
       }
+      setIsLoading(false);
     };
     fetchAttributes();
   }, [product.category_id]);
@@ -164,6 +162,22 @@ const ProductForm = () => {
     setStepIndex((i) => Math.max(i - 1, 0));
   };
 
+  console.log("currentAttrs:", currentAttrs);
+
+  if (isLoading) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="64px"
+        bgcolor="transparent"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
     <form onSubmit={handleNext} className="space-y-6 mb-10">
       {currentAttrs.length > 0 && (
@@ -216,18 +230,20 @@ const ProductForm = () => {
                     }
                   />
                 )}
-                {detail.type === "select" && detail.values && (
+                {detail.type === "select" && Array.isArray(detail.option) && (
                   <Select
                     isMulti
-                    options={detail.values.map((v) => ({
-                      value: v.value,
-                      label: v.value,
+                    // turn your string[] into react-select options
+                    options={detail.option.map((v) => ({
+                      value: v,
+                      label: v,
                     }))}
+                    // reflect the currently stored values as Select’s value
                     value={
                       Array.isArray(stored)
-                        ? detail.values
-                            .filter((v) => (stored as any[]).includes(v.value))
-                            .map((v) => ({ value: v.value, label: v.value }))
+                        ? detail.option
+                            .filter((v) => stored.includes(v))
+                            .map((v) => ({ value: v, label: v }))
                         : []
                     }
                     onChange={(
@@ -236,7 +252,7 @@ const ProductForm = () => {
                       handleAttributeChange(
                         groupName,
                         attrName,
-                        opts.map((o) => o.value)
+                        opts.map((o) => o.value) // back to string[]
                       )
                     }
                     styles={{
@@ -244,16 +260,18 @@ const ProductForm = () => {
                         ...prov,
                         backgroundColor: "transparent",
                       }),
-                      menu: (prov) => ({ ...prov, backgroundColor: "#f0f9ff" }),
+                      menu: (prov) => ({
+                        ...prov,
+                        backgroundColor: "transparent",
+                      }),
                       option: (prov, state) => ({
                         ...prov,
-                        backgroundColor: state.isFocused
-                          ? "#e0f2fe"
-                          : "#f0f9ff",
+                        backgroundColor: state.isFocused ? "#999" : "#111a2A",
                       }),
                     }}
                   />
                 )}
+
                 {detail.type === "select" && detail.name === "Brand" && (
                   <Select
                     value={selectedBrand}
@@ -266,6 +284,20 @@ const ProductForm = () => {
                       dispatch(
                         addProduct({ _id: productId, brand_id: opt?.value })
                       );
+                    }}
+                    styles={{
+                      control: (prov) => ({
+                        ...prov,
+                        backgroundColor: "transparent",
+                      }),
+                      menu: (prov) => ({
+                        ...prov,
+                        backgroundColor: "transparent",
+                      }),
+                      option: (prov, state) => ({
+                        ...prov,
+                        backgroundColor: state.isFocused ? "#999" : "#111a2A",
+                      }),
                     }}
                   />
                 )}
