@@ -41,7 +41,7 @@ const ProductForm = () => {
   const product = productState.byId[productId] || {};
 
   const validateForm = () => {
-    return Boolean(product.category_id) && attributes.length > 0;
+    return Boolean(product.category_id) && product.attributes.length > 0;
   };
 
   const clearStoreAndRedirect = async () => {
@@ -51,38 +51,6 @@ const ProductForm = () => {
     dispatch(clearProduct());
     // Redirect to products list
     router.push("/products/list_product");
-  };
-
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      alert("Please fill all required fields!");
-      return;
-    }
-
-    try {
-      if (productId && !validate(productId) && version(productId) !== 4) {
-        const res = await updateProduct(productId, {
-          category_id: product.category_id,
-          attributes,
-        });
-        if (res) {
-          alert("Product updated successfully!");
-          await clearStoreAndRedirect();
-        }
-      } else {
-        const res = await createProduct({
-          category_id: product.category_id,
-          attributes,
-        });
-        if (res) {
-          alert("Product submitted successfully!");
-          await clearStoreAndRedirect();
-        }
-      }
-    } catch (error) {
-      console.error("Error submitting product:", error);
-      alert("Failed to submit the product. Please try again.");
-    }
   };
 
   async function clearStore() {
@@ -148,6 +116,41 @@ const ProductForm = () => {
     );
   };
 
+  const handleSubmit = async () => {
+    // if (!validateForm()) {
+    //   alert("Please fill all required fields!");
+    //   return;
+    // }
+
+    const isLocalId = validate(productId) && version(productId) === 4;
+
+    try {
+      if (!isLocalId) {
+        console.log("product attributes:", product);
+
+        const res = await updateProduct(productId, {
+          attributes: product.attributes,
+        });
+        if (res) {
+          alert("Product updated successfully!");
+          await clearStoreAndRedirect();
+        }
+      } else {
+        const res = await createProduct({
+          category_id: product.category_id,
+          attributes: product?.attributes,
+        } as any);
+        if (res) {
+          alert("Product submitted successfully!");
+          await clearStoreAndRedirect();
+        }
+      }
+    } catch (error) {
+      console.error("Error submitting product:", error);
+      alert("Failed to submit the product. Please try again.");
+    }
+  };
+
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
     if (stepIndex < groupOrders.length - 1) setStepIndex((idx) => idx + 1);
@@ -161,25 +164,8 @@ const ProductForm = () => {
     setStepIndex((i) => Math.max(i - 1, 0));
   };
 
-  console.log("product:", product);
-
-  const uniqueAttrs = attributes.filter(
-    (item, i, arr) =>
-      arr.findIndex((a) => a.groupId.name === item.groupId.name) === i
-  );
-
   return (
     <form onSubmit={handleNext} className="space-y-6 mb-10">
-      {/* <div className=" whitespace-nowrap overflow-x-auto">
-        {uniqueAttrs.map((a) => (
-          <h3
-            key={a.groupId._id as string}
-            className=" inline-block mx-3 font-semibold"
-          >
-            {a.groupId.name}
-          </h3>
-        ))}
-      </div> */}
       {currentAttrs.length > 0 && (
         <div className="group-section">
           <h3 className="text-lg font-semibold mb-3">

@@ -11,12 +11,6 @@ const ProductSchema = new Schema(
       ref: "Category",
       required: true,
     },
-    group_name: {
-      type: String,
-    },
-    group_order: {
-      type: String,
-    },
     attributes: {
       type: Map,
       of: Schema.Types.Mixed,

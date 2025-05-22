@@ -94,24 +94,10 @@ export async function findProducts(id?: string) {
   } else {
     const products = await Product.find()
       .sort({ created_at: -1 })
-      .populate("brand_id")
+      // .populate("brand_id")
       .exec();
 
-    return products.map((prod: any) => ({
-      ...prod.toObject(),
-      _id: prod._id.toString(),
-      category_id: prod.category_id?.toString() ?? null,
-      brand_id: prod.brand_id?._id
-        ? {
-            _id: prod.brand_id._id.toString(),
-            name: prod.brand_id.name,
-          }
-        : null,
-      attributes: prod.attributes?.map((attr: any) => ({
-        ...attr.toObject(),
-        _id: attr._id?.toString(),
-      })),
-    }));
+    return products;
   }
 }
 
@@ -229,133 +215,176 @@ export async function findVariantDetails(
   }
 }
 
-export async function createProduct(formData: any) {
-  const { category_id, attributes } = formData;
-
-  if (!category_id) {
-    throw new Error("Category ID is required.");
-  }
-
-  // 1. Clean out unwanted groups/keys
-  const cleanedGroups = Object.entries(attributes || {})
-    .filter(([groupName]) => groupName !== "0")
-    .map(([groupName, group]) => ({
-      groupName,
-      attrs: Object.fromEntries(
-        Object.entries(group as Record<string, any>).filter(
-          ([key]) => key !== "undefined"
-        )
-      ),
-    }));
-
-  if (cleanedGroups.length === 0) {
-    throw new Error("No valid attribute groups to save.");
-  }
-
-  // 2. Make sure we're connected
-  await connection();
-
-  // 3. Build and save one document per group
-  const saves = cleanedGroups.map(({ groupName, attrs }, idx) => {
-    // Turn attrs into a Map for mongoose
-    const attrsMap = new Map<string, any>(Object.entries(attrs));
-
-    const doc = new Product({
-      category_id: new mongoose.Types.ObjectId(category_id),
-      group_name: groupName,
-      group_order: idx.toString(),
-      attributes: attrsMap,
-    });
-
-    return doc.save();
-  });
-
-  // 4. Wait for all to persist
-  const savedDocs = await Promise.all(saves);
-
-  // 5. Check failures
-  if (savedDocs.some((doc) => !doc)) {
-    throw new Error("Failed to save one or more product groups.");
-  }
-
-  // 6. Return plain JS objects
-  return savedDocs.map((doc) => doc.toObject());
+interface FormData {
+  category_id: string;
+  attributes: {
+    [groupName: string]: {
+      [attrName: string]: any;
+    };
+  };
 }
 
-export async function updateProduct(categoryId: string, formData: any) {
-  const { attributes } = formData;
-  if (!categoryId) {
-    throw new Error("Invalid product (category) ID.");
+interface CreateProductForm {
+  category_id: string;
+  attributes: Record<string, Record<string, any>>;
+}
+
+export async function createProduct(formData: CreateProductForm) {
+  const { category_id, attributes } = formData;
+
+  // 1) Validate
+  if (!category_id || typeof category_id !== "string") {
+    throw new Error("A valid category_id is required.");
+  }
+  if (
+    !attributes ||
+    typeof attributes !== "object" ||
+    Array.isArray(attributes)
+  ) {
+    throw new Error("Attributes object is required.");
   }
 
-  // 1. Clean incoming groups
-  const cleanedGroups = Object.entries(attributes || {})
+  // 2) Clean & collect groups
+  const cleaned = Object.entries(attributes)
     .filter(([groupName]) => groupName !== "0")
-    .map(([groupName, group]) => ({
-      groupName,
-      attrs: Object.fromEntries(
-        Object.entries(group as Record<string, any>).filter(
-          ([key]) => key !== "undefined"
-        )
-      ),
-    }));
+    .map(([groupName, groupObj], idx) => {
+      const cleanedAttrs = Object.entries(groupObj || {}).reduce<
+        Record<string, any>
+      >((acc, [key, val]) => {
+        const isEmptyArray = Array.isArray(val) && val.length === 0;
+        const isEmptyString = typeof val === "string" && !val.trim();
+        const isNullish = val === null || val === undefined;
+        if (isEmptyArray || isEmptyString || isNullish) {
+          return acc;
+        }
+        acc[key] = val;
+        return acc;
+      }, {});
 
-  // 2. Connect & load existing
-  await connection();
-  const catObjId = new mongoose.Types.ObjectId(categoryId);
-  const existing = await Product.find({ category_id: catObjId });
+      if (!Object.keys(cleanedAttrs).length) return null;
 
-  // Index existing by group_name
-  const existingMap = existing.reduce<Record<string, (typeof existing)[0]>>(
-    (acc, doc) => {
-      acc[doc.group_name] = doc;
-      return acc;
-    },
-    {}
-  );
-
-  const toKeepIds = new Set<string>();
-  const upserted = await Promise.all(
-    cleanedGroups.map(async ({ groupName, attrs }, idx) => {
-      const attrsMap = new Map<string, any>(Object.entries(attrs));
-
-      if (existingMap[groupName]) {
-        // 3a. Update existing group‐doc
-        const doc = existingMap[groupName]!;
-        doc.attributes = attrsMap;
-        doc.group_order = idx.toString();
-        await doc.save();
-        toKeepIds.add(doc._id.toString());
-        return doc;
-      } else {
-        // 3b. Create brand‐new group‐doc
-        const doc = new Product({
-          category_id: catObjId,
-          group_name: groupName,
-          group_order: idx.toString(),
-          attributes: attrsMap,
-        });
-        await doc.save();
-        toKeepIds.add(doc._id.toString());
-        return doc;
-      }
+      return { groupName, attrs: cleanedAttrs, order: idx };
     })
-  );
+    .filter(<T>(v: T | null): v is T => v !== null);
 
-  // 4. Remove any groups the user deleted
-  const toDelete = existing
-    .filter((doc) => !toKeepIds.has(doc._id.toString()))
-    .map((doc) => doc._id);
-  if (toDelete.length) {
-    await Product.deleteMany({ _id: { $in: toDelete } });
+  if (cleaned.length === 0) {
+    throw new Error("No valid attribute groups after cleaning.");
   }
 
-  // 5. Return all remaining in order
-  const finalList = await Product.find({ category_id: catObjId }).sort({
-    group_order: 1,
-  });
+  // 3) Build a single attributes Map containing *all* groups
+  const fullAttrs = new Map<string, any>();
+  for (const { groupName, attrs, order } of cleaned) {
+    // you can nest the group's own attrs inside the map under its name
+    fullAttrs.set(groupName, {
+      ...attrs,
+      group_order: order,
+    });
+  }
 
-  return finalList.map((doc) => doc.toObject());
+  // 4) Save one Product document inside a transaction
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
+    const catId = new mongoose.Types.ObjectId(category_id);
+
+    const doc = new Product({
+      category_id: catId,
+      attributes: fullAttrs,
+    });
+
+    await doc.save({ session });
+
+    await session.commitTransaction();
+    return doc.toObject();
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
+}
+
+interface UpdateProductForm {
+  attributes: Record<string, Record<string, any>>;
+}
+
+export async function updateProduct(
+  productId: string,
+  formData: UpdateProductForm
+) {
+  const { attributes } = formData;
+
+  console.log("attributes:", attributes);
+
+  // 1) Validate inputs
+  if (!productId || typeof productId !== "string") {
+    throw new Error("A valid product ID is required.");
+  }
+  if (
+    !attributes ||
+    typeof attributes !== "object" ||
+    Array.isArray(attributes)
+  ) {
+    throw new Error("Attributes object is required.");
+  }
+
+  // 2) Clean incoming groups (just like before)
+  const cleaned = Object.entries(attributes)
+    .filter(([groupName]) => groupName !== "0")
+    .map(([groupName, groupObj], idx) => {
+      const cleanedAttrs = Object.entries(groupObj || {}).reduce<
+        Record<string, any>
+      >((acc, [key, val]) => {
+        const isEmptyArray = Array.isArray(val) && val.length === 0;
+        const isEmptyString = typeof val === "string" && !val.trim();
+        const isNullish = val === null || val === undefined;
+        if (isEmptyArray || isEmptyString || isNullish) {
+          return acc;
+        }
+        acc[key] = val;
+        return acc;
+      }, {});
+
+      if (Object.keys(cleanedAttrs).length === 0) {
+        return null;
+      }
+
+      return { groupName, attrs: cleanedAttrs, order: idx };
+    })
+    .filter(<T>(v: T | null): v is T => v !== null);
+
+  if (cleaned.length === 0) {
+    throw new Error("No valid attribute groups after cleaning.");
+  }
+
+  // 3) Load your single Product doc
+  const prodObjId = new mongoose.Types.ObjectId(productId);
+  const doc = await Product.findById(prodObjId);
+  if (!doc) {
+    throw new Error(`Product with ID ${productId} not found.`);
+  }
+
+  // 4) Merge each cleaned group into existing `doc.attributes`
+  //    leaving untouched groups/fields alone.
+  for (const { groupName, attrs, order } of cleaned) {
+    // get existing group (if any)
+    const existingGroup = doc.attributes.get(groupName) || {};
+
+    // merge only the incoming keys
+    for (const [key, val] of Object.entries(attrs)) {
+      existingGroup[key] = val;
+    }
+
+    // also update the group's order metadata
+    existingGroup.group_order = order;
+
+    // write back into the Map
+    doc.attributes.set(groupName, existingGroup);
+  }
+
+  // 5) Save and return
+  await doc.save();
+  return doc.toObject();
 }
 
 export async function deleteProduct(id: string) {

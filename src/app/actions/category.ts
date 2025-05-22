@@ -289,7 +289,6 @@ export async function find_mapped_attributes_ids(
     const bsort = b.groupId?.sort_order ?? 0;
     return asort - bsort;
   });
-  console.log("uniqueAttributes :", unique);
   return unique;
 
   }

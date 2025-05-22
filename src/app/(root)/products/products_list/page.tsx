@@ -8,71 +8,88 @@ import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { RootState } from "@/app/store/store";
 import { fetchProducts } from "@/fetch/fetchProducts";
 
+interface Attrs {
+  [groupName: string]: {
+    [field: string]: any;
+    group_order: number;
+  };
+}
+
 const ProductList = () => {
   const dispatch = useAppDispatch();
   const products = useAppSelector((state: RootState) => state.product);
-  const [ind, setIndex] = useState("");
-
-  // console.log("products", products);
+  const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
 
   useEffect(() => {
     dispatch(fetchProducts());
   }, [dispatch]);
 
-  function showMenu(i: string) {
-    setIndex(i);
-  }
+  const showMenu = (id: string) => {
+    setMenuOpenFor((prev) => (prev === id ? null : id));
+  };
 
   return (
     <div>
       <h1 className="text-xl font-bold mb-4">Product List</h1>
       <ul className="flex flex-col gap-3">
-        {products?.allIds.map((id) => {
-          const product = products.byId[id];
+        {products.allIds.map((id) => {
+          const p = products.byId[id];
+          const attrs = p.attributes as Attrs;
+
+          // sort groups by group_order
+          const groups = Object.entries(attrs).sort(
+            ([, a], [, b]) => a.group_order - b.group_order
+          );
+
+          // pick out the Basic Infos group if present
+          const basic = attrs["Basic Infos"] || {};
+          const title = basic.Title || "Untitled product";
+          const shortDesc = basic["Short Description"] || "";
+
           return (
             <li
               key={id}
               className="flex items-center justify-between gap-3 border p-4 rounded-lg border-gray-800"
             >
-              {/* Product Image and Name */}
-              <div className="flex items-center gap-4">
-                <Image
-                  src={product.imageUrls?.[0] || "/placeholder.png"}
-                  alt={product.productName || "Product Image"}
-                  width={50}
-                  height={50}
-                  className="rounded-lg"
-                />
-                <p className="text-lg font-medium line-clamp-1">{product.productName}</p>
+              {/* Left: Thumbnail + Title/Description */}
+              <div className="flex-1 flex items-start gap-4">
+                {/* placeholder image */}
+                <div className="w-12 h-12 bg-gray-200 rounded-lg flex-shrink-0" />
+                <div>
+                  <h2 className="text-lg font-medium line-clamp-1">{title}</h2>
+                  {shortDesc && (
+                    <p className="text-sm text-gray-500 line-clamp-2">
+                      {shortDesc}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              {/* Menu Actions */}
+              {/* Right: three-dot menu */}
               <div className="relative">
-                <span
+                <button
+                  title="button"
+                  type="button"
                   onClick={() => showMenu(id)}
-                  className="border p-2 rounded-lg border-gray-800 cursor-pointer"
+                  className="p-2 border rounded-lg border-gray-800"
                 >
                   <MoreHorizSharp />
-                </span>
+                </button>
 
-                <ul
-                  className={`${
-                    ind === product._id
-                      ? "absolute -bottom-28 w-28 -left-20 z-10 dark:bg-pri-dark rounded-lg p-2 flex flex-col gap-2"
-                      : "hidden"
-                  }`}
-                >
-                  <Link href={`/products/list_product?id=${product._id}`}>
-                    <li className="p-2 border rounded-lg border-gray-800 cursor-pointer">
-                      Edit
-                    </li>
-                  </Link>
-                  <Link href={`/products/delete?id=${product._id}`}>
-                    <li className="p-2 border rounded-lg border-gray-800 cursor-pointer">
-                      Delete
-                    </li>
-                  </Link>
-                </ul>
+                {menuOpenFor === id && (
+                  <ul className="absolute right-0 mt-2 w-32 bg-white dark:bg-pri-dark rounded-lg p-2 shadow-lg flex flex-col gap-1">
+                    <Link href={`/products/list_product?id=${id}`}>
+                      <li className="p-2 hover:bg-gray-100 rounded cursor-pointer">
+                        Edit
+                      </li>
+                    </Link>
+                    <Link href={`/products/delete?id=${id}`}>
+                      <li className="p-2 hover:bg-gray-100 rounded cursor-pointer">
+                        Delete
+                      </li>
+                    </Link>
+                  </ul>
+                )}
               </div>
             </li>
           );
