@@ -42,7 +42,7 @@ const ProductList = () => {
           );
 
           // pick out the Basic Infos group if present
-          const basic = attrs["Basic Infos"] || {};
+          const basic = attrs["Identification & Branding"] || {};
           const title = basic.Title || "Untitled product";
           const shortDesc = basic["Short Description"] || "";
 

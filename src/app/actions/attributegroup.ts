@@ -11,7 +11,6 @@ export interface Group {
   name: string;
   parent_id: string; // "" if root
   group_order: number;
-  sort_order: number;
   children?: Group[];
 }
 
@@ -22,7 +21,6 @@ function serializeGroup(group: any): Group {
     name: group.name,
     parent_id: group.parent_id ? group.parent_id.toString() : "",
     group_order: group.group_order,
-    sort_order: group.sort_order,
   };
 }
 
@@ -42,12 +40,10 @@ function buildTree(flatGroups: Group[]): Group[] {
 
   const sortFn = (a: Group, b: Group) => {
     if (a.group_order !== b.group_order) return a.group_order - b.group_order;
-    return a.sort_order - b.sort_order;
   };
 
   // Recursively sort each level
   const sortTree = (nodes: (Group & { children: Group[] })[]) => {
-    nodes.sort(sortFn);
     nodes.forEach(n => sortTree(n.children as unknown as any[]));
   };
 
@@ -93,7 +89,6 @@ export async function createAttributeGroup(
       code: code.trim(),
       parent_id: mongoose.Types.ObjectId.isValid(parent_id) ? new mongoose.Types.ObjectId(parent_id) : undefined,
       group_order: group_order || 0,
-      sort_order: sort_order || 0,
     });
 
     await newGroup.save();

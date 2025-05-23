@@ -65,7 +65,7 @@ const Variants = () => {
           product.category_id
         );
         if (response?.length > 0) {
-          setAttributes(response as AttributeDetail[]);
+          setAttributes(response as any[]);
         }
       }
     };

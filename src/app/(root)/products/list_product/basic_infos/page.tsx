@@ -23,9 +23,16 @@ import { Box, CircularProgress } from "@mui/material";
 type AttributeDetail = {
   _id: string;
   name: string;
-  option?: string;
+  option?: string[];
   type: string;
-  groupId: { name: string; group_order: number };
+};
+
+type GroupNode = {
+  _id: string;
+  name: string;
+  group_order: number;
+  subgroups: GroupNode[];
+  attributes: AttributeDetail[];
 };
 
 const ProductForm = () => {
@@ -35,33 +42,21 @@ const ProductForm = () => {
   const productId = productState.allIds[0];
   const product = productState.byId[productId] || {};
 
-  const validateForm = () => {
-    return Boolean(product.category_id) && product.attributes.length > 0;
-  };
-
   const clearStoreAndRedirect = async () => {
-    // Clear Redux persisted data
     await persistor.purge();
-    // Clear product state
     dispatch(clearProduct());
-    // Redirect to products list
     router.push("/products/list_product");
   };
-
-  async function clearStore() {
-    await clearStoreAndRedirect();
-  }
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [selectedBrand, setSelectedBrand] = useState<{
     value: string;
     label: string;
   } | null>(null);
-  const [attributes, setAttributes] = useState<AttributeDetail[]>([]);
+  const [groups, setGroups] = useState<GroupNode[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
-  // fetch attributes
   useEffect(() => {
     const fetchAttributes = async () => {
       setIsLoading(true);
@@ -70,35 +65,19 @@ const ProductForm = () => {
           null,
           product.category_id
         );
-        if (Array.isArray(resp)) setAttributes(resp as AttributeDetail[]);
+        setGroups(resp as unknown as GroupNode[]);
       }
       setIsLoading(false);
     };
     fetchAttributes();
   }, [product.category_id]);
 
-  // fetch brands
   useEffect(() => {
     getBrands().then((res) => setBrands(res));
   }, []);
 
-  // compute sorted unique group_orders
-  const groupOrders = React.useMemo(() => {
-    const orders = Array.from(
-      new Set(attributes.map((a) => a.groupId.group_order))
-    );
-    return orders.sort((a, b) => a - b);
-  }, [attributes]);
+  const currentGroup = groups[stepIndex] || null;
 
-  // determine current group_order
-  const currentOrder = groupOrders[stepIndex] ?? null;
-
-  // filter attributes for this step
-  const currentAttrs = attributes.filter(
-    (a) => a.groupId.group_order === currentOrder
-  );
-
-  // handle switching field values
   const handleAttributeChange = (
     groupName: string,
     attrName: string,
@@ -115,33 +94,26 @@ const ProductForm = () => {
   };
 
   const handleSubmit = async () => {
-    // if (!validateForm()) {
-    //   alert("Please fill all required fields!");
-    //   return;
-    // }
-
     const isLocalId = validate(productId) && version(productId) === 4;
-
     try {
+      let res;
       if (!isLocalId) {
-        console.log("product attributes:", product);
-
-        const res = await updateProduct(productId, {
+        res = await updateProduct(productId, {
           attributes: product.attributes,
         });
-        if (res) {
-          alert("Product updated successfully!");
-          await clearStoreAndRedirect();
-        }
       } else {
-        const res = await createProduct({
+        res = await createProduct({
           category_id: product.category_id,
-          attributes: product?.attributes,
+          attributes: product.attributes,
         } as any);
-        if (res) {
-          alert("Product submitted successfully!");
-          await clearStoreAndRedirect();
-        }
+      }
+      if (res) {
+        alert(
+          isLocalId
+            ? "Product submitted successfully!"
+            : "Product updated successfully!"
+        );
+        await clearStoreAndRedirect();
       }
     } catch (error) {
       console.error("Error submitting product:", error);
@@ -151,18 +123,11 @@ const ProductForm = () => {
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
-    if (stepIndex < groupOrders.length - 1) setStepIndex((idx) => idx + 1);
-    else {
-      // final submit logic here
-      handleSubmit();
-    }
+    if (stepIndex < groups.length - 1) setStepIndex((i) => i + 1);
+    else handleSubmit();
   };
 
-  const handlePrev = () => {
-    setStepIndex((i) => Math.max(i - 1, 0));
-  };
-
-  console.log("currentAttrs:", currentAttrs);
+  const handlePrev = () => setStepIndex((i) => Math.max(i - 1, 0));
 
   if (isLoading) {
     return (
@@ -171,7 +136,6 @@ const ProductForm = () => {
         justifyContent="center"
         alignItems="center"
         minHeight="64px"
-        bgcolor="transparent"
       >
         <CircularProgress />
       </Box>
@@ -180,130 +144,63 @@ const ProductForm = () => {
 
   return (
     <form onSubmit={handleNext} className="space-y-6 mb-10">
-      {currentAttrs.length > 0 && (
+      {currentGroup && (
         <div className="group-section">
-          <h3 className="text-lg font-semibold mb-3">
-            {
-              attributes.find((a) => a.groupId.group_order === currentOrder)
-                ?.groupId.name
-            }
-          </h3>
-          {currentAttrs.map((detail) => {
-            const groupName = detail.groupId.name;
+          <h3 className="text-lg font-semibold mb-3">{currentGroup.name}</h3>
+          {/* Render top-level attributes */}
+          {currentGroup.attributes.map((detail) => {
+            const groupName = currentGroup.name;
             const attrName = detail.name;
             const stored = product.attributes?.[groupName]?.[attrName];
-            if (detail.type === "file") {
+            if (detail.type === "file")
               handleAttributeChange(groupName, attrName, files);
-            }
-
             return (
-              <div key={detail._id} className="mb-4">
-                <label className="block mb-1">{detail.name}</label>
-                {detail.type === "file" && (
-                  <div>
-                    <FilesUploader files={stored || []} addFiles={addFiles} />
-                  </div>
-                )}
-                {detail.type === "text" && (
-                  <input
-                    title="text"
-                    type="text"
-                    className="w-full"
-                    value={stored || ""}
-                    onChange={(e) =>
-                      handleAttributeChange(groupName, attrName, e.target.value)
-                    }
-                  />
-                )}
-                {detail.type === "number" && (
-                  <input
-                    title="number"
-                    type="number"
-                    className="w-full"
-                    value={stored || 0}
-                    onChange={(e) =>
-                      handleAttributeChange(
-                        groupName,
-                        attrName,
-                        Number(e.target.value)
-                      )
-                    }
-                  />
-                )}
-                {detail.type === "select" && Array.isArray(detail.option) && (
-                  <Select
-                    isMulti
-                    // turn your string[] into react-select options
-                    options={detail.option.map((v) => ({
-                      value: v,
-                      label: v,
-                    }))}
-                    // reflect the currently stored values as Select’s value
-                    value={
-                      Array.isArray(stored)
-                        ? detail.option
-                            .filter((v) => stored.includes(v))
-                            .map((v) => ({ value: v, label: v }))
-                        : []
-                    }
-                    onChange={(
-                      opts: MultiValue<{ value: string; label: string }>
-                    ) =>
-                      handleAttributeChange(
-                        groupName,
-                        attrName,
-                        opts.map((o) => o.value) // back to string[]
-                      )
-                    }
-                    styles={{
-                      control: (prov) => ({
-                        ...prov,
-                        backgroundColor: "transparent",
-                      }),
-                      menu: (prov) => ({
-                        ...prov,
-                        backgroundColor: "transparent",
-                      }),
-                      option: (prov, state) => ({
-                        ...prov,
-                        backgroundColor: state.isFocused ? "#999" : "#111a2A",
-                      }),
-                    }}
-                  />
-                )}
-
-                {detail.type === "select" && detail.name === "Brand" && (
-                  <Select
-                    value={selectedBrand}
-                    options={brands.map((b) => ({
-                      value: b._id,
-                      label: b.name,
-                    }))}
-                    onChange={(opt) => {
-                      setSelectedBrand(opt);
-                      dispatch(
-                        addProduct({ _id: productId, brand_id: opt?.value })
-                      );
-                    }}
-                    styles={{
-                      control: (prov) => ({
-                        ...prov,
-                        backgroundColor: "transparent",
-                      }),
-                      menu: (prov) => ({
-                        ...prov,
-                        backgroundColor: "transparent",
-                      }),
-                      option: (prov, state) => ({
-                        ...prov,
-                        backgroundColor: state.isFocused ? "#999" : "#111a2A",
-                      }),
-                    }}
-                  />
-                )}
-              </div>
+              <AttributeField
+                key={detail._id}
+                detail={detail}
+                stored={stored}
+                files={files}
+                addFiles={addFiles}
+                brands={brands}
+                selectedBrand={selectedBrand}
+                setSelectedBrand={setSelectedBrand}
+                handleAttributeChange={handleAttributeChange}
+                productId={productId}
+                dispatch={dispatch}
+              />
             );
           })}
+          {/* Render subgroup attributes */}
+          {currentGroup.subgroups.map(
+            (sub) =>
+              sub.attributes.length > 0 && (
+                <div key={sub._id} className="mt-6">
+                  <h4 className="text-md font-medium mb-2">{sub.name}</h4>
+                  {sub.attributes.map((detail) => {
+                    const groupName = sub.name;
+                    const attrName = detail.name;
+                    const stored = product.attributes?.[groupName]?.[attrName];
+                    if (detail.type === "file")
+                      handleAttributeChange(groupName, attrName, files);
+                    return (
+                      <AttributeField
+                        key={detail._id}
+                        detail={detail}
+                        stored={stored}
+                        files={files}
+                        addFiles={addFiles}
+                        brands={brands}
+                        selectedBrand={selectedBrand}
+                        setSelectedBrand={setSelectedBrand}
+                        handleAttributeChange={handleAttributeChange}
+                        productId={productId}
+                        dispatch={dispatch}
+                      />
+                    );
+                  })}
+                </div>
+              )
+          )}
         </div>
       )}
       <div className="flex justify-between">
@@ -312,24 +209,130 @@ const ProductForm = () => {
           onClick={handlePrev}
           disabled={stepIndex === 0}
           className="btn px-6"
-          style={{ backgroundColor: stepIndex === 0 ? "#ccc" : "#007bff" }}
         >
           Previous
         </button>
         <div className="flex gap-6">
           <button
             type="button"
-            onClick={clearStore}
+            onClick={clearStoreAndRedirect}
             className="border p-2 bg-gray-400 rounded-lg"
           >
             Cancel
           </button>
           <button type="submit" className="btn px-6">
-            {stepIndex < groupOrders.length - 1 ? "Next" : "Save & Submit"}
+            {stepIndex < groups.length - 1 ? "Next" : "Save & Submit"}
           </button>
         </div>
       </div>
     </form>
+  );
+};
+
+// Extracted for reuse
+const AttributeField: React.FC<{
+  detail: any;
+  stored: any;
+  files: any[];
+  addFiles: (f: any[]) => void;
+  brands: Brand[];
+  selectedBrand: { value: string; label: string } | null;
+  setSelectedBrand: React.Dispatch<
+    React.SetStateAction<{ value: string; label: string } | null>
+  >;
+  handleAttributeChange: (
+    groupName: string,
+    attrName: string,
+    selected: any
+  ) => void;
+  productId: string;
+  dispatch: any;
+}> = ({
+  detail,
+  stored,
+  files,
+  addFiles,
+  brands,
+  selectedBrand,
+  setSelectedBrand,
+  handleAttributeChange,
+  productId,
+  dispatch,
+}) => {
+  const { name, _id, type, option } = detail;
+  return (
+    <div key={_id} className="mb-4">
+      <label className="block mb-1">{name}</label>
+      {type === "file" && (
+        <FilesUploader files={stored || []} addFiles={addFiles} />
+      )}
+      {type === "text" && (
+        <input
+          title={type}
+          type="text"
+          className="w-full"
+          value={stored || ""}
+          onChange={(e) =>
+            handleAttributeChange(
+              detail.groupId?.name ?? "",
+              name,
+              e.target.value
+            )
+          }
+        />
+      )}
+      {type === "number" && (
+        <input
+          title={type}
+          type="number"
+          className="w-full"
+          value={stored || 0}
+          onChange={(e) =>
+            handleAttributeChange(
+              detail.groupId?.name ?? "",
+              name,
+              Number(e.target.value)
+            )
+          }
+        />
+      )}
+      {type === "select" && option && (
+        <Select
+          isMulti
+          options={option.map((v: any) => ({ value: v, label: v }))}
+          value={
+            Array.isArray(stored)
+              ? option
+                  .filter((v: any) => stored.includes(v))
+                  .map((v: any) => ({ value: v, label: v }))
+              : []
+          }
+          onChange={(opts: MultiValue<{ value: string; label: string }>) =>
+            handleAttributeChange(
+              detail.groupId?.name ?? "",
+              name,
+              opts.map((o) => o.value)
+            )
+          }
+          styles={{
+            control: (prov) => ({ ...prov, backgroundColor: "transparent" }),
+          }}
+        />
+      )}
+      {type === "select" && name === "Brand" && (
+        <Select
+          value={selectedBrand}
+          options={brands.map((b) => ({ value: b._id, label: b.name }))}
+          onChange={(opt) => {
+            setSelectedBrand(opt);
+            handleAttributeChange(detail.groupId?.name ?? "", name, opt?.value);
+          }}
+          styles={{
+            control: (prov) => ({ ...prov, backgroundColor: "transparent" }),
+          }}
+        />
+      )}
+    </div>
   );
 };
 

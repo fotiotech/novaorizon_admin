@@ -6,7 +6,6 @@ interface IAttributeGroup extends Document {
   name: string;
   parent_id?: mongoose.Types.ObjectId;
   group_order: number;
-  sort_order: number;
 }
 
 const attributeGroupSchema = new Schema<IAttributeGroup>(
@@ -18,7 +17,6 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
       ref: "AttributeGroup",
     },
     group_order: { type: Number, default: 0 },
-    sort_order: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -27,6 +25,8 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
 
 // Indexing for faster queries
 attributeGroupSchema.index({ code: 1 });
+attributeGroupSchema.index({ parent_id: 1, group_order: 1 }, { unique: true });
+
 
 const AttributeGroup =
   mongoose.models.AttributeGroup ||

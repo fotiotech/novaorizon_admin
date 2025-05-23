@@ -212,32 +212,58 @@ export async function create_update_mapped_attributes_ids(
   revalidatePath("/admin/categories");
 }
 
+
+import { Types } from 'mongoose';
+import AttributeGroup from "@/models/AttributesGroup";
+
+
+// Define the shape of an attribute and group/node
+interface Attribute {
+  _id: Types.ObjectId;
+  groupId?: {
+    _id: Types.ObjectId;
+  };
+  // other attribute fields
+}
+
+interface GroupNode {
+  _id: string;
+  code: string;
+  name: string;
+  parent_id?: Types.ObjectId;
+  group_order: number;
+  attributes: Attribute[];
+  subgroups: GroupNode[];
+}
+
+/**
+ * Finds and returns a nested tree of attribute groups and their attributes.
+ * @param id - Optional CategoryAttribute ID for direct lookup
+ * @param categoryId - Optional Category ID to collect mappings by ancestry
+ * @returns A promise resolving to an ordered tree of GroupNodes
+ */
 export async function find_mapped_attributes_ids(
-  id?: string | null,
-  categoryId?: string | null
-) {
+  id: string | null = null,
+  categoryId: string | null = null
+): Promise<GroupNode[]> {
+  // Ensure database connection is established
   await connection();
 
-  console.log("categoryId :", categoryId);
-
+  // 1) Direct mapping by CategoryAttribute ID
   if (id) {
-    const categoryAttribute = await CategoryAttribute.findById(id).populate(
-      "attributes"
-    );
-    if (categoryAttribute) {
-      return categoryAttribute.attributes;
-    }
-  }
-  if (categoryId) {
-     // Ensure ObjectId
-  const catObjectId =
-    typeof categoryId === 'string'
-      ? new mongoose.Types.ObjectId(categoryId)
-      : categoryId;
+    const mapping = await CategoryAttribute.findById(id)
+      .populate({ path: 'attributes', populate: { path: 'groupId', model: 'AttributeGroup' } })
+      .lean<({ attributes: Attribute[] } & mongoose.Document) | null>();
 
-  // 1. Retrieve this category and its ancestors via graphLookup
-  const [{ allIds } = { allIds: [catObjectId] }] =
-    (await Category.aggregate([
+    return mapping
+      ? buildGroupTree(mapping.attributes)
+      : [];
+  }
+
+  // 2) Mapping by category and its ancestor categories
+  if (categoryId) {
+    const catObjectId = new Types.ObjectId(categoryId);
+    const result = await Category.aggregate<{ allIds: Types.ObjectId[] }>([
       { $match: { _id: catObjectId } },
       {
         $graphLookup: {
@@ -248,54 +274,96 @@ export async function find_mapped_attributes_ids(
           as: 'ancestors',
         },
       },
-      {
-        $project: {
-          allIds: { $concatArrays: [['$_id'], '$ancestors._id'] },
-        },
-      },
-    ]).exec()) as any[];
+      { $project: { allIds: { $concatArrays: [['$_id'], '$ancestors._id'] } } },
+    ]);
 
-  // 2. Fetch CategoryAttribute docs for all related categories
-  const attributeDocs = await CategoryAttribute.find({
-    category_id: { $in: allIds },
-  })
-    .populate({
-      path: 'attributes',
-      model: 'Attribute',
-      populate: { path: 'groupId', model: 'AttributeGroup' },
-    })
-    .lean()
-    .exec();
+    const allIds = result[0]?.allIds ?? [catObjectId];
+    const docs = await CategoryAttribute.find({ category_id: { $in: allIds } })
+      .populate({ path: 'attributes', populate: { path: 'groupId', model: 'AttributeGroup' } })
+      .lean<{ attributes: Attribute[] }[]>();
 
+    // Deduplicate attributes
+    const mergedAttrs: Attribute[] = docs.flatMap((d) => d.attributes || []);
+    const uniqueAttrs = Array.from(
+      mergedAttrs.reduce((map, attr) => map.set(attr._id.toString(), attr), new Map<string, Attribute>()).values()
+    );
 
-  // Merge all attributes
-  const merged = attributeDocs.flatMap(doc => doc.attributes || []);
-
-  // Deduplicate by _id
-  const seen = new Set<string>();
-  const unique = merged.filter((attr: any) => {
-    const id = String(attr._id);
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-
-  // Sort by group_order, then sort_order
-  unique.sort((a: any, b: any) => {
-    const ag = a.groupId?.group_order ?? 0;
-    const bg = b.groupId?.group_order ?? 0;
-    if (ag !== bg) return ag - bg;
-    const asort = a.groupId?.sort_order ?? 0;
-    const bsort = b.groupId?.sort_order ?? 0;
-    return asort - bsort;
-  });
-  return unique;
-
+    return buildGroupTree(uniqueAttrs);
   }
-  const categoryAttribute = await CategoryAttribute.find().populate(
-    "attributes"
+
+  // 3) Fallback: all mappings
+  const allMappings = await CategoryAttribute.find()
+    .populate({ path: 'attributes', populate: { path: 'groupId', model: 'AttributeGroup' } })
+    .lean<{ attributes: Attribute[] }[]>();
+
+  const allAttrs: Attribute[] = allMappings.flatMap((m) => m.attributes || []);
+  const uniqueAttrs = Array.from(
+    allAttrs.reduce((map, attr) => map.set(attr._id.toString(), attr), new Map<string, Attribute>()).values()
   );
-  if (categoryAttribute) {
-    return categoryAttribute.map((attr) => attr.attributes);
-  }
+
+  return buildGroupTree(uniqueAttrs);
 }
+
+/**
+ * Builds a nested, ordered tree of AttributeGroups containing the given attributes.
+ * @param attributes - List of attributes to attach to their groups
+ */
+async function buildGroupTree(attributes: Attribute[]): Promise<GroupNode[]> {
+  // 1) Load all groups sorted by group_order
+  const allGroups = await AttributeGroup.find()
+    .sort('group_order')
+    .lean<GroupNode[]>();
+
+  // 2) Initialize nodes map
+  const nodes: Record<string, GroupNode> = allGroups.reduce((acc, g) => {
+    acc[g._id.toString()] = {
+      _id: g._id,
+      code: g.code,
+      name: g.name,
+      parent_id: g.parent_id,
+      group_order: g.group_order,
+      attributes: [],
+      subgroups: [],
+    };
+    return acc;
+  }, {} as Record<string, GroupNode>);
+
+  // 3) Build hierarchy
+  const roots: GroupNode[] = [];
+  allGroups.forEach((g) => {
+    const key = g._id.toString();
+    if (g.parent_id) {
+      const parentKey = g.parent_id.toString();
+      nodes[parentKey].subgroups.push(nodes[key]);
+    } else {
+      roots.push(nodes[key]);
+    }
+  });
+
+  // 4) Attach attributes
+  attributes.forEach((attr) => {
+    const gid = attr.groupId?._id.toString();
+    if (gid && nodes[gid]) {
+      nodes[gid].attributes.push(attr);
+    }
+  });
+
+  // 5) Sort and prune empty groups
+  function recurse(list: GroupNode[]): GroupNode[] {
+    return list
+      .map((node) => {
+        node.subgroups = recurse(node.subgroups).sort((a, b) => a.group_order - b.group_order);
+        return node;
+      })
+      .filter((node) => node.attributes.length > 0 || node.subgroups.length > 0)
+      .sort((a, b) => a.group_order - b.group_order);
+  }
+
+  return recurse(roots);
+}
+
+
+
+
+
+
