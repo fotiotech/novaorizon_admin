@@ -11,10 +11,11 @@ interface GroupDropdownProps {
   groups: Group[]; // already nested: top-level groups with children
   groupId: string;
   setGroupId: (id: string) => void;
+  setEditingAttributes?: (prev: (p: any) => void) => void;
   placeholder?: string;
 }
 
-const GroupDropdown: React.FC<GroupDropdownProps> = ({ groups, groupId, setGroupId, placeholder = "Select or Create New Group" }) => {
+const GroupDropdown: React.FC<GroupDropdownProps> = ({ groups, groupId, setGroupId, setEditingAttributes, placeholder = "Select or Create New Group" }) => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedParentId, setSelectedParentId] = useState<string>("");
@@ -74,6 +75,7 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({ groups, groupId, setGroup
                   className={`px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer ${groupId === top._id ? "font-semibold" : ""}`}
                   onClick={() => {
                     setGroupId(top._id);
+                    setEditingAttributes && setEditingAttributes(prev => ({...prev, groupId:top._id}));
                     setSelectedParentId(top._id);
                   }}
                 >

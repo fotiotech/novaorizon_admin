@@ -255,14 +255,6 @@ const Attributes = () => {
     }
   };
 
-  useEffect(() => {
-    if (editingAttribute) {
-      setEditingAttribute({
-        ...editingAttribute,
-        groupId,
-      });
-    }
-  }, [editingAttribute]);
 
   const handleUpdateAttribute = async (
     id: string,
@@ -295,18 +287,25 @@ const Attributes = () => {
     }
   };
 
-  const handleEditClick = (attr: AttributeType) => {
-    if (attr._id) {
-      setEditingAttribute({
-        id: attr?._id || "",
-        name: attr.name,
-        option: attr.option,
-        type: attr.type || "",
-        isHighlight: attr.isHighlight || false,
-        isVariant: attr.isVariant || false,
-      });
-    }
-  };
+const handleEditClick = (attr: AttributeType) => {
+  if (!attr._id) return;
+
+  // coerce select‐options array into a comma‐string
+  const optionString = Array.isArray(attr.option)
+    ? attr.option.join(",")
+    : attr.option || "";
+
+  setEditingAttribute({
+    id: attr._id,
+    name: attr.name,
+    option: optionString,
+    type: attr.type || "",
+    isHighlight: attr.isHighlight || false,
+    isVariant: attr.isVariant || false,
+    groupId: attr.groupId?._id || "",    // grab it right here
+  });
+};
+
 
   const sortOptions: Option[] = [
     { value: "asc", label: "A → Z" },
@@ -654,6 +653,7 @@ const Attributes = () => {
                           groups={groups}
                           groupId={groupId}
                           setGroupId={setGroupId}
+                          setEditingAttributes={setEditingAttribute as any}
                           placeholder={"Editing attribute group"}
                         />
                       </div>
