@@ -20,6 +20,7 @@ import { v4 as uuidv4, validate, version } from "uuid";
 import Spinner from "@/components/Spinner";
 import { Box, CircularProgress } from "@mui/material";
 import MultiValueInput from "@/components/MultipleValuesSelect";
+import VariationManager from "@/components/products/VariantManager";
 
 type AttributeDetail = {
   _id: string;
@@ -35,14 +36,6 @@ type GroupNode = {
   subgroups: GroupNode[];
   attributes: AttributeDetail[];
 };
-
-// helper: cartesian product
-function cartesian<T>(arrays: T[][]): T[][] {
-  return arrays.reduce<T[][]>(
-    (a, b) => a.flatMap((d) => b.map((e) => [...d, e])),
-    [[]]
-  );
-}
 
 const ProductForm = () => {
   const { files, addFiles } = useFileUploader();
@@ -65,6 +58,7 @@ const ProductForm = () => {
   const [groups, setGroups] = useState<GroupNode[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchAttributes = async () => {
@@ -92,6 +86,9 @@ const ProductForm = () => {
     attrName: string,
     selected: any
   ) => {
+    if (groupName === "Variants & Options" && attrName === "Variation Themes") {
+      setSelectedThemes(selected);
+    }
     dispatch(
       updateAttributes({
         productId,
@@ -151,20 +148,12 @@ const ProductForm = () => {
     );
   }
 
-  console.log("groups:", groups);
-
   return (
     <form onSubmit={handleNext} className="space-y-6 mb-10">
       {currentGroup && (
         <div className="group-section">
           <h3 className="text-lg font-semibold mb-3">{currentGroup.name}</h3>
-          {currentGroup.name === "Variants & Options" && (
-            <VariantsSection
-              details={currentGroup.attributes}
-              storedAttributes={product.attributes}
-              handleAttributeChange={handleAttributeChange}
-            />
-          )}
+
           {/* Render top-level attributes */}
           {currentGroup.attributes.map((detail) => {
             const groupName = currentGroup.name;
@@ -172,16 +161,6 @@ const ProductForm = () => {
             const stored = product.attributes?.[groupName]?.[attrName];
             if (detail.type === "file")
               handleAttributeChange(groupName, attrName, files);
-
-            {
-              currentGroup.name === "Variants & Options" && (
-                <VariantsSection
-                  details={currentGroup.attributes}
-                  storedAttributes={product.attributes}
-                  handleAttributeChange={handleAttributeChange}
-                />
-              );
-            }
 
             return (
               <AttributeField
@@ -199,6 +178,9 @@ const ProductForm = () => {
               />
             );
           })}
+          {currentGroup.name === 'Variants & Options' && (
+            selectedThemes.length > 0 && <VariationManager themes={selectedThemes} productId={productId} />
+          )}
           {/* Render subgroup attributes */}
           {currentGroup.subgroups.map(
             (sub) =>
@@ -230,6 +212,7 @@ const ProductForm = () => {
                 </div>
               )
           )}
+          
         </div>
       )}
       <div className="flex justify-between">
@@ -255,103 +238,6 @@ const ProductForm = () => {
         </div>
       </div>
     </form>
-  );
-};
-
-// Renders variant combinations and extra fields per variant
-const VariantsSection: React.FC<{
-  details: AttributeDetail[];
-  storedAttributes: any;
-  handleAttributeChange: (group: string, field: string, val: any) => void;
-}> = ({ details, storedAttributes, handleAttributeChange }) => {
-  const group = "Variants & Options";
-  const arrays = details.map((d) => storedAttributes?.[group]?.[d.name] || []);
-  const combos = cartesian(arrays);
-
-  return (
-    <table className="w-full table-auto mb-4">
-      <thead>
-        <tr>
-          {details.map((d) => (
-            <th key={d._id}>{d.name}</th>
-          ))}
-          <th>SKU</th>
-          <th>Price Adj.</th>
-          <th>Stock</th>
-          <th>Image</th>
-        </tr>
-      </thead>
-      <tbody>
-        {combos.map((combo) => {
-          const key = combo.join("|");
-          const variant = storedAttributes?.[group]?.variants?.[key] || {};
-          return (
-            <tr key={key} className="border-t">
-              {combo.map((v, i) => (
-                <td key={i}>{v as unknown as any}</td>
-              ))}
-              <td>
-                <input
-                title="SKU"
-                  type="text"
-                  className="w-full"
-                  value={variant.sku || ""}
-                  onChange={(e) =>
-                    handleAttributeChange(
-                      group,
-                      `variants.${key}.sku`,
-                      e.target.value
-                    )
-                  }
-                />
-              </td>
-              <td>
-                <input
-                title="Price Adjustment"
-                  type="number"
-                  className="w-full"
-                  value={variant.price_adj || 0}
-                  onChange={(e) =>
-                    handleAttributeChange(
-                      group,
-                      `variants.${key}.price_adj`,
-                      Number(e.target.value)
-                    )
-                  }
-                />
-              </td>
-              <td>
-                <input
-                title="Stock"
-                  type="number"
-                  className="w-full"
-                  value={variant.stock || 0}
-                  onChange={(e) =>
-                    handleAttributeChange(
-                      group,
-                      `variants.${key}.stock`,
-                      Number(e.target.value)
-                    )
-                  }
-                />
-              </td>
-              <td>
-                <FilesUploader
-                  files={variant.images || []}
-                  addFiles={(files) =>
-                    handleAttributeChange(
-                      group,
-                      `variants.${key}.images`,
-                      files
-                    )
-                  }
-                />
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
   );
 };
 
@@ -394,18 +280,6 @@ const AttributeField: React.FC<{
     { value: "UPC", label: "UPC" },
     { value: "ISBN", label: "ISBN" },
   ];
-
-  if (groupName === "Variants & Options" && type === "text") {
-    return (
-      <div key={_id} className="mb-4">
-        <label className="block mb-1">{name}</label>
-        <MultiValueInput
-          values={Array.isArray(stored) ? stored : []}
-          onChange={(vals) => handleAttributeChange(groupName, name, vals)}
-        />
-      </div>
-    );
-  }
 
   return (
     <div key={_id} className="mb-4">

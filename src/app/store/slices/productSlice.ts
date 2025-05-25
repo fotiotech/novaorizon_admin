@@ -54,15 +54,7 @@ const productSlice = createSlice({
         };
       }
     },
-    updateGetVariant: (
-      state,
-      action: PayloadAction<{ productId: string; value: boolean }>
-    ) => {
-      const { productId, value } = action.payload;
-      if (state.byId[productId]) {
-        state.byId[productId].getVariant = value;
-      }
-    },
+
     updateAttributes: (
       state,
       action: PayloadAction<{
@@ -84,18 +76,17 @@ const productSlice = createSlice({
         product.attributes[groupName][attrName] = selectedValues;
       }
     },
-    addVariant: (
+    // reducer
+    updateVariants: (
       state,
-      action: PayloadAction<{ productId: string; variant: any }>
+      action: PayloadAction<{ productId: string; variants: any[] }>
     ) => {
-      const { productId, variant } = action.payload;
+      const { productId, variants } = action.payload;
       if (state.byId[productId]) {
-        if (!state.byId[productId].variants) {
-          state.byId[productId].variants = [];
-        }
-        state.byId[productId].variants.push(variant);
+        state.byId[productId].variants = variants;
       }
     },
+
     removeVariant: (
       state,
       action: PayloadAction<{ productId: string; index: number }>
@@ -105,42 +96,7 @@ const productSlice = createSlice({
         state.byId[productId].variants.splice(index, 1);
       }
     },
-    updateVariantField: (
-      state,
-      action: PayloadAction<{
-        productId: string | null;
-        index: number;
-        field: string;
-        value: any;
-      }>
-    ) => {
-      const { productId, index, field, value } = action.payload;
 
-      if (productId && state.byId[productId]?.variants?.[index]) {
-        state.byId[productId].variants[index][field] = value;
-      }
-    },
-    updateVariantAttributes: (
-      state,
-      action: PayloadAction<{
-        productId: string;
-        groupName: string;
-        attrName: string;
-        selectedValues: string[];
-      }>
-    ) => {
-      const { productId, groupName, attrName, selectedValues } = action.payload;
-      if (state.byId[productId]) {
-        if (!state.byId[productId].variantAttributes) {
-          state.byId[productId].variantAttributes = {};
-        }
-        if (!state.byId[productId].variantAttributes[groupName]) {
-          state.byId[productId].variantAttributes[groupName] = {};
-        }
-        state.byId[productId].variantAttributes[groupName][attrName] =
-          selectedValues;
-      }
-    },
     syncVariantWithParent: (
       state,
       action: PayloadAction<{ productId: string }>
@@ -169,12 +125,9 @@ const productSlice = createSlice({
 export const {
   setProducts,
   addProduct,
-  updateGetVariant,
   updateAttributes,
-  addVariant,
+  updateVariants,
   removeVariant,
-  updateVariantField,
-  updateVariantAttributes,
   syncVariantWithParent,
   clearProduct,
 } = productSlice.actions;

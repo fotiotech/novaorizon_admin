@@ -284,6 +284,19 @@ export async function createProduct(formData: CreateProductForm) {
   // 4) Save one Product document inside a transaction
   const session = await mongoose.startSession();
   try {
+    await Product.collection.dropIndex("url_slug_1");
+    console.log("Dropped index url_slug_1");
+  } catch (e: any) {
+    console.warn("Could not drop url_slug_1:", e.message);
+  }
+
+  try {
+    await Product.collection.dropIndex("dsin_1");
+    console.log("Dropped index dsin_1");
+  } catch (e: any) {
+    console.warn("Could not drop dsin_1:", e.message);
+  }
+  try {
     session.startTransaction();
     const catId = new mongoose.Types.ObjectId(category_id);
 
@@ -295,7 +308,7 @@ export async function createProduct(formData: CreateProductForm) {
     await doc.save({ session });
 
     await session.commitTransaction();
-    return doc.toObject();
+    revalidatePath("/admin/products/products_list");
   } catch (err) {
     await session.abortTransaction();
     throw err;
