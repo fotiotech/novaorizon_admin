@@ -7,7 +7,19 @@ interface IAttribute extends Document {
   is_highlight?: boolean;
   name: string;
   option?: string[];
-  type: "select" | "multiselect" | "text" | "number" | "boolean"; // Added the missing 'type' property
+  type:
+    | "text"
+    | "select"
+    | "checkbox"
+    | "radio"
+    | "boolean"
+    | "textarea"
+    | "number"
+    | "date"
+    | "color"
+    | "file"
+    | "url"
+    | "multi-select"; // Added the missing 'type' property
 }
 
 // Attribute Schema
@@ -35,16 +47,21 @@ const AttributeSchema = new Schema<IAttribute>({
   type: {
     type: String,
     enum: [
-      "select",
-      "multiselect",
       "text",
-      "number",
+      "select",
+      "checkbox",
+      "radio",
       "boolean",
-      "file",
       "textarea",
+      "number",
       "date",
-    ], // Added the missing 'type' property
-  }, // Added the missing 'type' property},
+      "color",
+      "file",
+      "url",
+      "multi-select",
+    ],
+    required: true,
+  },
 });
 
 AttributeSchema.index({ name: 1 });

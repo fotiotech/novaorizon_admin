@@ -17,10 +17,10 @@ import { useFileUploader } from "@/hooks/useFileUploader";
 import { updateProduct, createProduct } from "@/app/actions/products";
 import router from "next/router";
 import { v4 as uuidv4, validate, version } from "uuid";
-import Spinner from "@/components/Spinner";
 import { Box, CircularProgress } from "@mui/material";
 import MultiValueInput from "@/components/MultipleValuesSelect";
 import VariationManager from "@/components/products/VariantManager";
+import AttributeField from "@/components/products/AttributeFields";
 
 type AttributeDetail = {
   _id: string;
@@ -149,72 +149,82 @@ const ProductForm = () => {
   }
 
   return (
-    <form onSubmit={handleNext} className="space-y-6 mb-10">
-      {currentGroup && (
-        <div className="group-section">
-          <h3 className="text-lg font-semibold mb-3">{currentGroup.name}</h3>
+    <form
+      onSubmit={handleNext}
+      className="flex flex-col gag-2 justify-between min-h-full space-y-6 mb-10 mx-3"
+    >
+      <div className="flex-1 overflow-y-auto">
+        {currentGroup && (
+          <div className="group-section">
+            <h3 className="text-lg font-semibold mb-3">{currentGroup.name}</h3>
 
-          {/* Render top-level attributes */}
-          {currentGroup.attributes.map((detail) => {
-            const groupName = currentGroup.name;
-            const attrName = detail.name;
-            const stored = product.attributes?.[groupName]?.[attrName];
-            if (detail.type === "file")
-              handleAttributeChange(groupName, attrName, files);
+            {/* Render top-level attributes */}
+            {currentGroup.attributes.map((detail) => {
+              const groupName = currentGroup.name;
+              const attrName = detail.name;
+              const stored = product.attributes?.[groupName]?.[attrName];
+              if (detail.type === "file")
+                handleAttributeChange(groupName, attrName, files);
 
-            return (
-              <AttributeField
-                key={detail._id}
-                detail={detail}
-                stored={stored}
-                files={files}
-                addFiles={addFiles}
-                brands={brands}
-                selectedBrand={selectedBrand}
-                setSelectedBrand={setSelectedBrand}
-                handleAttributeChange={handleAttributeChange}
-                productId={productId}
-                dispatch={dispatch}
-              />
-            );
-          })}
-          {currentGroup.name === 'Variants & Options' && (
-            selectedThemes.length > 0 && <VariationManager themes={selectedThemes} productId={productId} />
-          )}
-          {/* Render subgroup attributes */}
-          {currentGroup.subgroups.map(
-            (sub) =>
-              sub.attributes.length > 0 && (
-                <div key={sub._id} className="mt-6">
-                  <h4 className="text-md font-medium mb-2">{sub.name}</h4>
-                  {sub.attributes.map((detail) => {
-                    const groupName = sub.name;
-                    const attrName = detail.name;
-                    const stored = product.attributes?.[groupName]?.[attrName];
-                    if (detail.type === "file")
-                      handleAttributeChange(groupName, attrName, files);
-                    return (
-                      <AttributeField
-                        key={detail._id}
-                        detail={detail}
-                        stored={stored}
-                        files={files}
-                        addFiles={addFiles}
-                        brands={brands}
-                        selectedBrand={selectedBrand}
-                        setSelectedBrand={setSelectedBrand}
-                        handleAttributeChange={handleAttributeChange}
-                        productId={productId}
-                        dispatch={dispatch}
-                      />
-                    );
-                  })}
-                </div>
-              )
-          )}
-          
-        </div>
-      )}
+              return (
+                <AttributeField
+                  key={detail._id}
+                  detail={detail}
+                  stored={stored}
+                  files={files}
+                  addFiles={addFiles}
+                  brands={brands}
+                  selectedBrand={selectedBrand}
+                  setSelectedBrand={setSelectedBrand}
+                  handleAttributeChange={handleAttributeChange}
+                  productId={productId}
+                  dispatch={dispatch}
+                />
+              );
+            })}
+            {currentGroup.name === "Variants & Options" &&
+              selectedThemes.length > 0 && (
+                <VariationManager
+                  themes={selectedThemes}
+                  productId={productId}
+                />
+              )}
+            {/* Render subgroup attributes */}
+            {currentGroup.subgroups.map(
+              (sub) =>
+                sub.attributes.length > 0 && (
+                  <div key={sub._id} className="mt-6">
+                    <h4 className="text-md font-medium mb-2">{sub.name}</h4>
+                    {sub.attributes.map((detail) => {
+                      const groupName = sub.name;
+                      const attrName = detail.name;
+                      const stored =
+                        product.attributes?.[groupName]?.[attrName];
+                      if (detail.type === "file")
+                        handleAttributeChange(groupName, attrName, files);
+                      return (
+                        <AttributeField
+                          key={detail._id}
+                          detail={detail}
+                          stored={stored}
+                          files={files}
+                          addFiles={addFiles}
+                          brands={brands}
+                          selectedBrand={selectedBrand}
+                          setSelectedBrand={setSelectedBrand}
+                          handleAttributeChange={handleAttributeChange}
+                          productId={productId}
+                          dispatch={dispatch}
+                        />
+                      );
+                    })}
+                  </div>
+                )
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="flex justify-between">
         <button
           type="button"
@@ -238,175 +248,6 @@ const ProductForm = () => {
         </div>
       </div>
     </form>
-  );
-};
-
-// Extracted for reuse
-const AttributeField: React.FC<{
-  detail: any;
-  stored: any;
-  files: any[];
-  addFiles: (f: any[]) => void;
-  brands: Brand[];
-  selectedBrand: { value: string; label: string } | null;
-  setSelectedBrand: React.Dispatch<
-    React.SetStateAction<{ value: string; label: string } | null>
-  >;
-  handleAttributeChange: (
-    groupName: string,
-    attrName: string,
-    selected: any
-  ) => void;
-  productId: string;
-  dispatch: any;
-}> = ({
-  detail,
-  stored,
-  files,
-  addFiles,
-  brands,
-  selectedBrand,
-  setSelectedBrand,
-  handleAttributeChange,
-  productId,
-  dispatch,
-}) => {
-  const { name, _id, type, option } = detail;
-  const groupName = detail.groupId?.name ?? "";
-
-  // Options for code type when name is 'Product Code'
-  const codeTypeOptions = [
-    { value: "SKU", label: "SKU" },
-    { value: "UPC", label: "UPC" },
-    { value: "ISBN", label: "ISBN" },
-  ];
-
-  return (
-    <div key={_id} className="mb-4">
-      <label className="block mb-1">{name}</label>
-
-      {/* File type */}
-      {type === "file" && (
-        <FilesUploader files={stored || []} addFiles={addFiles} />
-      )}
-
-      {/* Product Code composite field */}
-      {type === "text" && name === "Product Code" ? (
-        <div className="flex gap-4 items-center">
-          <Select
-            options={codeTypeOptions}
-            value={codeTypeOptions.find(
-              (opt) => opt.value === (stored?.type || "")
-            )}
-            onChange={(opt) =>
-              handleAttributeChange(groupName, name, {
-                ...stored,
-                type: opt?.value,
-                value: stored?.value,
-              })
-            }
-            styles={{
-              control: (prov) => ({ ...prov, backgroundColor: "transparent" }),
-              menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
-            }}
-          />
-          <input
-            title="Product Code"
-            type="text"
-            className="flex-1"
-            placeholder="Enter code"
-            value={stored?.value || ""}
-            onChange={(e) =>
-              handleAttributeChange(groupName, name, {
-                ...stored,
-                type: stored?.type,
-                value: e.target.value,
-              })
-            }
-          />
-        </div>
-      ) : null}
-
-      {/* Regular text field */}
-      {type === "text" && name !== "Product Code" && (
-        <input
-          title={type}
-          type="text"
-          className="w-full"
-          value={stored || ""}
-          onChange={(e) =>
-            handleAttributeChange(groupName, name, e.target.value)
-          }
-        />
-      )}
-
-      {/* Textarea */}
-      {type === "textarea" && (
-        <textarea
-          title={type}
-          className="w-full bg-transparent"
-          value={stored || ""}
-          onChange={(e) =>
-            handleAttributeChange(groupName, name, e.target.value)
-          }
-        />
-      )}
-
-      {/* Number */}
-      {type === "number" && (
-        <input
-          title={type}
-          type="number"
-          className="w-full"
-          value={stored || 0}
-          onChange={(e) =>
-            handleAttributeChange(groupName, name, Number(e.target.value))
-          }
-        />
-      )}
-
-      {/* Select multi */}
-      {type === "select" && option && (
-        <Select
-          isMulti
-          options={option.map((v: any) => ({ value: v, label: v }))}
-          value={
-            Array.isArray(stored)
-              ? option
-                  .filter((v: any) => stored.includes(v))
-                  .map((v: any) => ({ value: v, label: v }))
-              : []
-          }
-          onChange={(opts: MultiValue<{ value: string; label: string }>) =>
-            handleAttributeChange(
-              groupName,
-              name,
-              opts.map((o) => o.value)
-            )
-          }
-          styles={{
-            control: (prov) => ({ ...prov, backgroundColor: "transparent" }),
-            menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
-          }}
-        />
-      )}
-
-      {/* Brand select */}
-      {type === "select" && name === "Brand" && (
-        <Select
-          value={selectedBrand}
-          options={brands.map((b) => ({ value: b._id, label: b.name }))}
-          onChange={(opt) => {
-            setSelectedBrand(opt);
-            handleAttributeChange(detail.groupId?.name ?? "", name, opt?.value);
-          }}
-          styles={{
-            control: (prov) => ({ ...prov, backgroundColor: "transparent" }),
-            menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
-          }}
-        />
-      )}
-    </div>
   );
 };
 

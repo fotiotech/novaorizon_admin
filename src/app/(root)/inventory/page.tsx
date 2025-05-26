@@ -1,7 +1,5 @@
-"use client";
-
+'use client'
 import React, { useEffect, useState } from "react";
-import { findProducts } from "@/app/actions/products";
 import { Edit, Warning } from "@mui/icons-material";
 import {
   Card,
@@ -15,8 +13,11 @@ import {
   Tooltip,
   Snackbar,
 } from "@mui/material";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { RootState } from "@/app/store/store";
+import { fetchProducts } from "@/fetch/fetchProducts";
 
-interface Product {
+interface ProductRow {
   _id: string;
   productName: string;
   sku: string;
@@ -35,11 +36,13 @@ interface InventoryStats {
   in_stock: StatsData;
   low_stock: StatsData;
   out_of_stock: StatsData;
-  lowStockProducts: Product[];
+  lowStockProducts: ProductRow[];
 }
 
 const InventoryPage: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
+  const dispatch = useAppDispatch();
+  const productState = useAppSelector((state: RootState) => state.product);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<string | null>(null);
@@ -47,6 +50,7 @@ const InventoryPage: React.FC = () => {
     quantity: 0,
     lowStockThreshold: 0,
   });
+  const [products, setProducts] = useState<ProductRow[]>([]);
   const [stats, setStats] = useState<InventoryStats | null>(null);
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -54,105 +58,96 @@ const InventoryPage: React.FC = () => {
     severity: "success" as "success" | "error",
   });
 
+  useEffect(() => {
+    dispatch(fetchProducts());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!productState.allIds.length) return;
+
+    setLoading(true);
+    try {
+      // map redux state shape to component rows
+      const rows: ProductRow[] = productState.allIds.map((id) => {
+        const raw = productState.byId[id];
+        const attrs = raw.attributes;
+        const quantity = attrs.Stock?.Quantity ?? 0;
+        const threshold = attrs.Stock?.LowStockThreshold ?? 10;
+        const status: "in_stock" | "low_stock" | "out_of_stock" =
+          quantity <= 0
+            ? "out_of_stock"
+            : quantity <= threshold
+            ? "low_stock"
+            : "in_stock";
+        
+        const title = attrs["Identification & Branding"]?.Title ?? "";
+        const codeField = attrs["Identification & Branding"]["Product Code"];
+        const sku = codeField?.value || codeField?.text || raw.sku || "";
+        return {
+          _id: raw._id,
+          productName: title,
+          sku,
+          stockQuantity: quantity,
+          lowStockThreshold: threshold,
+          stockStatus: status,
+          lastUpdated: raw.updatedAt || raw.createdAt || new Date().toISOString(),
+        };
+      });
+
+      // calculate stats
+      const statsObj: InventoryStats = {
+        in_stock: { count: 0, totalStock: 0 },
+        low_stock: { count: 0, totalStock: 0 },
+        out_of_stock: { count: 0, totalStock: 0 },
+        lowStockProducts: [],
+      };
+
+      rows.forEach((p) => {
+        statsObj[p?.stockStatus].count++;
+        statsObj[p.stockStatus].totalStock += p.stockQuantity;
+        if (p.stockStatus === "low_stock") statsObj.lowStockProducts.push(p);
+      });
+
+      setProducts(rows);
+      setStats(statsObj);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || "Failed to map inventory");
+    } finally {
+      setLoading(false);
+    }
+  }, [productState]);
+
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const productsData = await findProducts();
-        const processedProducts: Product[] = productsData.map((p: any) => ({
-          _id: p._id,
-          productName: p.productName,
-          sku: p.sku,
-          stockQuantity: p.stockQuantity || 0,
-          lowStockThreshold: p.lowStockThreshold || 10,
-          stockStatus: p.stockStatus || "out_of_stock",
-          lastUpdated: p.lastUpdated || new Date().toISOString(),
-        }));
-
-        // Calculate stats
-        const stats: InventoryStats = {
-          in_stock: { count: 0, totalStock: 0 },
-          low_stock: { count: 0, totalStock: 0 },
-          out_of_stock: { count: 0, totalStock: 0 },
-          lowStockProducts: [],
-        };
-
-        processedProducts.forEach((product) => {
-          const status = product.stockStatus;
-          stats[status].count++;
-          stats[status].totalStock += product.stockQuantity;
-          if (status === "low_stock") {
-            stats.lowStockProducts.push(product);
-          }
-        });
-
-        setProducts(processedProducts);
-        setStats(stats);
-        setError(null);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to load inventory"
-        );
-        console.error("Error fetching inventory data:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  const handleEdit = (
-    productId: string,
-    currentQty: number,
-    threshold: number
-  ) => {
-    setEditingProduct(productId);
+  const handleEdit = (product: ProductRow) => {
+    setEditingProduct(product._id);
     setEditValues({
-      quantity: currentQty,
-      lowStockThreshold: threshold,
+      quantity: product.stockQuantity,
+      lowStockThreshold: product.lowStockThreshold,
     });
   };
 
-  const handleSave = async (productId: string) => {
-    try {
-      const productsData = await findProducts();
-      const processedProducts: Product[] = productsData.map((p: any) => ({
-        _id: p._id,
-        productName: p.productName,
-        sku: p.sku,
-        stockQuantity: p.stockQuantity || 0,
-        lowStockThreshold: p.lowStockThreshold || 10,
-        stockStatus: p.stockStatus || "out_of_stock",
-        lastUpdated: p.lastUpdated || new Date().toISOString(),
-      }));
-      setProducts(processedProducts);
-      setEditingProduct(null);
-      setError(null);
-      setSnackbar({
-        open: true,
-        message: "Inventory updated successfully",
-        severity: "success",
-      });
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to update inventory";
-      setError(errorMessage);
-      setSnackbar({
-        open: true,
-        message: errorMessage,
-        severity: "error",
-      });
-    }
+  const handleSave = async (id: string) => {
+    // try {
+    //   await dispatch(
+    //     updateProduct(id, {
+    //       stockQuantity: editValues.quantity,
+    //       lowStockThreshold: editValues.lowStockThreshold,
+    //     })
+    //   );
+    //   setSnackbar({ open: true, message: "Updated successfully", severity: "success" });
+    //   setEditingProduct(null);
+    // } catch (err: any) {
+    //   setSnackbar({ open: true, message: err.message || "Update failed", severity: "error" });
+    // }
   };
 
-  const getStockStatus = (quantity: number, threshold: number): string => {
-    if (quantity <= 0) return "text-red-500";
-    if (quantity <= threshold) return "text-yellow-500";
+  const getStockStatus = (q: number, t: number) => {
+    if (q <= 0) return "text-red-500";
+    if (q <= t) return "text-yellow-500";
     return "text-green-500";
   };
 
@@ -169,7 +164,7 @@ const InventoryPage: React.FC = () => {
     );
   }
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+    <div className=" w-full space-y-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Inventory Management</h1>
       </div>
@@ -202,9 +197,9 @@ const InventoryPage: React.FC = () => {
               <Typography variant="h6" component="div">
                 In Stock
               </Typography>
-              <Typography variant="h4">{stats.in_stock.count}</Typography>
+              <Typography variant="h4">{stats.in_stock?.count}</Typography>
               <Typography color="textSecondary">
-                Total Items: {stats.in_stock.totalStock}
+                Total Items: {stats.in_stock?.totalStock}
               </Typography>
             </CardContent>
           </Card>
@@ -218,7 +213,7 @@ const InventoryPage: React.FC = () => {
                 Low Stock
                 <Warning className="ml-2 text-yellow-500" />
               </Typography>
-              <Typography variant="h4">{stats.low_stock.count}</Typography>
+              <Typography variant="h4">{stats.low_stock?.count}</Typography>
               <Typography color="textSecondary">
                 Items Need Attention
               </Typography>
@@ -234,7 +229,7 @@ const InventoryPage: React.FC = () => {
                 Out of Stock
                 <Warning className="ml-2 text-red-500" />
               </Typography>
-              <Typography variant="h4">{stats.out_of_stock.count}</Typography>
+              <Typography variant="h4">{stats.out_of_stock?.count}</Typography>
               <Typography color="textSecondary">Need Replenishment</Typography>
             </CardContent>
           </Card>
@@ -268,9 +263,9 @@ const InventoryPage: React.FC = () => {
       )}
 
       {/* Main Inventory Table */}
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-auto">
+        <div className="">
+          <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
                 <th
@@ -324,7 +319,7 @@ const InventoryPage: React.FC = () => {
 
                 return (
                   <tr key={product._id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="flex-1 min-h-0 bg-white dark:bg-gray-800 shadow rounded-lg overflow-auto">
                       <Typography
                         variant="body2"
                         className="font-medium text-gray-900 dark:text-gray-100"
@@ -453,7 +448,7 @@ const InventoryPage: React.FC = () => {
                           <span>
                             <IconButton
                               onClick={() =>
-                                handleEdit(product._id, stockLevel, threshold)
+                                handleEdit(product)
                               }
                               color="primary"
                               size="small"

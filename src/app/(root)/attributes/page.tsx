@@ -255,7 +255,6 @@ const Attributes = () => {
     }
   };
 
-
   const handleUpdateAttribute = async (
     id: string,
     name: string,
@@ -287,25 +286,24 @@ const Attributes = () => {
     }
   };
 
-const handleEditClick = (attr: AttributeType) => {
-  if (!attr._id) return;
+  const handleEditClick = (attr: AttributeType) => {
+    if (!attr._id) return;
 
-  // coerce select‐options array into a comma‐string
-  const optionString = Array.isArray(attr.option)
-    ? attr.option.join(",")
-    : attr.option || "";
+    // coerce select‐options array into a comma‐string
+    const optionString = Array.isArray(attr.option)
+      ? attr.option.join(",")
+      : attr.option || "";
 
-  setEditingAttribute({
-    id: attr._id,
-    name: attr.name,
-    option: optionString,
-    type: attr.type || "",
-    isHighlight: attr.isHighlight || false,
-    isVariant: attr.isVariant || false,
-    groupId: attr.groupId?._id || "",    // grab it right here
-  });
-};
-
+    setEditingAttribute({
+      id: attr._id,
+      name: attr.name,
+      option: optionString,
+      type: attr.type || "",
+      isHighlight: attr.isHighlight || false,
+      isVariant: attr.isVariant || false,
+      groupId: attr.groupId?._id || "", // grab it right here
+    });
+  };
 
   const sortOptions: Option[] = [
     { value: "asc", label: "A → Z" },
@@ -620,8 +618,8 @@ const handleEditClick = (attr: AttributeType) => {
                         <option value="text">text</option>
                         <option value="select">select</option>
                         <option value="checkbox">checkbox</option>
-                        <option value="boolean">boolean</option>
                         <option value="radio">radio</option>
+                        <option value="boolean">boolean</option>
                         <option value="textarea">textarea</option>
                         <option value="number">number</option>
                         <option value="date">date</option>
