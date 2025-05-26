@@ -22,7 +22,7 @@ const AdminLayout = ({ children }: adminLayoutProps) => {
   });
 
   return (
-    <div className=" flex h-screen overflow-hidden bg-gray-100 dark:bg-sec-dark">
+    <div className=" flex h-screen overflow-hidden bg-gray-100 dark:bg-sec-dark text-pri ">
       <AdminSideBar
         domNode={domNode}
         sideBarToggle={sideBarToggle}
