@@ -56,26 +56,35 @@ const productSlice = createSlice({
     },
 
     updateAttributes: (
-      state,
-      action: PayloadAction<{
-        productId: string;
-        groupName: string;
-        attrName: string;
-        selectedValues: any;
-      }>
-    ) => {
-      const { productId, groupName, attrName, selectedValues } = action.payload;
-      const product = state.byId[productId];
-      if (product) {
-        if (!product.attributes) {
-          product.attributes = {};
-        }
-        if (!product.attributes[groupName]) {
-          product.attributes[groupName] = {} as Record<string, any>;
-        }
-        product.attributes[groupName][attrName] = selectedValues;
-      }
-    },
+  state,
+  action: PayloadAction<{
+    productId: string;
+    groupId: string;
+    groupName: string;
+    parent_id: string;
+    attrName: string;
+    selectedValues: any;
+  }>
+) => {
+  const { productId, groupId, groupName, parent_id, attrName, selectedValues } = action.payload;
+  const product = state.byId[productId];
+  if (!product) {
+    return;
+  }
+
+  // Initialize attributes and the specific group if they don't exist
+  if (!product.attributes) {
+    product.attributes = {};
+  }
+  if (!product.attributes[groupName]) {
+    product.attributes[groupName] = {} as Record<string, any>;
+  }
+
+  // Store metadata and selected values under the dynamic group
+  product.attributes[groupName].groupId = groupId;
+  product.attributes[groupName].parent_id = parent_id;
+  product.attributes[groupName][attrName] = selectedValues;
+},
     // reducer
     updateVariants: (
       state,

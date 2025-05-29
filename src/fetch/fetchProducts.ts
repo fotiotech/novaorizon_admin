@@ -22,7 +22,6 @@ export const fetchProducts = (id?: string) => async (dispatch: AppDispatch) => {
   try {
     // Fetch product(s) using the provided `findProducts` function
     const data = id ? await findProducts(id) : await findProducts();
-    console.log("Fetched data:", data);
 
     // Check if data is empty or undefined
     if (!data || (Array.isArray(data) && data.length === 0)) {

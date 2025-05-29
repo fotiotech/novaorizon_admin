@@ -51,178 +51,22 @@ export async function findProducts(id?: string) {
   await connection();
 
   if (id) {
-    const product = await Product.findOne({ _id: id })
-      .populate("brand_id")
-      .exec();
+    const product = await Product.findOne({ _id: id }).exec();
 
     if (!product) return null;
-
-    const variantAttributes = await VariantAttribute.find({
-      product_id: product._id,
-    });
-
-    const variants = await Promise.all(
-      variantAttributes.map(async (attr) => {
-        return await Variant.find({ product_id: attr._id });
-      })
-    );
 
     return {
       ...product.toObject(),
       _id: product._id.toString(),
       category_id: product.category_id?.toString() ?? null,
-      brand_id: product.brand_id?._id
-        ? {
-            _id: product.brand_id._id.toString(),
-            name: product.brand_id.name,
-          }
-        : null,
-      attributes: product.attributes?.map((attr: any) => ({
-        ...attr.toObject(),
-        _id: attr._id?.toString(),
-      })),
-      variantAttributes: variantAttributes.map((attr: any) => ({
-        ...attr.toObject(),
-        _id: attr._id.toString(),
-      })),
-      variants: variants.flat().map((variant: any) => ({
-        ...variant.toObject(),
-        _id: variant._id.toString(),
-        product_id: variant.product_id.toString(),
-      })),
     };
   } else {
-    const products = await Product.find()
-      .sort({ created_at: -1 })
-      // .populate("brand_id")
-      .exec();
+    const products = await Product.find().sort({ created_at: -1 }).exec();
 
     return products;
   }
 }
 
-// Define return type for `findProductDetails`
-interface ProductDetails {
-  _id: string;
-  category_id: string | null;
-  brand_id: { _id: string; name: string } | null;
-  attributes: Array<any>;
-  variantAttributes: Array<any>;
-  [key: string]: any;
-}
-
-export async function findProductDetails(
-  dsin?: string
-): Promise<ProductDetails | null> {
-  try {
-    // Ensure database connection is established
-    await connection();
-
-    if (dsin) {
-      // Find product by dsin, and populate the brand information
-      const product = await Product.findOne({ dsin }).populate(
-        "brand_id",
-        "name"
-      );
-
-      if (product) {
-        // Find variant attributes related to the product
-        const variantAttributes = await VariantAttribute.find({
-          product_id: product._id,
-        });
-
-        console.log("Product details:", product);
-        console.log("Variant attributes:", variantAttributes);
-
-        // Return sanitized product details
-        return {
-          // Safely convert to object, and ensure proper conversion of fields
-          ...product.toObject(),
-          _id: product._id?.toString(),
-          category_id: product.category_id?.toString() ?? null,
-          brand_id: product.brand_id
-            ? {
-                _id: product.brand_id._id?.toString(),
-                name: product.brand_id.name,
-              }
-            : null,
-          variantAttributes: variantAttributes.map((variant: any) => ({
-            ...variant.toObject(),
-            _id: variant._id.toString(),
-            product_id: variant.product_id.toString(),
-          })),
-        };
-      }
-    }
-
-    // Return null if no product is found
-    return null;
-  } catch (error) {
-    // Log the error for debugging
-    console.error("Error fetching product details:", error);
-    // Optionally, rethrow the error or return null
-    throw new Error("Failed to fetch product details.");
-  }
-}
-
-interface VariantDetails {
-  _id: string;
-  variantAttributesId: string;
-  [key: string]: any;
-}
-
-export async function findVariantsAttributes(id: string) {
-  await connection();
-  if (id) {
-    const res = await VariantAttribute.find({ id });
-    return res;
-  }
-}
-
-export async function findVariants(id: string) {
-  await connection();
-  if (id) {
-    const res = await Variant.find({ id });
-    return res;
-  }
-}
-
-export async function findVariantDetails(
-  product_id: string,
-  variantName: string
-): Promise<VariantDetails | null> {
-  try {
-    await connection();
-
-    if (product_id && variantName) {
-      const variant = await Variant.findOne(
-        { product_id, variantName } // Ensure proper filtering
-      );
-
-      if (variant) {
-        return {
-          ...variant.toObject(),
-          _id: variant?._id.toString(),
-          product_id: variant.product_id?.toString(),
-        };
-      }
-    }
-
-    return null; // Return null if no variant is found
-  } catch (error) {
-    console.error("Error fetching variant details:", error);
-    throw new Error("Failed to fetch variant details.");
-  }
-}
-
-interface FormData {
-  category_id: string;
-  attributes: {
-    [groupName: string]: {
-      [attrName: string]: any;
-    };
-  };
-}
 
 interface CreateProductForm {
   category_id: string;

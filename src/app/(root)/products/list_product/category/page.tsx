@@ -10,19 +10,18 @@ import { addProduct } from "@/app/store/slices/productSlice";
 import { v4 as uuidv4 } from "uuid";
 import { fetchCategory } from "@/fetch/fetchCategory";
 
-const Category = () => {
+type CategoryProps = { initialId?: string | null };
+
+const Category: React.FC<CategoryProps> = ({ initialId }) => {
   const dispatch = useAppDispatch();
   const category = useAppSelector((state) => state.category);
   const products = useAppSelector((state) => state.product);
- 
- // 1️⃣ Create a ref that holds our “working” ID.  It only gets set once.
-  const idRef = useRef<string>();
-  if (!idRef.current) {
-    idRef.current = products.allIds.length
-      ? products.allIds[0]
-      : uuidv4();
-  }
-  const id = idRef.current;
+
+  // 1️⃣ Create a ref that holds our “working” ID.  It only gets set once.
+
+  const id = products.allIds.length ? products.allIds[0] : uuidv4();
+
+  console.log("products", products);
 
   // Initialize product in Redux if it doesn't exist
   useEffect(() => {

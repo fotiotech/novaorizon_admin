@@ -14,7 +14,9 @@ const AttributeField: React.FC<{
     React.SetStateAction<{ value: string; label: string } | null>
   >;
   handleAttributeChange: (
+    groupId: string,
     groupName: string,
+    parent_id: string,
     attrName: string,
     selected: any
   ) => void;
@@ -33,7 +35,9 @@ const AttributeField: React.FC<{
   dispatch,
 }) => {
   const { name, _id, type, option } = detail;
+  const groupId = detail.groupId?._id ?? "";
   const groupName = detail.groupId?.name ?? "";
+  const parent_id = detail.groupId?.parent_id ?? "";
 
   // Options for code type when name is 'Product Code'
   const codeTypeOptions = [
@@ -60,7 +64,7 @@ const AttributeField: React.FC<{
               (opt) => opt.value === (stored?.type || "")
             )}
             onChange={(opt) =>
-              handleAttributeChange(groupName, name, {
+              handleAttributeChange(groupId, groupName, parent_id, name, {
                 ...stored,
                 type: opt?.value,
                 value: stored?.value,
@@ -78,7 +82,7 @@ const AttributeField: React.FC<{
             placeholder="Enter code"
             value={stored?.value || ""}
             onChange={(e) =>
-              handleAttributeChange(groupName, name, {
+              handleAttributeChange(groupId, groupName, parent_id, name, {
                 ...stored,
                 type: stored?.type,
                 value: e.target.value,
@@ -96,7 +100,13 @@ const AttributeField: React.FC<{
           className="w-full"
           value={stored || ""}
           onChange={(e) =>
-            handleAttributeChange(groupName, name, e.target.value)
+            handleAttributeChange(
+              groupId,
+              groupName,
+              parent_id,
+              name,
+              e.target.value
+            )
           }
         />
       )}
@@ -108,7 +118,13 @@ const AttributeField: React.FC<{
           className="w-full bg-transparent"
           value={stored || ""}
           onChange={(e) =>
-            handleAttributeChange(groupName, name, e.target.value)
+            handleAttributeChange(
+              groupId,
+              groupName,
+              parent_id,
+              name,
+              e.target.value
+            )
           }
         />
       )}
@@ -121,7 +137,13 @@ const AttributeField: React.FC<{
           className="w-full"
           value={stored || 0}
           onChange={(e) =>
-            handleAttributeChange(groupName, name, Number(e.target.value))
+            handleAttributeChange(
+              groupId,
+              groupName,
+              parent_id,
+              name,
+              Number(e.target.value)
+            )
           }
         />
       )}
@@ -140,7 +162,9 @@ const AttributeField: React.FC<{
           }
           onChange={(opts: MultiValue<{ value: string; label: string }>) =>
             handleAttributeChange(
+              groupId,
               groupName,
+              parent_id,
               name,
               opts.map((o) => o.value)
             )
@@ -159,7 +183,13 @@ const AttributeField: React.FC<{
           options={brands.map((b) => ({ value: b._id, label: b.name }))}
           onChange={(opt) => {
             setSelectedBrand(opt);
-            handleAttributeChange(detail.groupId?.name ?? "", name, opt?.value);
+            handleAttributeChange(
+              groupId,
+              groupName,
+              parent_id,
+              name,
+              opt?.value
+            );
           }}
           styles={{
             control: (prov) => ({ ...prov, backgroundColor: "transparent" }),
@@ -185,7 +215,13 @@ const AttributeField: React.FC<{
                     : e.target.checked
                     ? [opt]
                     : [];
-                  handleAttributeChange(groupName, name, newVals);
+                  handleAttributeChange(
+                    groupId,
+                    groupName,
+                    parent_id,
+                    name,
+                    newVals
+                  );
                 }}
               />
               {opt}
@@ -202,7 +238,13 @@ const AttributeField: React.FC<{
             className="mr-2"
             checked={!!stored}
             onChange={(e) =>
-              handleAttributeChange(groupName, name, e.target.checked)
+              handleAttributeChange(
+                groupId,
+                groupName,
+                parent_id,
+                name,
+                e.target.checked
+              )
             }
           />
           {stored ? "Yes" : "No"}
@@ -220,7 +262,15 @@ const AttributeField: React.FC<{
                 name={_id}
                 value={opt}
                 checked={stored === opt}
-                onChange={() => handleAttributeChange(groupName, name, opt)}
+                onChange={() =>
+                  handleAttributeChange(
+                    groupId,
+                    groupName,
+                    parent_id,
+                    name,
+                    opt
+                  )
+                }
               />
               {opt}
             </label>
@@ -236,7 +286,13 @@ const AttributeField: React.FC<{
           className="w-full"
           value={stored || ""}
           onChange={(e) =>
-            handleAttributeChange(groupName, name, e.target.value)
+            handleAttributeChange(
+              groupId,
+              groupName,
+              parent_id,
+              name,
+              e.target.value
+            )
           }
         />
       )}
@@ -249,7 +305,13 @@ const AttributeField: React.FC<{
           className="w-full h-10 p-0"
           value={stored || "#000000"}
           onChange={(e) =>
-            handleAttributeChange(groupName, name, e.target.value)
+            handleAttributeChange(
+              groupId,
+              groupName,
+              parent_id,
+              name,
+              e.target.value
+            )
           }
         />
       )}
@@ -262,7 +324,13 @@ const AttributeField: React.FC<{
           className="w-full"
           value={stored || ""}
           onChange={(e) =>
-            handleAttributeChange(groupName, name, e.target.value)
+            handleAttributeChange(
+              groupId,
+              groupName,
+              parent_id,
+              name,
+              e.target.value
+            )
           }
         />
       )}
@@ -279,7 +347,9 @@ const AttributeField: React.FC<{
           }
           onChange={(opts: any) =>
             handleAttributeChange(
+              groupId,
               groupName,
+              parent_id,
               name,
               opts.map((o: any) => o.value)
             )

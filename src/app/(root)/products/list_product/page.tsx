@@ -23,7 +23,7 @@ const ListProduct = () => {
       <h3 className="text-2xl font-semibold mb-6">
         {id ? "Edit Product" : "Add New Product"}
       </h3>
-      <Category />
+      <Category initialId={id} />
     </div>
   );
 };

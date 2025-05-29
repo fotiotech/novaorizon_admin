@@ -32,6 +32,7 @@ type AttributeDetail = {
 type GroupNode = {
   _id: string;
   name: string;
+  parent_id: string;
   group_order: number;
   subgroups: GroupNode[];
   attributes: AttributeDetail[];
@@ -82,7 +83,9 @@ const ProductForm = () => {
   const currentGroup = groups[stepIndex] || null;
 
   const handleAttributeChange = (
+    groupId: string,
     groupName: string,
+    parent_id: string,
     attrName: string,
     selected: any
   ) => {
@@ -92,7 +95,9 @@ const ProductForm = () => {
     dispatch(
       updateAttributes({
         productId,
+        groupId,
         groupName,
+        parent_id,
         attrName,
         selectedValues: selected,
       })
@@ -148,6 +153,9 @@ const ProductForm = () => {
     );
   }
 
+  console.log("attributes:", product.attributes);
+
+
   return (
     <form
       onSubmit={handleNext}
@@ -160,11 +168,13 @@ const ProductForm = () => {
 
             {/* Render top-level attributes */}
             {currentGroup.attributes.map((detail) => {
+              const groupId = currentGroup._id;
               const groupName = currentGroup.name;
+              const parent_id = currentGroup.parent_id;
               const attrName = detail.name;
               const stored = product.attributes?.[groupName]?.[attrName];
               if (detail.type === "file")
-                handleAttributeChange(groupName, attrName, files);
+                handleAttributeChange(groupId, groupName, parent_id, attrName, files);
 
               return (
                 <AttributeField
@@ -196,12 +206,14 @@ const ProductForm = () => {
                   <div key={sub._id} className="mt-6">
                     <h4 className="text-md font-medium mb-2">{sub.name}</h4>
                     {sub.attributes.map((detail) => {
+                      const groupId = sub._id;
                       const groupName = sub.name;
+                      const parent_id = sub.parent_id;
                       const attrName = detail.name;
                       const stored =
                         product.attributes?.[groupName]?.[attrName];
                       if (detail.type === "file")
-                        handleAttributeChange(groupName, attrName, files);
+                        handleAttributeChange(groupId, groupName, parent_id, attrName, files);
                       return (
                         <AttributeField
                           key={detail._id}

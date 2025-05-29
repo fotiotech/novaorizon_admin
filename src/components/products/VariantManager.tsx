@@ -104,8 +104,12 @@ const VariationManager: React.FC<VariationManagerProps> = ({
           Enter Values for Each Theme
         </h4>
         {normalizedThemes.map((theme) => {
-          const currentVals =
-            (attributes["Variants & Options"]?.[theme] as string[]) || [];
+          const currentId =
+            (attributes["Variants & Options"]?._id as string)
+            const currentVals =
+            (attributes["Variants & Options"]?.[theme] as string[]) || []
+          const parent_id =
+            (attributes["Variants & Options"]?.parent_id as string);
           return (
             <div key={theme} className="mb-4">
               <label className="block mb-1">{theme} Values</label>
@@ -115,7 +119,9 @@ const VariationManager: React.FC<VariationManagerProps> = ({
                   dispatch(
                     updateAttributes({
                       productId,
+                      groupId: currentId,
                       groupName: "Variants & Options",
+                      parent_id,
                       attrName: theme,
                       selectedValues: newVals,
                     })
