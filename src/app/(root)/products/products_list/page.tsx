@@ -8,13 +8,6 @@ import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { RootState } from "@/app/store/store";
 import { fetchProducts } from "@/fetch/fetchProducts";
 
-interface Attrs {
-  [groupName: string]: {
-    [field: string]: any;
-    group_order: number;
-  };
-}
-
 const ProductList = () => {
   const dispatch = useAppDispatch();
   const products = useAppSelector((state: RootState) => state.product);
@@ -28,43 +21,33 @@ const ProductList = () => {
     setMenuOpenFor((prev) => (prev === id ? null : id));
   };
 
-  console.log("Products:", products);
-
   return (
     <div>
       <h1 className="text-xl font-bold mb-4">Product List</h1>
       <ul className="flex flex-col gap-3">
         {products.allIds.map((id) => {
           const p = products.byId[id];
-          const attrs = p.attributes as Attrs;
+          if (!p) return null;
 
-          // sort groups by group_order
-          const groups = Object.entries(attrs).sort(
-            ([, a], [, b]) => a.group_order - b.group_order
-          );
+          // Identification & Branding
+          const { sku, name } = p.identification_branding || {};
 
-          // Basic info fields
-          const branding = attrs["Identification & Branding"] || {};
-          const title = branding.Title || "Untitled product";
-          const shortDesc = branding["Short Description"] || "";
+          // Media & Visuals
+          const media = p.media_visuals || {};
+          const imageUrl = media.main_image || media.gallery?.[0] || null;
 
-          // Media & visuals
-          const media = attrs["Media & Visuals"] || {};
-          const images: string[] = media.Images || [];
-          const imageUrl = images.length > 0 ? images[0] : null;
-          const color =
-            media.Color || attrs["Physical & Design"]?.color || undefined;
+          // Pricing & Availability
+          const pricing = p.pricing_availability || {};
+          const salePrice = pricing.price;
+          const currency = pricing.currency || "";
 
-          // Pricing
-          const priceGroup = attrs.Price || {};
-          const salePrice = priceGroup["Sale Price"];
-          const listPrice = priceGroup["List Price"];
+          // Inventory
+          const quantity = pricing.quantity;
+          const stockStatus = pricing.stock_status || "";
 
-          // Stock
-          const stockGroup = attrs.Stock || {};
-          const quantity = stockGroup.Quantity;
-          const statusArr = stockGroup.Status || [];
-          const status = statusArr.length > 0 ? statusArr[0] : "";
+          // Descriptions
+          const descriptions = p.descriptions || {};
+          const shortDesc = descriptions.short || "";
 
           return (
             <li
@@ -77,7 +60,7 @@ const ProductList = () => {
                   <div className="w-12 h-12 relative flex-shrink-0">
                     <Image
                       src={imageUrl}
-                      alt={title}
+                      alt={name || "Product Image"}
                       fill
                       className="object-cover rounded-lg"
                     />
@@ -86,32 +69,28 @@ const ProductList = () => {
                   <div className="w-12 h-12 bg-gray-200 rounded-lg flex-shrink-0" />
                 )}
                 <div className="flex-1">
-                  <h2 className="text-lg font-medium line-clamp-1">{title}</h2>
+                  <h2 className="text-lg font-medium line-clamp-1">
+                    {name || "Untitled Product"}
+                  </h2>
                   {shortDesc && (
                     <p className="text-sm text-gray-500 line-clamp-2">
                       {shortDesc}
                     </p>
                   )}
                   <div className="mt-1 flex items-center gap-2">
-                    {salePrice && (
+                    {salePrice != null && (
                       <span className="text-sm font-semibold">
-                        cfa {salePrice}
-                      </span>
-                    )}
-                    {listPrice && (
-                      <span className="text-sm text-gray-500 line-through">
-                        cfa {listPrice}
+                        {currency} {salePrice}
                       </span>
                     )}
                   </div>
-                  {color && <p className="text-xs mt-1">Color: {color}</p>}
                 </div>
               </div>
 
               {/* Right: Stock + Menu */}
               <div className="flex items-center gap-4">
                 <div className="text-sm text-gray-700">
-                  {status} ({quantity})
+                  {stockStatus} ({quantity})
                 </div>
                 <div className="relative">
                   <button

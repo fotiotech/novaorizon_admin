@@ -22,69 +22,44 @@ const productSlice = createSlice({
       state.allIds = action.payload.allIds;
     },
     addProduct: (state, action: PayloadAction<any | null>) => {
-      const { _id, ...productData } = action.payload;
-
-      // Validate productId
+      const { _id, path, value } = action.payload;
       if (!_id) {
-        console.error("Product ID is undefined. Payload:", action.payload);
+        console.error("Missing _id in updateField");
         return;
       }
-
-      // Validate productData
-      if (!productData || typeof productData !== "object") {
-        console.error(
-          "Invalid product data. Skipping addProduct. Payload:",
-          action.payload
-        );
-        return;
-      }
-
-      // Check if the product already exists in the state
+      // Ensure the product exists
       if (!state.byId[_id]) {
-        // If not, initialize the product in the state
-        if (!state.allIds.includes(_id)) {
-          state.allIds.push(_id); // Add the productId to the allIds array
+        state.byId[_id] = {};
+        state.allIds.push(_id);
+      }
+
+      // Walk the `path` and set the value
+      const keys = path.split(".");
+      let cursor: any = state.byId[_id];
+
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        if (i === keys.length - 1) {
+          cursor[key] = value;
+        } else {
+          // create nested object if missing
+          if (typeof cursor[key] !== "object" || cursor[key] === null) {
+            cursor[key] = {};
+          }
+          cursor = cursor[key];
         }
-        state.byId[_id] = productData;
-      } else {
-        // If the product exists, update its fields
-        state.byId[_id] = {
-          ...state.byId[_id],
-          ...productData,
-        };
       }
     },
 
-    updateAttributes: (
-  state,
-  action: PayloadAction<{
-    productId: string;
-    groupId: string;
-    groupName: string;
-    parent_id: string;
-    attrName: string;
-    selectedValues: any;
-  }>
-) => {
-  const { productId, groupId, groupName, parent_id, attrName, selectedValues } = action.payload;
-  const product = state.byId[productId];
-  if (!product) {
-    return;
-  }
+    // (optional) initialize or reset a product
+    resetProduct: (state, action: PayloadAction<string>) => {
+      const id = action.payload;
+      if (!state.byId[id]) {
+        state.byId[id] = {};
+        state.allIds.push(id);
+      }
+    },
 
-  // Initialize attributes and the specific group if they don't exist
-  if (!product.attributes) {
-    product.attributes = {};
-  }
-  if (!product.attributes[groupName]) {
-    product.attributes[groupName] = {} as Record<string, any>;
-  }
-
-  // Store metadata and selected values under the dynamic group
-  product.attributes[groupName].groupId = groupId;
-  product.attributes[groupName].parent_id = parent_id;
-  product.attributes[groupName][attrName] = selectedValues;
-},
     // reducer
     updateVariants: (
       state,
@@ -106,23 +81,6 @@ const productSlice = createSlice({
       }
     },
 
-    syncVariantWithParent: (
-      state,
-      action: PayloadAction<{ productId: string }>
-    ) => {
-      const { productId } = action.payload;
-      if (state.byId[productId]?.variants) {
-        state.byId[productId].variants = state.byId[productId].variants.map(
-          (variant: any) => ({
-            ...variant,
-            variantName: state.byId[productId].product_name,
-            basePrice: state.byId[productId].basePrice,
-            taxRate: state.byId[productId].taxRate,
-            discount: state.byId[productId].discount,
-          })
-        );
-      }
-    },
     clearProduct: (state) => {
       // Reset to initial state
       state.byId = {};
@@ -134,10 +92,9 @@ const productSlice = createSlice({
 export const {
   setProducts,
   addProduct,
-  updateAttributes,
+  resetProduct,
   updateVariants,
   removeVariant,
-  syncVariantWithParent,
   clearProduct,
 } = productSlice.actions;
 export default productSlice.reducer;

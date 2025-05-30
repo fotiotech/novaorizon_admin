@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
 import Link from "next/link";
 import { addCategory } from "@/app/store/slices/categorySlice";
-import { addProduct } from "@/app/store/slices/productSlice";
+import { addProduct, resetProduct } from "@/app/store/slices/productSlice";
 import { v4 as uuidv4 } from "uuid";
 import { fetchCategory } from "@/fetch/fetchCategory";
 
@@ -22,7 +22,7 @@ const Category = () => {
   // Initialize product in Redux if it doesn't exist
   useEffect(() => {
     if (!products.allIds.length) {
-      dispatch(addProduct({ _id: id }));
+      dispatch(resetProduct(id));
     }
   }, [dispatch, id, products.allIds.length]);
 
@@ -59,7 +59,8 @@ const Category = () => {
     dispatch(
       addProduct({
         _id: id,
-        category_id: catId,
+        path: "category_id",
+        value: catId,
       })
     );
   };
