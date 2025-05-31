@@ -238,7 +238,7 @@ const ProductForm = () => {
               selectedBrand ||
               (product.identification_branding?.brand
                 ? {
-                    value: product.identification_branding.brand,
+                    value: product.identification_branding.brand?._id,
                     label:
                       brands.find(
                         (b) => b._id === product.identification_branding.brand

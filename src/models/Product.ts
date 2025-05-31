@@ -14,7 +14,7 @@ const ProductSchema = new Schema(
     identification_branding: {
       sku: { type: String, required: true },
       name: { type: String, required: true },
-      brand: { type: String },
+      brand: { type: Schema.Types.ObjectId, ref: "Brand" },
       manufacturer: { type: String },
       model_number: { type: String },
       // dynamic/custom entries
