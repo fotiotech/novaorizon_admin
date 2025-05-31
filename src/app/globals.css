@@ -18,7 +18,7 @@ select {
 }
 
 textarea {
-  @apply appearance-none block px-3 shadow focus:outline-none 
+  @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
     rounded-lg border-2 border-gray-800 
      focus:border-thiR my-2 p-2;
 }
