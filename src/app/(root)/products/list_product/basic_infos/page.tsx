@@ -14,6 +14,9 @@ import { Box, CircularProgress } from "@mui/material";
 import MainImageUploader from "@/components/products/MainImageUploader";
 import GalleryUploader from "@/components/products/GalleryUploader";
 import Select from "react-select";
+import AttributeField from "@/components/products/AttributeFields";
+import AttributeFieldsContainer from "@/components/products/AttributeFields";
+import CollabsibleSection from "@/components/products/CollabsibleSection";
 
 type AttributeDetail = {
   _id: string;
@@ -51,6 +54,7 @@ const ProductForm = () => {
     label: string;
   } | null>(null);
   const [groups, setGroups] = useState<GroupNode[]>([]);
+  const [groupIdentAndBrand, setGroupIdentAndBrand] = useState<GroupNode[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Fetch “Identification & Branding” attribute‐groups (if any)
@@ -62,6 +66,23 @@ const ProductForm = () => {
           product.category_id,
           "Identification & Branding"
         );
+        console.log("Fetched groups:", resp);
+        setGroupIdentAndBrand(resp as unknown as GroupNode[]);
+      }
+      setIsLoading(false);
+    };
+    fetchAttributes();
+  }, [product.category_id]);
+
+  useEffect(() => {
+    const fetchAttributes = async () => {
+      setIsLoading(true);
+      if (product.category_id) {
+        const resp = await getAttributesByCategoryAndGroupName(
+          product.category_id,
+          "Product Specifications"
+        );
+        console.log("Fetched groups:", resp);
         setGroups(resp as unknown as GroupNode[]);
       }
       setIsLoading(false);
@@ -147,13 +168,15 @@ const ProductForm = () => {
     );
   }
 
+  console.log("product", product);
+
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
         handleSubmit();
       }}
-      className="space-y-8 p-6 max-w-3xl mx-auto rounded-lg shadow"
+      className="space-y-8 max-w-3xl mx-auto rounded-lg shadow"
     >
       {/* ================================ */}
       {/* Identification & Branding */}
@@ -163,137 +186,120 @@ const ProductForm = () => {
           Identification &amp; Branding
         </h2>
 
-        {/* SKU */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">SKU</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Enter SKU"
-            value={product.identification_branding?.sku || ""}
-            onChange={(e) =>
-              handleChange("identification_branding", "sku", e.target.value)
-            }
-          />
-        </div>
+        <CollabsibleSection>
+          {/* Product Code Type + Value */}
+          <div className="flex gap-4 items-center">
+            <Select
+              options={codeTypeOptions}
+              value={codeTypeOptions.find(
+                (opt) =>
+                  opt.value ===
+                  (product.identification_branding?.product_code?.type || "")
+              )}
+              onChange={(opt) =>
+                handleChange("identification_branding", "product_code", {
+                  ...product.identification_branding?.product_code,
+                  type: opt?.value,
+                  value: product.identification_branding?.product_code?.value,
+                })
+              }
+              styles={{
+                control: (prov) => ({
+                  ...prov,
+                  backgroundColor: "transparent",
+                }),
+                menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
+              }}
+              className="flex-1"
+              placeholder="Select code type"
+            />
+            <input
+              title="Product Code"
+              type="text"
+              className="border p-2 rounded flex-1"
+              placeholder="Enter code"
+              value={product.identification_branding?.product_code?.value || ""}
+              onChange={(e) =>
+                handleChange("identification_branding", "product_code", {
+                  ...product.identification_branding?.product_code,
+                  type: product.identification_branding?.product_code?.type,
+                  value: e.target.value,
+                })
+              }
+            />
+          </div>
+          {/* Name */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Name</label>
+            <input
+              type="text"
+              className="border p-2 rounded w-full"
+              placeholder="Product Name"
+              value={product.identification_branding?.name || ""}
+              onChange={(e) =>
+                handleChange("identification_branding", "name", e.target.value)
+              }
+            />
+          </div>
 
-        {/* Product Code Type + Value */}
-        <div className="flex gap-4 items-center">
-          <Select
-            options={codeTypeOptions}
-            value={codeTypeOptions.find(
-              (opt) =>
-                opt.value ===
-                (product.identification_branding?.product_code?.type || "")
-            )}
-            onChange={(opt) =>
-              handleChange("identification_branding", "product_code", {
-                ...product.identification_branding?.product_code,
-                type: opt?.value,
-                value: product.identification_branding?.product_code?.value,
-              })
-            }
-            styles={{
-              control: (prov) => ({ ...prov, backgroundColor: "transparent" }),
-              menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
-            }}
-            className="flex-1"
-            placeholder="Select code type"
-          />
-          <input
-            title="Product Code"
-            type="text"
-            className="border p-2 rounded flex-1"
-            placeholder="Enter code"
-            value={product.identification_branding?.product_code?.value || ""}
-            onChange={(e) =>
-              handleChange("identification_branding", "product_code", {
-                ...product.identification_branding?.product_code,
-                type: product.identification_branding?.product_code?.type,
-                value: e.target.value,
-              })
-            }
-          />
-        </div>
+          {/* Brand */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Brand</label>
+            <Select
+              value={
+                selectedBrand ||
+                (product.identification_branding?.brand
+                  ? {
+                      value: product.identification_branding.brand?._id,
+                      label:
+                        brands.find(
+                          (b) => b._id === product.identification_branding.brand
+                        )?.name || "",
+                    }
+                  : null)
+              }
+              options={brands.map((b) => ({ value: b._id, label: b.name }))}
+              onChange={(opt) => {
+                setSelectedBrand(opt);
+                handleChange("identification_branding", "brand", opt?.value);
+              }}
+              styles={{
+                control: (prov) => ({
+                  ...prov,
+                  backgroundColor: "transparent",
+                }),
+                menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
+              }}
+              placeholder="Select brand"
+            />
+          </div>
 
-        {/* Name */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Name</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Product Name"
-            value={product.identification_branding?.name || ""}
-            onChange={(e) =>
-              handleChange("identification_branding", "name", e.target.value)
-            }
-          />
-        </div>
-
-        {/* Brand */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Brand</label>
-          <Select
-            value={
-              selectedBrand ||
-              (product.identification_branding?.brand
-                ? {
-                    value: product.identification_branding.brand?._id,
-                    label:
-                      brands.find(
-                        (b) => b._id === product.identification_branding.brand
-                      )?.name || "",
-                  }
-                : null)
-            }
-            options={brands.map((b) => ({ value: b._id, label: b.name }))}
-            onChange={(opt) => {
-              setSelectedBrand(opt);
-              handleChange("identification_branding", "brand", opt?.value);
-            }}
-            styles={{
-              control: (prov) => ({ ...prov, backgroundColor: "transparent" }),
-              menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
-            }}
-            placeholder="Select brand"
-          />
-        </div>
-
-        {/* Manufacturer */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Manufacturer</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Manufacturer"
-            value={product.identification_branding?.manufacturer || ""}
-            onChange={(e) =>
-              handleChange(
-                "identification_branding",
-                "manufacturer",
-                e.target.value
-              )
-            }
-          />
-        </div>
-
-        {/* Model Number */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Model Number</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Model Number"
-            value={product.identification_branding?.model_number || ""}
-            onChange={(e) =>
-              handleChange(
-                "identification_branding",
-                "model_number",
-                e.target.value
-              )
-            }
-          />
-        </div>
+          {/* Manufacturer */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Manufacturer</label>
+            <input
+              type="text"
+              className="border p-2 rounded w-full"
+              placeholder="Manufacturer"
+              value={product.identification_branding?.manufacturer || ""}
+              onChange={(e) =>
+                handleChange(
+                  "identification_branding",
+                  "manufacturer",
+                  e.target.value
+                )
+              }
+            />
+          </div>
+          <div className="flex gap-2">
+            <AttributeFieldsContainer
+              fetchedGroup={groupIdentAndBrand as any}
+              product={product?.identification_branding?.attributes}
+              path="identification_branding.attributes"
+              handleAttributeChange={handleChange}
+            />
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -303,143 +309,119 @@ const ProductForm = () => {
         <h2 className="text-2xl font-semibold border-b pb-2">
           Product Specifications
         </h2>
-
-        {/* Weight */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Weight</label>
-          <input
-            type="number"
-            className="border p-2 rounded w-full"
-            placeholder="Weight"
-            value={product.product_specifications?.weight || ""}
-            onChange={(e) =>
-              handleChange(
-                "product_specifications",
-                "weight",
-                Number(e.target.value)
-              )
-            }
-          />
-        </div>
-
-        {/* Dimensions */}
-        <div className="space-y-2">
-          <h3 className="font-medium">Dimensions</h3>
-          <div className="flex gap-2">
+        <CollabsibleSection>
+          {/* Weight */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Weight</label>
             <input
               type="number"
-              className="border p-2 rounded flex-1"
-              placeholder="Length"
-              value={product.product_specifications?.dimensions?.length || ""}
+              className="border p-2 rounded w-full"
+              placeholder="Weight"
+              value={product.product_specifications?.weight || ""}
               onChange={(e) =>
-                handleDimensionChange(
+                handleChange(
                   "product_specifications",
-                  "dimensions",
-                  "length",
+                  "weight",
                   Number(e.target.value)
-                )
-              }
-            />
-            <input
-              type="number"
-              className="border p-2 rounded flex-1"
-              placeholder="Width"
-              value={product.product_specifications?.dimensions?.width || ""}
-              onChange={(e) =>
-                handleDimensionChange(
-                  "product_specifications",
-                  "dimensions",
-                  "width",
-                  Number(e.target.value)
-                )
-              }
-            />
-            <input
-              type="number"
-              className="border p-2 rounded flex-1"
-              placeholder="Height"
-              value={product.product_specifications?.dimensions?.height || ""}
-              onChange={(e) =>
-                handleDimensionChange(
-                  "product_specifications",
-                  "dimensions",
-                  "height",
-                  Number(e.target.value)
-                )
-              }
-            />
-            <input
-              type="text"
-              className="border p-2 rounded flex-1"
-              placeholder="Unit (e.g., cm)"
-              value={product.product_specifications?.dimensions?.unit || ""}
-              onChange={(e) =>
-                handleDimensionChange(
-                  "product_specifications",
-                  "dimensions",
-                  "unit",
-                  e.target.value
                 )
               }
             />
           </div>
-        </div>
 
-        {/* Color */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Color</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Color"
-            value={product.product_specifications?.color || ""}
-            onChange={(e) =>
-              handleChange("product_specifications", "color", e.target.value)
-            }
-          />
-        </div>
+          {/* Dimensions */}
+          <div className="space-y-2">
+            <h3 className="font-medium">Dimensions</h3>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                className="border p-2 rounded flex-1"
+                placeholder="Length"
+                value={product.product_specifications?.dimensions?.length || ""}
+                onChange={(e) =>
+                  handleDimensionChange(
+                    "product_specifications",
+                    "dimensions",
+                    "length",
+                    Number(e.target.value)
+                  )
+                }
+              />
+              <input
+                type="number"
+                className="border p-2 rounded flex-1"
+                placeholder="Width"
+                value={product.product_specifications?.dimensions?.width || ""}
+                onChange={(e) =>
+                  handleDimensionChange(
+                    "product_specifications",
+                    "dimensions",
+                    "width",
+                    Number(e.target.value)
+                  )
+                }
+              />
+              <input
+                type="number"
+                className="border p-2 rounded flex-1"
+                placeholder="Height"
+                value={product.product_specifications?.dimensions?.height || ""}
+                onChange={(e) =>
+                  handleDimensionChange(
+                    "product_specifications",
+                    "dimensions",
+                    "height",
+                    Number(e.target.value)
+                  )
+                }
+              />
+              <input
+                type="text"
+                className="border p-2 rounded flex-1"
+                placeholder="Unit (e.g., cm)"
+                value={product.product_specifications?.dimensions?.unit || ""}
+                onChange={(e) =>
+                  handleDimensionChange(
+                    "product_specifications",
+                    "dimensions",
+                    "unit",
+                    e.target.value
+                  )
+                }
+              />
+            </div>
+          </div>
 
-        {/* Technical Specs (one example entry) */}
-        <div className="space-y-2">
-          <h3 className="font-medium">Technical Specs (one entry)</h3>
-          <div className="flex gap-2">
+          {/* Color */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Color</label>
             <input
               type="text"
-              className="border p-2 rounded flex-1"
-              placeholder="Spec Key"
-              value={
-                product.product_specifications?.technical_specs?.[0]?.key || ""
-              }
+              className="border p-2 rounded w-full"
+              placeholder="Color"
+              value={product.product_specifications?.color || ""}
               onChange={(e) =>
-                handleChange(
-                  "product_specifications",
-                  "technical_specs.0.key",
-                  e.target.value
-                )
-              }
-            />
-            <input
-              type="text"
-              className="border p-2 rounded flex-1"
-              placeholder="Spec Value"
-              value={
-                product.product_specifications?.technical_specs?.[0]?.value ||
-                ""
-              }
-              onChange={(e) =>
-                handleChange(
-                  "product_specifications",
-                  "technical_specs.0.value",
-                  e.target.value
-                )
+                handleChange("product_specifications", "color", e.target.value)
               }
             />
           </div>
-          <p className="text-sm text-gray-500">
-            * To add more technical specs, adjust indices (e.g.
-            `technical_specs.1.key`, `technical_specs.1.value`).
-          </p>
-        </div>
+
+          {/* Technical Specs (one example entry) */}
+          <div className="space-y-2">
+            <h3 className="font-medium">Technical Specs (one entry)</h3>
+            <div className="flex gap-2">
+              <AttributeFieldsContainer
+                fetchedGroup={groups as any}
+                product={product?.product_specifications?.technical_specs}
+                path="product_specifications.technical_specs"
+                handleAttributeChange={handleChange}
+              />
+            </div>
+            <p className="text-sm text-gray-500">
+              * To add more technical specs, adjust indices (e.g.
+              `technical_specs.1.key`, `technical_specs.1.value`).
+            </p>
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -449,38 +431,39 @@ const ProductForm = () => {
         <h2 className="text-2xl font-semibold border-b pb-2">
           Media &amp; Visuals
         </h2>
+        <CollabsibleSection>
+          {/* Main Image */}
+          <div className="space-y-2">
+            <h3 className="font-medium">Main Image</h3>
+            <MainImageUploader productId={productId} />
+          </div>
 
-        {/* Main Image */}
-        <div className="space-y-2">
-          <h3 className="font-medium">Main Image</h3>
-          <MainImageUploader productId={productId} />
-        </div>
+          {/* Gallery */}
+          <div className="space-y-2">
+            <h3 className="font-medium">Gallery</h3>
+            <GalleryUploader productId={productId} />
+          </div>
 
-        {/* Gallery */}
-        <div className="space-y-2">
-          <h3 className="font-medium">Gallery</h3>
-          <GalleryUploader productId={productId} />
-        </div>
-
-        {/* Videos (comma-separated URLs) */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">
-            Video URLs (comma‐separated)
-          </label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={2}
-            placeholder="https://... , https://..."
-            value={(product.media_visuals?.videos || []).join(", ")}
-            onChange={(e) => {
-              const arr = e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter((s) => s);
-              handleChange("media_visuals", "videos", arr);
-            }}
-          />
-        </div>
+          {/* Videos (comma-separated URLs) */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">
+              Video URLs (comma‐separated)
+            </label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={2}
+              placeholder="https://... , https://..."
+              value={(product.media_visuals?.videos || []).join(", ")}
+              onChange={(e) => {
+                const arr = e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s);
+                handleChange("media_visuals", "videos", arr);
+              }}
+            />
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -490,133 +473,134 @@ const ProductForm = () => {
         <h2 className="text-2xl font-semibold border-b pb-2">
           Pricing &amp; Availability
         </h2>
+        <CollabsibleSection>
+          {/* Price */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Price</label>
+            <input
+              type="number"
+              className="border p-2 rounded w-full"
+              placeholder="Price"
+              value={product.pricing_availability?.price || 0}
+              onChange={(e) =>
+                handleChange(
+                  "pricing_availability",
+                  "price",
+                  Number(e.target.value)
+                )
+              }
+            />
+          </div>
 
-        {/* Price */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Price</label>
-          <input
-            type="number"
-            className="border p-2 rounded w-full"
-            placeholder="Price"
-            value={product.pricing_availability?.price || 0}
-            onChange={(e) =>
-              handleChange(
-                "pricing_availability",
-                "price",
-                Number(e.target.value)
-              )
-            }
-          />
-        </div>
+          {/* Currency */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Currency</label>
+            <input
+              type="text"
+              className="border p-2 rounded w-full"
+              placeholder="e.g. USD"
+              value={product.pricing_availability?.currency || "USD"}
+              onChange={(e) =>
+                handleChange("pricing_availability", "currency", e.target.value)
+              }
+            />
+          </div>
 
-        {/* Currency */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Currency</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="e.g. USD"
-            value={product.pricing_availability?.currency || "USD"}
-            onChange={(e) =>
-              handleChange("pricing_availability", "currency", e.target.value)
-            }
-          />
-        </div>
+          {/* Cost */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Cost</label>
+            <input
+              type="number"
+              className="border p-2 rounded w-full"
+              placeholder="Cost"
+              value={product.pricing_availability?.cost || 0}
+              onChange={(e) =>
+                handleChange(
+                  "pricing_availability",
+                  "cost",
+                  Number(e.target.value)
+                )
+              }
+            />
+          </div>
 
-        {/* Cost */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Cost</label>
-          <input
-            type="number"
-            className="border p-2 rounded w-full"
-            placeholder="Cost"
-            value={product.pricing_availability?.cost || 0}
-            onChange={(e) =>
-              handleChange(
-                "pricing_availability",
-                "cost",
-                Number(e.target.value)
-              )
-            }
-          />
-        </div>
+          {/* MSRP */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">MSRP</label>
+            <input
+              type="number"
+              className="border p-2 rounded w-full"
+              placeholder="MSRP"
+              value={product.pricing_availability?.msrp || 0}
+              onChange={(e) =>
+                handleChange(
+                  "pricing_availability",
+                  "msrp",
+                  Number(e.target.value)
+                )
+              }
+            />
+          </div>
 
-        {/* MSRP */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">MSRP</label>
-          <input
-            type="number"
-            className="border p-2 rounded w-full"
-            placeholder="MSRP"
-            value={product.pricing_availability?.msrp || 0}
-            onChange={(e) =>
-              handleChange(
-                "pricing_availability",
-                "msrp",
-                Number(e.target.value)
-              )
-            }
-          />
-        </div>
+          {/* Stock Status */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Stock Status</label>
+            <select
+              title="stock status"
+              className="border p-2 rounded w-full"
+              value={product.pricing_availability?.stock_status || ""}
+              onChange={(e) =>
+                handleChange(
+                  "pricing_availability",
+                  "stock_status",
+                  e.target.value
+                )
+              }
+            >
+              <option value="">Select status</option>
+              <option value="in_stock">In Stock</option>
+              <option value="out_of_stock">Out of Stock</option>
+              <option value="backorder">Backorder</option>
+            </select>
+          </div>
 
-        {/* Stock Status */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Stock Status</label>
-          <select
-            title="stock status"
-            className="border p-2 rounded w-full"
-            value={product.pricing_availability?.stock_status || ""}
-            onChange={(e) =>
-              handleChange(
-                "pricing_availability",
-                "stock_status",
-                e.target.value
-              )
-            }
-          >
-            <option value="">Select status</option>
-            <option value="in_stock">In Stock</option>
-            <option value="out_of_stock">Out of Stock</option>
-            <option value="backorder">Backorder</option>
-          </select>
-        </div>
+          {/* Backorder */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="backorder"
+              checked={product.pricing_availability?.backorder || false}
+              onChange={(e) =>
+                handleChange(
+                  "pricing_availability",
+                  "backorder",
+                  e.target.checked
+                )
+              }
+            />
+            <label htmlFor="backorder" className="font-medium">
+              Allow Backorder
+            </label>
+          </div>
 
-        {/* Backorder */}
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="backorder"
-            checked={product.pricing_availability?.backorder || false}
-            onChange={(e) =>
-              handleChange(
-                "pricing_availability",
-                "backorder",
-                e.target.checked
-              )
-            }
-          />
-          <label htmlFor="backorder" className="font-medium">
-            Allow Backorder
-          </label>
-        </div>
-
-        {/* Quantity */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Quantity</label>
-          <input
-            type="number"
-            className="border p-2 rounded w-full"
-            placeholder="Quantity"
-            value={product.pricing_availability?.quantity || 0}
-            onChange={(e) =>
-              handleChange(
-                "pricing_availability",
-                "quantity",
-                Number(e.target.value)
-              )
-            }
-          />
-        </div>
+          {/* Quantity */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Quantity</label>
+            <input
+              type="number"
+              className="border p-2 rounded w-full"
+              placeholder="Quantity"
+              value={product.pricing_availability?.quantity || 0}
+              onChange={(e) =>
+                handleChange(
+                  "pricing_availability",
+                  "quantity",
+                  Number(e.target.value)
+                )
+              }
+            />
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -626,74 +610,75 @@ const ProductForm = () => {
         <h2 className="text-2xl font-semibold border-b pb-2">
           Variants &amp; Options
         </h2>
-
-        {/* Variant Type */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">
-            Variant Type (e.g., color, size)
-          </label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Variant Type"
-            value={product.variants_options?.variant_type || ""}
-            onChange={(e) =>
-              handleChange("variants_options", "variant_type", e.target.value)
-            }
-          />
-        </div>
-
-        {/* One Variant Entry (option, sku, additional_price) */}
-        <div className="space-y-2">
-          <h3 className="font-medium">Sample Variant Entry</h3>
-          <div className="flex gap-2">
+        <CollabsibleSection>
+          {/* Variant Type */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">
+              Variant Type (e.g., color, size)
+            </label>
             <input
               type="text"
-              className="border p-2 rounded flex-1"
-              placeholder="Option (e.g. “Red” or “Large”)"
-              value={product.variants_options?.variants?.[0]?.option || ""}
+              className="border p-2 rounded w-full"
+              placeholder="Variant Type"
+              value={product.variants_options?.variant_type || ""}
               onChange={(e) =>
-                handleChange(
-                  "variants_options",
-                  "variants.0.option",
-                  e.target.value
-                )
-              }
-            />
-            <input
-              type="text"
-              className="border p-2 rounded flex-1"
-              placeholder="Variant SKU"
-              value={product.variants_options?.variants?.[0]?.sku || ""}
-              onChange={(e) =>
-                handleChange(
-                  "variants_options",
-                  "variants.0.sku",
-                  e.target.value
-                )
-              }
-            />
-            <input
-              type="number"
-              className="border p-2 rounded flex-1"
-              placeholder="Additional Price"
-              value={
-                product.variants_options?.variants?.[0]?.additional_price || 0
-              }
-              onChange={(e) =>
-                handleChange(
-                  "variants_options",
-                  "variants.0.additional_price",
-                  Number(e.target.value)
-                )
+                handleChange("variants_options", "variant_type", e.target.value)
               }
             />
           </div>
-          <p className="text-sm text-gray-500">
-            * To add more variants, adjust the index (e.g. `variants.1.option`,
-            etc.).
-          </p>
-        </div>
+
+          {/* One Variant Entry (option, sku, additional_price) */}
+          <div className="space-y-2">
+            <h3 className="font-medium">Sample Variant Entry</h3>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="border p-2 rounded flex-1"
+                placeholder="Option (e.g. “Red” or “Large”)"
+                value={product.variants_options?.variants?.[0]?.option || ""}
+                onChange={(e) =>
+                  handleChange(
+                    "variants_options",
+                    "variants.0.option",
+                    e.target.value
+                  )
+                }
+              />
+              <input
+                type="text"
+                className="border p-2 rounded flex-1"
+                placeholder="Variant SKU"
+                value={product.variants_options?.variants?.[0]?.sku || ""}
+                onChange={(e) =>
+                  handleChange(
+                    "variants_options",
+                    "variants.0.sku",
+                    e.target.value
+                  )
+                }
+              />
+              <input
+                type="number"
+                className="border p-2 rounded flex-1"
+                placeholder="Additional Price"
+                value={
+                  product.variants_options?.variants?.[0]?.additional_price || 0
+                }
+                onChange={(e) =>
+                  handleChange(
+                    "variants_options",
+                    "variants.0.additional_price",
+                    Number(e.target.value)
+                  )
+                }
+              />
+            </div>
+            <p className="text-sm text-gray-500">
+              * To add more variants, adjust the index (e.g.
+              `variants.1.option`, etc.).
+            </p>
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -703,56 +688,57 @@ const ProductForm = () => {
         <h2 className="text-2xl font-semibold border-b pb-2">
           Key Features &amp; Bullets
         </h2>
+        <CollabsibleSection>
+          {/* Key Features (one per line) */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">
+              Key Features (one per line)
+            </label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={3}
+              placeholder="Feature 1&#10;Feature 2&#10;Feature 3"
+              value={(product.key_features || []).join("\n")}
+              onChange={(e) => {
+                const arr = e.target.value
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter((s) => s);
+                dispatch(
+                  addProduct({
+                    _id: productId,
+                    path: "key_features",
+                    value: arr,
+                  })
+                );
+              }}
+            />
+          </div>
 
-        {/* Key Features (one per line) */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">
-            Key Features (one per line)
-          </label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={3}
-            placeholder="Feature 1&#10;Feature 2&#10;Feature 3"
-            value={(product.key_features || []).join("\n")}
-            onChange={(e) => {
-              const arr = e.target.value
-                .split("\n")
-                .map((s) => s.trim())
-                .filter((s) => s);
-              dispatch(
-                addProduct({
-                  _id: productId,
-                  path: "key_features",
-                  value: arr,
-                })
-              );
-            }}
-          />
-        </div>
-
-        {/* Bullets (one per line) */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Bullets (one per line)</label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={3}
-            placeholder="• Bullet 1&#10;• Bullet 2&#10;• Bullet 3"
-            value={(product.bullets || []).join("\n")}
-            onChange={(e) => {
-              const arr = e.target.value
-                .split("\n")
-                .map((s) => s.trim())
-                .filter((s) => s);
-              dispatch(
-                addProduct({
-                  _id: productId,
-                  path: "bullets",
-                  value: arr,
-                })
-              );
-            }}
-          />
-        </div>
+          {/* Bullets (one per line) */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Bullets (one per line)</label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={3}
+              placeholder="• Bullet 1&#10;• Bullet 2&#10;• Bullet 3"
+              value={(product.bullets || []).join("\n")}
+              onChange={(e) => {
+                const arr = e.target.value
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter((s) => s);
+                dispatch(
+                  addProduct({
+                    _id: productId,
+                    path: "bullets",
+                    value: arr,
+                  })
+                );
+              }}
+            />
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -760,30 +746,32 @@ const ProductForm = () => {
       {/* ================================ */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold border-b pb-2">Descriptions</h2>
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Short Description</label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={2}
-            placeholder="Short description"
-            value={product.descriptions?.short || ""}
-            onChange={(e) =>
-              handleChange("descriptions", "short", e.target.value)
-            }
-          />
-        </div>
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Long Description</label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={4}
-            placeholder="Long description"
-            value={product.descriptions?.long || ""}
-            onChange={(e) =>
-              handleChange("descriptions", "long", e.target.value)
-            }
-          />
-        </div>
+        <CollabsibleSection>
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Short Description</label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={2}
+              placeholder="Short description"
+              value={product.descriptions?.short || ""}
+              onChange={(e) =>
+                handleChange("descriptions", "short", e.target.value)
+              }
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Long Description</label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={4}
+              placeholder="Long description"
+              value={product.descriptions?.long || ""}
+              onChange={(e) =>
+                handleChange("descriptions", "long", e.target.value)
+              }
+            />
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -793,60 +781,61 @@ const ProductForm = () => {
         <h2 className="text-2xl font-semibold border-b pb-2">
           Materials &amp; Composition
         </h2>
+        <CollabsibleSection>
+          {/* Primary Material */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Primary Material</label>
+            <input
+              type="text"
+              className="border p-2 rounded w-full"
+              placeholder="Primary Material"
+              value={product.materials_composition?.primary_material || ""}
+              onChange={(e) =>
+                handleChange(
+                  "materials_composition",
+                  "primary_material",
+                  e.target.value
+                )
+              }
+            />
+          </div>
 
-        {/* Primary Material */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Primary Material</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Primary Material"
-            value={product.materials_composition?.primary_material || ""}
-            onChange={(e) =>
-              handleChange(
-                "materials_composition",
-                "primary_material",
-                e.target.value
-              )
-            }
-          />
-        </div>
+          {/* Secondary Material */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Secondary Material</label>
+            <input
+              type="text"
+              className="border p-2 rounded w-full"
+              placeholder="Secondary Material"
+              value={product.materials_composition?.secondary_material || ""}
+              onChange={(e) =>
+                handleChange(
+                  "materials_composition",
+                  "secondary_material",
+                  e.target.value
+                )
+              }
+            />
+          </div>
 
-        {/* Secondary Material */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Secondary Material</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Secondary Material"
-            value={product.materials_composition?.secondary_material || ""}
-            onChange={(e) =>
-              handleChange(
-                "materials_composition",
-                "secondary_material",
-                e.target.value
-              )
-            }
-          />
-        </div>
-
-        {/* Composition Details */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Composition Details</label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={3}
-            placeholder="Composition details"
-            value={product.materials_composition?.composition_details || ""}
-            onChange={(e) =>
-              handleChange(
-                "materials_composition",
-                "composition_details",
-                e.target.value
-              )
-            }
-          />
-        </div>
+          {/* Composition Details */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Composition Details</label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={3}
+              placeholder="Composition details"
+              value={product.materials_composition?.composition_details || ""}
+              onChange={(e) =>
+                handleChange(
+                  "materials_composition",
+                  "composition_details",
+                  e.target.value
+                )
+              }
+            />
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -856,131 +845,132 @@ const ProductForm = () => {
         <h2 className="text-2xl font-semibold border-b pb-2">
           Logistics &amp; Shipping
         </h2>
+        <CollabsibleSection>
+          {/* Shipping Weight */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Shipping Weight</label>
+            <input
+              type="number"
+              className="border p-2 rounded w-full"
+              placeholder="Shipping Weight"
+              value={product.logistics_shipping?.shipping_weight || ""}
+              onChange={(e) =>
+                handleChange(
+                  "logistics_shipping",
+                  "shipping_weight",
+                  Number(e.target.value)
+                )
+              }
+            />
+          </div>
 
-        {/* Shipping Weight */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Shipping Weight</label>
-          <input
-            type="number"
-            className="border p-2 rounded w-full"
-            placeholder="Shipping Weight"
-            value={product.logistics_shipping?.shipping_weight || ""}
-            onChange={(e) =>
-              handleChange(
-                "logistics_shipping",
-                "shipping_weight",
-                Number(e.target.value)
-              )
-            }
-          />
-        </div>
+          {/* Shipping Dimensions */}
+          <div className="space-y-2">
+            <h3 className="font-medium">Shipping Dimensions</h3>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                className="border p-2 rounded flex-1"
+                placeholder="Length"
+                value={
+                  product.logistics_shipping?.shipping_dimensions?.length || ""
+                }
+                onChange={(e) =>
+                  handleDimensionChange(
+                    "logistics_shipping",
+                    "shipping_dimensions",
+                    "length",
+                    Number(e.target.value)
+                  )
+                }
+              />
+              <input
+                type="number"
+                className="border p-2 rounded flex-1"
+                placeholder="Width"
+                value={
+                  product.logistics_shipping?.shipping_dimensions?.width || ""
+                }
+                onChange={(e) =>
+                  handleDimensionChange(
+                    "logistics_shipping",
+                    "shipping_dimensions",
+                    "width",
+                    Number(e.target.value)
+                  )
+                }
+              />
+              <input
+                type="number"
+                className="border p-2 rounded flex-1"
+                placeholder="Height"
+                value={
+                  product.logistics_shipping?.shipping_dimensions?.height || ""
+                }
+                onChange={(e) =>
+                  handleDimensionChange(
+                    "logistics_shipping",
+                    "shipping_dimensions",
+                    "height",
+                    Number(e.target.value)
+                  )
+                }
+              />
+              <input
+                type="text"
+                className="border p-2 rounded flex-1"
+                placeholder="Unit (e.g. cm)"
+                value={
+                  product.logistics_shipping?.shipping_dimensions?.unit || ""
+                }
+                onChange={(e) =>
+                  handleDimensionChange(
+                    "logistics_shipping",
+                    "shipping_dimensions",
+                    "unit",
+                    e.target.value
+                  )
+                }
+              />
+            </div>
+          </div>
 
-        {/* Shipping Dimensions */}
-        <div className="space-y-2">
-          <h3 className="font-medium">Shipping Dimensions</h3>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              className="border p-2 rounded flex-1"
-              placeholder="Length"
-              value={
-                product.logistics_shipping?.shipping_dimensions?.length || ""
-              }
-              onChange={(e) =>
-                handleDimensionChange(
-                  "logistics_shipping",
-                  "shipping_dimensions",
-                  "length",
-                  Number(e.target.value)
-                )
-              }
-            />
-            <input
-              type="number"
-              className="border p-2 rounded flex-1"
-              placeholder="Width"
-              value={
-                product.logistics_shipping?.shipping_dimensions?.width || ""
-              }
-              onChange={(e) =>
-                handleDimensionChange(
-                  "logistics_shipping",
-                  "shipping_dimensions",
-                  "width",
-                  Number(e.target.value)
-                )
-              }
-            />
-            <input
-              type="number"
-              className="border p-2 rounded flex-1"
-              placeholder="Height"
-              value={
-                product.logistics_shipping?.shipping_dimensions?.height || ""
-              }
-              onChange={(e) =>
-                handleDimensionChange(
-                  "logistics_shipping",
-                  "shipping_dimensions",
-                  "height",
-                  Number(e.target.value)
-                )
-              }
-            />
+          {/* Origin Country */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Origin Country</label>
             <input
               type="text"
-              className="border p-2 rounded flex-1"
-              placeholder="Unit (e.g. cm)"
-              value={
-                product.logistics_shipping?.shipping_dimensions?.unit || ""
-              }
+              className="border p-2 rounded w-full"
+              placeholder="Origin Country"
+              value={product.logistics_shipping?.origin_country || ""}
               onChange={(e) =>
-                handleDimensionChange(
+                handleChange(
                   "logistics_shipping",
-                  "shipping_dimensions",
-                  "unit",
+                  "origin_country",
                   e.target.value
                 )
               }
             />
           </div>
-        </div>
 
-        {/* Origin Country */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Origin Country</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Origin Country"
-            value={product.logistics_shipping?.origin_country || ""}
-            onChange={(e) =>
-              handleChange(
-                "logistics_shipping",
-                "origin_country",
-                e.target.value
-              )
-            }
-          />
-        </div>
-
-        {/* Shipping Class */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Shipping Class</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Shipping Class"
-            value={product.logistics_shipping?.shipping_class || ""}
-            onChange={(e) =>
-              handleChange(
-                "logistics_shipping",
-                "shipping_class",
-                e.target.value
-              )
-            }
-          />
-        </div>
+          {/* Shipping Class */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Shipping Class</label>
+            <input
+              type="text"
+              className="border p-2 rounded w-full"
+              placeholder="Shipping Class"
+              value={product.logistics_shipping?.shipping_class || ""}
+              onChange={(e) =>
+                handleChange(
+                  "logistics_shipping",
+                  "shipping_class",
+                  e.target.value
+                )
+              }
+            />
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -990,38 +980,43 @@ const ProductForm = () => {
         <h2 className="text-2xl font-semibold border-b pb-2">
           Warranty &amp; Returns
         </h2>
+        <CollabsibleSection>
+          {/* Warranty Period */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Warranty Period</label>
+            <input
+              type="text"
+              className="border p-2 rounded w-full"
+              placeholder="e.g. 1 year"
+              value={product.warranty_returns?.warranty_period || ""}
+              onChange={(e) =>
+                handleChange(
+                  "warranty_returns",
+                  "warranty_period",
+                  e.target.value
+                )
+              }
+            />
+          </div>
 
-        {/* Warranty Period */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Warranty Period</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="e.g. 1 year"
-            value={product.warranty_returns?.warranty_period || ""}
-            onChange={(e) =>
-              handleChange(
-                "warranty_returns",
-                "warranty_period",
-                e.target.value
-              )
-            }
-          />
-        </div>
-
-        {/* Return Policy */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Return Policy</label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={3}
-            placeholder="Return Policy Details"
-            value={product.warranty_returns?.return_policy || ""}
-            onChange={(e) =>
-              handleChange("warranty_returns", "return_policy", e.target.value)
-            }
-          />
-        </div>
+          {/* Return Policy */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Return Policy</label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={3}
+              placeholder="Return Policy Details"
+              value={product.warranty_returns?.return_policy || ""}
+              onChange={(e) =>
+                handleChange(
+                  "warranty_returns",
+                  "return_policy",
+                  e.target.value
+                )
+              }
+            />
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -1031,74 +1026,79 @@ const ProductForm = () => {
         <h2 className="text-2xl font-semibold border-b pb-2">
           SEO &amp; Marketing Metadata
         </h2>
+        <CollabsibleSection>
+          {/* Meta Title */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Meta Title</label>
+            <input
+              type="text"
+              className="border p-2 rounded w-full"
+              placeholder="Meta Title"
+              value={product.seo_marketing?.meta_title || ""}
+              onChange={(e) =>
+                handleChange("seo_marketing", "meta_title", e.target.value)
+              }
+            />
+          </div>
 
-        {/* Meta Title */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Meta Title</label>
-          <input
-            type="text"
-            className="border p-2 rounded w-full"
-            placeholder="Meta Title"
-            value={product.seo_marketing?.meta_title || ""}
-            onChange={(e) =>
-              handleChange("seo_marketing", "meta_title", e.target.value)
-            }
-          />
-        </div>
+          {/* Meta Description */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">Meta Description</label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={2}
+              placeholder="Meta Description"
+              value={product.seo_marketing?.meta_description || ""}
+              onChange={(e) =>
+                handleChange(
+                  "seo_marketing",
+                  "meta_description",
+                  e.target.value
+                )
+              }
+            />
+          </div>
 
-        {/* Meta Description */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">Meta Description</label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={2}
-            placeholder="Meta Description"
-            value={product.seo_marketing?.meta_description || ""}
-            onChange={(e) =>
-              handleChange("seo_marketing", "meta_description", e.target.value)
-            }
-          />
-        </div>
+          {/* Meta Keywords (comma‐separated) */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">
+              Meta Keywords (comma‐separated)
+            </label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={2}
+              placeholder="keyword1, keyword2, keyword3"
+              value={(product.seo_marketing?.meta_keywords || []).join(", ")}
+              onChange={(e) => {
+                const arr = e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s);
+                handleChange("seo_marketing", "meta_keywords", arr);
+              }}
+            />
+          </div>
 
-        {/* Meta Keywords (comma‐separated) */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">
-            Meta Keywords (comma‐separated)
-          </label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={2}
-            placeholder="keyword1, keyword2, keyword3"
-            value={(product.seo_marketing?.meta_keywords || []).join(", ")}
-            onChange={(e) => {
-              const arr = e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter((s) => s);
-              handleChange("seo_marketing", "meta_keywords", arr);
-            }}
-          />
-        </div>
-
-        {/* Marketing Tags (comma‐separated) */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">
-            Marketing Tags (comma‐separated)
-          </label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={2}
-            placeholder="tag1, tag2, tag3"
-            value={(product.seo_marketing?.marketing_tags || []).join(", ")}
-            onChange={(e) => {
-              const arr = e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter((s) => s);
-              handleChange("seo_marketing", "marketing_tags", arr);
-            }}
-          />
-        </div>
+          {/* Marketing Tags (comma‐separated) */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">
+              Marketing Tags (comma‐separated)
+            </label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={2}
+              placeholder="tag1, tag2, tag3"
+              value={(product.seo_marketing?.marketing_tags || []).join(", ")}
+              onChange={(e) => {
+                const arr = e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s);
+                handleChange("seo_marketing", "marketing_tags", arr);
+              }}
+            />
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}
@@ -1108,72 +1108,73 @@ const ProductForm = () => {
         <h2 className="text-2xl font-semibold border-b pb-2">
           Legal &amp; Compliance
         </h2>
+        <CollabsibleSection>
+          {/* Safety Certifications (comma‐separated) */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">
+              Safety Certifications (comma‐separated)
+            </label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={2}
+              placeholder="Cert1, Cert2, Cert3"
+              value={(
+                product.legal_compliance?.safety_certifications || []
+              ).join(", ")}
+              onChange={(e) => {
+                const arr = e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s);
+                handleChange("legal_compliance", "safety_certifications", arr);
+              }}
+            />
+          </div>
 
-        {/* Safety Certifications (comma‐separated) */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">
-            Safety Certifications (comma‐separated)
-          </label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={2}
-            placeholder="Cert1, Cert2, Cert3"
-            value={(product.legal_compliance?.safety_certifications || []).join(
-              ", "
-            )}
-            onChange={(e) => {
-              const arr = e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter((s) => s);
-              handleChange("legal_compliance", "safety_certifications", arr);
-            }}
-          />
-        </div>
+          {/* Country Restrictions (comma‐separated) */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">
+              Country Restrictions (comma‐separated)
+            </label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={2}
+              placeholder="Country1, Country2, Country3"
+              value={(
+                product.legal_compliance?.country_restrictions || []
+              ).join(", ")}
+              onChange={(e) => {
+                const arr = e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s);
+                handleChange("legal_compliance", "country_restrictions", arr);
+              }}
+            />
+          </div>
 
-        {/* Country Restrictions (comma‐separated) */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">
-            Country Restrictions (comma‐separated)
-          </label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={2}
-            placeholder="Country1, Country2, Country3"
-            value={(product.legal_compliance?.country_restrictions || []).join(
-              ", "
-            )}
-            onChange={(e) => {
-              const arr = e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter((s) => s);
-              handleChange("legal_compliance", "country_restrictions", arr);
-            }}
-          />
-        </div>
-
-        {/* Compliance Documents (comma‐separated URLs or IDs) */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium">
-            Compliance Documents (comma‐separated URLs/IDs)
-          </label>
-          <textarea
-            className="border p-2 rounded w-full"
-            rows={2}
-            placeholder="doc1_url, doc2_url"
-            value={(product.legal_compliance?.compliance_documents || []).join(
-              ", "
-            )}
-            onChange={(e) => {
-              const arr = e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter((s) => s);
-              handleChange("legal_compliance", "compliance_documents", arr);
-            }}
-          />
-        </div>
+          {/* Compliance Documents (comma‐separated URLs or IDs) */}
+          <div className="flex flex-col">
+            <label className="mb-1 font-medium">
+              Compliance Documents (comma‐separated URLs/IDs)
+            </label>
+            <textarea
+              className="border p-2 rounded w-full"
+              rows={2}
+              placeholder="doc1_url, doc2_url"
+              value={(
+                product.legal_compliance?.compliance_documents || []
+              ).join(", ")}
+              onChange={(e) => {
+                const arr = e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s);
+                handleChange("legal_compliance", "compliance_documents", arr);
+              }}
+            />
+          </div>
+        </CollabsibleSection>
       </section>
 
       {/* ================================ */}

@@ -325,7 +325,7 @@ const Attributes = () => {
   console.log("editingAttributes:", editingAttribute);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+    <div className="max-w-7xl mx-auto lg:px-8 w-full">
       <h2 className="font-bold text-xl my-2">Attributes</h2>
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">

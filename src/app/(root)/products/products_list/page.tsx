@@ -21,6 +21,14 @@ const ProductList = () => {
     setMenuOpenFor((prev) => (prev === id ? null : id));
   };
 
+  if (!products.allIds.length) {
+    return (
+      <div className="text-center text-gray-500">
+        No products found. Please add some products.
+      </div>
+    );
+  }
+
   return (
     <div>
       <h1 className="text-xl font-bold mb-4">Product List</h1>
@@ -52,7 +60,7 @@ const ProductList = () => {
           return (
             <li
               key={id}
-              className="flex items-center justify-between gap-3 border p-4 rounded-lg border-gray-800"
+              className="flex items-center justify-between gap-3 border rounded-lg border-gray-800"
             >
               {/* Left: Thumbnail + Details */}
               <div className="flex-1 flex items-center gap-4">
