@@ -2,7 +2,7 @@ import React from "react";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import FilesUploader from "@/components/FilesUploader";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { addProduct, updateVariants } from "@/app/store/slices/productSlice";
+import { addProduct } from "@/app/store/slices/productSlice";
 import { RootState } from "@/app/store/store";
 
 interface MainImageUploaderProps {
