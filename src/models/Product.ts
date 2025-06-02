@@ -12,11 +12,11 @@ const ProductSchema = new Schema(
 
     /* Identification & Branding */
     identification_branding: {
-      productCode: {
-        type: { type: String, required: true },
-        value: { type: String, required: true },
+      product_code: {
+        type: { type: String, },
+        value: { type: String, required: true, unique: true },
       },
-      name: { type: String, required: true },
+      name: { type: String, required: true, unique: true },
       brand: { type: Schema.Types.ObjectId, ref: "Brand" },
       manufacturer: { type: String },
       // dynamic/custom entries
@@ -63,15 +63,16 @@ const ProductSchema = new Schema(
 
     /* Variants & Options */
     variants_options: {
-      variant_type: { type: String }, // e.g., "size", "color"
+      variant_theme: { type: String }, // e.g., "size", "color"
       variants: [
         {
           option: { type: String },
           sku: { type: String },
-          additional_price: { type: Number },
+          price: { type: Number },
+          attributes: { type: Schema.Types.Mixed, default: {} },
         },
       ],
-      attributes: { type: Schema.Types.Mixed, default: {} },
+      
     },
 
     /* Key Features & Bullets */
@@ -85,6 +86,14 @@ const ProductSchema = new Schema(
       long: { type: String },
       attributes: { type: Schema.Types.Mixed, default: {} },
     },
+
+    /* Related Products */
+    related_products: [
+      {
+        product_id: { type: Schema.Types.ObjectId, ref: "Product" },
+        relationship_type: { type: String }, // e.g., "similar", "accessory"
+      },
+    ],
 
     /* Materials & Composition */
     materials_composition: {

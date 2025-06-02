@@ -60,27 +60,6 @@ const productSlice = createSlice({
       }
     },
 
-    // reducer
-    updateVariants: (
-      state,
-      action: PayloadAction<{ productId: string; variants: any[] }>
-    ) => {
-      const { productId, variants } = action.payload;
-      if (state.byId[productId]) {
-        state.byId[productId].variants = variants;
-      }
-    },
-
-    removeVariant: (
-      state,
-      action: PayloadAction<{ productId: string; index: number }>
-    ) => {
-      const { productId, index } = action.payload;
-      if (state.byId[productId]?.variants) {
-        state.byId[productId].variants.splice(index, 1);
-      }
-    },
-
     clearProduct: (state) => {
       // Reset to initial state
       state.byId = {};
@@ -93,8 +72,6 @@ export const {
   setProducts,
   addProduct,
   resetProduct,
-  updateVariants,
-  removeVariant,
   clearProduct,
 } = productSlice.actions;
 export default productSlice.reducer;

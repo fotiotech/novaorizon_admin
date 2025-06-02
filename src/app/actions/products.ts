@@ -63,7 +63,11 @@ export async function findProducts(id?: string) {
   } else {
     const products = await Product.find().sort({ created_at: -1 }).exec();
 
-    return products;
+    return products.map((doc) => ({
+      ...doc.toObject(),
+      _id: doc._id.toString(),
+      category_id: doc.category_id?.toString() ?? null,
+    }));
   }
 }
 

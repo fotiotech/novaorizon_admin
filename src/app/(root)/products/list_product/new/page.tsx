@@ -17,6 +17,8 @@ import Select from "react-select";
 import AttributeField from "@/components/products/AttributeFields";
 import AttributeFieldsContainer from "@/components/products/AttributeFields";
 import CollabsibleSection from "@/components/products/CollabsibleSection";
+import { redirect } from "next/navigation";
+import VariantsManager from "@/components/products/VariantOption";
 
 type AttributeDetail = {
   _id: string;
@@ -142,6 +144,7 @@ const ProductForm = () => {
             : "Product updated successfully!"
         );
         await clearStoreAndRedirect();
+        redirect("/admin/products/products_list");
       }
     } catch (error) {
       console.error("Error submitting product:", error);
@@ -606,80 +609,7 @@ const ProductForm = () => {
       {/* ================================ */}
       {/* Variants & Options */}
       {/* ================================ */}
-      <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
-          Variants &amp; Options
-        </h2>
-        <CollabsibleSection>
-          {/* Variant Type */}
-          <div className="flex flex-col">
-            <label className="mb-1 font-medium">
-              Variant Type (e.g., color, size)
-            </label>
-            <input
-              type="text"
-              className="border p-2 rounded w-full"
-              placeholder="Variant Type"
-              value={product.variants_options?.variant_type || ""}
-              onChange={(e) =>
-                handleChange("variants_options", "variant_type", e.target.value)
-              }
-            />
-          </div>
-
-          {/* One Variant Entry (option, sku, additional_price) */}
-          <div className="space-y-2">
-            <h3 className="font-medium">Sample Variant Entry</h3>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                className="border p-2 rounded flex-1"
-                placeholder="Option (e.g. “Red” or “Large”)"
-                value={product.variants_options?.variants?.[0]?.option || ""}
-                onChange={(e) =>
-                  handleChange(
-                    "variants_options",
-                    "variants.0.option",
-                    e.target.value
-                  )
-                }
-              />
-              <input
-                type="text"
-                className="border p-2 rounded flex-1"
-                placeholder="Variant SKU"
-                value={product.variants_options?.variants?.[0]?.sku || ""}
-                onChange={(e) =>
-                  handleChange(
-                    "variants_options",
-                    "variants.0.sku",
-                    e.target.value
-                  )
-                }
-              />
-              <input
-                type="number"
-                className="border p-2 rounded flex-1"
-                placeholder="Additional Price"
-                value={
-                  product.variants_options?.variants?.[0]?.additional_price || 0
-                }
-                onChange={(e) =>
-                  handleChange(
-                    "variants_options",
-                    "variants.0.additional_price",
-                    Number(e.target.value)
-                  )
-                }
-              />
-            </div>
-            <p className="text-sm text-gray-500">
-              * To add more variants, adjust the index (e.g.
-              `variants.1.option`, etc.).
-            </p>
-          </div>
-        </CollabsibleSection>
-      </section>
+      <VariantsManager productId={productId} />
 
       {/* ================================ */}
       {/* Key Features & Bullets */}
