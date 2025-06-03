@@ -22,7 +22,7 @@ const HeroContent = () => {
       <div className="flex justify-between items-center">
         <h2 className=" font-bold text-lg">Hero Content</h2>
         <Link
-          href={"/content_management/banner_sliders/add_hero_content"}
+          href={"/store_config/banner_sliders/add_hero_content"}
         >
           <button type="button" className="p-2 rounded-lg bg-thiR">
             Add Hero Content
@@ -44,7 +44,7 @@ const HeroContent = () => {
                 <span>{hero.title}</span>
               </div>
               <Link
-                href={`/content_management/banner_sliders/edit_hero_content?id=${hero._id}`}
+                href={`/store_config/banner_sliders/edit_hero_content?id=${hero._id}`}
               >
                 <button
                   title="edit"

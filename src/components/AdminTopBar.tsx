@@ -112,7 +112,7 @@ const AdminTopBar = ({
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <Link href={"/admin/notifications"} className="relative">
+        <Link href={"/notifications"} className="relative">
           <NotificationsSharp />
           <ToastContainer />
           <span

@@ -9,7 +9,7 @@ const Settings = () => {
       </div>
       <div>
         <ul className="mt-4">
-          <Link href={"/content_management/banner_sliders/hero_content"}>
+          <Link href={"/store_config/banner_sliders/hero_content"}>
             <li className="p-2 border rounded-lg ">Hero Content</li>
           </Link>
         </ul>

@@ -52,7 +52,7 @@ const AllOrderPage = () => {
         {allOrders.map((order) => (
           <Link
             key={order._id}
-            href={`/admin/orders/order_details?orderNumber=${order.orderNumber}`}
+            href={`/orders/order_details?orderNumber=${order.orderNumber}`}
           >
             <div className="border rounded-lg p-4 shadow-sm hover:shadow-md">
               <div className="mb-4">

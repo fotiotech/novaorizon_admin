@@ -2,7 +2,7 @@ import React, { LegacyRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Person2 } from "@mui/icons-material";
+import { Discount, LocalShipping, Person2, Store } from "@mui/icons-material";
 
 interface MenuLink {
   name: string;
@@ -26,8 +26,15 @@ const menuConfig: MenuSection[] = [
   {
     title: "Dashboard",
     links: [
-      { name: "Overview", href: "/" },
+      { name: "Overview", href: "/overview" },
       { name: "Reports", href: "/reports" },
+    ],
+  },
+  {
+    title: "Users",
+    links: [
+      { name: "Admin Users", href: "/users", icon: <Person2 /> },
+      { name: "Permissions & Roles", href: "/permissions_roles" },
     ],
   },
   {
@@ -44,19 +51,26 @@ const menuConfig: MenuSection[] = [
   {
     title: "Orders",
     links: [
-      { name: "All Orders", href: "/orders" },
+      { name: "All Orders", href: "/orders"  },
       { name: "Pending Orders", href: "/pending_orders" },
       { name: "Shipped Orders", href: "/shipped_orders" },
       { name: "Completed Orders", href: "/completed_orders" },
       { name: "Returns", href: "/returns" },
     ],
   },
+  {
+    title: "Shipping",
+    links: [{ name: "Shipping", href: "/shipping", icon: <LocalShipping /> }],
+  },
+  {
+    title: "Promotion",
+    links: [{ name: "Discount & Coupons", href: "/discounts_coupons", icon: <Discount /> }],
+  },
   // ...other sections omitted for brevity
   {
-    title: "Users",
+    title: "Settings",
     links: [
-      { name: "Admin Users", href: "/users", icon: <Person2 /> },
-      { name: "Permissions & Roles", href: "/permissions_roles" },
+      { name: "Store Configuration", href: "/store_config", icon: <Store /> },
     ],
   },
 ];
@@ -80,7 +94,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
       ref={domNode}
       className={`${
         screenSize <= 1024 ? (sideBarToggle ? open : hide) : ""
-      } w-3/4 lg:w-64 md:w-1/2 shadow overflow-y-auto scrollbar-none bg-pri 
+      } w-3/4 lg:w-64 md:w-1/2 shadow h-full overflow-y-auto scrollbar-none bg-pri 
         border-r border-gray-800 dark:bg-pri-dark
          text-sec dark:text-pri`}
     >
@@ -96,7 +110,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
       </div>
       <nav className="p-4 space-y-6 ">
         {menuConfig.map((section) => (
-          <div key={section.title}>
+          <div key={section.title} className="">
             <h3 className="text-sm font-semibold mb-2 text-gray-600 dark:text-gray-400">
               {section.title}
             </h3>

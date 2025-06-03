@@ -51,7 +51,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
       ref={containerRef}
       className="flex flex-wrap gap-2 w-full overflow-x-auto scrollbar-none my-4"
     >
-      {files.map((file, index) => (
+      {files?.map((file, index) => (
         <div
           key={index}
           className="relative inline-block border-2 border-gray-600 w-44 h-56 rounded-md overflow-hidden"

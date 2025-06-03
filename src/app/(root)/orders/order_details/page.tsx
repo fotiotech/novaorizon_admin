@@ -94,10 +94,10 @@ const OrderDetailsPage = () => {
             </h2>
             <p>
               <span className="font-bold">Address:</span>{" "}
-              {order?.shippingAddress.street}, {order?.shippingAddress.city},{" "}
-              {order?.shippingAddress.state},{" "}
-              {order?.shippingAddress.postalCode},{" "}
-              {order?.shippingAddress.country}
+              {order?.shippingAddress?.street}, {order?.shippingAddress?.city},{" "}
+              {order?.shippingAddress?.state},{" "}
+              {order?.shippingAddress?.postalCode},{" "}
+              {order?.shippingAddress?.country}
             </p>
             <p>
               <span className="font-bold">Shipping Status:</span>{" "}

@@ -50,6 +50,7 @@ export const useFileUploader = (
   }, [imgFiles, upload]);
 
   const addFiles = (newFiles: File[]) => {
+    if(!newFiles) return null;
     setImgFiles((prev) => [...prev, ...newFiles]);
   };
 
