@@ -1,23 +1,22 @@
+"use client";
+
 import { addProduct } from "@/app/store/slices/productSlice";
 import { RootState } from "@/app/store/store";
 import React, { ChangeEvent } from "react";
 import { useSelector, useDispatch } from "react-redux";
+import VariantImageUploader from "./VariantImageUpload";
 
-
-// Define the shape of a Variant entry
 interface Variant {
-  option: string;
+  [key: string]: string | number;
   sku: string;
   price: number;
 }
 
-// Define the shape of the variants_options object
 interface VariantsOptions {
   variant_theme: string;
   variants: Variant[];
 }
 
-// Props for VariantsManager
 interface VariantsManagerProps {
   productId: string;
 }
@@ -25,7 +24,6 @@ interface VariantsManagerProps {
 const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
   const dispatch = useDispatch();
 
-  // Safely select the product's variants_options from Redux state, with defaults
   const variantsOptions: VariantsOptions = useSelector((state: RootState) => {
     const raw = state.product.byId[productId]?.variants_options as
       | Partial<VariantsOptions>
@@ -36,9 +34,20 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     };
   });
 
-  // Handle change for variant theme (e.g., "color" or "size")
   const handleThemeChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const newTheme = e.target.value;
+    const newTheme = e.target.value.trim();
+
+    // Migrate existing variants to use new theme key
+    const updatedVariants = variantsOptions.variants.map((variant) => {
+      const oldKey = variantsOptions.variant_theme;
+      const value = oldKey && variant[oldKey] ? variant[oldKey] : "";
+      const { [oldKey]: _, ...rest } = variant;
+      return {
+        ...rest,
+        [newTheme]: value,
+      };
+    });
+
     dispatch(
       addProduct({
         _id: productId,
@@ -46,12 +55,19 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
         value: newTheme,
       })
     );
+
+    dispatch(
+      addProduct({
+        _id: productId,
+        path: "variants_options.variants",
+        value: updatedVariants,
+      })
+    );
   };
 
-  // Handle change for individual variant fields using addProduct for nested paths
   const handleVariantFieldChange = (
     index: number,
-    field: keyof Variant,
+    field: string,
     value: string | number
   ) => {
     const path = `variants_options.variants.${index}.${field}`;
@@ -64,10 +80,10 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     );
   };
 
-  // Add a new empty variant entry
   const handleAddVariant = () => {
+    const theme = variantsOptions.variant_theme || "option";
     const newVariant: Variant = {
-      option: "",
+      [theme]: "",
       sku: "",
       price: 0,
     };
@@ -81,7 +97,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     );
   };
 
-  // Remove a variant by index
   const handleRemoveVariant = (index: number) => {
     const updatedVariants = variantsOptions.variants.filter(
       (_, idx) => idx !== index
@@ -95,13 +110,14 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     );
   };
 
+  const theme = variantsOptions.variant_theme;
+
   return (
     <section className="space-y-4">
       <h2 className="text-2xl font-semibold border-b pb-2">
         Variants &amp; Options
       </h2>
 
-      {/* Variant Theme Input */}
       <div className="flex flex-col">
         <label className="mb-1 font-medium">
           Variant Theme (e.g., color, size)
@@ -110,36 +126,37 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
           type="text"
           className="border p-2 rounded w-full"
           placeholder="Variant Theme"
-          value={variantsOptions.variant_theme}
+          value={theme}
           onChange={handleThemeChange}
         />
       </div>
 
-      {/* List of Variant Entries */}
       <div className="space-y-4">
         {variantsOptions.variants.map((variant, index) => (
           <div key={index} className="grid grid-cols-4 gap-2 items-end">
             <div className="flex flex-col">
               <label className="mb-1 text-sm">
-                Option (e.g., “Red” or “Large”)
+                {theme
+                  ? theme.charAt(0).toUpperCase() + theme.slice(1)
+                  : "Option"}
               </label>
               <input
                 type="text"
                 className="border p-2 rounded w-full"
-                placeholder="Option"
-                value={variant.option}
+                placeholder={`Enter ${theme}`}
+                value={(variant[theme] as string) || ""}
                 onChange={(e) =>
-                  handleVariantFieldChange(index, "option", e.target.value)
+                  handleVariantFieldChange(index, theme, e.target.value)
                 }
               />
             </div>
 
             <div className="flex flex-col">
-              <label className="mb-1 text-sm">Variant SKU</label>
+              <label className="mb-1 text-sm">SKU</label>
               <input
+                title="sku"
                 type="text"
                 className="border p-2 rounded w-full"
-                placeholder="SKU"
                 value={variant.sku}
                 onChange={(e) =>
                   handleVariantFieldChange(index, "sku", e.target.value)
@@ -148,11 +165,11 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
             </div>
 
             <div className="flex flex-col">
-              <label className="mb-1 text-sm">Additional Price</label>
+              <label className="mb-1 text-sm">Price</label>
               <input
+                title="price"
                 type="number"
                 className="border p-2 rounded w-full"
-                placeholder="Price"
                 value={variant.price}
                 onChange={(e) =>
                   handleVariantFieldChange(
@@ -162,6 +179,10 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
                   )
                 }
               />
+            </div>
+
+            <div>
+              <VariantImageUploader productId={productId} index={index} />
             </div>
 
             <div className="flex items-center">
@@ -176,7 +197,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
           </div>
         ))}
 
-        {/* Button to Add New Variant */}
         <div>
           <button
             type="button"

@@ -65,12 +65,7 @@ const ProductSchema = new Schema(
     variants_options: {
       variant_theme: { type: String }, // e.g., "size", "color"
       variants: [
-        {
-          option: { type: String },
-          sku: { type: String },
-          price: { type: Number },
-          attributes: { type: Schema.Types.Mixed, default: {} },
-        },
+        { type: Schema.Types.Mixed, default: {} },
       ],
       
     },
