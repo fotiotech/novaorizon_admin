@@ -19,6 +19,7 @@ import AttributeFieldsContainer from "@/components/products/AttributeFields";
 import CollabsibleSection from "@/components/products/CollabsibleSection";
 import { redirect } from "next/navigation";
 import VariantsManager from "@/components/products/VariantOption";
+import ManageRelatedProduct from "@/components/products/ManageRelatedProduct";
 
 type AttributeDetail = {
   _id: string;
@@ -702,6 +703,10 @@ const ProductForm = () => {
             />
           </div>
         </CollabsibleSection>
+      </section>
+
+      <section className="space-y-4">
+        <ManageRelatedProduct product={product} id={productId} />
       </section>
 
       {/* ================================ */}
