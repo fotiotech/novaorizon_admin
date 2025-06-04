@@ -2,7 +2,7 @@ import { CartItem } from "@/app/reducer/cartReducer";
 
 export type Users = {
   _id?: string;
-  username: string;
+  name: string;
   email: string;
   password?: string;
   role: string;

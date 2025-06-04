@@ -35,7 +35,7 @@ function MonetbilPayment() {
     serviceKey: process.env.NEXT_PUBLIC_MONETBIL_KEY as string,
     amount: calculateTotal(cart),
     phone: customer?.billingAddress.phone,
-    user: user?.username,
+    user: user?.name,
     firstName: customer?.billingAddress.firstName,
     lastName: customer?.billingAddress.lastName,
     email: customer?.billingAddress.email,

@@ -12,6 +12,7 @@ import React, { LegacyRef, useEffect, useState } from "react";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer, toast } from "react-toastify";
 import axios from "axios";
+import { useSession } from "next-auth/react";
 
 interface adminTopBarProps {
   domNode?: LegacyRef<HTMLDivElement>;
@@ -33,7 +34,8 @@ const AdminTopBar = ({
   screenSize,
   setSideBarToggle,
 }: adminTopBarProps) => {
-  const { user } = useUser();
+const session = useSession();
+  const user = session?.data?.user as any;
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
 
   useEffect(() => {
@@ -124,7 +126,7 @@ const AdminTopBar = ({
         </Link>
 
         <div className="flex items-center gap-1">
-          <p className="font-bold">{user?.username}</p>
+          <p className="font-bold">{user?.name}</p>
           <Person style={{ fontSize: 30 }} />
         </div>
       </div>

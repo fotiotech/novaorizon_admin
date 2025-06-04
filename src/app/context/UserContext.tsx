@@ -1,5 +1,4 @@
 "use client";
-import { getUser } from "@/app/lib/dal";
 import { Customer, Users } from "@/constant/types";
 import React, {
   createContext,
@@ -9,6 +8,7 @@ import React, {
   ReactNode,
 } from "react";
 import { findCustomer } from "../actions/customer";
+import { useSession } from "next-auth/react";
 
 // Define the shape of the user context
 interface UserContextType {
@@ -40,7 +40,7 @@ interface UserProviderProps {
 export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const initialState: Users = {
     _id: "",
-    username: "",
+    name: "",
     email: "",
     role: "",
     status: "",
@@ -84,7 +84,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-
+  const session = useSession();
+  const userData = session?.data?.user as any;
   const [user, setUser] = useState<Users | null>(initialState);
   const [customerInfos, setCustomerInfos] = useState<Customer | null>(
     initialCustomerState
@@ -109,18 +110,17 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const userData = await getUser();
         if (userData) {
           setUser({
-            _id: userData?._id || "",
-            username: userData?.username || "",
+            _id: userData?.id || "",
+            name: userData?.name || "",
             email: userData?.email || "",
             role: userData?.role || "",
           });
         }
 
-        if (userData?._id) {
-          const response = await findCustomer(userData._id);
+        if (userData?.id) {
+          const response = await findCustomer(userData.id);
           if (response) {
             setCustomerInfos(response);
           }

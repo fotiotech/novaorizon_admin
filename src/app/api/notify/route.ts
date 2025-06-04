@@ -23,7 +23,7 @@ export async function GET() {
     const userIds = notifications.map((notification) => notification.userId);
     const users = await User.find({ _id: { $in: userIds } }).lean();
     const userMap = Object.fromEntries(
-      users.map((user) => [user._id.toString(), user])
+      users.map((user: any) => [user._id.toString(), user])
     );
 
     const notificationsWithUsers = notifications.map((notification) => ({

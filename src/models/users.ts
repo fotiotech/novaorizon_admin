@@ -1,23 +1,9 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
 import bcrypt from "bcryptjs";
 
-interface IUser extends Document {
-  _id: mongoose.Types.ObjectId;
-  username: string;
-  email: string;
-  password: string;
-  googleId?: string;
-  role?: string;
-  image?: string;
-  status?: string;
-  created_at?: Date;
-  updated_at?: Date;
-  matchPassword: (enteredPassword: string) => Promise<boolean>;
-}
-
-const UserSchema: Schema<IUser> = new mongoose.Schema(
+const UserSchema = new mongoose.Schema(
   {
-    username: {
+    name: {
       type: String,
       required: true,
     },
@@ -30,8 +16,8 @@ const UserSchema: Schema<IUser> = new mongoose.Schema(
       type: String,
       required: true,
     },
-    googleId: {
-      type: String,
+    emailVerified: {
+      type: Date,
     },
     role: {
       type: String,
@@ -39,6 +25,8 @@ const UserSchema: Schema<IUser> = new mongoose.Schema(
     image: {
       type: String,
     },
+    accounts: [],
+    sessions: [],
     status: {
       type: String,
       enum: ["active", "inactive"],
@@ -57,7 +45,7 @@ const UserSchema: Schema<IUser> = new mongoose.Schema(
 );
 
 // Hash the password before saving the user model
-UserSchema.pre<IUser>("save", async function (next) {
+UserSchema.pre("save", async function (next) {
   if (this.isModified("password")) {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
@@ -71,6 +59,6 @@ UserSchema.methods.matchPassword = async function (enteredPassword: string) {
 };
 
 // Export the model
-const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
+const User = mongoose.models.User || mongoose.model("User", UserSchema);
 
 export default User;

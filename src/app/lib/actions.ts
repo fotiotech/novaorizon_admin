@@ -2,17 +2,13 @@
 
 import {
   FormState,
-  LoginFormState,
-  SigninFormSchema,
   SignupFormSchema,
 } from "./definitions";
 import { redirect } from "next/navigation";
-import { createSession, deleteSession, updateSession } from "./session";
 import Customer from "@/models/Customer";
 import User from "@/models/users";
 import { connection } from "@/utils/connection";
-import { verifySession } from "./dal";
-import { ObjectId } from "mongoose";
+import { signIn } from "@/app/auth";
 
 export async function signup(state: FormState, formData: FormData) {
   // Validate form fields
@@ -46,7 +42,7 @@ export async function signup(state: FormState, formData: FormData) {
       username: name,
       email: email,
       password: password,
-      role: "customer",
+      role: "user",
       status: "active",
     });
 
@@ -58,67 +54,9 @@ export async function signup(state: FormState, formData: FormData) {
       };
     }
 
-    // Current steps:
-    // 4. Create user session
-    await createSession(user?._id.toString());
-
     const newCustomer = new Customer({ userId: user._id });
     await newCustomer.save();
 
-    // 5. Redirect user
-    redirect("/auth/login");
+    return signIn();
   }
-}
-
-export const authenticate = async (
-  state:
-    | {
-        errors: {
-          email?: string[] | undefined;
-          password?: string[] | undefined;
-        };
-        message?: string;
-      }
-    | undefined,
-  formData: FormData
-) => {
-  const validatedFields = SigninFormSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
-
-  if (!validatedFields.success) {
-    return {
-      ...state,
-      errors: validatedFields.error.flatten().fieldErrors,
-    };
-  }
-
-  const { email, password } = validatedFields.data;
-
-  await connection();
-
-  const user = await User.findOne({ email });
-  console.log(user);
-
-  if (!user || !(await user.matchPassword(password))) {
-    console.log("Wrong password");
-    return;
-  }
-
-  // Handle session
-  const session = await verifySession();
-  if (session) {
-    const updatedSession = await updateSession();
-    console.log("Session updated:", updatedSession);
-  } else {
-    await createSession(user._id.toString());
-  }
-
-  redirect("/");
-};
-
-export async function logout(id: string) {
-  deleteSession(id);
-  redirect("/auth/login");
 }

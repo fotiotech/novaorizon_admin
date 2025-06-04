@@ -46,7 +46,7 @@ const NotificationPage = () => {
               notification.isRead ? "bg-slate-700" : "bg-slate-500"
             } flex items-center gap-3 p-2 border rounded-lg`}
           >
-            <p>{notification?.user?.username}</p>
+            <p>{notification?.user?.name}</p>
             {notification.message} -{" "}
             {new Date(notification.timestamp).toLocaleString()}
           </li>
