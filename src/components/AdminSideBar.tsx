@@ -51,7 +51,7 @@ const menuConfig: MenuSection[] = [
   {
     title: "Orders",
     links: [
-      { name: "All Orders", href: "/orders"  },
+      { name: "All Orders", href: "/orders" },
       { name: "Pending Orders", href: "/pending_orders" },
       { name: "Shipped Orders", href: "/shipped_orders" },
       { name: "Completed Orders", href: "/completed_orders" },
@@ -64,9 +64,14 @@ const menuConfig: MenuSection[] = [
   },
   {
     title: "Promotion",
-    links: [{ name: "Discount & Coupons", href: "/discounts_coupons", icon: <Discount /> }],
+    links: [
+      {
+        name: "Discount & Coupons",
+        href: "/discounts_coupons",
+        icon: <Discount />,
+      },
+    ],
   },
-  // ...other sections omitted for brevity
   {
     title: "Settings",
     links: [
@@ -74,6 +79,8 @@ const menuConfig: MenuSection[] = [
     ],
   },
 ];
+
+const signOutLink: MenuLink = { name: "Sign Out", href: "/auth/signout" };
 
 const AdminSideBar: React.FC<AdminSideBarProps> = ({
   domNode,
@@ -92,49 +99,63 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   return (
     <aside
       ref={domNode}
-      className={`${
+      className={`$${
         screenSize <= 1024 ? (sideBarToggle ? open : hide) : ""
       } w-3/4 lg:w-64 md:w-1/2 shadow h-full overflow-y-auto scrollbar-none bg-pri 
         border-r border-gray-800 dark:bg-pri-dark
-         text-sec dark:text-pri`}
+         text-sec dark:text-pri flex flex-col justify-between`}
     >
-      <div className="p-4 flex items-center justify-between lg:justify-center">
-        <Link href="/">
-          <Image src="/logo.png" alt="logo" width={60} height={40} />
-        </Link>
-        {screenSize <= 1024 && (
-          <button onClick={handleClose} className="lg:hidden text-xl">
-            ✕
-          </button>
-        )}
+      <div>
+        <div className="p-4 flex items-center justify-between lg:justify-center">
+          <Link href="/">
+            <Image src="/logo.png" alt="logo" width={60} height={40} />
+          </Link>
+          {screenSize <= 1024 && (
+            <button onClick={handleClose} className="lg:hidden text-xl">
+              ✕
+            </button>
+          )}
+        </div>
+        <nav className="p-4 space-y-6">
+          {menuConfig.map((section) => (
+            <div key={section.title}>
+              <h3 className="text-sm font-semibold mb-2 text-gray-600 dark:text-gray-400">
+                {section.title}
+              </h3>
+              <ul className="space-y-1">
+                {section.links.map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      onClick={handleClose}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors $${
+                        pathname === link.href || pathname.startsWith(link.href)
+                          ? "bg-gray-300 dark:bg-gray-600"
+                          : ""
+                      }`}
+                    >
+                      {link.icon}
+                      <span>{link.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
       </div>
-      <nav className="p-4 space-y-6 ">
-        {menuConfig.map((section) => (
-          <div key={section.title} className="">
-            <h3 className="text-sm font-semibold mb-2 text-gray-600 dark:text-gray-400">
-              {section.title}
-            </h3>
-            <ul className="space-y-1">
-              {section.links.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    onClick={handleClose}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
-                      pathname === link.href || pathname.startsWith(link.href)
-                        ? "bg-gray-300 dark:bg-gray-600"
-                        : ""
-                    }`}
-                  >
-                    {link.icon}
-                    <span>{link.name}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </nav>
+      <div className="p-4">
+        <Link
+          href={signOutLink.href}
+          onClick={handleClose}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-red-300 text-black hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors $${
+            pathname === signOutLink.href ? "bg-gray-300 dark:bg-gray-600" : ""
+          }`}
+        >
+          {signOutLink.icon}
+          <span>{signOutLink.name}</span>
+        </Link>
+      </div>
     </aside>
   );
 };

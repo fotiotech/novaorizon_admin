@@ -7,5 +7,5 @@ export function SignIn() {
 
  
 export function SignOut() {
-  return <button onClick={() => signOut()}>Sign Out</button>
+  return <button onClick={() => signOut()} className="p-2 px-4 bg-red-500 rounded-lg">Sign Out</button>
 } 

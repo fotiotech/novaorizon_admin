@@ -1,3 +1,5 @@
+'use client'
+
 import { useUser } from "@/app/context/UserContext";
 import {
   Menu,
@@ -13,6 +15,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer, toast } from "react-toastify";
 import axios from "axios";
 import { useSession } from "next-auth/react";
+import { SignIn } from "./auth/SignInButton";
 
 interface adminTopBarProps {
   domNode?: LegacyRef<HTMLDivElement>;
@@ -34,7 +37,7 @@ const AdminTopBar = ({
   screenSize,
   setSideBarToggle,
 }: adminTopBarProps) => {
-const session = useSession();
+  const session = useSession();
   const user = session?.data?.user as any;
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
 
@@ -126,7 +129,8 @@ const session = useSession();
         </Link>
 
         <div className="flex items-center gap-1">
-          <p className="font-bold">{user?.name}</p>
+          {user ? <p className="font-bold">{user?.email.slice(0,7)}...</p> : <SignIn />}
+
           <Person style={{ fontSize: 30 }} />
         </div>
       </div>
