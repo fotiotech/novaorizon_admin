@@ -1,6 +1,6 @@
 "use server";
-import User from "@/models/users";
 import { connection } from "@/utils/connection";
+import User from "@/models/users";
 
 export async function findUsers(_id?: string) {
   await connection();

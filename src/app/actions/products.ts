@@ -1,7 +1,7 @@
 "use server";
+import { connection } from "@/utils/connection";
 
 import "@/models/Brand";
-import { connection } from "@/utils/connection";
 import { revalidatePath } from "next/cache";
 import slugify from "slugify";
 import { Variant } from "@/models/Variant";

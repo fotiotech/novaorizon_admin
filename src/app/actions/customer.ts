@@ -1,6 +1,6 @@
-"use server";
+"use server";import { connection } from "@/utils/connection";
+
 import Customer from "@/models/Customer";
-import { connection } from "@/utils/connection";
 import { redirect } from "next/navigation";
 
 export async function findCustomer(_id: string) {

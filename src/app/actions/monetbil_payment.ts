@@ -1,4 +1,6 @@
 "use server";
+import { connection } from "@/utils/connection";
+
 import { MonetbilPaymentRequest } from "@/constant/types";
 import axios from "axios";
 import { NextResponse } from "next/server";
@@ -118,6 +120,7 @@ export async function updateOrderStatus(
 ) {
   if (!email || !transaction_id || !status) return null;
   try {
+    await connection();
     const order = await Order.findOneAndUpdate(
       { email },
       { transaction_id, paymentStatus: status },

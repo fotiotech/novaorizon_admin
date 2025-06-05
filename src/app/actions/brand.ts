@@ -1,9 +1,9 @@
 // app/actions/brand.ts
 "use server";
+import { connection } from "@/utils/connection";
 
 import Brand from "@/models/Brand";
 import Product from "@/models/Product";
-import { connection } from "@/utils/connection";
 import slugify from "slugify";
 
 // Fetch all brands

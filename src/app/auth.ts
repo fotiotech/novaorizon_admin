@@ -1,11 +1,11 @@
+import { connection } from "@/utils/connection";
+import { MongoDBAdapter } from "@auth/mongodb-adapter";
+import client from "./lib/db";
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
-import { MongoDBAdapter } from "@auth/mongodb-adapter";
-import client from "./lib/db";
 import Credentials from "next-auth/providers/credentials";
 import type { Provider } from "next-auth/providers";
-import { connection } from "@/utils/connection";
 import User from "@/models/users";
 
 const providers: Provider[] = [

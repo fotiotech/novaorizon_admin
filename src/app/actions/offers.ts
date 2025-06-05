@@ -1,7 +1,7 @@
 "use server";
+import { connection } from "@/utils/connection";
 
 import Offer from "@/models/Offer";
-import { connection } from "@/utils/connection";
 import { revalidatePath } from "next/cache";
 
 export async function createOffer(data: {

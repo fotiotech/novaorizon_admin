@@ -1,6 +1,7 @@
 "use server";
-import HeroContent from "@/models/HeroContent";
 import { connection } from "@/utils/connection";
+
+import HeroContent from "@/models/HeroContent";
 import { revalidatePath } from "next/cache";
 
 export async function findHeroContent() {

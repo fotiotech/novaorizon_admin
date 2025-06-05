@@ -1,7 +1,7 @@
 "use server";
+import { connection } from "@/utils/connection";
 
 import { Review } from "@/models/Review";
-import { connection } from "@/utils/connection";
 
 export async function findReviews(productId?: string) {
   await connection();

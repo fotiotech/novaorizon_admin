@@ -1,8 +1,8 @@
 "use server";
+import { connection } from "@/utils/connection";
 
 import { Brand, Category } from "@/constant/types";
 import Product from "@/models/Product";
-import { connection } from "@/utils/connection";
 
 export async function getSearch(
   query: string,
