@@ -2,9 +2,9 @@
 import { connection } from "@/utils/connection";
 
 import "@/models/Brand";
+import "@/models/User";
 import { revalidatePath } from "next/cache";
 import slugify from "slugify";
-import { Variant } from "@/models/Variant";
 import { VariantAttribute } from "@/models/VariantAttributes";
 import { ref, deleteObject } from "firebase/storage";
 import { storage } from "@/utils/firebaseConfig";

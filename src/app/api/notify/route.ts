@@ -1,7 +1,7 @@
 "use server";
 
 import Notification from "@/models/Notification";
-import User from "@/models/users";
+import User from "@/models/User";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
 

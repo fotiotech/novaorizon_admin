@@ -16,7 +16,7 @@ const EditHeroContent = () => {
   const id = searchParams.get("id")?.toLowerCase();
   const { files, loading, addFiles, removeFile } = useFileUploader();
 
-  const imageFile = files?.length! > 1 ? files : files?.[0];
+  const imageFile = files?.length > 1 ? files : files?.[0];
 
   const toUpdateHeroContent = updateHeroContent.bind(
     null,
@@ -31,10 +31,13 @@ const EditHeroContent = () => {
     cta_link: "",
   });
 
+  console.log("content", imageFile);
+
   useEffect(() => {
     async function getHeroContent() {
       if (id) {
         const content = await findHeroContentById(id);
+
         if (content) {
           setHero({
             ...hero,
@@ -43,7 +46,7 @@ const EditHeroContent = () => {
             cta_text: content.cta_text,
             cta_link: content.cta_link,
           });
-          addFiles(hero.imageUrl as unknown as File[]);
+          addFiles([hero.imageUrl] as unknown as File[]);
         }
       }
     }

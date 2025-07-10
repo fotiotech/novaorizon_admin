@@ -11,11 +11,11 @@ export interface IShipping extends Document {
     postalCode: string;
     country: string;
   };
-  trackingNumber?: string;
+  trackingNumber?: string; 
   carrier: string;
   shippingMethod: 'standard' | 'express' | 'overnight';
   shippingCost: number;
-  status: 'pending' | 'shipped' | 'in_transit' | 'delivered' | 'returned' | 'canceled';
+  status: 'pending' | 'assigned' | 'in_transit' | 'delivered' | 'returned' | 'canceled';
   shippedAt?: Date;
   deliveredAt?: Date;
   createdAt: Date;
@@ -54,6 +54,6 @@ const ShippingSchema = new Schema<IShipping>(
 );
 
 // Export the Shipping Model
-const Shipping = mongoose.model<IShipping>('Shipping', ShippingSchema);
+const Shipping = mongoose.models.Shipping || mongoose.model<IShipping>('Shipping', ShippingSchema);
 
 export default Shipping;

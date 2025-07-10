@@ -4,7 +4,7 @@ import { connection } from "@/utils/connection";
 import { MonetbilPaymentRequest } from "@/constant/types";
 import axios from "axios";
 import { NextResponse } from "next/server";
-import User from "@/models/users";
+import User from "@/models/User";
 import Order from "@/models/Order"; // Adjust the path based on your project structure
 
 export async function generatePaymentLink(

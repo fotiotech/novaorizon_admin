@@ -2,6 +2,7 @@
 import { connection } from "@/utils/connection";
 import Order from "@/models/Order";
 import { revalidatePath } from "next/cache";
+import Shipping from "@/models/Shipping";
 
 export async function findOrders(orderNumber?: string, userId?: string | null) {
   await connection();
@@ -111,6 +112,7 @@ export async function createOrder(orderNumber: string, data: any) {
           runValidators: true, // Validate fields based on schema
         }
       );
+      
       if (updatedOrder) return true;
       return null;
     } else {
@@ -139,6 +141,8 @@ export async function createOrder(orderNumber: string, data: any) {
         discount,
       });
       const savedOrder = await newOrder.save();
+
+      
       if (savedOrder) return true;
       return null;
     }

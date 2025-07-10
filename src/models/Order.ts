@@ -17,7 +17,7 @@ export interface OrderDocument extends Document {
   products: Product[];
   subtotal: number;
   tax: number;
-  shippingCost: number;
+  shippingCost: number; 
   total: number;
   paymentStatus: "pending" | "paid" | "failed" | "cancelled";
   paymentMethod: string;

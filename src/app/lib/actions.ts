@@ -1,12 +1,9 @@
 "use server";
 
-import {
-  FormState,
-  SignupFormSchema,
-} from "./definitions";
+import { FormState, SignupFormSchema } from "./definitions";
 import { redirect } from "next/navigation";
 import Customer from "@/models/Customer";
-import User from "@/models/users";
+import User from "@/models/User";
 import { connection } from "@/utils/connection";
 import { signIn } from "@/app/auth";
 

@@ -17,7 +17,7 @@ const Category = () => {
 
   // 1️⃣ Create a ref that holds our “working” ID.  It only gets set once.
 
-  const id = products.allIds.length ? products.allIds[0] : uuidv4();
+  const id = products.allIds.length ? products.allIds[0] : uuidv4(); 
 
   // Initialize product in Redux if it doesn't exist
   useEffect(() => {

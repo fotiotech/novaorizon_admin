@@ -40,7 +40,7 @@ const AdminLayout = ({ children }: adminLayoutProps) => {
           screenSize={screenSize}
         />
 
-        <div className="flex-1 overflow-auto scrollbar-none p-6 text-sec dark:text-pri">
+        <div className="flex-1 overflow-auto scrollbar-none p-6  text-sec dark:text-pri">
           {children}
         </div>
       </div>

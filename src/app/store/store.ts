@@ -6,8 +6,10 @@ import userReducer from "./slices/userSlice";
 import productReducer from "./slices/productSlice";
 import categoryReducer from "./slices/categorySlice";
 import offerReducer from "./slices/offerSlice";
+import orderReducer from "./slices/orderSlice";
 import attributeReducer from "./slices/attributeSlice";
 import attributeGroupReducer from "./slices/attributeGroupSlice";
+import shippingReducer from "./slices/shippingSlice";
 
 const persistConfig = {
   key: "root",
@@ -20,6 +22,8 @@ const rootReducer = combineReducers({
   category: categoryReducer,
   product: productReducer,
   offer: offerReducer,
+  order: orderReducer,
+  shipping: shippingReducer,
   attribute: attributeReducer,
   attributeGroup: attributeGroupReducer,
 });

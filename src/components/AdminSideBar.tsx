@@ -28,6 +28,7 @@ const menuConfig: MenuSection[] = [
     links: [
       { name: "Overview", href: "/overview" },
       { name: "Reports", href: "/reports" },
+      { name: "collection", href: "/collection" },
     ],
   },
   {

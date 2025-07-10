@@ -1,5 +1,14 @@
 import { normalize } from "normalizr";
-import { user, category, product, offer, attribute, attributeGroup } from "./schemas";
+import {
+  user,
+  category,
+  product,
+  offer,
+  attribute,
+  attributeGroup,
+  order,
+  shipping,
+} from "./schemas";
 
 // Normalize user function
 export const normalizeUser = (data: any) => {
@@ -16,9 +25,15 @@ export const normalizeProducts = (data: any) => {
   return normalize(data, [product]);
 };
 
-// Normalize product function
+// Normalize offer function
 export const normalizeOffer = (data: any) => {
-  return normalize(data, [product]);
+  return normalize(data, [offer]);
+}; // Normalize order function
+export const normalizeOrder = (data: any) => {
+  return normalize(data, [order]);
+};
+export const normalizeShipping = (data: any) => {
+  return normalize(data, [shipping]);
 };
 
 // Normalize product function
