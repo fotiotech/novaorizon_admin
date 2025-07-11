@@ -102,7 +102,7 @@ const EditCollection = () => {
 
   if (!collection) {
     return (
-      <div className="p-4">
+      <div className="p-2 lg:p-4">
         <div className="text-center text-red-600">Collection not found</div>
       </div>
     );

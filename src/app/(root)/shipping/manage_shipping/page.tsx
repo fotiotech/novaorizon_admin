@@ -122,7 +122,7 @@ export default function CarriersPage() {
   };
 
   return (
-    <div className="p-4">
+    <div className="p-2 lg:p-4">
       <h1 className="text-2xl font-bold mb-4">Manage Carriers</h1>
 
       {/* Form */}

@@ -59,7 +59,7 @@ const Shipping = () => {
   }
 
   return (
-    <div className="p-4 flex flex-col gap-4">
+    <div className="p-2 lg:p-4 flex flex-col gap-4">
       <div className="flex justify-between items-center">
         <h2>Shipping</h2>
         <Link href="/shipping/manage_shipping">

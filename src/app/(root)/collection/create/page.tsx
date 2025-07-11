@@ -85,7 +85,7 @@ const CreateCollection = () => {
 
 
   return (
-    <div className="p-4">
+    <div className="p-2 lg:p-4">
       {error && (
         <Notification
           type="error"
