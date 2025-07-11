@@ -93,7 +93,7 @@ const CollectionPage = () => {
             {collections.map(({ collection, products }) => (
               <div
                 key={collection._id}
-                className="border rounded-lg overflow-hidden group"
+                className=" rounded-lg overflow-hidden group"
               >
                 <div className="p-4">
                   <h3 className="font-semibold text-lg">{collection.name}</h3>
