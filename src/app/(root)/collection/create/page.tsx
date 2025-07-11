@@ -15,8 +15,10 @@ const CreateCollection = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [rules, setRules] = useState<any[]>([]);
+  const [rules, setRules] = useState<any[]>([{ attribute: "name", operator: "$lt", value: "value", position: 0 }]);
   const [showJson, setShowJson] = useState(false);
+
+  console.log('rules', rules);
 
   const handleSubmit = async (formData: FormData) => {
     setIsSubmitting(true);
@@ -79,6 +81,8 @@ const CreateCollection = () => {
 
     return JSON.stringify(preview, null, 2);
   };
+
+
 
   return (
     <div className="p-4">
@@ -161,7 +165,7 @@ const CreateCollection = () => {
           </div>
 
           <div className="py-4 border-t border-b">
-            <CollectionRuleForm onAddRule={setRules} />
+            <CollectionRuleForm rules={rules} onAddRule={setRules} />
           </div>
 
           <div className="space-y-4">

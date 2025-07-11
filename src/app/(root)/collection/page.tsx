@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { getCollections, deleteCollection } from "@/app/actions/collection";
+import { getCollectionsWithProducts, deleteCollection } from "@/app/actions/collection";
 import Image from "next/image";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
@@ -15,7 +15,7 @@ const CollectionPage = () => {
   const [success, setSuccess] = useState<string | null>(null);
 
   async function fetchCollections() {
-    const result = await getCollections();
+    const result = await getCollectionsWithProducts();
     if (result.success) {
       const mappedCollections = result.data || [];
       setCollections(mappedCollections);
@@ -36,15 +36,13 @@ const CollectionPage = () => {
     setError(null);
 
     try {
-      // Optimistic update
-      const collectionToDelete = collections.find((c) => c.id === id);
-      setCollections((prev) => prev.filter((c) => c.id !== id));
+      const collectionToDelete = collections.find((c) => c.collection._id === id);
+      setCollections((prev) => prev.filter((c) => c.collection._id !== id));
 
       const result = await deleteCollection(id);
       if (result.success) {
         setSuccess("Collection deleted successfully");
       } else {
-        // Rollback on error
         if (collectionToDelete) {
           setCollections((prev) => [...prev, collectionToDelete]);
         }
@@ -52,7 +50,6 @@ const CollectionPage = () => {
       }
     } catch (err) {
       setError("An unexpected error occurred");
-      // Refresh the list to ensure consistency
       await fetchCollections();
     } finally {
       setDeleteLoading(null);
@@ -86,28 +83,18 @@ const CollectionPage = () => {
         </Link>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-4">
+      <div className="border border-gray-600 rounded-lg shadow p-4">
         {loading ? (
           <div className="flex justify-center items-center min-h-[200px]">
             <Spinner />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {collections.map((collection) => (
+            {collections.map(({ collection, products }) => (
               <div
-                key={collection.id}
+                key={collection._id}
                 className="border rounded-lg overflow-hidden group"
               >
-                {collection.imageUrl && (
-                  <div className="relative h-48 w-full">
-                    <Image
-                      src={collection.imageUrl}
-                      alt={collection.name}
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                )}
                 <div className="p-4">
                   <h3 className="font-semibold text-lg">{collection.name}</h3>
                   <p className="text-gray-600 text-sm mt-1">
@@ -116,26 +103,26 @@ const CollectionPage = () => {
                   <div className="flex justify-between items-center mt-4">
                     <span
                       className={`px-2 py-1 rounded-full text-xs ${
-                        collection.isActive
+                        collection.status === "active"
                           ? "bg-green-100 text-green-800"
                           : "bg-red-100 text-red-800"
                       }`}
                     >
-                      {collection.isActive ? "Active" : "Inactive"}
+                      {collection.status === "active" ? "Active" : "Inactive"}
                     </span>
                     <div className="flex items-center space-x-3">
                       <Link
-                        href={`/collection/edit?id=${collection.id}`}
+                        href={`/collection/edit?id=${collection._id}`}
                         className="text-blue-600 hover:underline"
                       >
                         Edit
                       </Link>
                       <button
-                        onClick={() => handleDelete(collection.id!)}
+                        onClick={() => handleDelete(collection._id)}
                         className="text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={deleteLoading === collection.id}
+                        disabled={deleteLoading === collection._id}
                       >
-                        {deleteLoading === collection.id ? (
+                        {deleteLoading === collection._id ? (
                           <span className="flex items-center">
                             <Spinner />
                             <span className="ml-2">Deleting...</span>
@@ -146,6 +133,17 @@ const CollectionPage = () => {
                       </button>
                     </div>
                   </div>
+
+                  {products.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-semibold mb-2">Products:</h4>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                        {products.map((product: any) => (
+                          <li key={product._id}>{product.identification_branding.name}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

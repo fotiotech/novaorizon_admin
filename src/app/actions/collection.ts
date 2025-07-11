@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import { Collection } from "@/models/Collection";
+import Product from "@/models/Product";
 
 export async function createCollection(formData: FormData) {
   try {
@@ -65,14 +66,50 @@ export async function createCollection(formData: FormData) {
   }
 }
 
-export async function getCollections() {
+export async function getCollectionsWithProducts() {
   try {
     await connection();
-    const collections = await Collection.find().sort({ created_at: -1 }).lean();
-    return { success: true, data: collections };
+    const collections = await Collection.find({ status: "active" })
+      .sort({ created_at: -1 })
+      .lean();
+
+    const results = [];
+
+    for (const collection of collections) {
+      const query: Record<string, any> = {};
+
+      for (const rule of collection.rules) {
+        const attributePath = rule.attribute; // e.g., "pricing_availability.price"
+
+        // Safely apply rule to query using dot notation
+        if (!query[attributePath]) {
+          query[attributePath] = {};
+        }
+        query[attributePath][rule.operator] = rule.value;
+      }
+
+      const matchingProducts = await Product.find(query).lean();
+
+      results.push({
+        collection: {
+          _id: collection._id,
+          name: collection.name,
+          description: collection.description,
+          category_id: collection.category_id,
+          created_at: collection.created_at,
+          updated_at: collection.updated_at,
+        },
+        products: matchingProducts,
+      });
+    }
+
+    return { success: true, data: results };
   } catch (error) {
-    console.error("Error fetching collections:", error);
-    return { success: false, error: "Failed to fetch collections" };
+    console.error("Error fetching collections with products:", error);
+    return {
+      success: false,
+      error: "Failed to fetch collections with products",
+    };
   }
 }
 
