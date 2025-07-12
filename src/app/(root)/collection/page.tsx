@@ -135,7 +135,7 @@ const CollectionPage = () => {
                   </div>
 
                   {products.length > 0 && (
-                    <div className="mt-4">
+                    <div className="mt-4"> 
                       <h4 className="text-sm font-semibold mb-2">Products:</h4>
                       <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
                         {products.map((product: any) => (

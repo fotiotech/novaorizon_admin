@@ -79,9 +79,7 @@ export async function getCollectionsWithProducts() {
 
     for (const collection of collections) {
       // start by filtering on the collection’s category_id
-      const query: Record<string, any> = {
-        category_id: collection.category_id._id, // <-- ensures "shop by category"
-      };
+      const query: Record<string, any> = {};
 
       for (const rule of collection.rules) {
         const attributePath = rule.attribute; // e.g., "pricing_availability.price"
@@ -96,6 +94,12 @@ export async function getCollectionsWithProducts() {
       const matchingProducts = await Product.find(query)
         .populate("category_id", "categoryName")
         .lean();
+
+      console.log(
+        "Matching products for collection:",
+        collection,
+        matchingProducts
+      );
 
       results.push({
         collection: {
