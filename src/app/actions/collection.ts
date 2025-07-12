@@ -5,6 +5,7 @@ import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import { Collection } from "@/models/Collection";
 import Product from "@/models/Product";
+import "@/models/Category";
 
 export async function createCollection(formData: FormData) {
   try {
