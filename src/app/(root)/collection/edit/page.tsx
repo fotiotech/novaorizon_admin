@@ -8,6 +8,7 @@ import { getCollectionById, updateCollection } from "@/app/actions/collection";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import CollectionRuleForm from "@/components/collections/RuleEditor";
+import { getCategory } from "@/app/actions/category";
 
 const EditCollection = () => {
   const router = useRouter();
@@ -23,8 +24,17 @@ const EditCollection = () => {
     { attribute: "name", operator: "$lt", value: "value", position: 0 },
   ]);
   const [showJson, setShowJson] = useState(false);
+  const [category, setCategory] = useState<any[]>([]);
+  
+    useEffect(() => {
+      // Fetch categories or any initial data if needed
+      async function fetchCat() {
+        const res = await getCategory();
+        setCategory(res);
+      }
+      fetchCat();
+    }, []);
 
-  console.log("rules", rules);
 
   useEffect(() => {
     async function fetchCollection() {
@@ -164,6 +174,24 @@ const EditCollection = () => {
                 disabled={isSubmitting}
               />
             </div>
+
+            <div>
+              <label htmlFor="category_id" className="block mb-2">
+                Category ID:
+              </label>
+              <select
+                id="category_id"
+                name="category_id"
+                defaultValue={collection.category_id}
+                className="w-full bg-transparent border rounded-lg p-2"
+                disabled={isSubmitting}
+              >
+                {category.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
 
             <div>
               <label className="flex items-center space-x-2">

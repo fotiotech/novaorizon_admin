@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import FilesUploader from "@/components/FilesUploader";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import { createCollection } from "@/app/actions/collection";
@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import CollectionRuleForm from "@/components/collections/RuleEditor";
+import { getCategory } from "@/app/actions/category";
 
 const CreateCollection = () => {
   const { files, addFiles } = useFileUploader();
@@ -15,10 +16,20 @@ const CreateCollection = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [rules, setRules] = useState<any[]>([{ attribute: "name", operator: "$lt", value: "value", position: 0 }]);
+  const [rules, setRules] = useState<any[]>([
+    { attribute: "name", operator: "$lt", value: "value", position: 0 },
+  ]);
   const [showJson, setShowJson] = useState(false);
+  const [category, setCategory] = useState<any[]>([]);
 
-  console.log('rules', rules);
+  useEffect(() => {
+    // Fetch categories or any initial data if needed
+    async function fetchCat() {
+      const res = await getCategory();
+      setCategory(res);
+    }
+    fetchCat();
+  }, []);
 
   const handleSubmit = async (formData: FormData) => {
     setIsSubmitting(true);
@@ -82,8 +93,6 @@ const CreateCollection = () => {
     return JSON.stringify(preview, null, 2);
   };
 
-
-
   return (
     <div className="p-2 lg:p-4">
       {error && (
@@ -138,14 +147,19 @@ const CreateCollection = () => {
             <label htmlFor="category_id" className="block mb-2">
               Category ID:
             </label>
-            <input
-              id="category_id"
+            <select
+              title="category_id"
               name="category_id"
-              type="text"
-              required
               className="w-full bg-transparent border rounded-lg p-2"
               disabled={isSubmitting}
-            />
+            >
+              <option value="">Select Category</option>
+              {category.map((cat) => (
+                <option key={cat._id} value={cat._id}>
+                  {cat.categoryName}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

@@ -76,7 +76,10 @@ export async function getCollectionsWithProducts() {
     const results = [];
 
     for (const collection of collections) {
-      const query: Record<string, any> = {};
+      // start by filtering on the collection’s category_id
+      const query: Record<string, any> = {
+        category_id: collection.category_id._id, // <-- ensures "shop by category"
+      };
 
       for (const rule of collection.rules) {
         const attributePath = rule.attribute; // e.g., "pricing_availability.price"
@@ -88,14 +91,16 @@ export async function getCollectionsWithProducts() {
         query[attributePath][rule.operator] = rule.value;
       }
 
-      const matchingProducts = await Product.find(query).lean();
+      const matchingProducts = await Product.find(query)
+        .populate("category_id", "categoryName")
+        .lean();
 
       results.push({
         collection: {
           _id: collection._id,
           name: collection.name,
           description: collection.description,
-          category_id: collection.category_id,
+          category: collection.category_id,
           created_at: collection.created_at,
           updated_at: collection.updated_at,
         },
