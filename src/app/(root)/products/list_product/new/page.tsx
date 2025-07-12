@@ -186,7 +186,7 @@ const ProductForm = () => {
       {/* Identification & Branding */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Identification &amp; Branding
         </h2>
 
@@ -310,7 +310,7 @@ const ProductForm = () => {
       {/* Product Specifications */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Product Specifications
         </h2>
         <CollabsibleSection>
@@ -432,7 +432,7 @@ const ProductForm = () => {
       {/* Media & Visuals */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
+        <h2 className="ext-lg font-semibold text-gray-300 pb-2">
           Media &amp; Visuals
         </h2>
         <CollabsibleSection>
@@ -474,7 +474,7 @@ const ProductForm = () => {
       {/* Pricing & Availability */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Pricing &amp; Availability
         </h2>
         <CollabsibleSection>
@@ -616,7 +616,7 @@ const ProductForm = () => {
       {/* Key Features & Bullets */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Key Features &amp; Bullets
         </h2>
         <CollabsibleSection>
@@ -676,7 +676,9 @@ const ProductForm = () => {
       {/* Descriptions */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">Descriptions</h2>
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">
+          Descriptions
+        </h2>
         <CollabsibleSection>
           <div className="flex flex-col">
             <label className="mb-1 font-medium">Short Description</label>
@@ -713,7 +715,7 @@ const ProductForm = () => {
       {/* Materials & Composition */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Materials &amp; Composition
         </h2>
         <CollabsibleSection>
@@ -777,7 +779,7 @@ const ProductForm = () => {
       {/* Logistics & Shipping */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Logistics &amp; Shipping
         </h2>
         <CollabsibleSection>
@@ -912,7 +914,7 @@ const ProductForm = () => {
       {/* Warranty & Returns */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Warranty &amp; Returns
         </h2>
         <CollabsibleSection>
@@ -958,7 +960,7 @@ const ProductForm = () => {
       {/* SEO & Marketing Metadata */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">
           SEO &amp; Marketing Metadata
         </h2>
         <CollabsibleSection>
@@ -1040,7 +1042,7 @@ const ProductForm = () => {
       {/* Legal & Compliance */}
       {/* ================================ */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Legal &amp; Compliance
         </h2>
         <CollabsibleSection>

@@ -52,7 +52,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
 
   return (
     <div>
-      <h3 className="text-2xl font-semibold border-b pb-2">Related Product</h3>
+      <h3 className="text-lg font-semibold text-gray-300 pb-2">Related Product</h3>
       <CollabsibleSection>
         <div className="h-72 overflow-y-auto space-y-4 p-2">
           {products.map((item, idx) => {

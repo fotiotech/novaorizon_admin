@@ -114,7 +114,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
 
   return (
     <section className="space-y-4">
-      <h2 className="text-2xl font-semibold border-b pb-2">
+      <h2 className="text-lg font-semibold text-gray-300 pb-2">
         Variants &amp; Options
       </h2>
 
