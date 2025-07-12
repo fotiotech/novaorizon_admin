@@ -8,21 +8,17 @@ import { revalidatePath } from "next/cache";
 
 // Add TypeScript interfaces
 interface AttributeFormData {
-  groupId: string;
   names: string[];
   option?: string[][];
   type: string[];
-  isHighlight: boolean[];
-  isVariants: boolean[];
+
 }
 
 interface AttributeUpdateParams {
   name: string;
   option?: string | string[]; // ← allow both
   type: string | string[];
-  groupId: string;
-  isHighlight: boolean;
-  isVariant: boolean;
+
 }
 
 // Function to fetch category attributes and values
@@ -37,7 +33,6 @@ export async function findAttributesAndValues(id?: string) {
       .populate("groupId", "name group_order sort_order")
       .lean();
 
-    console.log("Response from findAttributesAndValues:", response);
     return response;
   } catch (error) {
     console.error("Error in findAttributesAndValues:", error);
@@ -45,9 +40,9 @@ export async function findAttributesAndValues(id?: string) {
 }
 
 export async function createAttribute(formData: AttributeFormData) {
-  const { groupId, names, option, type, isHighlight, isVariants } = formData;
+  const { names, option, type } = formData;
 
-  if (!groupId || !Array.isArray(names) || names.length === 0) {
+  if ( !Array.isArray(names) || names.length === 0) {
     throw new Error("Missing required fields");
   }
 
@@ -71,13 +66,12 @@ export async function createAttribute(formData: AttributeFormData) {
         ? formData.type[i] ?? "text"
         : formData.type ?? "text";
 
-      const filter = { groupId, name: rawName };
+      const filter = { name: rawName };
       const update = {
         $set: {
           option: optionsArr,
           type: attrType,
-          isVariant: Boolean(formData.isVariants[i]),
-          is_highlight: Boolean(formData.isHighlight[i]),
+         
         },
       };
 
@@ -148,9 +142,7 @@ export async function updateAttribute(
           name: params.name.trim(),
           option: optionsArr,
           type: attrType,
-          groupId: params.groupId, // mongoose will cast string → ObjectId
-          is_highlight: Boolean(params.isHighlight),
-          isVariant: Boolean(params.isVariant),
+        
         },
       },
       { new: true }

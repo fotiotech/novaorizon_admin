@@ -1,4 +1,4 @@
-'use client";';
+"use client";
 
 import React, { useEffect, useState, useMemo } from "react";
 import Select from "react-select";
@@ -7,12 +7,16 @@ import {
   create_update_mapped_attributes_ids,
   find_mapped_attributes_ids,
 } from "@/app/actions/category";
+import {
+  findAllAttributeGroups,
+  findAttributeForGroups,
+} from "@/app/actions/attributegroup";
 
-type AttributesGroup = {
+type AttributeGroup = {
   _id: string;
   name: string;
   parent_id?: string;
-  category_id: string;
+  attributes: string[] | [{ name: string; _id?: string }];
 };
 
 interface Option {
@@ -35,12 +39,11 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
   setAttributes,
   categoryId,
 }) => {
-  // ensure attributes is always an array
   const selectedAttributes = Array.isArray(attributes) ? attributes : [];
 
-  const [attributeD, setAttributeD] = useState<
-    { _id: string; name: string; group: any }[]
-  >([]);
+  const [attributeGroups, setAttributeGroups] = useState<
+    AttributeGroup[] | null
+  >([{ _id: "", name: "", attributes: [{ name: "", _id: "" }] }]);
 
   const [filterText, setFilterText] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<Option>({
@@ -49,19 +52,12 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
   });
   const [mappedAttributes, setMappedAttributes] = useState<any>([]);
 
-  // Load attributes
   useEffect(() => {
     (async () => {
       try {
-        const attrs = await findAttributesAndValues();
-        if (Array.isArray(attrs)) {
-          setAttributeD(
-            attrs.map((a: any) => ({
-              _id: a._id,
-              name: a.name,
-              group: a.groupId,
-            }))
-          );
+        const allAttributeGroups = await findAttributeForGroups();
+        if (Array.isArray(allAttributeGroups)) {
+          setAttributeGroups(allAttributeGroups as AttributeGroup[]);
         }
       } catch (err) {
         console.error(err);
@@ -71,7 +67,7 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
 
   useEffect(() => {
     async function fetchMappedAttributes() {
-      if (categoryId === "") {
+      if (!categoryId) {
         console.error("Category ID is required");
         return;
       }
@@ -90,22 +86,48 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
   ];
 
   const visibleAttributes = useMemo(() => {
-    const filtered = attributeD.filter((a) =>
-      a.name.toLowerCase().includes(filterText.toLowerCase())
-    );
-    const sorted = filtered.sort((a, b) =>
-      sortOrder.value === "asc"
-        ? a.name.localeCompare(b.name)
-        : b.name.localeCompare(a.name)
-    );
-    return sorted;
-  }, [attributeD, filterText, sortOrder]);
+    const allAttributes =
+      attributeGroups?.map((g) => ({
+        _id: g._id,
+        name: g.name,
+        attributes: g.attributes.map((a) => ({
+          ...(a as { name: string; _id?: string }),
+        })),
+      })) || [];
 
-  const toggleAttribute = (name: string) => {
-    if (selectedAttributes.includes(name)) {
-      setAttributes(selectedAttributes.filter((n) => n !== name));
+    const filteredGroups = allAttributes
+      .filter(
+        (group) =>
+          group.name.toLowerCase().includes(filterText.toLowerCase()) ||
+          group.attributes.some((a) =>
+            a.name?.toLowerCase().includes(filterText.toLowerCase())
+          )
+      )
+      .map((group) => ({
+        ...group,
+        attributes: group.attributes.filter((a) =>
+          a.name?.toLowerCase().includes(filterText.toLowerCase())
+        ),
+      }));
+
+    const sortedGroups = filteredGroups.map((group) => ({
+      ...group,
+      attributes: group.attributes.sort((a, b) =>
+        sortOrder.value === "asc"
+          ? a.name.localeCompare(b.name)
+          : b.name.localeCompare(a.name)
+      ),
+    }));
+
+    return sortedGroups;
+  }, [attributeGroups, filterText, sortOrder]);
+
+
+  const toggleAttribute = (id: string) => {
+    if (selectedAttributes.includes(id)) {
+      setAttributes(selectedAttributes.filter((n) => n !== id));
     } else {
-      setAttributes([...selectedAttributes, name]);
+      setAttributes([...selectedAttributes, id]);
     }
   };
 
@@ -116,8 +138,6 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
     }
     await create_update_mapped_attributes_ids(null, categoryId, attributes);
   };
-
-  console.log("Mapped Attributes:", mappedAttributes);
 
   return (
     <div className={`${toggleCreateAttribute ? "block" : "hidden"} mb-4`}>
@@ -141,27 +161,25 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
       {/* Custom attribute list */}
       <div className="mt-4">
         <label>Map Attributes:</label>
-        <div
-          className="flex flex-col gap-2 border
-        border-gray-600 rounded-md p-3 h-48 my-2
-        overflow-auto bg-white dark:bg-sec-dark"
-        >
-          {visibleAttributes.map((attr) => (
-            <div
-              key={attr._id}
-              onClick={() => toggleAttribute(attr._id)}
-              className={` p-1 px-2
-                cursor-pointer rounded hover:bg-gray-100 
-                dark:hover:bg-gray-700 ${
-                  selectedAttributes.includes(attr._id)
-                    ? "bg-blue-100 dark:bg-blue-900"
-                    : ""
-                }`}
-            >
-              <div className="flex items-center gap-3">
-                <span>{attr.name}</span>
-                <span className="text-sm text-gray-300">{attr.group?.name}</span>
-              </div>
+        <div className="flex flex-col gap-2 border border-gray-600 rounded-md p-3 h-48 my-2 overflow-auto bg-white dark:bg-sec-dark">
+          {visibleAttributes?.map((g) => (
+            <div key={g._id} className="p-1 px-2 cursor-pointer rounded">
+              <h3 className="font-bold text-lg mb-2">{g.name}</h3>
+              {g.attributes.map((attr: any) => (
+                <div
+                  key={attr?._id}
+                  onClick={() => toggleAttribute(attr._id)}
+                  className={`flex justify-between items-center p-1 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                    selectedAttributes.includes(attr._id)
+                      ? "bg-blue-100 dark:bg-blue-900"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span>{attr.name}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -175,6 +193,7 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
           Map Attributes
         </button>
       </div>
+
       {/* Mapped attributes */}
       {mappedAttributes && (
         <div className="flex flex-col gap-2">

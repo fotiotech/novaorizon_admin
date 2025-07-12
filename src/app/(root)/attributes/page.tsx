@@ -19,12 +19,9 @@ import Select from "react-select";
 type AttributeType = {
   _id?: string;
   id?: string;
-  groupId?: any;
   name: string;
   option?: string;
   type: string;
-  isHighlight?: boolean;
-  isVariant?: boolean;
 };
 
 // Update the AttributesGroup type
@@ -32,6 +29,7 @@ type AttributesGroup = {
   _id: string;
   name: string;
   parent_id: string;
+  attributes?: string[]; // Array of attribute IDs
   group_order: number;
   sort_order: number;
 };
@@ -41,9 +39,6 @@ type EditingAttributeType = {
   name: string;
   option?: string;
   type: string;
-  groupId?: string;
-  isHighlight: boolean;
-  isVariant: boolean;
 };
 
 interface Option {
@@ -54,7 +49,7 @@ interface Option {
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
   const [formData, setFormData] = useState<AttributeType[]>([
-    { name: "", type: "", isVariant: false, isHighlight: false },
+    { name: "", type: "" },
   ]);
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
   const [newGroupName, setNewGroupName] = useState<string>("");
@@ -71,6 +66,7 @@ const Attributes = () => {
     value: "asc",
     label: "A → Z",
   });
+  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -109,10 +105,7 @@ const Attributes = () => {
   }, []);
 
   function addAttributes() {
-    setFormData((prev) => [
-      ...prev,
-      { name: "", option: "", type: "", isVariant: false, isHighlight: false },
-    ]);
+    setFormData((prev) => [...prev, { name: "", option: "", type: "" }]);
   }
 
   const handleInputChange = (
@@ -128,10 +121,6 @@ const Attributes = () => {
               name: field === "name" ? (value as string) : attr.name,
               option: field === "option" ? (value as string) : attr.option,
               type: field === "type" ? (value as string) : attr.type,
-              isHighlight:
-                field === "isHighlight" ? (value as boolean) : attr.isHighlight,
-              isVariant:
-                field === "isVariant" ? (value as boolean) : attr.isVariant,
             }
           : attr
       )
@@ -139,12 +128,14 @@ const Attributes = () => {
   };
 
   const handleCreateGroup = async () => {
-    if (newGroupName.trim() === "") return;
+    // if (newGroupName.trim() === "") return;
 
     const response = await createAttributeGroup(
+      groupId || "",
       newGroupName,
       code,
       parentGroupId,
+      selectedAttributes,
       groupOrder,
       sortOrder
     );
@@ -176,16 +167,11 @@ const Attributes = () => {
         }
 
         const attributeData = {
-          groupId: groupId || "",
           names: formData.map((attr) => attr.name.trim()),
           option: formData.map((attr) =>
             attr.option?.split(",")
           ) as unknown as string[][],
           type: formData.map((attr) => (attr.type.trim() ? attr.type : "text")),
-          isHighlight: formData.map((attr) =>
-            attr.isHighlight ? attr.isHighlight : false
-          ),
-          isVariants: formData.map((attr) => Boolean(attr.isVariant)),
         };
 
         try {
@@ -197,8 +183,6 @@ const Attributes = () => {
               name: "",
               option: "",
               type: "",
-              isVariant: false,
-              isHighlight: false,
             },
           ]);
           setError(null);
@@ -231,9 +215,6 @@ const Attributes = () => {
             name: updateData.name.trim(),
             option: updateData.option.split(","),
             type: updateData.type.trim(),
-            groupId: updateData.groupId,
-            isHighlight: updateData.isHighlight,
-            isVariant: updateData.isVariant,
           });
         }
       }
@@ -259,19 +240,13 @@ const Attributes = () => {
     id: string,
     name: string,
     option: string,
-    type: string,
-    groupId: string,
-    isHighlight: boolean,
-    isVariant: boolean
+    type: string
   ) => {
     try {
       await manageAttribute("update", id, "attribute", {
         name,
         option,
         type,
-        groupId,
-        isHighlight,
-        isVariant,
       });
       setEditingAttribute(null);
 
@@ -299,9 +274,6 @@ const Attributes = () => {
       name: attr.name,
       option: optionString,
       type: attr.type || "",
-      isHighlight: attr.isHighlight || false,
-      isVariant: attr.isVariant || false,
-      groupId: attr.groupId?._id || "", // grab it right here
     });
   };
 
@@ -414,6 +386,62 @@ const Attributes = () => {
         </div>
       </div>
 
+      {/* Attributes for group selection */}
+
+      <div>
+        <h3>Select Attributes for group</h3>
+        <div className="h-64 overflow-y-auto">
+          <div className="my-3 flex md:flex-row gap-2 items-center">
+            <input
+              type="text"
+              placeholder="Filter attributes..."
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              className="w-full md:w-1/2 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+            />
+            <Select
+              options={sortOptions}
+              value={sortAttrOrder}
+              onChange={(opt) => setSortAttrOrder(opt as Option)}
+              className="w-1/3 md:w-1/4 dark:bg-sec-dark"
+            />
+          </div>
+          {visibleAttributes.map((attr) => (
+            <div key={attr._id} className="flex items-center gap-2 ">
+              <input
+                type="checkbox"
+                id={`attr-${attr._id}`}
+                checked={selectedAttributes.includes(attr._id || "")}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedAttributes((prev) => [...prev, attr._id || ""]);
+                  } else {
+                    setSelectedAttributes((prev) =>
+                      prev.filter((id) => id !== attr._id)
+                    );
+                  }
+                }}
+                className={
+                  selectedAttributes.includes(attr._id || "")
+                    ? "checked:bg-blue-500"
+                    : ""
+                }
+              />
+              <label htmlFor={`attr-${attr._id}`}>{attr.name}</label>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end my-4 mb-8">
+          <button
+            type="button"
+            onClick={handleCreateGroup}
+            className="btn text-sm mt-2 "
+          >
+            Assign Attributes{" "}
+          </button>
+        </div>
+      </div>
+
       {/* Attributes Creation Form */}
       <div className="space-y-4 mb-6">
         <div className="flex justify-between items-center">
@@ -491,35 +519,6 @@ const Attributes = () => {
                   />
                 </div>
               )}
-
-              <div className="flex items-center gap-2">
-                <label htmlFor={`isVariant-${index}`}>Is Variant:</label>
-                <input
-                  id={`isVariant-${index}`}
-                  type="checkbox"
-                  name={`isVariant-${index}`}
-                  checked={attr.isVariant || false}
-                  onChange={(e) =>
-                    handleInputChange(index, "isVariant", e.target.checked)
-                  }
-                  className="w-4 h-4"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label htmlFor={`isVariant-${index}`}>
-                  Is Highlight Attribute:
-                </label>
-                <input
-                  id={`isHighlight-${index}`}
-                  type="checkbox"
-                  name={`isHighlight-${index}`}
-                  checked={attr.isHighlight || false}
-                  onChange={(e) =>
-                    handleInputChange(index, "isHighlight", e.target.checked)
-                  }
-                  className="w-4 h-4"
-                />
-              </div>
             </div>
           ))}
         </div>
@@ -562,7 +561,6 @@ const Attributes = () => {
               <div className="flex justify-between items-center">
                 <div className="flex gap-2 items-center">
                   <span className="text-sm text-gray-300">{attr.name} </span>
-                  <span>{attr?.groupId?.name}</span>
                   <span
                     onClick={() => handleEditClick(attr)}
                     className="cursor-pointer"
@@ -645,58 +643,7 @@ const Attributes = () => {
                           aria-label="Edit attribute option"
                         />
                       )}
-                      <div className="flex items-center gap-2">
-                        <p>Group:</p>
-                        <GroupSelector
-                          groups={groups}
-                          groupId={groupId}
-                          setGroupId={setGroupId}
-                          setEditingAttributes={setEditingAttribute as any}
-                          placeholder={"Editing attribute group"}
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label
-                          htmlFor={`edit-isVariant-${editingAttribute.id}`}
-                          className="text-sm whitespace-nowrap"
-                        >
-                          Is Variant:
-                        </label>
-                        <input
-                          id={`edit-isVariant-${editingAttribute.id}`}
-                          type="checkbox"
-                          checked={editingAttribute.isVariant}
-                          onChange={(e) =>
-                            setEditingAttribute({
-                              ...editingAttribute,
-                              isVariant: e.target.checked,
-                            })
-                          }
-                          className="w-4 h-4"
-                          title="Mark as variant attribute"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label
-                          htmlFor={`edit-isVariant-${editingAttribute.id}`}
-                          className="text-sm whitespace-nowrap"
-                        >
-                          Is Highlight Attribute:
-                        </label>
-                        <input
-                          id={`edit-highlight-${editingAttribute.id}`}
-                          type="checkbox"
-                          checked={editingAttribute.isHighlight}
-                          onChange={(e) =>
-                            setEditingAttribute({
-                              ...editingAttribute,
-                              isHighlight: e.target.checked,
-                            })
-                          }
-                          className="w-4 h-4"
-                          title="Mark as variant attribute"
-                        />
-                      </div>
+
                       <button
                         type="button"
                         onClick={() =>
@@ -704,10 +651,7 @@ const Attributes = () => {
                             editingAttribute.id,
                             editingAttribute.name,
                             editingAttribute.option as string,
-                            editingAttribute.type,
-                            editingAttribute.groupId as string,
-                            editingAttribute.isHighlight,
-                            editingAttribute.isVariant
+                            editingAttribute.type
                           )
                         }
                         className="btn-sm bg-green-500 hover:bg-green-600 text-white rounded px-2"

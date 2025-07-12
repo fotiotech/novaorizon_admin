@@ -8,6 +8,7 @@ import CategoryAttribute from "@/models/CategoryAttribute";
 import { revalidatePath } from "next/cache";
 import AttributeGroup from "@/models/AttributesGroup";
 import Attribute from "@/models/Attributes";
+import { AttributeGroupResult } from "./type";
 
 function generateSlug(name: string) {
   return slugify(name, { lower: true });
@@ -231,7 +232,6 @@ interface GroupNode {
   subgroups: GroupNode[];
 }
 
-
 export async function find_mapped_attributes_ids(
   id: string | null = null,
   categoryId: string | null = null
@@ -242,11 +242,7 @@ export async function find_mapped_attributes_ids(
   // 1) Direct mapping by CategoryAttribute ID
   if (id) {
     const mapping = await CategoryAttribute.findById(id)
-      .populate({
-        path: "attributes",
-        populate: { path: "groupId", model: "AttributeGroup" },
-      })
-      .lean<({ attributes: Attribute[] } & mongoose.Document) | null>();
+    .lean<({ attributes: Attribute[] } & mongoose.Document) | null>();
 
     return mapping ? buildGroupTree(mapping.attributes) : [];
   }
@@ -269,12 +265,9 @@ export async function find_mapped_attributes_ids(
     ]);
 
     const allIds = result[0]?.allIds ?? [catObjectId];
-    const docs = await CategoryAttribute.find({ category_id: { $in: allIds } })
-      .populate({
-        path: "attributes",
-        populate: { path: "groupId", model: "AttributeGroup" },
-      })
-      .lean<{ attributes: Attribute[] }[]>();
+    const docs = await CategoryAttribute.find({
+      category_id: { $in: allIds },
+    }).lean<{ attributes: Attribute[] }[]>();
 
     // Deduplicate attributes
     const mergedAttrs: Attribute[] = docs.flatMap((d) => d.attributes || []);
@@ -292,11 +285,7 @@ export async function find_mapped_attributes_ids(
 
   // 3) Fallback: all mappings
   const allMappings = await CategoryAttribute.find()
-    .populate({
-      path: "attributes",
-      populate: { path: "groupId", model: "AttributeGroup" },
-    })
-    .lean<{ attributes: Attribute[] }[]>();
+  .lean<{ attributes: Attribute[] }[]>();
 
   const allAttrs: Attribute[] = allMappings.flatMap((m) => m.attributes || []);
   const uniqueAttrs = Array.from(
@@ -367,37 +356,10 @@ async function buildGroupTree(attributes: Attribute[]): Promise<GroupNode[]> {
   return recurse(roots);
 }
 
-interface AttributeDoc {
-  _id: Types.ObjectId;
-  name: string;
-  option?: string[];
-  type: string;
-  groupId: Types.ObjectId;
-}
-
-interface GroupDoc {
-  _id: Types.ObjectId;
-  name: string;
-  parent_id?: Types.ObjectId;
-}
-
-
 export async function getAttributesByCategoryAndGroupName(
   categoryId: string,
   groupName: string
-): Promise<
-  | AttributeDoc[]
-  | {
-      group: { _id: Types.ObjectId; name: string };
-      attributes: AttributeDoc[];
-      children: Array<{
-        group: { _id: Types.ObjectId; name: string };
-        attributes: AttributeDoc[];
-      }>;
-    }
-  | null
-> {
-  // Convert the string → ObjectId
+) {
   let objectCategoryId: Types.ObjectId;
   try {
     objectCategoryId = new Types.ObjectId(categoryId);
@@ -406,254 +368,135 @@ export async function getAttributesByCategoryAndGroupName(
     return null;
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // 1) Efficiently collect this category + ALL ancestors via a single aggregation
-  //    (instead of a while-loop). If there is a cycle, we force-break after 20 hops.
-  // ────────────────────────────────────────────────────────────────────────────
-  console.log("→ [Step 1] Running $graphLookup to find ancestors of", objectCategoryId);
-  let allCategoryIds: Types.ObjectId[] = [];
-  try {
-    const result = await Category.aggregate<{ ancestors: Types.ObjectId[] }>([
-      { $match: { _id: objectCategoryId } },
-      {
-        $graphLookup: {
-          from: "categories",            // Mongo collection name for Category
-          startWith: "$parent_id",
-          connectFromField: "parent_id",
-          connectToField: "_id",
-          as: "ancestors",
-          maxDepth: 20,                  // force‐break if deeper than 20
+  const result = await Category.aggregate<{
+    allAncestors: Types.ObjectId[];
+  }>([
+    { $match: { _id: objectCategoryId } },
+    {
+      $graphLookup: {
+        from: "categories",
+        startWith: "$parent_id",
+        connectFromField: "parent_id",
+        connectToField: "_id",
+        as: "ancestors",
+        maxDepth: 20,
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        allAncestors: {
+          $concatArrays: [
+            ["$_id"],
+            { $map: { input: "$ancestors", as: "a", in: "$$a._id" } },
+          ],
         },
       },
-      // Project so that “ancestors” array + self‐ID is easy to read
-      {
-        $project: {
-          _id: 1,
-          allAncestors: {
-            $concatArrays: [
-              ["$_id"],
-              { $map: { input: "$ancestors", as: "a", in: "$$a._id" } },
-            ],
-          },
-        },
-      },
-    ]) as any;
+    },
+  ]);
 
-    if (!result.length) {
-      console.warn("No category found with _id =", objectCategoryId);
-      return null;
-    }
-    allCategoryIds = result[0].allAncestors;
-    console.log("→ [Step 1] Found ancestors (incl self):", allCategoryIds);
-  } catch (err) {
-    console.error("Error during $graphLookup for ancestors:", err);
-    return null;
-  }
+  if (!result.length) return null;
 
-  // If we got back an empty array for some reason, bail
-  if (!allCategoryIds || allCategoryIds.length === 0) {
-    console.warn("[Step 1] No ancestors or self found; returning null");
-    return null;
-  }
+  const allCategoryIds = result[0].allAncestors;
+  const catAttrDocs = await CategoryAttribute.find({
+    category_id: { $in: allCategoryIds },
+  })
+    .select("attributes")
+    .lean();
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // 2) Gather all CategoryAttribute docs whose `category_id` is in that list
-  // ────────────────────────────────────────────────────────────────────────────
-  console.log("→ [Step 2] Finding CategoryAttribute docs for categories:", allCategoryIds);
-  let catAttrDocs: Array<{ attributes: Types.ObjectId[] }> = [];
-  try {
-    catAttrDocs = await CategoryAttribute.find({
-      category_id: { $in: allCategoryIds },
-    }).select("attributes").lean();
-    console.log("→ [Step 2] Found", catAttrDocs.length, "CategoryAttribute docs");
-  } catch (err) {
-    console.error("Error fetching CategoryAttribute for ancestors:", err);
-    return null;
-  }
+  if (!catAttrDocs.length) return null;
 
-  if (!catAttrDocs.length) {
-    console.warn("[Step 2] No CategoryAttribute docs at all for these categories");
-    return null;
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // 3) Compile a deduplicated Set of all attribute ObjectIds from every doc
-  // ────────────────────────────────────────────────────────────────────────────
   const allAttributeIdsSet = new Set<string>();
   for (const doc of catAttrDocs) {
     for (const attrId of doc.attributes || []) {
       allAttributeIdsSet.add(attrId.toString());
     }
   }
-  if (!allAttributeIdsSet.size) {
-    console.warn("[Step 3] CategoryAttribute entries exist, but no attribute IDs inside");
-    return null;
-  }
-  const allAttributeIds = Array.from(allAttributeIdsSet).map((s) => new Types.ObjectId(s));
-  console.log("→ [Step 3] Total unique attribute IDs:", allAttributeIds.length);
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // 4) Fetch all Attribute documents in one go
-  // ────────────────────────────────────────────────────────────────────────────
-  console.log("→ [Step 4] Loading all Attribute docs via Attribute.find({ _id: { $in: [...] } })");
-  let allAttributes: (AttributeDoc & { _id: Types.ObjectId })[] = [];
-  try {
-    allAttributes = await Attribute.find({ _id: { $in: allAttributeIds } })
-      .select("_id name option type groupId")
-      .lean();
-    console.log("→ [Step 4] Found", allAttributes.length, "Attribute docs");
-  } catch (err) {
-    console.error("Error fetching Attribute docs:", err);
-    return null;
-  }
-  if (!allAttributes.length) {
-    console.warn("[Step 4] None of those attribute IDs exist in Attribute collection");
-    return null;
-  }
+  const allAttributeIds = Array.from(allAttributeIdsSet).map(
+    (s) => new Types.ObjectId(s)
+  );
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // 5) Build a Map<groupId, GroupDoc> for easy lookups, and fetch only needed groups
-  // ────────────────────────────────────────────────────────────────────────────
-  const uniqueGroupIds = Array.from(
-    new Set(allAttributes.map((a) => a.groupId.toString()))
-  ).map((s) => new Types.ObjectId(s));
+  const allGroups = await AttributeGroup.find({
+    attributes: { $elemMatch: { $in: allAttributeIds } },
+  })
+    .select("_id name parent_id attributes group_order")
+    .lean<
+      {
+        _id: Types.ObjectId;
+        name: string;
+        parent_id?: Types.ObjectId;
+        attributes: Types.ObjectId[];
+        group_order: number;
+      }[]
+    >();
 
-  console.log("→ [Step 5] Finding AttributeGroup docs for groupIds:", uniqueGroupIds);
-  let allGroups: GroupDoc[] = [];
-  try {
-    allGroups = await AttributeGroup.find({ _id: { $in: uniqueGroupIds } })
-      .select("_id name parent_id")
-      .lean();
-    console.log("→ [Step 5] Found", allGroups.length, "AttributeGroup docs");
-  } catch (err) {
-    console.error("Error fetching AttributeGroup docs:", err);
-    return null;
-  }
-  if (!allGroups.length) {
-    console.warn("[Step 5] None of the groupIds exist in AttributeGroup");
-    return null;
-  }
-  const groupMap = new Map<string, GroupDoc>();
+  if (!allGroups.length) return null;
+
+  const groupMap = new Map<
+    string,
+    {
+      _id: Types.ObjectId;
+      name: string;
+      parent_id?: Types.ObjectId;
+      attributes: Types.ObjectId[];
+      group_order: number;
+    }
+  >();
   for (const g of allGroups) {
     groupMap.set(g._id.toString(), g);
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // 6) Identify the target groupName among those groups
-  // ────────────────────────────────────────────────────────────────────────────
-  console.log(`→ [Step 6] Looking for a group whose name === "${groupName}"`);
-  let parentGroup: GroupDoc | null = allGroups.find((g) => g.name === groupName) || null;
+  let parentGroup = allGroups.find((g) => g.name === groupName) || null;
   if (!parentGroup) {
-    try {
-      parentGroup = await AttributeGroup.findOne({ name: groupName })
-        .select("_id name parent_id")
-        .lean();
-      console.log("→ [Step 6] Fetched parentGroup by findOne:", parentGroup);
-    } catch (err) {
-      console.error("[Step 6] Error fetching groupName via findOne:", err);
-      return null;
-    }
+    parentGroup = await AttributeGroup.findOne({ name: groupName })
+      .select("_id name parent_id attributes group_order")
+      .lean();
   }
-  if (!parentGroup) {
-    console.warn(`[Step 6] No AttributeGroup found with name="${groupName}"`);
-    return null;
-  }
-  const isTopParent = !parentGroup.parent_id;
-  console.log("→ [Step 6] parentGroup:", parentGroup, "isTopParent?", isTopParent);
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // 7) If it’s a leaf group (parent_id ≠ null), filter and return a flat list
-  // ────────────────────────────────────────────────────────────────────────────
+  if (!parentGroup) return null;
+
+  const isTopParent = !parentGroup.parent_id;
+
+  const attributesById = new Map();
+  const rawAttributes = await Attribute.find({ _id: { $in: allAttributeIds } })
+    .select("_id name option type groupId")
+    .lean();
+  rawAttributes.forEach((attr: any) =>
+    attributesById.set(attr._id.toString(), attr)
+  );
+
   if (!isTopParent) {
-    console.log(`→ [Step 7] "${groupName}" is a leaf. Returning flat AttributeDoc[].`);
-    const leafAttrs = allAttributes
-      .filter((attr) => attr.groupId.equals(parentGroup!._id))
-      .map((attr) => ({
-        _id: attr._id,
-        name: attr.name,
-        option: attr.option,
-        type: attr.type,
-        groupId: attr.groupId,
-      }));
-    console.log("→ [Step 7] leafAttrs.length =", leafAttrs.length);
+    const leafAttrs = (parentGroup.attributes || [])
+      .filter((id) => attributesById.has(id.toString()))
+      .map((id) => attributesById.get(id.toString())!);
+
     return leafAttrs.length ? leafAttrs : null;
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // 8) If top‐level, fetch its direct children
-  // ────────────────────────────────────────────────────────────────────────────
-  console.log(`→ [Step 8] "${groupName}" is top‐level. Finding its direct child groups.`);
-  let childGroups: GroupDoc[] = [];
-  try {
-    childGroups = await AttributeGroup.find({ parent_id: parentGroup._id })
-      .select("_id name")
-      .lean();
-    console.log("→ [Step 8] childGroups:", childGroups.length);
-  } catch (err) {
-    console.error("Error fetching child groups:", err);
-    return null;
-  }
+  const childGroups = await AttributeGroup.find({ parent_id: parentGroup._id })
+    .select("_id name attributes group_order")
+    .sort({ group_order: 1 })
+    .lean();
 
-  // Initialize a map: childGroupId → [] of AttributeDoc
-  const childAttrMap = new Map<string, AttributeDoc[]>();
-  for (const cg of childGroups) {
-    childAttrMap.set(cg._id.toString(), []);
-  }
+  const parentAttributes = (parentGroup.attributes || [])
+    .filter((id) => attributesById.has(id.toString()))
+    .map((id) => attributesById.get(id.toString())!);
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // 9) Partition allAttributes into “parent‐level” vs “child‐level”
-  // ────────────────────────────────────────────────────────────────────────────
-  const parentAttributes: AttributeDoc[] = [];
-  console.log("→ [Step 9] Partitioning allAttributes by groupId");
-  for (const attr of allAttributes) {
-    if (attr.groupId.equals(parentGroup._id)) {
-      parentAttributes.push({
-        _id: attr._id,
-        name: attr.name,
-        option: attr.option,
-        type: attr.type,
-        groupId: attr.groupId,
-      });
-    } else {
-      const key = attr.groupId.toString();
-      if (childAttrMap.has(key)) {
-        childAttrMap.get(key)!.push({
-          _id: attr._id,
-          name: attr.name,
-          option: attr.option,
-          type: attr.type,
-          groupId: attr.groupId,
-        });
-      }
-    }
-  }
-  console.log("→ [Step 9] parentAttributes.length =", parentAttributes.length);
+  const childrenStructured = childGroups.map((child) => ({
+    group: { _id: child._id, name: child.name, group_order: child.group_order },
+    attributes: (child.attributes || [])
+      .filter((id: string) => attributesById.has(id.toString()))
+      .map((id: string) => attributesById.get(id.toString())!),
+  }));
 
-  const childrenStructured: Array<{
-    group: { _id: Types.ObjectId; name: string };
-    attributes: AttributeDoc[];
-  }> = [];
-  for (const child of childGroups) {
-    childrenStructured.push({
-      group: { _id: child._id, name: child.name },
-      attributes: childAttrMap.get(child._id.toString()) || [],
-    });
-  }
-  console.log(
-    "→ [Step 9] childrenStructured:",
-    childrenStructured.map((c) => ({
-      group: c.group.name,
-      count: c.attributes.length,
-    }))
-  );
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // 10) Return the nested payload
-  // ────────────────────────────────────────────────────────────────────────────
   return {
-    group: { _id: parentGroup._id, name: parentGroup.name },
+    group: {
+      _id: parentGroup._id,
+      name: parentGroup.name,
+      group_order: parentGroup.group_order,
+    },
     attributes: parentAttributes,
     children: childrenStructured,
   };
 }
-

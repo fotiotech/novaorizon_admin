@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from "uuid";
 import Spinner from "@/components/Spinner";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import CategoryAttribute from "@/components/category/CategoryAttribute";
+import { findAllAttributeGroups } from "@/app/actions/attributegroup";
 
 const Categories = () => {
   const dispatch = useAppDispatch();
@@ -89,6 +90,8 @@ const Categories = () => {
         const res = await getCategory();
         setCategories(res);
       }
+
+      
     };
 
     fetchData();
@@ -160,7 +163,7 @@ const Categories = () => {
               onClick={() => setToggleCreateAttribute((prev) => !prev)}
               className="my-2"
             >
-              Map Groups And Attributes for this Category?
+              Map Attributes for this Category?
             </span>
 
             <CategoryAttribute

@@ -5,6 +5,8 @@ interface IAttributeGroup extends Document {
   code: string;
   name: string;
   parent_id?: mongoose.Types.ObjectId;
+  attributes?: mongoose.Types.ObjectId[];
+  createdAt?: Date;
   group_order: number;
 }
 
@@ -16,6 +18,9 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
       type: Schema.Types.ObjectId,
       ref: "AttributeGroup",
     },
+    attributes: [
+      { type: Schema.Types.ObjectId, ref: "Attribute", unique: true },
+    ],
     group_order: { type: Number, default: 0 },
   },
   {

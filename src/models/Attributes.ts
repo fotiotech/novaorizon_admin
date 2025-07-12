@@ -27,7 +27,6 @@ const AttributeSchema = new Schema<IAttribute>({
   groupId: {
     type: Schema.Types.ObjectId,
     ref: "AttributeGroup",
-    required: [true, "Group ID is required"],
   },
 
   name: {
