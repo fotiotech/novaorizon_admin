@@ -131,6 +131,23 @@ const CreateCollection = () => {
           </div>
 
           <div>
+            <label htmlFor="display" className="block mb-2">
+              Display Format:
+            </label>
+            <select
+              id="display"
+              name="display"
+              className="w-full bg-transparent border rounded-lg p-2"
+              required
+              disabled={isSubmitting}
+            >
+              <option value="grid">grid</option>
+              <option value="category">category</option>
+              <option value="carrousel">product carrousel</option>
+            </select>
+          </div>
+
+          <div>
             <label htmlFor="description" className="block mb-2">
               Description:
             </label>

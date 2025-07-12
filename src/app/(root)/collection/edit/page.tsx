@@ -25,16 +25,15 @@ const EditCollection = () => {
   ]);
   const [showJson, setShowJson] = useState(false);
   const [category, setCategory] = useState<any[]>([]);
-  
-    useEffect(() => {
-      // Fetch categories or any initial data if needed
-      async function fetchCat() {
-        const res = await getCategory();
-        setCategory(res);
-      }
-      fetchCat();
-    }, []);
 
+  useEffect(() => {
+    // Fetch categories or any initial data if needed
+    async function fetchCat() {
+      const res = await getCategory();
+      setCategory(res);
+    }
+    fetchCat();
+  }, []);
 
   useEffect(() => {
     async function fetchCollection() {
@@ -100,7 +99,6 @@ const EditCollection = () => {
       setIsSubmitting(false);
     }
   };
-
 
   if (loading) {
     return (
@@ -176,6 +174,24 @@ const EditCollection = () => {
             </div>
 
             <div>
+              <label htmlFor="display" className="block mb-2">
+                Display Format:
+              </label>
+              <select
+                id="display"
+                name="display"
+                className="w-full bg-transparent border rounded-lg p-2"
+                defaultValue={collection.display || "product"}
+                required
+                disabled={isSubmitting}
+              >
+                <option value="grid">grid</option>
+                <option value="category">category</option>
+                <option value="carrousel">product carrousel</option>
+              </select>
+            </div>
+
+            <div>
               <label htmlFor="category_id" className="block mb-2">
                 Category ID:
               </label>
@@ -192,6 +208,7 @@ const EditCollection = () => {
                   </option>
                 ))}
               </select>
+            </div>
 
             <div>
               <label className="flex items-center space-x-2">

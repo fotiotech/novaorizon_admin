@@ -12,6 +12,7 @@ export async function createCollection(formData: FormData) {
 
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
+    const display = formData.get("display") as string;
     const category_id = formData.get("category_id") as string;
     const status = formData.get("status") as string;
     const rulesJson = formData.get("rules") as string;
@@ -52,6 +53,7 @@ export async function createCollection(formData: FormData) {
     const collection = new Collection({
       name,
       description,
+      display,
       category_id: new mongoose.Types.ObjectId(category_id),
       rules,
       status: status === "inactive" ? "inactive" : "active",
@@ -99,6 +101,7 @@ export async function getCollectionsWithProducts() {
         collection: {
           _id: collection._id,
           name: collection.name,
+          display: collection.display,
           description: collection.description,
           category: collection.category_id,
           created_at: collection.created_at,
@@ -124,6 +127,7 @@ export async function updateCollection(id: string, formData: FormData) {
 
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
+    const display = formData.get("display") as string;
     const category_id = formData.get("category_id") as string;
     const status = formData.get("status") as string;
     const rulesJson = formData.get("rules") as string;
@@ -157,6 +161,7 @@ export async function updateCollection(id: string, formData: FormData) {
     const updates = {
       name,
       description,
+      display,
       category_id: new mongoose.Types.ObjectId(category_id),
       rules,
       status: status === "inactive" ? "inactive" : "active",
