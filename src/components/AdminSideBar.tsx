@@ -2,7 +2,25 @@ import React, { LegacyRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Discount, LocalShipping, Person2, Store } from "@mui/icons-material";
+import {
+  Assignment,
+  BarChart,
+  Category,
+  CheckCircle,
+  CollectionsBookmark,
+  Dashboard,
+  Discount,
+  Group,
+  Inventory,
+  ListAlt,
+  LocalShipping,
+  Person2,
+  Replay,
+  ShoppingBag,
+  ShoppingCart,
+  Store,
+  Tag,
+} from "@mui/icons-material";
 
 interface MenuLink {
   name: string;
@@ -22,41 +40,65 @@ interface AdminSideBarProps {
   setSideBarToggle: (open: boolean) => void;
 }
 
-const menuConfig: MenuSection[] = [
+const menuConfig = [
   {
     title: "Dashboard",
     links: [
-      { name: "Overview", href: "/overview" },
-      { name: "Reports", href: "/reports" },
-      { name: "collection", href: "/collection" },
+      { name: "Overview", href: "/overview", icon: <Dashboard /> },
+      { name: "Reports", href: "/reports", icon: <BarChart /> },
+      {
+        name: "Collection",
+        href: "/collection",
+        icon: <CollectionsBookmark />,
+      },
     ],
   },
   {
     title: "Users",
     links: [
       { name: "Admin Users", href: "/users", icon: <Person2 /> },
-      { name: "Permissions & Roles", href: "/permissions_roles" },
+      {
+        name: "Permissions & Roles",
+        href: "/permissions_roles",
+        icon: <Group />,
+      },
     ],
   },
   {
     title: "Products",
     links: [
-      { name: "All Products", href: "/products/products_list" },
-      { name: "List Product", href: "/products/list_product" },
-      { name: "Categories & Subcategories", href: "/categories" },
-      { name: "Brands", href: "/brands" },
-      { name: "Attributes & Tags", href: "/attributes" },
-      { name: "Inventory", href: "/inventory" },
+      {
+        name: "All Products",
+        href: "/products/products_list",
+        icon: <ShoppingCart />,
+      },
+      {
+        name: "List Product",
+        href: "/products/list_product",
+        icon: <ListAlt />,
+      },
+      { name: "Category", href: "/categories", icon: <Category /> },
+      { name: "Brands", href: "/brands", icon: <Tag /> },
+      { name: "Attributes & Tags", href: "/attributes", icon: <Assignment /> },
+      { name: "Inventory", href: "/inventory", icon: <Inventory /> },
     ],
   },
   {
     title: "Orders",
     links: [
-      { name: "All Orders", href: "/orders" },
-      { name: "Pending Orders", href: "/pending_orders" },
-      { name: "Shipped Orders", href: "/shipped_orders" },
-      { name: "Completed Orders", href: "/completed_orders" },
-      { name: "Returns", href: "/returns" },
+      { name: "All Orders", href: "/orders", icon: <ShoppingBag /> },
+      { name: "Pending Orders", href: "/pending_orders", icon: <Assignment /> },
+      {
+        name: "Shipped Orders",
+        href: "/shipped_orders",
+        icon: <LocalShipping />,
+      },
+      {
+        name: "Completed Orders",
+        href: "/completed_orders",
+        icon: <CheckCircle />,
+      },
+      { name: "Returns", href: "/returns", icon: <Replay /> },
     ],
   },
   {
@@ -76,7 +118,11 @@ const menuConfig: MenuSection[] = [
   {
     title: "Settings",
     links: [
-      { name: "Store Configuration", href: "/store_config", icon: <Store /> },
+      {
+        name: "Store Configuration",
+        href: "/store_config",
+        icon: <Store />,
+      },
     ],
   },
 ];
