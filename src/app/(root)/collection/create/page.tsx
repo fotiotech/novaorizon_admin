@@ -20,16 +20,8 @@ const CreateCollection = () => {
     { attribute: "name", operator: "$lt", value: "value", position: 0 },
   ]);
   const [showJson, setShowJson] = useState(false);
-  const [category, setCategory] = useState<any[]>([]);
-
-  useEffect(() => {
-    // Fetch categories or any initial data if needed
-    async function fetchCat() {
-      const res = await getCategory();
-      setCategory(res);
-    }
-    fetchCat();
-  }, []);
+  
+  console.log('rules', rules);
 
   const handleSubmit = async (formData: FormData) => {
     setIsSubmitting(true);
@@ -160,24 +152,7 @@ const CreateCollection = () => {
             />
           </div>
 
-          <div>
-            <label htmlFor="category_id" className="block mb-2">
-              Category ID:
-            </label>
-            <select
-              title="category_id"
-              name="category_id"
-              className="w-full bg-transparent border rounded-lg p-2"
-              disabled={isSubmitting}
-            >
-              <option value="">Select Category</option>
-              {category.map((cat) => (
-                <option key={cat._id} value={cat._id}>
-                  {cat.categoryName}
-                </option>
-              ))}
-            </select>
-          </div>
+          
 
           <div>
             <label htmlFor="status" className="block mb-2">

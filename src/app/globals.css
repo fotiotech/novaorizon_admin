@@ -17,6 +17,10 @@ select {
      focus:border-thiR my-2 p-2;
 }
 
+option {
+  @apply capitalize bg-transparent text-gray-950;
+}
+
 textarea {
   @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
     rounded-lg border-2 border-gray-800 

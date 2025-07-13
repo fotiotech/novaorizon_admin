@@ -55,8 +55,6 @@ const Categories = () => {
     }
   };
 
-  
-
   const handleCategoryData = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -90,8 +88,6 @@ const Categories = () => {
         const res = await getCategory();
         setCategories(res);
       }
-
-      
     };
 
     fetchData();
@@ -156,24 +152,6 @@ const Categories = () => {
               className="w-full bg-[#eee] dark:bg-sec-dark"
             />
           </div>
-
-          {/* Group Selection */}
-          <div className="w-full space-y-4">
-            <span
-              onClick={() => setToggleCreateAttribute((prev) => !prev)}
-              className="my-2"
-            >
-              Map Attributes for this Category?
-            </span>
-
-            <CategoryAttribute
-              toggleCreateAttribute={toggleCreateAttribute}
-              setToggleCreateAttribute={setToggleCreateAttribute}
-              attributes={attributes}
-              setAttributes={setAttributes}
-              categoryId={categoryData._id || ''}
-            />
-          </div>
         </div>
         <div>
           <FilesUploader files={files} addFiles={addFiles} />
@@ -188,6 +166,24 @@ const Categories = () => {
             value={editId ? categoryEdit.description : categoryData.description}
             onChange={handleCategoryData}
             className="w-full p-2 max-h-20 bg-[#eee] dark:bg-sec-dark"
+          />
+        </div>
+
+        {/* Group Selection */}
+        <div className="w-full space-y-4">
+          <span
+            onClick={() => setToggleCreateAttribute((prev) => !prev)}
+            className="my-2"
+          >
+            Map Attributes for this Category?
+          </span>
+
+          <CategoryAttribute
+            toggleCreateAttribute={toggleCreateAttribute}
+            setToggleCreateAttribute={setToggleCreateAttribute}
+            attributes={attributes}
+            setAttributes={setAttributes}
+            categoryId={categoryData._id || ""}
           />
         </div>
         <div className="flex justify-end">
