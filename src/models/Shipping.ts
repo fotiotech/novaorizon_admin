@@ -15,7 +15,8 @@ export interface IShipping extends Document {
   carrier: string;
   shippingMethod: 'standard' | 'express' | 'overnight';
   shippingCost: number;
-  status: 'pending' | 'assigned' | 'in_transit' | 'delivered' | 'returned' | 'canceled';
+  status: 'pending' | 'assigned' | 'in_transit' | 'delivered' | 'returned' | 'cancelled';
+  returnReason?: string; // Optional field for returned shipments
   shippedAt?: Date;
   deliveredAt?: Date;
   createdAt: Date;
@@ -44,9 +45,10 @@ const ShippingSchema = new Schema<IShipping>(
     shippingCost: { type: Number, required: true, min: 0 },
     status: {
       type: String,
-      enum: ['pending', 'shipped', 'in_transit', 'delivered', 'returned', 'canceled'],
+      enum: ['pending', 'assigned', 'in_transit', 'delivered', 'returned', 'cancelled'],
       default: 'pending',
     },
+    returnReason: { type: String }, // Optional field for returned shipments
     shippedAt: { type: Date },
     deliveredAt: { type: Date },
   },
