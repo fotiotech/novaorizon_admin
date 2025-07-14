@@ -67,6 +67,18 @@ const Category = () => {
 
   const [filter, setFilter] = useState<string>("");
 
+  // Helper to build category path
+  function getCategoryPath(categoryId: string, byId: Record<string, any>): string {
+    let path: string[] = [];
+    let current = byId[categoryId];
+    while (current) {
+      path.unshift(current.categoryName);
+      if (!current.parent_id || !byId[current.parent_id]) break;
+      current = byId[current.parent_id];
+    }
+    return path.join(' / ');
+  }
+
   return (
     <div className="p-2 mt-4">
       <h3 className="text-lg font-semibold mb-4">Select Category</h3>
@@ -97,20 +109,23 @@ const Category = () => {
                   key={idx}
                   className="flex justify-between items-center rounded-lg bg-slate-600 p-2"
                 >
-                  <p
-                    onClick={() => handleSelect(categoryData._id)}
-                    className="flex-1 cursor-pointer"
-                  >
-                    {categoryData?.categoryName}
-                  </p>
+                  <div className="flex-1">
+                    <p
+                      onClick={() => handleSelect(categoryData._id)}
+                      className="cursor-pointer font-semibold"
+                    >
+                      {categoryData?.categoryName}
+                    </p>
+                    <p className="text-xs text-gray-300 mt-1">
+                      {getCategoryPath(categoryData._id, category.byId)}
+                    </p>
+                  </div>
                   <span
                     onClick={(e) => {
                       e.stopPropagation();
                       handleSelect(categoryData._id);
                     }}
-                    className={`${
-                      parentId === categoryData._id ? "bg-blue-400" : ""
-                    } px-2 rounded-lg border`}
+                    className={`${parentId === categoryData._id ? "bg-blue-400" : ""} px-2 rounded-lg border`}
                   >
                     Select
                   </span>
