@@ -19,7 +19,7 @@ const ListProduct = () => {
   }, [dispatch, id]);
 
   return (
-    <div className="p-4">
+    <div className="p-2 lg:p-4">
       <h3 className="text-2xl font-semibold mb-6">
         {id ? "Edit Product" : "Add New Product"}
       </h3>

@@ -70,7 +70,7 @@ const Category = () => {
 
 
   return (
-    <div className="p-2 mt-4">
+    <div className=" mt-4">
       <h3 className="text-lg font-semibold mb-4">Select Category</h3>
       <input
         type="text"
