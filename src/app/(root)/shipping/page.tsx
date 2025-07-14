@@ -159,7 +159,9 @@ const Shipping = () => {
           <button
             type="button"
             onClick={() => changeStatus("cancelled")}
-            disabled={shipping?.status !== "pending"}
+            disabled={
+              shipping?.status !== "pending"
+            }
             className="btn border border-red-500 text-red-500 disabled:opacity-50"
           >
             Cancel
