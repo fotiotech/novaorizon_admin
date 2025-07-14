@@ -17,7 +17,7 @@ const Category = () => {
 
   // 1️⃣ Create a ref that holds our “working” ID.  It only gets set once.
 
-  const id = products.allIds.length ? products.allIds[0] : uuidv4(); 
+  const id = products.allIds.length ? products.allIds[0] : uuidv4();
 
   // Initialize product in Redux if it doesn't exist
   useEffect(() => {
@@ -65,40 +65,58 @@ const Category = () => {
     );
   };
 
+  const [filter, setFilter] = useState<string>("");
+
   return (
     <div className="p-2 mt-4">
       <h3 className="text-lg font-semibold mb-4">Select Category</h3>
+      <input
+        type="text"
+        placeholder="Filter categories..."
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        className="mb-2 p-2 rounded border w-full"
+      />
       <ul className="flex flex-col gap-2 bg-[#eee] h-[500px] scrollbar-none overflow-clip overflow-y-auto dark:bg-sec-dark">
         {category?.allIds.length > 0 &&
-          category?.allIds.map((idx) => {
-            const categoryData = category.byId[idx];
-            if (!categoryData) return null;
+          category?.allIds
+            .filter((idx) => {
+              const categoryData = category.byId[idx];
+              if (!categoryData) return false;
+              if (!filter) return true;
+              return categoryData.categoryName
+                ?.toLowerCase()
+                .includes(filter.toLowerCase());
+            })
+            .map((idx) => {
+              const categoryData = category.byId[idx];
+              if (!categoryData) return null;
 
-            return (
-              <li
-                key={idx}
-                className="flex justify-between items-center rounded-lg bg-slate-600 p-2"
-              >
-                <p
-                  onClick={() => handleSelect(categoryData._id)}
-                  className="flex-1 cursor-pointer"
+              return (
+                <li
+                  key={idx}
+                  className="flex justify-between items-center rounded-lg bg-slate-600 p-2"
                 >
-                  {categoryData?.categoryName}
-                </p>
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSelect(categoryData._id);
-                  }}
-                  className={`${
-                    parentId === categoryData._id ? "bg-blue-400" : ""
-                  } px-2 rounded-lg border`}
-                >
-                  Select
-                </span>
-              </li>
-            );
-          })}
+                  <p
+                    onClick={() => handleSelect(categoryData._id)}
+                    className="flex-1 cursor-pointer"
+                  >
+                    {categoryData?.categoryName}
+                  </p>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelect(categoryData._id);
+                    }}
+                    className={`${
+                      parentId === categoryData._id ? "bg-blue-400" : ""
+                    } px-2 rounded-lg border`}
+                  >
+                    Select
+                  </span>
+                </li>
+              );
+            })}
       </ul>
 
       <div className="flex justify-between mt-6">
