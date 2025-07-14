@@ -2,7 +2,7 @@
 
 import { getCategory } from "@/app/actions/category";
 import { Category as Cat } from "@/constant/types";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
 import Link from "next/link";
 import { addCategory } from "@/app/store/slices/categorySlice";
@@ -67,21 +67,7 @@ const Category = () => {
 
   const [filter, setFilter] = useState<string>("");
 
-  // Memoize filtered category IDs for performance
-  const filteredCategoryIds = useMemo(() => {
-    if (!category?.allIds?.length) return [];
-    return category.allIds.filter((idx) => {
-      const categoryData = category.byId[idx];
-      if (!categoryData) return false;
-      if (!filter) return true;
-      return categoryData.categoryName
-        ?.toLowerCase()
-        .includes(filter.toLowerCase());
-    });
-  }, [category?.allIds, category?.byId, filter]);
 
-  // Limit rendering to first 100 filtered items
-  const limitedCategoryIds = filteredCategoryIds.slice(0, 100);
 
   return (
     <div className="p-2 mt-4">
@@ -94,43 +80,46 @@ const Category = () => {
         className="mb-2 p-2 rounded border w-full"
       />
       <ul className="flex flex-col gap-2 bg-[#eee] h-[500px] scrollbar-none overflow-clip overflow-y-auto dark:bg-sec-dark">
-        {limitedCategoryIds.length > 0 &&
-          limitedCategoryIds.map((idx) => {
-            const categoryData = category.byId[idx];
-            if (!categoryData) return null;
+        {category?.allIds.length > 0 &&
+          category?.allIds
+            .filter((idx) => {
+              const categoryData = category.byId[idx];
+              if (!categoryData) return false;
+              if (!filter) return true;
+              return categoryData.categoryName
+                ?.toLowerCase()
+                .includes(filter.toLowerCase());
+            })
+            .map((idx) => {
+              const categoryData = category.byId[idx];
+              if (!categoryData) return null;
 
-            return (
-              <li
-                key={idx}
-                className="flex justify-between items-center rounded-lg bg-slate-600 p-2"
-              >
-                <div className="flex-1">
-                  <p
-                    onClick={() => handleSelect(categoryData._id)}
-                    className="cursor-pointer font-semibold"
-                  >
-                    {categoryData?.categoryName}
-                  </p>
-                </div>
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSelect(categoryData._id);
-                  }}
-                  className={`${
-                    parentId === categoryData._id ? "bg-blue-400" : ""
-                  } px-2 rounded-lg border`}
+              return (
+                <li
+                  key={idx}
+                  className="flex justify-between items-center rounded-lg bg-slate-600 p-2"
                 >
-                  Select
-                </span>
-              </li>
-            );
-          })}
-        {filteredCategoryIds.length > 100 && (
-          <li className="text-xs text-gray-400 px-2 py-1">
-            Showing first 100 results. Please refine your filter for more.
-          </li>
-        )}
+                  <div className="flex-1">
+                    <p
+                      onClick={() => handleSelect(categoryData._id)}
+                      className="cursor-pointer font-semibold"
+                    >
+                      {categoryData?.categoryName}
+                    </p>
+                    
+                  </div>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelect(categoryData._id);
+                    }}
+                    className={`${parentId === categoryData._id ? "bg-blue-400" : ""} px-2 rounded-lg border`}
+                  >
+                    Select
+                  </span>
+                </li>
+              );
+            })}
       </ul>
 
       <div className="flex justify-between mt-6">
