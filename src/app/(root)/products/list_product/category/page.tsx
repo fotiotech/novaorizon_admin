@@ -68,7 +68,10 @@ const Category = () => {
   const [filter, setFilter] = useState<string>("");
 
   // Helper to build category path
-  function getCategoryPath(categoryId: string, byId: Record<string, any>): string {
+  function getCategoryPath(
+    categoryId: string,
+    byId: Record<string, any>
+  ): string {
     let path: string[] = [];
     let current = byId[categoryId];
     while (current) {
@@ -76,7 +79,7 @@ const Category = () => {
       if (!current.parent_id || !byId[current.parent_id]) break;
       current = byId[current.parent_id];
     }
-    return path.join(' / ');
+    return path.join(" / ");
   }
 
   return (
@@ -125,7 +128,9 @@ const Category = () => {
                       e.stopPropagation();
                       handleSelect(categoryData._id);
                     }}
-                    className={`${parentId === categoryData._id ? "bg-blue-400" : ""} px-2 rounded-lg border`}
+                    className={`${
+                      parentId === categoryData._id ? "bg-blue-400" : ""
+                    } px-2 rounded-lg border`}
                   >
                     Select
                   </span>
