@@ -108,11 +108,14 @@ const Shipping = () => {
           <ul className="flex flex-col gap-3 h-44 overflow-y-auto rounded-lg border p-2 border-gray-600">
             {filteredShippingIds.map((id) => (
               <li key={id} className="flex flex-col gap-1">
-                <p>#{shippings.byId[id]?.orderNumber || "Order " + id}</p>
+                <Link
+                  href={`/orders/order_details?orderNumber=${shippings.byId[id]?.orderNumber}`}
+                >
+                  <p>#{shippings.byId[id]?.orderNumber || "Order " + id}</p>
+                </Link>
+
                 <div className="flex items-center gap-3">
-                  <p>
-                    {shippings.byId[id]?.firstName} {shippings.byId[id]?.email}
-                  </p>
+                  <p>{shippings.byId[id]?.userId.name}</p>
                   <p>{shippings.byId[id]?.status}</p>
                   <button
                     type="button"
@@ -151,7 +154,11 @@ const Shipping = () => {
             className="w-full p-2 border rounded"
           />
         </div>
-        <button type="submit" className="btn">
+        <button
+          type="submit"
+          disabled={shipping?.status !== "pending"}
+          className="btn"
+        >
           Assign
         </button>
 
@@ -159,9 +166,7 @@ const Shipping = () => {
           <button
             type="button"
             onClick={() => changeStatus("cancelled")}
-            disabled={
-              shipping?.status !== "pending"
-            }
+            disabled={shipping?.status !== "pending"}
             className="btn border border-red-500 text-red-500 disabled:opacity-50"
           >
             Cancel

@@ -2,8 +2,9 @@
 
 // CRUD Operations for Shipping
 
-import Shipping from "@/models/Shipping";
 import { connection } from "@/utils/connection";
+import Shipping from "@/models/Shipping";
+import Order from "@/models/Order";
 
 // Create a new Shipping entry
 export async function createShipping(data: any) {
@@ -79,6 +80,15 @@ export async function updateShipping(id: string, data: any) {
       data: `Invalid status transition from ${shipping.status} to ${data.status}`,
     };
   }
+  await Order.findByIdAndUpdate(
+    { _id: shipping.orderId },
+    {
+      shippingStatus: response?.data?.status,
+      orderStatus:
+        response?.data?.status === "completed" ? response?.data?.status : "",
+    },
+    { new: true }
+  );
   return response;
 }
 
