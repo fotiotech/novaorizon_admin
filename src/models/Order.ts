@@ -17,7 +17,7 @@ export interface OrderDocument extends Document {
   products: Product[];
   subtotal: number;
   tax: number;
-  shippingCost: number; 
+  shippingCost: number;
   total: number;
   paymentStatus: "pending" | "paid" | "failed" | "cancelled";
   paymentMethod: string;
@@ -98,6 +98,19 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
   },
   { timestamps: true }
 );
+
+// To catch findByIdAndDelete, findOneAndDelete, etc.
+OrderSchema.pre("findOneAndDelete", async function (next) {
+  try {
+    const doc = await this.model.findOne(this.getFilter());
+    if (doc) {
+      await mongoose.model("Shipping").deleteMany({ author: doc._id });
+    }
+    next();
+  } catch (err: any) {
+    next(err);
+  }
+});
 
 const Order: Model<OrderDocument> =
   mongoose.models.Order || mongoose.model<OrderDocument>("Order", OrderSchema);

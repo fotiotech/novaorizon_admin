@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { Orders } from "@/constant/types";
@@ -30,115 +31,109 @@ const OrderDetailsPage = () => {
 
     getAllOrders();
   }, [orderNumber]);
+
   return (
-    <div>
+    <div className="max-w-5xl mx-auto p-6">
       {loading ? (
-        <p className="text-center">Loading Details...</p>
+        <div className="flex justify-center items-center h-96">
+          <p className="text-lg text-muted-foreground">Loading Details...</p>
+        </div>
       ) : (
-        <div className="max-w-4xl mx-auto p-6  shadow-md rounded-lg">
-          <h1 className="text-2xl font-bold text-gray-400 mb-6">
-            Order Details - {order?.orderNumber}
+        <div className="space-y-8 bg-background border border-border p-6 rounded-2xl shadow-md">
+          <h1 className="text-3xl font-bold text-primary mb-4">
+            Order #{order?.orderNumber}
           </h1>
 
-          {/* Order Info */}
-          <section className="border-b pb-4 mb-4">
-            <h2 className="text-lg font-semibold text-gray-300">
-              Order Information
+          <section className="space-y-2">
+            <h2 className="text-xl font-semibold text-muted-foreground">
+              Order Info
             </h2>
-            <p>
-              <span className="font-bold">Order Number:</span>{" "}
-              {order?.orderNumber}
-            </p>
-            <p>
-              <span className="font-bold">Order Status:</span>{" "}
-              {order?.orderStatus}
-            </p>
-            <p>
-              <span className="font-bold">Payment Status:</span>{" "}
-              {order?.paymentStatus}
-            </p>
-            <p>
-              <span className="font-bold">Payment Method:</span>{" "}
-              {order?.paymentMethod}
-            </p>
-            {order?.transactionId && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <p>
-                <span className="font-bold">Transaction ID:</span>{" "}
-                {order?.transactionId}
+                <strong>Status:</strong> {order?.orderStatus}
               </p>
-            )}
+              <p>
+                <strong>Payment:</strong> {order?.paymentStatus} via{" "}
+                {order?.paymentMethod}
+              </p>
+              {order?.transactionId && (
+                <p>
+                  <strong>Transaction ID:</strong> {order?.transactionId}
+                </p>
+              )}
+              <p>
+                <strong>Date:</strong>{" "}
+                {new Date(order?.createdAt || "").toLocaleString()}
+              </p>
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-xl font-semibold text-muted-foreground">
+              Customer
+            </h2>
             <p>
-              <span className="font-bold">Date:</span>{" "}
-              {new Date(order?.createdAt || "").toLocaleString()}
+              <strong>Name:</strong> {order?.firstName} {order?.lastName}
+            </p>
+            <p>
+              <strong>Email:</strong> {order?.email}
             </p>
           </section>
 
-          {/* Customer Info */}
-          <section className="border-b pb-4 mb-4">
-            <h2 className="text-lg font-semibold text-gray-300">
-              Customer Information
+          <section className="space-y-2">
+            <h2 className="text-xl font-semibold text-muted-foreground">
+              Shipping
             </h2>
             <p>
-              <span className="font-bold">Name:</span> {order?.firstName}{" "}
-              {order?.lastName}
-            </p>
-            <p>
-              <span className="font-bold">Email:</span> {order?.email}
-            </p>
-          </section>
-
-          {/* Shipping Info */}
-          <section className="border-b pb-4 mb-4">
-            <h2 className="text-lg font-semibold text-gray-300">
-              Shipping Information
-            </h2>
-            <p>
-              <span className="font-bold">Address:</span>{" "}
-              {order?.shippingAddress?.street}, {order?.shippingAddress?.city},{" "}
-              {order?.shippingAddress?.state},{" "}
+              <strong>Address:</strong> {order?.shippingAddress?.street},{" "}
+              {order?.shippingAddress?.city}, {order?.shippingAddress?.state},{" "}
               {order?.shippingAddress?.postalCode},{" "}
               {order?.shippingAddress?.country}
             </p>
             <p>
-              <span className="font-bold">Shipping Status:</span>{" "}
-              {order?.shippingStatus as any}
+              <strong>Status:</strong> {order?.shippingStatus as any}
             </p>
             {order?.shippingDate && (
               <p>
-                <span className="font-bold">Shipping Date:</span>{" "}
-                {new Date(order?.shippingDate).toLocaleDateString()}
+                <strong>Shipped:</strong>{" "}
+                {new Date(order.shippingDate).toLocaleDateString()}
               </p>
             )}
             {order?.deliveryDate && (
               <p>
-                <span className="font-bold">Delivery Date:</span>{" "}
-                {new Date(order?.deliveryDate).toLocaleDateString()}
+                <strong>Delivered:</strong>{" "}
+                {new Date(order.deliveryDate).toLocaleDateString()}
               </p>
             )}
           </section>
 
-          {/* Products */}
-          <section className="border-b pb-4 mb-4">
-            <h2 className="text-lg font-semibold text-gray-300">Products</h2>
+          <section>
+            <h2 className="text-xl font-semibold text-muted-foreground mb-2">
+              Products
+            </h2>
             <ul className="space-y-4">
               {order?.products.map((product: CartItem) => (
                 <li
                   key={product.productId}
-                  className="flex items-center gap-4 border-b pb-4"
+                  className="flex items-center gap-4 p-4 border border-border rounded-xl"
                 >
                   {product.imageUrl && (
                     <Image
                       src={product.imageUrl}
                       alt={product.name}
-                      width={60}
-                      height={60}
-                      className="rounded"
+                      width={64}
+                      height={64}
+                      className="rounded-lg"
                     />
                   )}
-                  <div>
-                    <p className="font-bold text-gray-400">{product.name}</p>
-                    <p>Quantity: {product.quantity}</p>
-                    <p>
+                  <div className="text-sm">
+                    <p className="font-medium text-foreground">
+                      {product.name}
+                    </p>
+                    <p className="text-muted-foreground">
+                      Qty: {product.quantity}
+                    </p>
+                    <p className="text-muted-foreground">
                       Price: <Prices amount={product.price} />
                     </p>
                   </div>
@@ -147,36 +142,36 @@ const OrderDetailsPage = () => {
             </ul>
           </section>
 
-          {/* Summary */}
-          <section>
-            <h2 className="text-lg font-semibold text-gray-300">
-              Order Summary
+          <section className="border-t pt-4 space-y-2">
+            <h2 className="text-xl font-semibold text-muted-foreground">
+              Summary
             </h2>
-            <p>
-              <span className="font-bold">Subtotal:</span> $
-              <Prices amount={order?.subtotal!} />
-            </p>
-            <p>
-              <span className="font-bold">Tax:</span>
-              <Prices amount={order?.tax!} />
-            </p>
-            <p>
-              <span className="font-bold">Shipping Cost:</span>
-              <Prices amount={order?.shippingCost!} />
-            </p>
-            <p>
-              <span className="font-bold">Discount:</span>
-              -<Prices amount={order?.discount!} />
-            </p>
-            <p className="text-xl font-bold text-gray-300">
-              Total: <Prices amount={order?.total!} />
-            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <p>
+                <strong>Subtotal:</strong> <Prices amount={order?.subtotal!} />
+              </p>
+              <p>
+                <strong>Tax:</strong> <Prices amount={order?.tax!} />
+              </p>
+              <p>
+                <strong>Shipping:</strong>{" "}
+                <Prices amount={order?.shippingCost!} />
+              </p>
+              <p>
+                <strong>Discount:</strong> -<Prices amount={order?.discount!} />
+              </p>
+              <p className="col-span-2 text-lg font-bold text-primary">
+                Total: <Prices amount={order?.total!} />
+              </p>
+            </div>
           </section>
 
           {order?.notes && (
-            <section className="mt-4">
-              <h2 className="text-lg font-semibold text-gray-300">Notes</h2>
-              <p>{order?.notes}</p>
+            <section className="pt-4">
+              <h2 className="text-xl font-semibold text-muted-foreground">
+                Notes
+              </h2>
+              <p className="text-muted-foreground">{order?.notes}</p>
             </section>
           )}
         </div>

@@ -86,19 +86,17 @@ const menuConfig = [
   {
     title: "Orders",
     links: [
-      { name: "All Orders", href: "/orders", icon: <ShoppingBag /> },
-      { name: "Pending Orders", href: "/pending_orders", icon: <Assignment /> },
-      {
-        name: "Shipped Orders",
-        href: "/shipped_orders",
-        icon: <LocalShipping />,
-      },
-      {
-        name: "Completed Orders",
-        href: "/completed_orders",
-        icon: <CheckCircle />,
-      },
+      { name: "Orders", href: "/orders", icon: <ShoppingBag /> },
+      { name: "Reviews", href: "/reviews", icon: <CheckCircle /> },
       { name: "Returns", href: "/returns", icon: <Replay /> },
+    ],
+  },
+  {
+    title: "Accounting",
+    links: [
+      { name: "Payments", href: "/payment", icon: <ShoppingBag /> },
+      { name: "Invoices", href: "/invoices", icon: <CheckCircle /> },
+      { name: "Refunds", href: "/refunds", icon: <Replay /> },
     ],
   },
   {
