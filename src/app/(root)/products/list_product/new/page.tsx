@@ -182,9 +182,7 @@ const ProductForm = () => {
       }}
       className="space-y-8 max-w-3xl mx-auto rounded-lg shadow"
     >
-      {/* ================================ */}
-      {/* Identification & Branding */}
-      {/* ================================ */}
+      
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Identification &amp; Branding
@@ -306,9 +304,6 @@ const ProductForm = () => {
         </CollabsibleSection>
       </section>
 
-      {/* ================================ */}
-      {/* Product Specifications */}
-      {/* ================================ */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Product Specifications
@@ -428,9 +423,6 @@ const ProductForm = () => {
         </CollabsibleSection>
       </section>
 
-      {/* ================================ */}
-      {/* Media & Visuals */}
-      {/* ================================ */}
       <section className="space-y-4">
         <h2 className="ext-lg font-semibold text-gray-300 pb-2">
           Media &amp; Visuals
@@ -470,9 +462,6 @@ const ProductForm = () => {
         </CollabsibleSection>
       </section>
 
-      {/* ================================ */}
-      {/* Pricing & Availability */}
-      {/* ================================ */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Pricing &amp; Availability
@@ -607,14 +596,8 @@ const ProductForm = () => {
         </CollabsibleSection>
       </section>
 
-      {/* ================================ */}
-      {/* Variants & Options */}
-      {/* ================================ */}
       <VariantsManager productId={productId} />
 
-      {/* ================================ */}
-      {/* Key Features & Bullets */}
-      {/* ================================ */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Key Features &amp; Bullets
@@ -672,9 +655,6 @@ const ProductForm = () => {
         </CollabsibleSection>
       </section>
 
-      {/* ================================ */}
-      {/* Descriptions */}
-      {/* ================================ */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Descriptions
@@ -711,9 +691,6 @@ const ProductForm = () => {
         <ManageRelatedProduct product={product} id={productId} />
       </section>
 
-      {/* ================================ */}
-      {/* Materials & Composition */}
-      {/* ================================ */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Materials &amp; Composition
@@ -775,9 +752,6 @@ const ProductForm = () => {
         </CollabsibleSection>
       </section>
 
-      {/* ================================ */}
-      {/* Logistics & Shipping */}
-      {/* ================================ */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Logistics &amp; Shipping
@@ -910,9 +884,6 @@ const ProductForm = () => {
         </CollabsibleSection>
       </section>
 
-      {/* ================================ */}
-      {/* Warranty & Returns */}
-      {/* ================================ */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Warranty &amp; Returns
@@ -956,9 +927,6 @@ const ProductForm = () => {
         </CollabsibleSection>
       </section>
 
-      {/* ================================ */}
-      {/* SEO & Marketing Metadata */}
-      {/* ================================ */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           SEO &amp; Marketing Metadata
@@ -1038,9 +1006,6 @@ const ProductForm = () => {
         </CollabsibleSection>
       </section>
 
-      {/* ================================ */}
-      {/* Legal & Compliance */}
-      {/* ================================ */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Legal &amp; Compliance
@@ -1114,9 +1079,6 @@ const ProductForm = () => {
         </CollabsibleSection>
       </section>
 
-      {/* ================================ */}
-      {/* Submit / Cancel Buttons */}
-      {/* ================================ */}
       <div className="flex justify-between mt-6 items-center">
         <button
           type="button"

@@ -10,17 +10,22 @@ import {
   CollectionsBookmark,
   Dashboard,
   Discount,
+  Email,
+  GetAppRounded,
   Group,
   Inventory,
   ListAlt,
   LocalShipping,
   Person2,
   Replay,
+  Settings,
   ShoppingBag,
   ShoppingCart,
+  SixteenMp,
   Store,
   Tag,
 } from "@mui/icons-material";
+import { IconButton } from "@mui/material";
 
 interface MenuLink {
   name: string;
@@ -114,12 +119,47 @@ const menuConfig = [
     ],
   },
   {
-    title: "Settings",
+    title: "Content & Merchandising",
     links: [
       {
         name: "Store Configuration",
         href: "/store_config",
         icon: <Store />,
+      },
+      {
+        name: "Collection",
+        href: "/collection",
+        icon: <CollectionsBookmark />,
+      },
+    ],
+  },
+  {
+    title: "SEO & Marketing Tools",
+    links: [
+      {
+        name: "Email marketing",
+        href: "/email_marketing",
+        icon: <Email />,
+      },
+      {
+        name: "Sitemaps generation",
+        href: "/sitemaps_generation",
+        icon: <GetAppRounded />,
+      },
+      {
+        name: "Meta tags & URL",
+        href: "/meta_tags_url",
+        icon: <IconButton />,
+      },
+    ],
+  },
+  {
+    title: "Settings",
+    links: [
+      {
+        name: "General Settings",
+        href: "/settings",
+        icon: <Settings />,
       },
     ],
   },
