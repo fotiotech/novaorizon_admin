@@ -222,9 +222,20 @@ export async function updateProduct(
   for (const [groupName, groupValue] of Object.entries(product)) {
     const cleaned = cleanGroupUpdate(groupValue as any);
     if (cleaned !== undefined) {
+      // Fix invalid date in reviews_ratings
+      if (groupName === "reviews_ratings" && Array.isArray(cleaned)) {
+        cleaned.forEach((review) => {
+          if (review.created_at && typeof review.created_at === "object" && Object.keys(review.created_at).length === 0) {
+            review.created_at = new Date(); // Or handle as needed (null, or skip setting)
+          } else if (typeof review.created_at === "string" || typeof review.created_at === "number") {
+            review.created_at = new Date(review.created_at);
+          }
+        });
+      }
       cleanedGroups[groupName] = cleaned;
     }
   }
+
   if (Object.keys(cleanedGroups).length === 0) {
     throw new Error("No valid attribute groups after cleaning.");
   }
@@ -239,10 +250,8 @@ export async function updateProduct(
   // 3) Merge per group, narrowing array vs object, using any-cast on set()
   for (const [groupName, cleanedValue] of Object.entries(cleanedGroups)) {
     if (Array.isArray(cleanedValue)) {
-      // For array-type groups (e.g. key_features, bullets, reviews_ratings)
       (doc as any).set(groupName, cleanedValue);
     } else {
-      // For object-type groups (e.g. identification_branding, pricing_availability)
       const existing = (doc as any).get(groupName) || {};
       (doc as any).set(groupName, { ...existing, ...cleanedValue });
     }
@@ -252,6 +261,7 @@ export async function updateProduct(
   const updated = await doc.save();
   return updated.toObject();
 }
+
 
 export async function deleteProduct(id: string) {
   try {
