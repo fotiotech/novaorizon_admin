@@ -43,24 +43,29 @@ export default function ChatWidget({
       text: draft.trim(),
       timestamp: serverTimestamp(),
     };
+    
+
+    try {
+      // 1) add the message
+      await addDoc(msgsRef, newMsg);
+
+      // 2) upsert the room metadata
+      const roomRef = doc(db, "chatRooms", roomId);
+      await setDoc(
+        roomRef,
+        {
+          roomId,
+          name: user.name,
+          avatar: user.avatarUrl,
+          lastMessage: draft,
+          lastTimestamp: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      console.error("🔥 Firestore write failed:", err);
+    }
     setDraft("");
-
-    // 1) add the message
-    await addDoc(msgsRef, newMsg);
-
-    // 2) upsert the room metadata
-    const roomRef = doc(db, "chatRooms", roomId);
-    await setDoc(
-      roomRef,
-      {
-        roomId,
-        name: user.name,
-        avatar: user.avatarUrl,
-        lastMessage: draft.trim(),
-        lastTimestamp: serverTimestamp(),
-      },
-      { merge: true }
-    );
   };
 
   return (

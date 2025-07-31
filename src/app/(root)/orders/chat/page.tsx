@@ -3,7 +3,7 @@
 import { useUser } from "@/app/context/UserContext"; // Assuming you have a custom hook to get user info
 import ChatWidget from "../_component/ChatWidget";
 import { useState } from "react";
-import ChatRoomList from "../_component/ChatRoomList"; // Assuming you have a component to list chat rooms
+import ChatRoomList from "../_component/ChatRoomList";
 export default function Checkout() {
   const { user } = useUser();
   const [activeRoom, setActiveRoom] = useState(null);
@@ -16,7 +16,7 @@ export default function Checkout() {
           <ChatWidget user={user} roomId={activeRoom} />
         ) : (
           <div className="flex h-full items-center justify-center text-gray-500">
-            Sélectionnez une conversation
+            Select a conversation
           </div>
         )}
       </div>
@@ -24,8 +24,3 @@ export default function Checkout() {
   );
 }
 
-// If using getServerSideProps:
-// export async function getServerSideProps(ctx) {
-//   const user = await getUserFromSession(ctx.req);
-//   return { props: { user } };
-// }
