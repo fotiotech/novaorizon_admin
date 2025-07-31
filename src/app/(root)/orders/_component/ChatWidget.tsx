@@ -64,15 +64,17 @@ export default function ChatWidget({
   };
 
   return (
-    <div className="fixed bottom-4 right-4 w-80 bg-white border rounded shadow-lg p-3">
-      <div className="h-64 overflow-y-auto mb-2 space-y-1">
-        {messages.map((m: any) => (
-          <div key={m.id} className="text-sm">
-            <strong>{m.from}:</strong> {m.text}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
+    <div className="lg:space-x-10 w-full bg-white border rounded shadow-lg p-3">
+      {messages.length > 0 && (
+        <div className="h-64 overflow-y-auto mb-2 space-y-1">
+          {messages.map((m: any) => (
+            <div key={m.id} className="text-sm">
+              <strong>{m.from}:</strong> {m.text}
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      )}
       <div className="flex">
         <input
           className="flex-1 border rounded-l px-2 py-1"

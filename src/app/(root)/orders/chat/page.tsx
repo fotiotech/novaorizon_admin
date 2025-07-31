@@ -1,4 +1,5 @@
 // pages/checkout.jsx
+"use client";
 import { useUser } from "@/app/context/UserContext"; // Assuming you have a custom hook to get user info
 import ChatWidget from "../_component/ChatWidget";
 import { useState } from "react";
