@@ -6,7 +6,7 @@ import { useState } from "react";
 import ChatRoomList from "../_component/ChatRoomList";
 export default function Checkout() {
   const { user } = useUser();
-  const [activeRoom, setActiveRoom] = useState(null);
+  const [activeRoom, setActiveRoom] = useState("");
 
   return (
     <div className="flex h-screen">
@@ -23,4 +23,3 @@ export default function Checkout() {
     </div>
   );
 }
-

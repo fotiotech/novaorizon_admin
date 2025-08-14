@@ -1,98 +1,153 @@
-// components/ChatWidget.jsx
+// components/ChatWidget.tsx
+"use client";
 import { useEffect, useState, useRef } from "react";
-import {
-  collection,
-  query,
-  orderBy,
-  limit,
-  onSnapshot,
-  addDoc,
-  serverTimestamp,
-  doc,
-  setDoc,
-} from "firebase/firestore";
 import { db } from "@/utils/firebaseConfig";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from "firebase/firestore";
+
+interface ChatWidgetProps {
+  user: { name: string } | null;
+  roomId?: string;
+}
+
+interface Message {
+  id: string;
+  from: string;
+  text: string;
+  sentAt?: any;
+}
 
 export default function ChatWidget({
   user,
   roomId = "default-room",
-}: {
-  user: any;
-  roomId?: string;
-}) {
-  const [messages, setMessages] = useState([]);
+}: ChatWidgetProps) {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
-  const bottomRef = useRef<any>();
-
-  useEffect(() => {
-    const msgsRef = collection(db, "chats", roomId, "messages");
-    const q = query(msgsRef, orderBy("timestamp", "asc"), limit(100));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setMessages(msgs as any);
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    });
-    return unsubscribe;
-  }, [roomId]);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const sendMessage = async () => {
-    if (!draft.trim()) return;
-    const msgsRef = collection(db, "chats", roomId, "messages");
+    if (!draft.trim() || !user) return;
     const newMsg = {
       from: user?.name,
       text: draft.trim(),
-      timestamp: serverTimestamp(),
+      sentAt: serverTimestamp(),
     };
-    
 
     try {
-      // 1) add the message
-      await addDoc(msgsRef, newMsg);
-
-      // 2) upsert the room metadata
+      const msgRef = collection(db, "chats", roomId, "messages");
       const roomRef = doc(db, "chatRooms", roomId);
+
+      await addDoc(msgRef, newMsg);
       await setDoc(
         roomRef,
         {
           roomId,
           name: user.name,
-          avatar: user.avatarUrl,
           lastMessage: draft,
-          lastTimestamp: serverTimestamp(),
+          sentAt: serverTimestamp(),
         },
         { merge: true }
       );
     } catch (err) {
       console.error("🔥 Firestore write failed:", err);
     }
+
     setDraft("");
   };
 
+  const updateMessage = async (id: string, newText: string) => {
+    try {
+      const msgDoc = doc(db, "chats", roomId, "messages", id);
+      await updateDoc(msgDoc, { text: newText });
+    } catch (err) {
+      console.error("🔥 Firestore update failed:", err);
+    }
+  };
+
+  const deleteMessage = async (id: string) => {
+    try {
+      const msgDoc = doc(db, "chats", roomId, "messages", id);
+      await deleteDoc(msgDoc);
+    } catch (err) {
+      console.error("🔥 Firestore delete failed:", err);
+    }
+  };
+
+  useEffect(() => {
+    const msgsRef = collection(db, "chats", roomId, "messages");
+    const q = query(msgsRef, orderBy("sentAt", "asc"));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      })) as Message[];
+      setMessages(msgs);
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+
+    return () => unsubscribe();
+  }, [roomId]);
+
   return (
-    <div className="lg:space-x-10 w-full bg-white border rounded shadow-lg p-3">
-      {messages.length > 0 && (
-        <div className="h-64 overflow-y-auto mb-2 space-y-1">
-          {messages.map((m: any) => (
-            <div key={m.id} className="text-sm">
+    <div className="flex flex-col w-full rounded-xl shadow-lg p-4 space-y-3">
+      <div className="flex-1 h-64 overflow-y-auto space-y-2">
+        {messages.map((m) => (
+          <div
+            key={m.id}
+            className="flex justify-between items-center  p-2 rounded-lg"
+          >
+            <div className="text-sm">
               <strong>{m.from}:</strong> {m.text}
             </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-      )}
+            {user?.name === m.from && (
+              <div className="flex space-x-2">
+                <button
+                  className="text-blue-600 text-xs"
+                  onClick={() =>
+                    updateMessage(
+                      m.id,
+                      prompt("Edit message:", m.text) || m.text
+                    )
+                  }
+                >
+                  Edit
+                </button>
+                <button
+                  className="text-red-600 text-xs"
+                  onClick={() => deleteMessage(m.id)}
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
       <div className="flex">
         <input
-          className="flex-1 border rounded-l px-2 py-1"
+          className="flex-1 border rounded-l-lg px-3 py-2 text-sm focus:outline-none"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Votre message…"
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
         />
         <button
-          className="bg-blue-600 text-white px-3 rounded-r"
+          className="bg-blue-600 text-white px-4 rounded-r-lg text-sm hover:bg-blue-700"
           onClick={sendMessage}
         >
-          Envoyer
+          Send
         </button>
       </div>
     </div>
