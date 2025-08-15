@@ -32,7 +32,7 @@ export default function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
   }, []);
 
   return (
-    <div className="p-4 border-r border-gray-600 w-64 space-y-2 overflow-y-auto">
+    <div className="p-2 lg:p-4 w-64 space-y-2 overflow-y-auto">
       <h2 className="font-bold mb-2 text-lg">Active Chats</h2>
       {rooms.length === 0 ? (
         <p className="text-gray-400">No active chats.</p>
