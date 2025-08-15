@@ -6,6 +6,9 @@ import { collection, onSnapshot } from "firebase/firestore";
 interface ChatRoom {
   roomId: string;
   name?: string;
+  from?: string;
+  product?: string;
+  lastMessage?: string;
 }
 
 interface ChatRoomListProps {
@@ -35,13 +38,14 @@ export default function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
         <p className="text-gray-400">No active chats.</p>
       ) : (
         rooms.map((room) => (
-          <button
+          <div
             key={room.roomId}
             onClick={() => onSelectRoom(room.roomId)}
             className="block w-full text-left px-3 py-2 rounded hover:bg-gray-700 transition-colors"
           >
-            {room.name || room.roomId}
-          </button>
+            <p>{room.from}</p>
+            <p className="line-clamp-1 text-gray-400">{room.product}</p>
+          </div>
         ))
       )}
     </div>

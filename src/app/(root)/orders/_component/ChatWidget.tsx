@@ -41,7 +41,7 @@ export default function ChatWidget({
   const sendMessage = async () => {
     if (!draft.trim() || !user) return;
     const newMsg = {
-      from: user?.name,
+      from: "novaorizon",
       text: draft.trim(),
       sentAt: serverTimestamp(),
     };
@@ -51,16 +51,16 @@ export default function ChatWidget({
       const roomRef = doc(db, "chatRooms", roomId);
 
       await addDoc(msgRef, newMsg);
-      await setDoc(
-        roomRef,
-        {
-          roomId,
-          name: user.name,
-          lastMessage: draft,
-          sentAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      // await setDoc(
+      //   roomRef,
+      //   {
+      //     roomId,
+      //     name: user.name,
+      //     lastMessage: draft,
+      //     sentAt: serverTimestamp(),
+      //   },
+      //   { merge: true }
+      // );
     } catch (err) {
       console.error("🔥 Firestore write failed:", err);
     }
@@ -132,7 +132,9 @@ export default function ChatWidget({
               </li>
             ))}
           </ul>
-          <p className="mt-2 font-bold">Total: ${room.cart?.total?.toFixed(2)}</p>
+          <p className="mt-2 font-bold">
+            Total: ${room.cart?.total?.toFixed(2)}
+          </p>
         </div>
       )}
       <div className="flex-1 h-64 overflow-y-auto space-y-2">
@@ -141,10 +143,10 @@ export default function ChatWidget({
             key={m.id}
             className="flex justify-between items-center  p-2 rounded-lg"
           >
-            <div className="text-sm">
+            <div className="text-sm w-full text-wrap">
               <strong>{m.from}:</strong> {m.text}
             </div>
-            {user?.name === m.from && (
+            {m.from === "novaorizon" && (
               <div className="flex space-x-2">
                 <button
                   className="text-blue-600 text-xs"
