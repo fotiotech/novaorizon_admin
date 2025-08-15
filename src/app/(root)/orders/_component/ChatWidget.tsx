@@ -51,16 +51,6 @@ export default function ChatWidget({
       const roomRef = doc(db, "chatRooms", roomId);
 
       await addDoc(msgRef, newMsg);
-      // await setDoc(
-      //   roomRef,
-      //   {
-      //     roomId,
-      //     name: user.name,
-      //     lastMessage: draft,
-      //     sentAt: serverTimestamp(),
-      //   },
-      //   { merge: true }
-      // );
     } catch (err) {
       console.error("🔥 Firestore write failed:", err);
     }
