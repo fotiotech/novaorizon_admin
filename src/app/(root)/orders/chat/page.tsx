@@ -9,7 +9,7 @@ export default function Checkout() {
   const [activeRoom, setActiveRoom] = useState("");
 
   return (
-    <div className="flex h-screen">
+    <div className="lg:flex h-screen">
       <ChatRoomList onSelectRoom={setActiveRoom} />
       <div className="flex-1 relative">
         {activeRoom ? (
