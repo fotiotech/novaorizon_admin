@@ -241,8 +241,9 @@ export async function find_mapped_attributes_ids(
 
   // 1) Direct mapping by CategoryAttribute ID
   if (id) {
-    const mapping = await CategoryAttribute.findById(id)
-    .lean<({ attributes: Attribute[] } & mongoose.Document) | null>();
+    const mapping = await CategoryAttribute.findById(id).lean<
+      ({ attributes: Attribute[] } & mongoose.Document) | null
+    >();
 
     return mapping ? buildGroupTree(mapping.attributes) : [];
   }
@@ -284,8 +285,9 @@ export async function find_mapped_attributes_ids(
   }
 
   // 3) Fallback: all mappings
-  const allMappings = await CategoryAttribute.find()
-  .lean<{ attributes: Attribute[] }[]>();
+  const allMappings = await CategoryAttribute.find().lean<
+    { attributes: Attribute[] }[]
+  >();
 
   const allAttrs: Attribute[] = allMappings.flatMap((m) => m.attributes || []);
   const uniqueAttrs = Array.from(
@@ -358,7 +360,7 @@ async function buildGroupTree(attributes: Attribute[]): Promise<GroupNode[]> {
 
 export async function getAttributesByCategoryAndGroupName(
   categoryId: string,
-  groupName: string
+  code?: string
 ) {
   let objectCategoryId: Types.ObjectId;
   try {
@@ -420,36 +422,19 @@ export async function getAttributesByCategoryAndGroupName(
   const allGroups = await AttributeGroup.find({
     attributes: { $elemMatch: { $in: allAttributeIds } },
   })
-    .select("_id name parent_id attributes group_order")
-    .lean<
-      {
-        _id: Types.ObjectId;
-        name: string;
-        parent_id?: Types.ObjectId;
-        attributes: Types.ObjectId[];
-        group_order: number;
-      }[]
-    >();
+    .select("_id code name parent_id attributes group_order")
+    .lean();
 
   if (!allGroups.length) return null;
 
-  const groupMap = new Map<
-    string,
-    {
-      _id: Types.ObjectId;
-      name: string;
-      parent_id?: Types.ObjectId;
-      attributes: Types.ObjectId[];
-      group_order: number;
-    }
-  >();
+  const groupMap = new Map();
   for (const g of allGroups) {
-    groupMap.set(g._id.toString(), g);
+    groupMap.set(g._id as string, g);
   }
 
-  let parentGroup = allGroups.find((g) => g.name === groupName) || null;
+  let parentGroup = allGroups.find((g) => g.code === code) || null;
   if (!parentGroup) {
-    parentGroup = await AttributeGroup.findOne({ name: groupName })
+    parentGroup = await AttributeGroup.findOne({ code })
       .select("_id name parent_id attributes group_order")
       .lean();
   }
@@ -468,8 +453,8 @@ export async function getAttributesByCategoryAndGroupName(
 
   if (!isTopParent) {
     const leafAttrs = (parentGroup.attributes || [])
-      .filter((id) => attributesById.has(id.toString()))
-      .map((id) => attributesById.get(id.toString())!);
+      .filter((id: string) => attributesById.has(id.toString()))
+      .map((id: string) => attributesById.get(id.toString())!);
 
     return leafAttrs.length ? leafAttrs : null;
   }
@@ -480,8 +465,8 @@ export async function getAttributesByCategoryAndGroupName(
     .lean();
 
   const parentAttributes = (parentGroup.attributes || [])
-    .filter((id) => attributesById.has(id.toString()))
-    .map((id) => attributesById.get(id.toString())!);
+    .filter((id: string) => attributesById.has(id.toString()))
+    .map((id: string) => attributesById.get(id.toString())!);
 
   const childrenStructured = childGroups.map((child) => ({
     group: { _id: child._id, name: child.name, group_order: child.group_order },
@@ -493,6 +478,7 @@ export async function getAttributesByCategoryAndGroupName(
   return {
     group: {
       _id: parentGroup._id,
+      code: parentGroup.code,
       name: parentGroup.name,
       group_order: parentGroup.group_order,
     },
