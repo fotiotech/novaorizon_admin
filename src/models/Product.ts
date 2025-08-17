@@ -159,55 +159,34 @@ const ProductSchema = new Schema(
   }
 );
 
-ProductSchema.post("save", async function (doc) {
+async function indexToES(doc: any) {
   try {
     await esClient.index({
       index: ES_INDEX,
       id: doc._id.toString(),
-      body: {
+      document: {
         name: doc.identification_branding?.name,
         description: doc.descriptions?.long || doc.descriptions?.short || "",
         price: doc.pricing_availability?.price,
         category_id: doc.category_id.toString(),
         brand: doc.identification_branding?.brand?.toString() || null,
+        main_image: doc.media_visuals?.main_image || null,
         createdAt: doc.createdAt,
       },
     });
   } catch (err) {
-    console.error("ES index error (save):", err);
+    console.error("ES index error:", err);
   }
-});
+}
 
-ProductSchema.post("findOneAndUpdate", async function (doc) {
-  if (!doc) return;
-  try {
-    await esClient.index({
-      index: ES_INDEX,
-      id: doc._id.toString(),
-      body: {
-        name: doc.identification_branding.name,
-        description: doc.descriptions?.long || doc.descriptions?.short || "",
-        price: doc.pricing_availability.price,
-        category_id: doc.category_id.toString(),
-        brand: doc.identification_branding.brand?.toString() || null,
-        createdAt: doc.createdAt,
-      },
-    });
-  } catch (err) {
-    console.error("ES index error (update):", err);
-  }
-});
-
+ProductSchema.post("save", async function (doc) { await indexToES(doc); });
+ProductSchema.post("findOneAndUpdate", async function (doc) { if (doc) await indexToES(doc); });
 ProductSchema.post("findOneAndDelete", async function (doc) {
   if (!doc) return;
   try {
-    await esClient.delete({
-      index: ES_INDEX,
-      id: doc._id.toString(),
-    });
+    await esClient.delete({ index: ES_INDEX, id: doc._id.toString() });
   } catch (err: any) {
-    if (err?.meta?.body?.result !== "not_found")
-      console.error("ES delete error:", err);
+    if (err?.meta?.body?.result !== "not_found") console.error("ES delete error:", err);
   }
 });
 
