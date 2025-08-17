@@ -111,7 +111,7 @@ const Categories = () => {
   };
 
   return (
-    <div className="p-4 lg:p-8 space-y-6">
+    <div className=" lg:p-8 space-y-3">
       <h2 className="text-2xl font-bold my-2 text-gray-800 dark:text-gray-100">
         {editId ? "Edit Category" : "Create Category"}
       </h2>
