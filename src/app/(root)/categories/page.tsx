@@ -43,13 +43,12 @@ const Categories = () => {
   const [toggleCreateAttribute, setToggleCreateAttribute] =
     useState<boolean>(false);
 
-  // Define an action function that either posts a new category or updates an existing one
   const action = async (formData: Cat) => {
     const result = await createCategory(formData, editId);
     if (result) {
       const updatedCategories = await getCategory();
       setCategories(updatedCategories);
-      setEditId(null); // Reset the form after submit
+      setEditId(null);
     } else {
       console.log("Error while processing!");
     }
@@ -112,35 +111,40 @@ const Categories = () => {
   };
 
   return (
-    <div className="p-2 pb-10">
-      <h2 className="text-2xl font-bold my-2">
+    <div className="p-4 lg:p-8 space-y-6">
+      <h2 className="text-2xl font-bold my-2 text-gray-800 dark:text-gray-100">
         {editId ? "Edit Category" : "Create Category"}
       </h2>
 
-      <form onSubmit={handleSubmit}>
-        <div className="lg:flex gap-3 mb-2">
-          <div className="lg:flex gap-3 mb-5">
-            <div>
-              <label htmlFor="categoryId">Parent Category:</label>
-              <select
-                title="parentCategory"
-                name="_id"
-                value={editId ? categoryEdit._id : categoryData._id}
-                onChange={handleCategoryData}
-                className="w-full bg-[#eee] dark:bg-sec-dark"
-              >
-                <option value="">Select Parent Category</option>
-                {categories.map((cat) => (
-                  <option key={cat._id} value={cat._id}>
-                    {cat.categoryName}
-                  </option>
-                ))}
-              </select>
-            </div>
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-6 bg-white dark:bg-gray-800 shadow rounded-xl p-4"
+      >
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex-1">
+            <label htmlFor="categoryId" className="block mb-1 font-medium">
+              Parent Category
+            </label>
+            <select
+              title="parentCategory"
+              name="_id"
+              value={editId ? categoryEdit._id : categoryData._id}
+              onChange={handleCategoryData}
+              className="w-full p-2 rounded-lg border bg-gray-100 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">Select Parent Category</option>
+              {categories.map((cat) => (
+                <option key={cat._id} value={cat._id}>
+                  {cat.categoryName}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div>
-            <label htmlFor="category">New Category:</label>
+          <div className="flex-1">
+            <label htmlFor="category" className="block mb-1 font-medium">
+              New Category
+            </label>
             <input
               id="category"
               type="text"
@@ -149,34 +153,37 @@ const Categories = () => {
                 editId ? categoryEdit.categoryName : categoryData.categoryName
               }
               onChange={handleCategoryData}
-              className="w-full bg-[#eee] dark:bg-sec-dark"
+              className="w-full p-2 rounded-lg border bg-gray-100 dark:bg-gray-700 dark:text-white"
             />
           </div>
         </div>
+
         <div>
           <FilesUploader files={files} addFiles={addFiles} />
         </div>
 
         <div>
-          <label htmlFor="description">Description:</label>
+          <label htmlFor="description" className="block mb-1 font-medium">
+            Description
+          </label>
           <input
             id="description"
             type="text"
             name="description"
             value={editId ? categoryEdit.description : categoryData.description}
             onChange={handleCategoryData}
-            className="w-full p-2 max-h-20 bg-[#eee] dark:bg-sec-dark"
+            className="w-full p-2 rounded-lg border bg-gray-100 dark:bg-gray-700 dark:text-white"
           />
         </div>
 
-        {/* Group Selection */}
         <div className="w-full space-y-4">
-          <span
+          <button
+            type="button"
             onClick={() => setToggleCreateAttribute((prev) => !prev)}
-            className="my-2"
+            className="text-blue-600 dark:text-blue-400 font-medium hover:underline"
           >
             Map Attributes for this Category?
-          </span>
+          </button>
 
           <CategoryAttribute
             toggleCreateAttribute={toggleCreateAttribute}
@@ -186,58 +193,62 @@ const Categories = () => {
             categoryId={categoryData._id || ""}
           />
         </div>
+
         <div className="flex justify-end">
-          <button type="submit" className="btn block my-2">
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+          >
             {editId ? "Update Category" : "Add Category"}
           </button>
         </div>
       </form>
 
       <div>
-        <h2 className="font-bold text-xl my-2">Categories</h2>
+        <h2 className="font-bold text-xl my-2 text-gray-800 dark:text-gray-100">
+          Categories
+        </h2>
 
-        <div className="grid grid-cols-2 gap-3 w-full whitespace-nowrap overflow-x-auto">
-          <ul className="flex flex-col gap-1 max-h-96 overflow-y-auto scrollbar-none">
-            {categories &&
-              categories.map((cat) => (
-                <li
-                  key={cat._id}
-                  className="flex justify-between cursor-pointer font-bold text-gray-300 "
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto scrollbar-thin">
+            {categories.map((cat) => (
+              <li
+                key={cat._id}
+                className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                <span
+                  onClick={() => setCatId(cat._id as string)}
+                  className="flex-1 cursor-pointer font-medium hover:text-blue-600"
                 >
-                  <span
-                    onClick={() => setCatId(cat._id as string)}
-                    className="flex-1 hover:text-sec hover:bg-opacity-5 p-1"
+                  {cat.categoryName}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditId(cat._id as string)}
+                    className="px-2 py-1 border rounded hover:bg-gray-200 dark:hover:bg-gray-600"
                   >
-                    {cat.categoryName}
-                  </span>
-                  <div className="flex gap-2">
-                    <span
-                      onClick={() => setEditId(cat._id as string)}
-                      className="border px-1 hover:text-sec hover:bg-opacity-5 p-1"
-                    >
-                      Edit
-                    </span>
-                    <span
-                      onClick={() => handleDelete(cat._id as string)}
-                      className="border px-1 hover:text-sec hover:bg-opacity-5 p-1"
-                    >
-                      Delete
-                    </span>
-                  </div>
-                </li>
-              ))}
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(cat._id as string)}
+                    className="px-2 py-1 border rounded text-red-600 hover:bg-red-50 dark:hover:bg-gray-600"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </li>
+            ))}
           </ul>
 
-          <ul className="flex flex-col gap-1 max-h-96 overflow-hidden overflow-y-auto scrollbar-none">
-            {subCategory &&
-              subCategory.map((sub) => (
-                <li
-                  key={sub._id}
-                  className="flex justify-between cursor-pointer font-bold text-gray-300 hover:text-pri hover:bg-gray-100 hover:bg-opacity-5 p-1"
-                >
-                  {sub.categoryName}
-                </li>
-              ))}
+          <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto scrollbar-thin">
+            {subCategory?.map((sub) => (
+              <li
+                key={sub._id}
+                className="p-2 rounded-lg font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                {sub.categoryName}
+              </li>
+            ))}
           </ul>
         </div>
       </div>

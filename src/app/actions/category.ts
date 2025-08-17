@@ -233,73 +233,54 @@ interface GroupNode {
 }
 
 export async function find_mapped_attributes_ids(
-  id: string | null = null,
   categoryId: string | null = null
-): Promise<GroupNode[]> {
-  // Ensure database connection is established
+) {
+  console.log("categoryId", categoryId);
+  if (!categoryId) return [];
+
   await connection();
 
-  // 1) Direct mapping by CategoryAttribute ID
-  if (id) {
-    const mapping = await CategoryAttribute.findById(id).lean<
-      ({ attributes: Attribute[] } & mongoose.Document) | null
-    >();
-
-    return mapping ? buildGroupTree(mapping.attributes) : [];
-  }
-
-  // 2) Mapping by category and its ancestor categories
-  if (categoryId) {
-    const catObjectId = new Types.ObjectId(categoryId);
-    const result = await Category.aggregate<{ allIds: Types.ObjectId[] }>([
-      { $match: { _id: catObjectId } },
-      {
-        $graphLookup: {
-          from: "categories",
-          startWith: "$parent_id",
-          connectFromField: "parent_id",
-          connectToField: "_id",
-          as: "ancestors",
-        },
+  // 1️⃣ Get category and all ancestors
+  const catObjectId = new Types.ObjectId(categoryId);
+  const categories = await Category.aggregate([
+    { $match: { _id: catObjectId } },
+    {
+      $graphLookup: {
+        from: "categories",
+        startWith: "$parent_id",
+        connectFromField: "parent_id",
+        connectToField: "_id",
+        as: "ancestors",
       },
-      { $project: { allIds: { $concatArrays: [["$_id"], "$ancestors._id"] } } },
-    ]);
+    },
+    { $project: { allIds: { $concatArrays: [["$_id"], "$ancestors._id"] } } },
+  ]);
 
-    const allIds = result[0]?.allIds ?? [catObjectId];
-    const docs = await CategoryAttribute.find({
-      category_id: { $in: allIds },
-    }).lean<{ attributes: Attribute[] }[]>();
+  const allIds = categories[0]?.allIds ?? [catObjectId];
 
-    // Deduplicate attributes
-    const mergedAttrs: Attribute[] = docs.flatMap((d) => d.attributes || []);
-    const uniqueAttrs = Array.from(
-      mergedAttrs
-        .reduce(
-          (map, attr) => map.set(attr._id.toString(), attr),
-          new Map<string, Attribute>()
-        )
-        .values()
-    );
-
-    return buildGroupTree(uniqueAttrs);
-  }
-
-  // 3) Fallback: all mappings
-  const allMappings = await CategoryAttribute.find().lean<
-    { attributes: Attribute[] }[]
-  >();
-
-  const allAttrs: Attribute[] = allMappings.flatMap((m) => m.attributes || []);
-  const uniqueAttrs = Array.from(
-    allAttrs
-      .reduce(
-        (map, attr) => map.set(attr._id.toString(), attr),
-        new Map<string, Attribute>()
-      )
-      .values()
+  // 2️⃣ Get CategoryAttributes mapped to these categories
+  const categoryAttrs = await CategoryAttribute.find({
+    category_id: { $in: allIds },
+  }).lean();
+  const mergedAttrs: Attribute[] = categoryAttrs.flatMap(
+    (ca) => ca.attributes || []
   );
 
-  return buildGroupTree(uniqueAttrs);
+  // Deduplicate attribute IDs
+  const attrIds = Array.from(new Set(mergedAttrs.map((a) => a._id.toString())));
+
+  if (attrIds.length === 0) return [];
+
+  // 3️⃣ Find AttributeGroups that include any of these attribute IDs
+  const groups = await AttributeGroup.find({
+    attributes: { $in: attrIds },
+  })
+    .populate({ path: "attributes" })
+    .lean();
+
+  console.log("groups", groups);
+
+  return groups;
 }
 
 async function buildGroupTree(attributes: Attribute[]): Promise<GroupNode[]> {
@@ -469,7 +450,12 @@ export async function getAttributesByCategoryAndGroupName(
     .map((id: string) => attributesById.get(id.toString())!);
 
   const childrenStructured = childGroups.map((child) => ({
-    group: { _id: child._id, code: child.code, name: child.name, group_order: child.group_order },
+    group: {
+      _id: child._id,
+      code: child.code,
+      name: child.name,
+      group_order: child.group_order,
+    },
     attributes: (child.attributes || [])
       .filter((id: string) => attributesById.has(id.toString()))
       .map((id: string) => attributesById.get(id.toString())!),

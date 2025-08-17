@@ -71,7 +71,7 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
         console.error("Category ID is required");
         return;
       }
-      const res = await find_mapped_attributes_ids(null, categoryId);
+      const res = await find_mapped_attributes_ids(categoryId);
       if (res) {
         setMappedAttributes(res);
       }
@@ -122,7 +122,6 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
     return sortedGroups;
   }, [attributeGroups, filterText, sortOrder]);
 
-
   const toggleAttribute = (id: string) => {
     if (selectedAttributes.includes(id)) {
       setAttributes(selectedAttributes.filter((n) => n !== id));
@@ -161,7 +160,7 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
       {/* Custom attribute list */}
       <div className="mt-4">
         <label>Map Attributes:</label>
-        <div className="flex flex-col gap-2 border border-gray-600 rounded-md p-3 h-48 my-2 overflow-auto bg-white dark:bg-sec-dark">
+        <div className="flex flex-col gap-2 border border-gray-600 rounded-md p-3 h-80 my-2 overflow-auto bg-white dark:bg-sec-dark">
           {visibleAttributes?.map((g) => (
             <div key={g._id} className="p-1 px-2 cursor-pointer rounded">
               <h3 className="font-bold text-lg mb-2">{g.name}</h3>
@@ -196,13 +195,28 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
 
       {/* Mapped attributes */}
       {mappedAttributes && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 ">
           <h3 className="text-lg font-bold">Mapped Attributes:</h3>
-          <ul className="list-disc pl-5">
-            {mappedAttributes?.map((attr: any) => (
-              <li key={attr?._id} className="text-gray-700 dark:text-gray-300">
-                {attr?.name}
-              </li>
+          <ul className="list-disc pl-5 h-60 overflow-y-auto">
+            {mappedAttributes.map((group: any) => (
+              <div
+                key={group._id}
+                className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg "
+              >
+                <h3 className="text-lg font-bold mb-2 text-gray-800 dark:text-gray-100">
+                  {group.name}
+                </h3>
+                <ul className="list-disc pl-5">
+                  {group.attributes.map((attr: any) => (
+                    <li
+                      key={attr._id}
+                      className="text-gray-700 dark:text-gray-300"
+                    >
+                      {attr.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
           </ul>
         </div>
