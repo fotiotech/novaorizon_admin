@@ -1,6 +1,7 @@
+// Frontend dropdown component (no change except we can call deleteAttributeGroup when needed)
+import { deleteAttributeGroup } from "@/app/actions/attributegroup";
 import React, { useState, useRef, useEffect } from "react";
 
-// Frontend now expects nested tree with `children`
 interface Group {
   _id: string;
   name: string;
@@ -8,7 +9,7 @@ interface Group {
 }
 
 interface GroupDropdownProps {
-  groups: Group[]; // already nested: top-level groups with children
+  groups: Group[];
   groupId: string;
   setGroupId: (id: string) => void;
   setEditGroupId: (id: string) => void;
@@ -28,7 +29,6 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [selectedParentId, setSelectedParentId] = useState<string>("");
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -44,7 +44,6 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
   }, []);
 
   const selectedGroup = (() => {
-    // search tree for groupId
     const find = (nodes: Group[]): Group | undefined => {
       for (const node of nodes) {
         if (node._id === groupId) return node;
@@ -85,13 +84,13 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
       </div>
 
       {isOpen && (
-        <div className=" mt-1 w-full max-h-60 overflow-y-auto rounded-lg bg-white dark:bg-sec-dark shadow-lg z-10">
+        <div className="mt-1 w-full max-h-60 overflow-y-auto rounded-lg bg-white dark:bg-sec-dark shadow-lg z-10">
           <ul>
             {groups.map((top) => (
               <li key={top._id}>
-                <div className="flex items-center  gap-3">
+                <div className="flex items-center gap-3">
                   <div
-                    className={` px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer ${
+                    className={`px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer ${
                       groupId === top._id ? "font-semibold" : ""
                     }`}
                     onClick={() => {
@@ -99,31 +98,39 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
                       setEditingAttributes &&
                         setEditingAttributes((prev) => ({
                           ...prev,
-                          groupId: top?._id,
+                          groupId: top._id,
                         }));
-                      setSelectedParentId(top?._id);
+                      setSelectedParentId(top._id);
                     }}
                   >
                     <p>{top.name}</p>
                   </div>
                   <p
-                    onClick={() => setEditGroupId(top?._id)}
+                    onClick={() => setEditGroupId(top._id)}
                     className="text-blue-500 p-2 hover:bg-gray-200"
                   >
                     Edit
+                  </p>
+                  <p
+                    onClick={async () => {
+                      await deleteAttributeGroup(top._id);
+                    }}
+                    className="text-red-500 p-2 hover:bg-gray-200"
+                  >
+                    Delete
                   </p>
                 </div>
 
                 {selectedParentId === top._id && top.children && (
                   <ul>
                     {top.children.map((child) => (
-                      <li key={child._id} className="flex items-center  gap-3">
+                      <li key={child._id} className="flex items-center gap-3">
                         <div
-                          className={` px-6 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer ${
-                            groupId === child?._id ? "font-semibold" : ""
+                          className={`px-6 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer ${
+                            groupId === child._id ? "font-semibold" : ""
                           }`}
                           onClick={() => {
-                            setGroupId(child?._id);
+                            setGroupId(child._id);
                             setIsOpen(false);
                             setSelectedParentId("");
                           }}
@@ -131,10 +138,18 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
                           <p>{child.name}</p>
                         </div>
                         <p
-                          onClick={() => setEditGroupId(top?._id)}
+                          onClick={() => setEditGroupId(child._id)}
                           className="text-blue-500 hover:bg-gray-200 p-2"
                         >
                           Edit
+                        </p>
+                        <p
+                          onClick={async () => {
+                            await deleteAttributeGroup(child._id);
+                          }}
+                          className="text-red-500 hover:bg-gray-200 p-2"
+                        >
+                          Delete
                         </p>
                       </li>
                     ))}
