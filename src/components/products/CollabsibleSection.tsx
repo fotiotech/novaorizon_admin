@@ -18,7 +18,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="w-full flex justify-end items-center px-4 py-2 text-right focus:outline-none"
+        className="w-full flex justify-end items-center px-4 text-right focus:outline-none"
       >
         <span className="text-xl leading-none">{isOpen ? "−" : "+"}</span>
       </button>

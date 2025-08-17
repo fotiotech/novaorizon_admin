@@ -19,6 +19,7 @@ import Select from "react-select";
 type AttributeType = {
   _id?: string;
   id?: string;
+  code: string;
   name: string;
   option?: string;
   type: string;
@@ -27,6 +28,7 @@ type AttributeType = {
 // Update the AttributesGroup type
 type AttributesGroup = {
   _id: string;
+  code: string;
   name: string;
   parent_id: string;
   attributes?: string[]; // Array of attribute IDs
@@ -36,6 +38,7 @@ type AttributesGroup = {
 
 type EditingAttributeType = {
   id: string;
+  code: string;
   name: string;
   option?: string;
   type: string;
@@ -49,7 +52,7 @@ interface Option {
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
   const [formData, setFormData] = useState<AttributeType[]>([
-    { name: "", type: "" },
+    { code: "", name: "", type: "", option: "" },
   ]);
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
   const [newGroupName, setNewGroupName] = useState<string>("");
@@ -71,7 +74,7 @@ const Attributes = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await findAttributesAndValues(groupId);
+        const response = await findAttributesAndValues();
         if (response?.length > 0) {
           setAttributes(response as unknown as AttributeType[]);
           setError(null); // Clear any previous errors on success
@@ -105,7 +108,10 @@ const Attributes = () => {
   }, []);
 
   function addAttributes() {
-    setFormData((prev) => [...prev, { name: "", option: "", type: "" }]);
+    setFormData((prev) => [
+      ...prev,
+      { code: "", name: "", option: "", type: "" },
+    ]);
   }
 
   const handleInputChange = (
@@ -118,6 +124,7 @@ const Attributes = () => {
         i === index
           ? {
               ...attr,
+              code: field === "code" ? (value as string) : attr.code,
               name: field === "name" ? (value as string) : attr.name,
               option: field === "option" ? (value as string) : attr.option,
               type: field === "type" ? (value as string) : attr.type,
@@ -167,6 +174,8 @@ const Attributes = () => {
         }
 
         const attributeData = {
+          action: groupId,
+          codes: formData.map((attr) => attr.code.trim()),
           names: formData.map((attr) => attr.name.trim()),
           option: formData.map((attr) =>
             attr.option?.split(",")
@@ -180,6 +189,7 @@ const Attributes = () => {
           // Reset form after successful creation
           setFormData([
             {
+              code: "",
               name: "",
               option: "",
               type: "",
@@ -206,12 +216,13 @@ const Attributes = () => {
         }
       } else if (action === "update") {
         if (attrOrVal === "attribute" && id && updateData) {
-          if (!updateData.name.trim()) {
+          if (!updateData.code.trim() || !updateData.name.trim()) {
             setError("Attribute name cannot be empty");
             return;
           }
 
           await updateAttribute(id, {
+            code: updateData.code.trim(),
             name: updateData.name.trim(),
             option: updateData.option.split(","),
             type: updateData.type.trim(),
@@ -238,12 +249,14 @@ const Attributes = () => {
 
   const handleUpdateAttribute = async (
     id: string,
+    code: string,
     name: string,
     option: string,
     type: string
   ) => {
     try {
       await manageAttribute("update", id, "attribute", {
+        code,
         name,
         option,
         type,
@@ -271,6 +284,7 @@ const Attributes = () => {
 
     setEditingAttribute({
       id: attr._id,
+      code: attr.code,
       name: attr.name,
       option: optionString,
       type: attr.type || "",
@@ -458,6 +472,21 @@ const Attributes = () => {
               className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
             >
               <div>
+                <label htmlFor={`code-${index}`} className="block mb-1">
+                  Code:
+                </label>
+                <input
+                  id={`code-${index}`}
+                  type="text"
+                  name={`code-${index}`}
+                  value={attr.code}
+                  onChange={(e) =>
+                    handleInputChange(index, "code", e.target.value)
+                  }
+                  className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+                />
+              </div>
+              <div>
                 <label htmlFor={`name-${index}`} className="block mb-1">
                   Name:
                 </label>
@@ -584,6 +613,21 @@ const Attributes = () => {
                     <div className="flex gap-2 items-center">
                       <input
                         type="text"
+                        name={editingAttribute.code}
+                        value={editingAttribute.code}
+                        onChange={(e) =>
+                          setEditingAttribute({
+                            ...editingAttribute,
+                            code: e.target.value,
+                          })
+                        }
+                        className="p-1 rounded bg-none border dark:bg-gray-400"
+                        title="Edit attribute code"
+                        placeholder="Enter attribute code"
+                        aria-label="Edit attribute code"
+                      />
+                      <input
+                        type="text"
                         name={editingAttribute.name}
                         value={editingAttribute.name}
                         onChange={(e) =>
@@ -649,6 +693,7 @@ const Attributes = () => {
                         onClick={() =>
                           handleUpdateAttribute(
                             editingAttribute.id,
+                            editingAttribute.code,
                             editingAttribute.name,
                             editingAttribute.option as string,
                             editingAttribute.type

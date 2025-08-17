@@ -99,11 +99,11 @@ const ProductForm = () => {
   }, []);
 
   // Generic handler for top‐level or nested simple fields
-  const handleChange = (group: string, field: string, value: any) => {
+  const handleChange = (groupCode: string, field: string, value: any) => {
     dispatch(
       addProduct({
         _id: productId,
-        path: `${group}.${field}`,
+        path: `${groupCode}.${field}`,
         value,
       })
     );
@@ -182,7 +182,6 @@ const ProductForm = () => {
       }}
       className="space-y-8 max-w-3xl mx-auto rounded-lg shadow"
     >
-      
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-300 pb-2">
           Identification &amp; Branding
@@ -415,10 +414,6 @@ const ProductForm = () => {
                 handleAttributeChange={handleChange}
               />
             </div>
-            <p className="text-sm text-gray-500">
-              * To add more technical specs, adjust indices (e.g.
-              `technical_specs.1.key`, `technical_specs.1.value`).
-            </p>
           </div>
         </CollabsibleSection>
       </section>

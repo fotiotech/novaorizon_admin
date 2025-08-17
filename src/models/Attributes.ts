@@ -2,9 +2,7 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 
 // Attribute Interface
 interface IAttribute extends Document {
-  groupId: Schema.Types.ObjectId;
-  isVariant?: boolean;
-  is_highlight?: boolean;
+  code: string;
   name: string;
   option?: string[];
   type:
@@ -24,25 +22,18 @@ interface IAttribute extends Document {
 
 // Attribute Schema
 const AttributeSchema = new Schema<IAttribute>({
-  groupId: {
-    type: Schema.Types.ObjectId,
-    ref: "AttributeGroup",
+  code: {
+    type: String,
+    unique: true,
+    required: [true, "Attribute code is required"],
   },
-
   name: {
     type: String,
     unique: true,
     required: [true, "Attribute name is required"],
   },
   option: [{ type: String }],
-  is_highlight: {
-    type: Boolean,
-    default: false,
-  },
-  isVariant: {
-    type: Boolean,
-    default: false,
-  },
+
   type: {
     type: String,
     enum: [
@@ -63,6 +54,7 @@ const AttributeSchema = new Schema<IAttribute>({
   },
 });
 
+AttributeSchema.index({ code: 1 });
 AttributeSchema.index({ name: 1 });
 
 // Attribute Model

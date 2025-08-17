@@ -8,17 +8,17 @@ import { revalidatePath } from "next/cache";
 
 // Add TypeScript interfaces
 interface AttributeFormData {
+  codes: string[];
   names: string[];
   option?: string[][];
   type: string[];
-
 }
 
 interface AttributeUpdateParams {
+  code: string;
   name: string;
   option?: string | string[]; // ← allow both
   type: string | string[];
-
 }
 
 // Function to fetch category attributes and values
@@ -29,9 +29,7 @@ export async function findAttributesAndValues(id?: string) {
     let query = id ? Attribute.findOne({ _id: id }) : Attribute.find();
 
     // Populate only `groupId` and select specific fields, then return plain objects
-    const response = await query
-      .populate("groupId", "name group_order sort_order")
-      .lean();
+    const response = await query.lean();
 
     return response;
   } catch (error) {
@@ -40,9 +38,9 @@ export async function findAttributesAndValues(id?: string) {
 }
 
 export async function createAttribute(formData: AttributeFormData) {
-  const { names, option, type } = formData;
+  const { codes, names } = formData;
 
-  if ( !Array.isArray(names) || names.length === 0) {
+  if (!Array.isArray(names) || names.length === 0) {
     throw new Error("Missing required fields");
   }
 
@@ -50,28 +48,30 @@ export async function createAttribute(formData: AttributeFormData) {
 
   try {
     const attributes: (typeof Attribute)[] = [];
+    const len = Math.max(codes.length, names.length);
 
-    for (let i = 0; i < names.length; i++) {
-      const rawName = names[i].trim();
+    for (let i = 0; i < len; i++) {
+      const rawCode = (codes[i] || "").trim();
+      const rawName = (names[i] || "").trim();
+
+      if (!rawCode) throw new Error(`Invalid attribute code at idx ${i}`);
       if (!rawName) throw new Error(`Invalid attribute name at idx ${i}`);
 
-      // grab THIS attribute’s options (an array of strings)
       const rawOpt = Array.isArray(formData.option) ? formData.option[i] : [];
       const optionsArr = Array.isArray(rawOpt)
         ? rawOpt.map((o) => o.trim()).filter(Boolean)
         : [];
 
-      // grab THIS attribute’s type
       const attrType = Array.isArray(formData.type)
         ? formData.type[i] ?? "text"
         : formData.type ?? "text";
 
-      const filter = { name: rawName };
+      const filter = { code: rawCode };
       const update = {
         $set: {
+          name: rawName,
           option: optionsArr,
           type: attrType,
-         
         },
       };
 
@@ -136,13 +136,13 @@ export async function updateAttribute(
 
     // 3) Perform the update
     const updated = await Attribute.findByIdAndUpdate(
-      id,
+      { _id: id },
       {
         $set: {
+          code: params.code.trim(),
           name: params.name.trim(),
           option: optionsArr,
           type: attrType,
-        
         },
       },
       { new: true }
@@ -152,8 +152,9 @@ export async function updateAttribute(
       throw new Error("Attribute not found");
     }
 
+    console.log(updated);
+
     revalidatePath("/admin/attributes");
-    return updated;
   } catch (err) {
     console.error("Error in updateAttribute:", err);
     throw err;
@@ -161,13 +162,13 @@ export async function updateAttribute(
 }
 
 // Function to delete attribute
-export async function deleteAttribute(name: string) {
+export async function deleteAttribute(code: string) {
   await connection();
   const session = await mongoose.startSession();
 
   try {
     await session.withTransaction(async () => {
-      const attribute = await Attribute.findOne({ name }).session(session);
+      const attribute = await Attribute.findOne({ code }).session(session);
       if (!attribute) {
         throw new Error("Attribute not found");
       }

@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 // types.ts
 export interface Group {
   _id: string;
-  groupId?: string; // Optional, used for editing existing groups
+  code: string;
   name: string;
   parent_id: string; // "" if root
   attributes?: string[] | [{ name: string; _id?: string }]; // Array of attribute IDs
@@ -20,11 +20,14 @@ export interface Group {
 function serializeGroup(group: any): Group {
   return {
     _id: group._id.toString(),
+    code: group.code,
     name: group.name,
     parent_id: group.parent_id ? group.parent_id.toString() : "",
     attributes: group.attributes
       ? group.attributes.map((a: any) =>
-          a === "" ? a.toString() : { _id: a._id?.toString(), name: a.name }
+          a === ""
+            ? a.toString()
+            : { _id: a._id?.toString(), code: a.code, name: a.name }
         )
       : [],
     createdAt: group.createdAt ? new Date(group.createdAt) : undefined,
@@ -66,14 +69,11 @@ export async function findAttributeForGroups(
   try {
     const filter = id ? { _id: new mongoose.Types.ObjectId(id) } : {};
     const attributeGroups = await AttributeGroup.find(filter)
-      .populate("attributes", "_id name")
+      .populate("attributes", "_id code name")
       .lean();
     const serialized = attributeGroups.map(serializeGroup);
     // Build nested tree before returning
-    console.log(
-      "Serialized Attribute Groups:",
-      serialized.map((g) => g.attributes?.map((a) => a))
-    );
+
     return serialized;
   } catch (error) {
     console.error("[AttributeGroup] Error in findAllAttributeGroups:", error);
@@ -88,7 +88,7 @@ export async function findAllAttributeGroups(
   try {
     const filter = id ? { _id: new mongoose.Types.ObjectId(id) } : {};
     const attributeGroups = await AttributeGroup.find(filter)
-      .populate("attributes", "name _id")
+      .populate("attributes", "name code _id")
       .lean();
     const serialized = attributeGroups.map(serializeGroup);
     // Build nested tree before returning
@@ -101,7 +101,7 @@ export async function findAllAttributeGroups(
 
 // Function to create a new attribute group
 export async function createAttributeGroup(
-  groupId: string | null,
+  action: string | null,
   name: string,
   code: string,
   parent_id: string,
@@ -110,12 +110,12 @@ export async function createAttributeGroup(
   sort_order: number
 ) {
   await connection();
-  console.log("groupId:", groupId);
+  console.log("groupId:", action);
   try {
-    if (groupId && groupId !== "create" && attributes.length > 0) {
+    if (action && action !== "create" && attributes.length > 0) {
       // If groupId is provided, update the existing group
       const res = await AttributeGroup.findByIdAndUpdate(
-        { _id: new mongoose.Types.ObjectId(groupId) },
+        { _id: new mongoose.Types.ObjectId(action) },
         {
           attributes: attributes.map(
             (attr) => new mongoose.Types.ObjectId(attr)
@@ -125,13 +125,13 @@ export async function createAttributeGroup(
       );
       console.log("Updated Attribute Group:", res);
       // revalidatePath("/attributes");
-    } else if (name) {
+    } else if (code && name) {
       // Create a new attribute group
       const newGroup = await AttributeGroup.findOneAndUpdate(
         { name },
         {
-          name,
           code,
+          name,
           parent_id: parent_id ? new mongoose.Types.ObjectId(parent_id) : null,
           attributes: attributes.map(
             (attr) => new mongoose.Types.ObjectId(attr)
