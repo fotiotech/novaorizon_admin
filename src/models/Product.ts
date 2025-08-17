@@ -1,4 +1,6 @@
+import { esClient } from "@/app/lib/es";
 import mongoose, { Schema } from "mongoose";
+const ES_INDEX = process.env.ELASTIC_INDEX || "";
 
 // Core Product Schema treating all fields as grouped attributes
 const ProductSchema = new Schema(
@@ -156,6 +158,58 @@ const ProductSchema = new Schema(
     timestamps: true, // createdAt, updatedAt
   }
 );
+
+ProductSchema.post("save", async function (doc) {
+  try {
+    await esClient.index({
+      index: ES_INDEX,
+      id: doc._id.toString(),
+      body: {
+        name: doc.identification_branding?.name,
+        description: doc.descriptions?.long || doc.descriptions?.short || "",
+        price: doc.pricing_availability?.price,
+        category_id: doc.category_id.toString(),
+        brand: doc.identification_branding?.brand?.toString() || null,
+        createdAt: doc.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error("ES index error (save):", err);
+  }
+});
+
+ProductSchema.post("findOneAndUpdate", async function (doc) {
+  if (!doc) return;
+  try {
+    await esClient.index({
+      index: ES_INDEX,
+      id: doc._id.toString(),
+      body: {
+        name: doc.identification_branding.name,
+        description: doc.descriptions?.long || doc.descriptions?.short || "",
+        price: doc.pricing_availability.price,
+        category_id: doc.category_id.toString(),
+        brand: doc.identification_branding.brand?.toString() || null,
+        createdAt: doc.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error("ES index error (update):", err);
+  }
+});
+
+ProductSchema.post("findOneAndDelete", async function (doc) {
+  if (!doc) return;
+  try {
+    await esClient.delete({
+      index: ES_INDEX,
+      id: doc._id.toString(),
+    });
+  } catch (err: any) {
+    if (err?.meta?.body?.result !== "not_found")
+      console.error("ES delete error:", err);
+  }
+});
 
 const Product =
   mongoose.models.Product || mongoose.model("Product", ProductSchema);

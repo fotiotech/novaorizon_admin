@@ -105,7 +105,7 @@ export default function ChatWidget({
   }, [roomId]);
 
   return (
-    <div className="flex flex-col w-full rounded-xl shadow-lg p-2 lg:p-4 space-y-3">
+    <div className="flex flex-col w-full rounded-xl shadow-lg lg:p-4 space-y-3">
       {room?.cart && (
         <div className="mb-4 p-3 rounded-lg bg-gray-800 text-white shadow">
           <h3 className="font-semibold mb-1">Cart Summary</h3>
