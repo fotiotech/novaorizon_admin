@@ -118,7 +118,7 @@ const ProductForm = () => {
     >
       {groups.length > 0 &&
         groups.map((group) => {
-          const { code, name, attributes } = group;
+          const { code, name, parent_id, attributes } = group;
 
           return (
             <section key={group._id} className="space-y-4">

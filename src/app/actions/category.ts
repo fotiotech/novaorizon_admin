@@ -435,7 +435,7 @@ export async function getAttributesByCategoryAndGroupName(
   let parentGroup = allGroups.find((g) => g.code === code) || null;
   if (!parentGroup) {
     parentGroup = await AttributeGroup.findOne({ code })
-      .select("_id name parent_id attributes group_order")
+      .select("_id code name parent_id attributes group_order")
       .lean();
   }
 
@@ -445,7 +445,7 @@ export async function getAttributesByCategoryAndGroupName(
 
   const attributesById = new Map();
   const rawAttributes = await Attribute.find({ _id: { $in: allAttributeIds } })
-    .select("_id name option type groupId")
+    .select("_id code name option type")
     .lean();
   rawAttributes.forEach((attr: any) =>
     attributesById.set(attr._id.toString(), attr)
@@ -460,7 +460,7 @@ export async function getAttributesByCategoryAndGroupName(
   }
 
   const childGroups = await AttributeGroup.find({ parent_id: parentGroup._id })
-    .select("_id name attributes group_order")
+    .select("_id code name attributes group_order")
     .sort({ group_order: 1 })
     .lean();
 
@@ -469,7 +469,7 @@ export async function getAttributesByCategoryAndGroupName(
     .map((id: string) => attributesById.get(id.toString())!);
 
   const childrenStructured = childGroups.map((child) => ({
-    group: { _id: child._id, name: child.name, group_order: child.group_order },
+    group: { _id: child._id, code: child.code, name: child.name, group_order: child.group_order },
     attributes: (child.attributes || [])
       .filter((id: string) => attributesById.has(id.toString()))
       .map((id: string) => attributesById.get(id.toString())!),

@@ -1,17 +1,15 @@
 "use server";
 import { connection } from "@/utils/connection";
-
 import AttributeGroup from "@/models/AttributesGroup";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 
-// types.ts
 export interface Group {
   _id: string;
   code: string;
   name: string;
-  parent_id: string; // "" if root
-  attributes?: string[] | [{ name: string; _id?: string }]; // Array of attribute IDs
+  parent_id: string;
+  attributes?: string[] | [{ name: string; _id?: string }];
   createdAt?: Date;
   group_order: number;
   children?: Group[];
@@ -49,13 +47,9 @@ function buildTree(flatGroups: Group[]): Group[] {
     }
   });
 
-  const sortFn = (a: Group, b: Group) => {
-    if (a.group_order !== b.group_order) return a.group_order - b.group_order;
-  };
-
-  // Recursively sort each level
   const sortTree = (nodes: (Group & { children: Group[] })[]) => {
-    nodes.forEach((n) => sortTree(n.children as unknown as any[]));
+    nodes.sort((a, b) => a.group_order - b.group_order);
+    nodes.forEach((n: any) => sortTree(n.children));
   };
 
   sortTree(roots);
@@ -71,12 +65,9 @@ export async function findAttributeForGroups(
     const attributeGroups = await AttributeGroup.find(filter)
       .populate("attributes", "_id code name")
       .lean();
-    const serialized = attributeGroups.map(serializeGroup);
-    // Build nested tree before returning
-
-    return serialized;
+    return attributeGroups.map(serializeGroup);
   } catch (error) {
-    console.error("[AttributeGroup] Error in findAllAttributeGroups:", error);
+    console.error("[AttributeGroup] Error in findAttributeForGroups:", error);
     return null;
   }
 }
@@ -90,16 +81,13 @@ export async function findAllAttributeGroups(
     const attributeGroups = await AttributeGroup.find(filter)
       .populate("attributes", "name code _id")
       .lean();
-    const serialized = attributeGroups.map(serializeGroup);
-    // Build nested tree before returning
-    return buildTree(serialized);
+    return buildTree(attributeGroups.map(serializeGroup));
   } catch (error) {
     console.error("[AttributeGroup] Error in findAllAttributeGroups:", error);
     return null;
   }
 }
 
-// Function to create a new attribute group
 export async function createAttributeGroup(
   action: string | null,
   name: string,
@@ -110,10 +98,8 @@ export async function createAttributeGroup(
   sort_order: number
 ) {
   await connection();
-  console.log("groupId:", action);
   try {
     if (action && action !== "create" && attributes.length > 0) {
-      // If groupId is provided, update the existing group
       const res = await AttributeGroup.findByIdAndUpdate(
         { _id: new mongoose.Types.ObjectId(action) },
         {
@@ -123,10 +109,9 @@ export async function createAttributeGroup(
         },
         { new: true }
       );
-      console.log("Updated Attribute Group:", res);
-      // revalidatePath("/attributes");
+      revalidatePath("/attributes");
+      return serializeGroup(res);
     } else if (code && name) {
-      // Create a new attribute group
       const newGroup = await AttributeGroup.findOneAndUpdate(
         { name },
         {
@@ -142,11 +127,71 @@ export async function createAttributeGroup(
         { upsert: true, new: true, lean: true }
       );
       revalidatePath("/attributes");
-      // Return serialized group
       return serializeGroup(newGroup);
     }
   } catch (error) {
     console.error("[AttributeGroup] Error creating group:", error);
+    throw error;
+  }
+}
+
+export async function findGroup(id?: string) {
+  await connection();
+  try {
+    if (!id) return;
+    const attributeGroups = await AttributeGroup.findOne({ _id: id });
+    return serializeGroup(attributeGroups);
+  } catch (error) {
+    console.error("[AttributeGroup] Error in findAttributeForGroups:", error);
+    return null;
+  }
+}
+
+export async function updateAttributeGroup(
+  id: string,
+  updates: Partial<{
+    name: string;
+    code: string;
+    parent_id: string;
+    attributes: string[];
+    group_order: number;
+  }>
+) {
+  await connection();
+  try {
+    const updated = await AttributeGroup.findByIdAndUpdate(
+      { _id: new mongoose.Types.ObjectId(id) },
+      {
+        ...updates,
+        ...(updates.parent_id && {
+          parent_id: new mongoose.Types.ObjectId(updates.parent_id),
+        }),
+        ...(updates.attributes && {
+          attributes: updates.attributes.map(
+            (attr) => new mongoose.Types.ObjectId(attr)
+          ),
+        }),
+      },
+      { new: true }
+    ).lean();
+    revalidatePath("/attributes");
+    return serializeGroup(updated);
+  } catch (error) {
+    console.error("[AttributeGroup] Error updating group:", error);
+    throw error;
+  }
+}
+
+export async function deleteAttributeGroup(id: string) {
+  await connection();
+  try {
+    await AttributeGroup.findByIdAndDelete({
+      _id: new mongoose.Types.ObjectId(id),
+    });
+    revalidatePath("/attributes");
+    return { success: true };
+  } catch (error) {
+    console.error("[AttributeGroup] Error deleting group:", error);
     throw error;
   }
 }

@@ -3,6 +3,8 @@
 import {
   createAttributeGroup,
   findAllAttributeGroups,
+  findGroup,
+  updateAttributeGroup,
 } from "@/app/actions/attributegroup";
 import {
   createAttribute,
@@ -60,6 +62,8 @@ const Attributes = () => {
   const [groupOrder, setGroupOrder] = useState<number>(0);
   const [sortOrder, setSortOrder] = useState<number>(0);
   const [groupId, setGroupId] = useState<string>("");
+  const [editGroupId, setEditGroupId] = useState<string>("");
+
   const [parentGroupId, setParentGroupId] = useState<string>("");
   const [editingAttribute, setEditingAttribute] =
     useState<EditingAttributeType | null>(null);
@@ -90,7 +94,6 @@ const Attributes = () => {
     async function getGroups() {
       try {
         const groupResponse = await findAllAttributeGroups(groupId);
-        console.log("[Attributes] Group response:", groupResponse);
         if (groupResponse) {
           setGroups(groupResponse as unknown as AttributesGroup[]);
           setError(null);
@@ -103,9 +106,30 @@ const Attributes = () => {
       }
     }
 
+    async function findGroupToEdit() {
+      if (!editGroupId) return;
+      try {
+        const groupResponse = await findGroup(editGroupId);
+        console.log(groupResponse);
+        if (groupResponse) {
+          setCode(groupResponse?.code ?? "");
+          setNewGroupName(groupResponse?.name ?? "");
+          setGroupOrder(groupResponse?.group_order ?? "");
+          setParentGroupId(groupResponse?.parent_id ?? "");
+          setError(null);
+        } else {
+          setError("No attribute groups found");
+        }
+      } catch (err) {
+        console.error("[Attributes] Error fetching groups:", err);
+        setError(err instanceof Error ? err.message : "Failed to load groups");
+      }
+    }
+
     fetchData();
     getGroups();
-  }, []);
+    findGroupToEdit();
+  }, [groupId,editGroupId]);
 
   function addAttributes() {
     setFormData((prev) => [
@@ -151,6 +175,29 @@ const Attributes = () => {
       // Refresh groups list
       const groupResponse = await findAllAttributeGroups();
       setGroups(groupResponse as unknown as AttributesGroup[]);
+    }
+  };
+
+  const handleUpdateGroup = async () => {
+    // if (newGroupName.trim() === "") return;
+    if (editGroupId) {
+      const data = {
+        name: newGroupName,
+        code,
+        parent_id: parentGroupId,
+        attributes: selectedAttributes,
+        group_order: groupOrder,
+        sort_order: sortOrder,
+      };
+
+      const response = await updateAttributeGroup(editGroupId, data);
+
+      if (response) {
+        setNewGroupName("");
+        // Refresh groups list
+        const groupResponse = await findAllAttributeGroups();
+        setGroups(groupResponse as unknown as AttributesGroup[]);
+      }
     }
   };
 
@@ -308,7 +355,7 @@ const Attributes = () => {
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
 
-  console.log("editingAttributes:", editingAttribute);
+  console.log("editGroupId:", editGroupId);
 
   return (
     <div className="max-w-7xl mx-auto lg:px-8 w-full">
@@ -331,10 +378,11 @@ const Attributes = () => {
               groups={groups}
               groupId={groupId}
               setGroupId={setGroupId}
+              setEditGroupId={setEditGroupId}
             />
           </div>
 
-          {groupId === "create" && (
+          {groupId === "create" || editGroupId ? (
             <div className="space-y-4 pl-0 md:pl-4">
               <select
                 title="group"
@@ -389,14 +437,16 @@ const Attributes = () => {
                 />
                 <button
                   type="button"
-                  onClick={handleCreateGroup}
+                  onClick={() =>
+                    editGroupId ? handleUpdateGroup : handleCreateGroup
+                  }
                   className="btn text-sm w-full md:w-auto"
                 >
-                  Create Group
+                  {editGroupId ? "Edit Group" : "Create Group"}
                 </button>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
