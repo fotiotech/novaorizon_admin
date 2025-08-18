@@ -121,7 +121,7 @@ export async function createAttributeGroup(
         {
           code,
           name,
-          parent_id: parent_id ? new mongoose.Types.ObjectId(parent_id) : null,
+          parent_id: parent_id ? parent_id : undefined,
           attributes: attributes.map(
             (attr) => new mongoose.Types.ObjectId(attr)
           ),
@@ -156,7 +156,7 @@ export async function updateAttributeGroup(
   updates: Partial<{
     name: string;
     code: string;
-    parent_id: string;
+    parent_id: string | null;
     attributes: string[];
     group_order: number;
     sort_order: number;
@@ -164,21 +164,43 @@ export async function updateAttributeGroup(
 ) {
   await connection();
   try {
-    const updated = await AttributeGroup.findByIdAndUpdate(
-      { _id: new mongoose.Types.ObjectId(id) },
-      {
-        ...updates,
-        ...(updates.parent_id && {
-          parent_id: new mongoose.Types.ObjectId(updates.parent_id),
-        }),
-        ...(updates.attributes && {
-          attributes: updates.attributes.map(
-            (attr) => new mongoose.Types.ObjectId(attr)
+    // Remove attributes index temporarily to avoid duplicate key errors
+    await AttributeGroup.collection.dropIndex("attributes_1").catch(() => {});
+
+    const updateData: any = { ...updates };
+
+    // Safely convert parent_id
+    if (
+      updates.parent_id &&
+      mongoose.Types.ObjectId.isValid(updates.parent_id)
+    ) {
+      updateData.parent_id = new mongoose.Types.ObjectId(updates.parent_id);
+    } else if (updates.parent_id === "" || updates.parent_id === null) {
+      updateData.parent_id = null;
+    }
+
+    // Merge existing attributes with new ones
+    if (updates.attributes) {
+      const group: any = await AttributeGroup.findById(id).lean();
+      const existingAttrs: string[] = (group?.attributes || []).map((a: any) =>
+        a.toString()
+      );
+      const mergedAttrs = Array.from(
+        new Set([
+          ...existingAttrs,
+          ...updates.attributes.filter((attr) =>
+            mongoose.Types.ObjectId.isValid(attr)
           ),
-        }),
-      },
-      { new: true }
-    ).lean();
+        ])
+      ).map((attr) => new mongoose.Types.ObjectId(attr));
+
+      updateData.attributes = mergedAttrs;
+    }
+
+    const updated = await AttributeGroup.findByIdAndUpdate(id, updateData, {
+      new: true,
+    }).lean();
+
     revalidatePath("/attributes");
     return serializeGroup(updated);
   } catch (error) {

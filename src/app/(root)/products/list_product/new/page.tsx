@@ -91,11 +91,11 @@ const ProductForm = () => {
     try {
       let res;
       if (!isLocalId) {
-        res = await updateProduct(productId, { product });
+        res = await updateProduct(productId, { attributes: product });
       } else {
         res = await createProduct({
           category_id: product.category_id,
-          product,
+          attributes: product,
         } as any);
       }
       if (res) {

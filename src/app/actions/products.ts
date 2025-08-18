@@ -56,9 +56,10 @@ export async function findProducts(id?: string) {
     if (!product) return null;
 
     return {
-      ...product.toObject(),
+      ...product?.toObject(),
       _id: product._id.toString(),
       category_id: product.category_id?.toString() ?? null,
+      ...product?.attributes,
     };
   } else {
     const products = await Product.find().sort({ created_at: -1 }).exec();
@@ -67,29 +68,14 @@ export async function findProducts(id?: string) {
       ...doc.toObject(),
       _id: doc._id.toString(),
       category_id: doc.category_id?.toString() ?? null,
+      ...doc?.attributes,
     }));
   }
 }
 
 export interface CreateProductForm {
   category_id: string;
-  product: {
-    identification_branding?: Record<string, any>;
-    product_specifications?: Record<string, any>;
-    media_visuals?: Record<string, any>;
-    pricing_availability?: Record<string, any>;
-    variants_options?: Record<string, any>;
-    key_features?: string[];
-    bullets?: string[];
-    descriptions?: Record<string, any>;
-    materials_composition?: Record<string, any>;
-    logistics_shipping?: Record<string, any>;
-    warranty_returns?: Record<string, any>;
-    reviews_ratings?: any[];
-    ratings_summary?: Record<string, any>;
-    seo_marketing?: Record<string, any>;
-    legal_compliance?: Record<string, any>;
-  };
+  attributes?: Record<string, any>;
 }
 
 function cleanGroup<T extends Record<string, any>>(
@@ -109,49 +95,39 @@ function cleanGroup<T extends Record<string, any>>(
 }
 
 export async function createProduct(formData: CreateProductForm) {
-  const { category_id, product } = formData;
+  const { category_id, attributes } = formData;
 
-  // 1) Basic validation
   if (!category_id || typeof category_id !== "string") {
     throw new Error("A valid category_id is required.");
   }
 
-  // 2) Clean each group
   const docData: any = {
     category_id: new mongoose.Types.ObjectId(category_id),
   };
 
-  for (const groupKey of Object.keys(
-    product
-  ) as (keyof CreateProductForm["product"])[]) {
-    const cleaned = cleanGroup(product[groupKey]);
-    if (cleaned !== undefined) {
-      // Special case arrays of strings
-      if (Array.isArray(cleaned) && !cleaned.length) continue;
-      docData[groupKey] = cleaned;
-    }
+  const cleanedAttributes = cleanGroup(attributes);
+  if (cleanedAttributes) {
+    docData.attributes = cleanedAttributes;
   }
 
-  // Ensure at least one group was provided
-  if (Object.keys(docData).length === 1) {
-    // only category_id present
-    throw new Error("At least one attribute group must contain data.");
+  if (!docData.attributes) {
+    throw new Error("At least one attribute must be provided.");
   }
 
-  // 3) Persist in transaction
   const session = await mongoose.startSession();
   try {
     session.startTransaction();
 
-    const product = new Product(docData);
-    await product.save({ session });
+    const prodDoc = new Product(docData);
+    await prodDoc.save({ session });
 
     await session.commitTransaction();
     revalidatePath("/admin/products/products_list");
+
     return {
-      ...product.toObject(),
-      _id: product._id.toString(),
-      category_id: product.category_id.toString(),
+      ...prodDoc.toObject(),
+      _id: prodDoc._id.toString(),
+      category_id: prodDoc.category_id.toString(),
     };
   } catch (err) {
     await session.abortTransaction();
@@ -162,23 +138,7 @@ export async function createProduct(formData: CreateProductForm) {
 }
 
 export interface UpdateProductForm {
-  product: {
-    identification_branding?: Record<string, any>;
-    product_specifications?: Record<string, any>;
-    media_visuals?: Record<string, any>;
-    pricing_availability?: Record<string, any>;
-    variants_options?: Record<string, any>;
-    key_features?: string[];
-    bullets?: string[];
-    descriptions?: Record<string, any>;
-    materials_composition?: Record<string, any>;
-    logistics_shipping?: Record<string, any>;
-    warranty_returns?: Record<string, any>;
-    reviews_ratings?: any[];
-    ratings_summary?: Record<string, any>;
-    seo_marketing?: Record<string, any>;
-    legal_compliance?: Record<string, any>;
-  };
+  attributes?: Record<string, any>;
 }
 
 function cleanGroupUpdate<T extends Record<string, any> | any[]>(
@@ -208,60 +168,36 @@ export async function updateProduct(
   productId: string,
   formData: UpdateProductForm
 ) {
-  const { product } = formData;
+  const { attributes } = formData;
 
   if (!productId || typeof productId !== "string") {
     throw new Error("A valid product ID is required.");
   }
-  if (typeof product !== "object") {
-    throw new Error("Product update object is required.");
+  if (!attributes || typeof attributes !== "object") {
+    throw new Error("Attributes object is required.");
   }
 
-  // 1) Clean each group
-  const cleanedGroups: Record<string, any> = {};
-  for (const [groupName, groupValue] of Object.entries(product)) {
-    const cleaned = cleanGroupUpdate(groupValue as any);
-    if (cleaned !== undefined) {
-      // Fix invalid date in reviews_ratings
-      if (groupName === "reviews_ratings" && Array.isArray(cleaned)) {
-        cleaned.forEach((review) => {
-          if (review.created_at && typeof review.created_at === "object" && Object.keys(review.created_at).length === 0) {
-            review.created_at = new Date(); // Or handle as needed (null, or skip setting)
-          } else if (typeof review.created_at === "string" || typeof review.created_at === "number") {
-            review.created_at = new Date(review.created_at);
-          }
-        });
-      }
-      cleanedGroups[groupName] = cleaned;
-    }
+  const cleanedAttributes = cleanGroupUpdate(attributes);
+  if (!cleanedAttributes) {
+    throw new Error("No valid attributes after cleaning.");
   }
 
-  if (Object.keys(cleanedGroups).length === 0) {
-    throw new Error("No valid attribute groups after cleaning.");
-  }
-
-  // 2) Load existing doc
   const objId = new mongoose.Types.ObjectId(productId);
   const doc = await Product.findById(objId);
   if (!doc) {
     throw new Error(`Product with ID ${productId} not found.`);
   }
 
-  // 3) Merge per group, narrowing array vs object, using any-cast on set()
-  for (const [groupName, cleanedValue] of Object.entries(cleanedGroups)) {
-    if (Array.isArray(cleanedValue)) {
-      (doc as any).set(groupName, cleanedValue);
-    } else {
-      const existing = (doc as any).get(groupName) || {};
-      (doc as any).set(groupName, { ...existing, ...cleanedValue });
-    }
-  }
+  const existingAttrs = doc.attributes || {};
+  doc.attributes = { ...existingAttrs, ...cleanedAttributes };
 
-  // 4) Save & return
   const updated = await doc.save();
+
+  // Optional: Revalidate path if needed
+  revalidatePath("/admin/products/products_list");
+
   return updated.toObject();
 }
-
 
 export async function deleteProduct(id: string) {
   try {
@@ -365,94 +301,5 @@ export async function deleteProductImages(
     return { success: true, message: "Image(s) deleted successfully" };
   } catch (error: any) {
     console.error("Error deleting product images:", error);
-  }
-}
-
-export async function updateVariantAttributes(
-  productId: string,
-  variantData: {
-    groupName: string;
-    attributes: { name: string; value: string }[];
-    imageUrls?: string[];
-  }
-) {
-  await connection();
-  try {
-    const variant = await VariantAttribute.findOneAndUpdate(
-      {
-        product_id: new mongoose.Types.ObjectId(productId),
-        groupName: variantData.groupName,
-      },
-      {
-        $set: {
-          attributes: variantData.attributes,
-          ...(variantData.imageUrls && { imageUrls: variantData.imageUrls }),
-        },
-      },
-      { upsert: true, new: true }
-    );
-
-    return variant;
-  } catch (error) {
-    console.error("Error updating variant attributes:", error);
-    throw error;
-  }
-}
-
-export async function deleteVariantImages(
-  productId: string,
-  groupName: string,
-  imageUrls?: string[]
-) {
-  await connection();
-  try {
-    const variant = await VariantAttribute.findOne({
-      product_id: new mongoose.Types.ObjectId(productId),
-      groupName,
-    });
-
-    if (!variant) {
-      throw new Error("Variant not found");
-    }
-
-    // Delete specific images or all images
-    if (imageUrls?.length) {
-      // Delete specific images from storage
-      for (const url of imageUrls) {
-        try {
-          const imageRef = ref(storage, url);
-          await deleteObject(imageRef);
-        } catch (e) {
-          console.error(`Error deleting image ${url}:`, e);
-        }
-      }
-
-      // Remove URLs from variant
-      interface VariantWithImages {
-        imageUrls: string[];
-      }
-
-      variant.imageUrls = variant.imageUrls.filter(
-        (url: string) => !imageUrls.includes(url)
-      );
-    } else {
-      // Delete all images from storage
-      for (const url of variant.imageUrls) {
-        try {
-          const imageRef = ref(storage, url);
-          await deleteObject(imageRef);
-        } catch (e) {
-          console.error(`Error deleting image ${url}:`, e);
-        }
-      }
-
-      variant.imageUrls = [];
-    }
-
-    await variant.save();
-    return variant;
-  } catch (error) {
-    console.error("Error deleting variant images:", error);
-    throw error;
   }
 }
