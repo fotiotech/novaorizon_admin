@@ -5,6 +5,8 @@ import React, { useState, useRef, useEffect } from "react";
 interface Group {
   _id: string;
   name: string;
+  group_order: number;
+  sort_order: number;
   children?: Group[];
 }
 
@@ -12,6 +14,7 @@ interface GroupDropdownProps {
   groups: Group[];
   groupId: string;
   setGroupId: (id: string) => void;
+  setAction: (p: string) => void;
   setEditGroupId: (id: string) => void;
   setEditingAttributes?: (prev: (p: any) => void) => void;
   placeholder?: string;
@@ -21,6 +24,7 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
   groups,
   groupId,
   setGroupId,
+  setAction,
   setEditGroupId,
   setEditingAttributes,
   placeholder = "Select or Create New Group",
@@ -103,10 +107,29 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
                       setSelectedParentId(top._id);
                     }}
                   >
-                    <p>{top.name}</p>
+                    <div className="flex flex-col">
+                      <p>{top.name}</p>
+                      <div className="flex gap-2 items-center text-xs text-gray-300">
+                        <p>group: {top.group_order}</p>
+                        <p>sort: {top.sort_order}</p>
+                      </div>
+                    </div>
                   </div>
                   <p
-                    onClick={() => setEditGroupId(top._id)}
+                    onClick={() => {
+                      setAction("add attributes");
+                      setGroupId(top._id);
+                      setIsOpen(false);
+                    }}
+                    className="text-blue-500 p-2 hover:bg-gray-200"
+                  >
+                    + Attributes
+                  </p>
+                  <p
+                    onClick={() => {
+                      setAction("edit");
+                      setEditGroupId(top._id);
+                    }}
                     className="text-blue-500 p-2 hover:bg-gray-200"
                   >
                     Edit
@@ -121,7 +144,7 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
                   </p>
                 </div>
 
-                {selectedParentId === top._id && top.children && (
+                {selectedParentId === top._id && top?.children && (
                   <ul>
                     {top.children.map((child) => (
                       <li key={child._id} className="flex items-center gap-3">
@@ -130,15 +153,37 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
                             groupId === child._id ? "font-semibold" : ""
                           }`}
                           onClick={() => {
-                            setGroupId(child._id);
+                            setGroupId(child?._id);
                             setIsOpen(false);
                             setSelectedParentId("");
                           }}
                         >
-                          <p>{child.name}</p>
+                          <div className="flex flex-col">
+                            <p>{child.name}</p>
+                            <div className="flex gap-2 items-center text-xs text-gray-300">
+                              <p>group: {top.group_order}</p>
+                              <p>sort: {top.sort_order}</p>
+                            </div>
+                          </div>
                         </div>
                         <p
-                          onClick={() => setEditGroupId(child._id)}
+                          onClick={() => {
+                            setAction("add attributes");
+                            setGroupId(child?._id);
+                            setIsOpen(false);
+                            setSelectedParentId("");
+                          }}
+                          className="text-blue-500 p-2 hover:bg-gray-200"
+                        >
+                          + Attributes
+                        </p>
+                        <p
+                          onClick={() => {
+                            setAction("edit");
+                            setEditGroupId(child._id);
+                            setIsOpen(false);
+                            setSelectedParentId("");
+                          }}
                           className="text-blue-500 hover:bg-gray-200 p-2"
                         >
                           Edit
@@ -156,7 +201,7 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
                     <li
                       className="px-6 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-blue-600"
                       onClick={() => {
-                        setGroupId("create");
+                        setAction("create");
                         setIsOpen(false);
                         setSelectedParentId("");
                       }}
@@ -170,7 +215,7 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
             <li
               className="px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer"
               onClick={() => {
-                setGroupId("create");
+                setAction("create");
                 setIsOpen(false);
                 setSelectedParentId("");
               }}

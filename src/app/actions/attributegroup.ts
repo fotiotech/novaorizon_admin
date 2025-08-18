@@ -12,6 +12,7 @@ export interface Group {
   attributes?: string[] | [{ name: string; _id?: string }];
   createdAt?: Date;
   group_order: number;
+  sort_order: number;
   children?: Group[];
 }
 
@@ -30,6 +31,7 @@ function serializeGroup(group: any): Group {
       : [],
     createdAt: group.createdAt ? new Date(group.createdAt) : undefined,
     group_order: group.group_order,
+    sort_order: group.sort_order,
   };
 }
 
@@ -90,6 +92,7 @@ export async function findAllAttributeGroups(
 
 export async function createAttributeGroup(
   action: string | null,
+  groupId: string,
   name: string,
   code: string,
   parent_id: string,
@@ -99,9 +102,10 @@ export async function createAttributeGroup(
 ) {
   await connection();
   try {
-    if (action && action !== "create" && attributes.length > 0) {
+    if (!action) return;
+    if (action === "add attributes" && attributes.length > 0) {
       const res = await AttributeGroup.findByIdAndUpdate(
-        { _id: new mongoose.Types.ObjectId(action) },
+        { _id: new mongoose.Types.ObjectId(groupId) },
         {
           attributes: attributes.map(
             (attr) => new mongoose.Types.ObjectId(attr)
@@ -111,7 +115,7 @@ export async function createAttributeGroup(
       );
       revalidatePath("/attributes");
       return serializeGroup(res);
-    } else if (code && name) {
+    } else if (action === "create" || action === "edit") {
       const newGroup = await AttributeGroup.findOneAndUpdate(
         { name },
         {

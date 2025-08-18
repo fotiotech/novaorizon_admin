@@ -6,6 +6,7 @@ import { findAttributesAndValues } from "@/app/actions/attributes";
 import {
   create_update_mapped_attributes_ids,
   find_mapped_attributes_ids,
+  getCategory,
 } from "@/app/actions/category";
 import {
   findAllAttributeGroups,
@@ -27,7 +28,7 @@ interface Option {
 interface CategoryAttributeProps {
   toggleCreateAttribute: boolean;
   attributes: string[];
-  setToggleCreateAttribute: (flag: boolean) => void;
+  handleSubmit: (e: React.FormEvent) => void;
   setAttributes: (attrs: string[]) => void;
   categoryId?: string;
 }
@@ -35,7 +36,7 @@ interface CategoryAttributeProps {
 const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
   toggleCreateAttribute,
   attributes,
-  setToggleCreateAttribute,
+  handleSubmit,
   setAttributes,
   categoryId,
 }) => {
@@ -130,14 +131,6 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
     }
   };
 
-  const handleSubmitMappedAttributes = async () => {
-    if (!categoryId) {
-      console.error("Category ID is required");
-      return;
-    }
-    await create_update_mapped_attributes_ids(null, categoryId, attributes);
-  };
-
   return (
     <div className={`${toggleCreateAttribute ? "block" : "hidden"} mb-4`}>
       {/* Filter & Sort */}
@@ -184,11 +177,7 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
         </div>
       </div>
       <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={handleSubmitMappedAttributes}
-          className="btn block my-2"
-        >
+        <button type="button" onClick={handleSubmit} className="btn block my-2">
           Map Attributes
         </button>
       </div>

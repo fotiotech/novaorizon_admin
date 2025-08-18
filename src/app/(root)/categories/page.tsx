@@ -187,10 +187,10 @@ const Categories = () => {
 
           <CategoryAttribute
             toggleCreateAttribute={toggleCreateAttribute}
-            setToggleCreateAttribute={setToggleCreateAttribute}
+            handleSubmit={handleSubmit}
             attributes={attributes}
             setAttributes={setAttributes}
-            categoryId={categoryData._id || ""}
+            categoryId={categoryData._id || categoryEdit._id || ""}
           />
         </div>
 

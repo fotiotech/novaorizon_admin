@@ -57,11 +57,13 @@ const Attributes = () => {
     { code: "", name: "", type: "", option: "" },
   ]);
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
-  const [newGroupName, setNewGroupName] = useState<string>("");
+  const [name, setName] = useState<string>("");
   const [code, setCode] = useState<string>("");
   const [groupOrder, setGroupOrder] = useState<number>(0);
+  const [pGroupOrder, setPGroupOrder] = useState<number>(0);
   const [sortOrder, setSortOrder] = useState<number>(0);
   const [groupId, setGroupId] = useState<string>("");
+  const [action, setAction] = useState<string>("");
   const [editGroupId, setEditGroupId] = useState<string>("");
 
   const [parentGroupId, setParentGroupId] = useState<string>("");
@@ -93,9 +95,9 @@ const Attributes = () => {
 
     async function getGroups() {
       try {
-        const groupResponse = await findAllAttributeGroups(groupId);
-        if (groupResponse) {
-          setGroups(groupResponse as unknown as AttributesGroup[]);
+        const res = await findAllAttributeGroups();
+        if (res) {
+          setGroups(res as unknown as AttributesGroup[]);
           setError(null);
         } else {
           setError("No attribute groups found");
@@ -113,8 +115,9 @@ const Attributes = () => {
         console.log(groupResponse);
         if (groupResponse) {
           setCode(groupResponse?.code ?? "");
-          setNewGroupName(groupResponse?.name ?? "");
+          setName(groupResponse?.name ?? "");
           setGroupOrder(groupResponse?.group_order ?? "");
+          setSortOrder(groupResponse?.group_order ?? "");
           setParentGroupId(groupResponse?.parent_id ?? "");
           setError(null);
         } else {
@@ -129,7 +132,7 @@ const Attributes = () => {
     fetchData();
     getGroups();
     findGroupToEdit();
-  }, [groupId,editGroupId]);
+  }, [groupId, editGroupId]);
 
   function addAttributes() {
     setFormData((prev) => [
@@ -162,8 +165,9 @@ const Attributes = () => {
     // if (newGroupName.trim() === "") return;
 
     const response = await createAttributeGroup(
-      groupId || "",
-      newGroupName,
+      action,
+      groupId,
+      name,
       code,
       parentGroupId,
       selectedAttributes,
@@ -171,10 +175,10 @@ const Attributes = () => {
       sortOrder
     );
     if (response) {
-      setNewGroupName("");
+      setName("");
       // Refresh groups list
-      const groupResponse = await findAllAttributeGroups();
-      setGroups(groupResponse as unknown as AttributesGroup[]);
+      const res = await findAllAttributeGroups();
+      setGroups(res as unknown as AttributesGroup[]);
     }
   };
 
@@ -182,7 +186,7 @@ const Attributes = () => {
     // if (newGroupName.trim() === "") return;
     if (editGroupId) {
       const data = {
-        name: newGroupName,
+        name,
         code,
         parent_id: parentGroupId,
         attributes: selectedAttributes,
@@ -193,7 +197,7 @@ const Attributes = () => {
       const response = await updateAttributeGroup(editGroupId, data);
 
       if (response) {
-        setNewGroupName("");
+        setName("");
         // Refresh groups list
         const groupResponse = await findAllAttributeGroups();
         setGroups(groupResponse as unknown as AttributesGroup[]);
@@ -221,7 +225,6 @@ const Attributes = () => {
         }
 
         const attributeData = {
-          action: groupId,
           codes: formData.map((attr) => attr.code.trim()),
           names: formData.map((attr) => attr.name.trim()),
           option: formData.map((attr) =>
@@ -378,25 +381,28 @@ const Attributes = () => {
               groups={groups}
               groupId={groupId}
               setGroupId={setGroupId}
+              setAction={setAction}
               setEditGroupId={setEditGroupId}
             />
           </div>
 
-          {groupId === "create" || editGroupId ? (
+          {action === "create" || action === "edit" ? (
             <div className="space-y-4 pl-0 md:pl-4">
               <select
                 title="group"
                 name="parentGroupId"
                 value={parentGroupId}
-                onChange={(e) => {
-                  setParentGroupId(e.target.value);
-                }}
+                onChange={(e) => setParentGroupId(e.target.value)}
                 className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
               >
                 <option value="">Select parent group</option>
                 {groups?.length > 0 &&
                   groups.map((group) => (
-                    <option key={group._id} value={group._id}>
+                    <option
+                      key={group._id}
+                      value={group._id}
+                      onClick={() => setPGroupOrder(group.group_order)}
+                    >
                       {group.name}
                     </option>
                   ))}
@@ -413,9 +419,9 @@ const Attributes = () => {
                 />
                 <input
                   type="text"
-                  name="newGroupName"
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
+                  name="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   placeholder="Enter new group name"
                   className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
                 />
@@ -438,7 +444,7 @@ const Attributes = () => {
                 <button
                   type="button"
                   onClick={() =>
-                    editGroupId ? handleUpdateGroup : handleCreateGroup
+                    editGroupId ? handleUpdateGroup() : handleCreateGroup()
                   }
                   className="btn text-sm w-full md:w-auto"
                 >
@@ -452,59 +458,64 @@ const Attributes = () => {
 
       {/* Attributes for group selection */}
 
-      <div>
-        <h3>Select Attributes for group</h3>
-        <div className="h-64 overflow-y-auto">
-          <div className="my-3 flex md:flex-row gap-2 items-center">
-            <input
-              type="text"
-              placeholder="Filter attributes..."
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="w-full md:w-1/2 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
-            />
-            <Select
-              options={sortOptions}
-              value={sortAttrOrder}
-              onChange={(opt) => setSortAttrOrder(opt as Option)}
-              className="w-1/3 md:w-1/4 dark:bg-sec-dark"
-            />
-          </div>
-          {visibleAttributes.map((attr) => (
-            <div key={attr._id} className="flex items-center gap-2 ">
+      {action === "add attributes" && (
+        <div>
+          <h3>Select Attributes for group</h3>
+          <div className="h-64 overflow-y-auto">
+            <div className="my-3 flex md:flex-row gap-2 items-center">
               <input
-                type="checkbox"
-                id={`attr-${attr._id}`}
-                checked={selectedAttributes.includes(attr._id || "")}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedAttributes((prev) => [...prev, attr._id || ""]);
-                  } else {
-                    setSelectedAttributes((prev) =>
-                      prev.filter((id) => id !== attr._id)
-                    );
-                  }
-                }}
-                className={
-                  selectedAttributes.includes(attr._id || "")
-                    ? "checked:bg-blue-500"
-                    : ""
-                }
+                type="text"
+                placeholder="Filter attributes..."
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                className="w-full md:w-1/2 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
               />
-              <label htmlFor={`attr-${attr._id}`}>{attr.name}</label>
+              <Select
+                options={sortOptions}
+                value={sortAttrOrder}
+                onChange={(opt) => setSortAttrOrder(opt as Option)}
+                className="w-1/3 md:w-1/4 dark:bg-sec-dark"
+              />
             </div>
-          ))}
+            {visibleAttributes.map((attr) => (
+              <div key={attr._id} className="flex items-center gap-2 ">
+                <input
+                  type="checkbox"
+                  id={`attr-${attr._id}`}
+                  checked={selectedAttributes.includes(attr._id || "")}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedAttributes((prev) => [
+                        ...prev,
+                        attr._id || "",
+                      ]);
+                    } else {
+                      setSelectedAttributes((prev) =>
+                        prev.filter((id) => id !== attr._id)
+                      );
+                    }
+                  }}
+                  className={
+                    selectedAttributes.includes(attr._id || "")
+                      ? "checked:bg-blue-500"
+                      : ""
+                  }
+                />
+                <label htmlFor={`attr-${attr._id}`}>{attr.name}</label>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end my-4 mb-8">
+            <button
+              type="button"
+              onClick={handleCreateGroup}
+              className="btn text-sm mt-2 "
+            >
+              Assign Attributes{" "}
+            </button>
+          </div>
         </div>
-        <div className="flex justify-end my-4 mb-8">
-          <button
-            type="button"
-            onClick={handleCreateGroup}
-            className="btn text-sm mt-2 "
-          >
-            Assign Attributes{" "}
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Attributes Creation Form */}
       <div className="space-y-4 mb-6">
@@ -649,7 +660,7 @@ const Attributes = () => {
                 </div>
                 <button
                   onClick={() =>
-                    manageAttribute("delete", attr.name, "attribute")
+                    manageAttribute("delete", attr.code, "attribute")
                   }
                   className="text-red-500 hover:text-red-700"
                   aria-label={`Delete attribute ${attr.name}`}

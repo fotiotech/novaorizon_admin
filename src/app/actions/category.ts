@@ -8,7 +8,6 @@ import CategoryAttribute from "@/models/CategoryAttribute";
 import { revalidatePath } from "next/cache";
 import AttributeGroup from "@/models/AttributesGroup";
 import Attribute from "@/models/Attributes";
-import { AttributeGroupResult } from "./type";
 
 function generateSlug(name: string) {
   return slugify(name, { lower: true });
@@ -77,31 +76,29 @@ export async function createCategory(
     categoryName?: string;
     description?: string;
     imageUrl?: string[];
-    attributes?: any[];
+    attributes?: string[];
   },
-  id?: string | null,
-  updateAttField?: string | null
+  id?: string | null
 ) {
   try {
     const { _id, categoryName, description, imageUrl, attributes } = formData;
-
     if (!categoryName) return { error: "Category name is required." };
 
     const url_slug = generateSlug(categoryName + (description || ""));
-
     await connection();
 
     const parent_id = _id ? new mongoose.Types.ObjectId(_id) : undefined;
+    const existingCategory = id ? await Category.findById(id) : null;
 
-    const existingCategory = await Category.findOne({ _id: id });
+    if (existingCategory) {
+      // Merge existing and new attributes (avoid duplicates)
+      const existingAttrs = existingCategory.attributes || [];
+      const updatedAttrs = attributes
+        ? Array.from(new Set([...existingAttrs, ...attributes.map(String)]))
+        : existingAttrs;
 
-    const updAttField = existingCategory?.attributes?.filter(
-      (attr: string) => attr !== updateAttField
-    );
-
-    if (id) {
       await Category.updateOne(
-        { _id: new mongoose.Types.ObjectId(id) },
+        { _id: existingCategory._id },
         {
           $set: {
             url_slug,
@@ -109,22 +106,7 @@ export async function createCategory(
             parent_id,
             description,
             imageUrl: imageUrl || undefined,
-            attributes: attributes?.map((ids) => ids.toString()) || undefined,
-          },
-        }
-      );
-    } else if (updateAttField && id) {
-      await Category.updateOne(
-        { _id: new mongoose.Types.ObjectId(id) },
-        {
-          $set: {
-            url_slug,
-            categoryName,
-            parent_id,
-            description,
-            imageUrl: imageUrl || undefined,
-            attributes:
-              updAttField?.map((ids: any) => ids.toString()) || undefined,
+            attributes: updatedAttrs,
           },
         }
       );
@@ -135,10 +117,12 @@ export async function createCategory(
         parent_id,
         description,
         imageUrl: imageUrl || undefined,
-        attributes: attributes || undefined,
+        attributes: attributes?.map(String) || [],
       });
       await newCategory.save();
     }
+
+    revalidatePath("/categories");
   } catch (error: any) {
     console.error(
       "Error while processing the request:\n",
@@ -222,25 +206,14 @@ interface Attribute {
   // other attribute fields
 }
 
-interface GroupNode {
-  _id: string;
-  code: string;
-  name: string;
-  parent_id?: Types.ObjectId;
-  group_order: number;
-  attributes: Attribute[];
-  subgroups: GroupNode[];
-}
-
 export async function find_mapped_attributes_ids(
   categoryId: string | null = null
 ) {
-  console.log("categoryId", categoryId);
   if (!categoryId) return [];
 
   await connection();
 
-  // 1️⃣ Get category and all ancestors
+  // Get attribute IDs from ancestor categories using their `attributes` field directly
   const catObjectId = new Types.ObjectId(categoryId);
   const categories = await Category.aggregate([
     { $match: { _id: catObjectId } },
@@ -253,108 +226,49 @@ export async function find_mapped_attributes_ids(
         as: "ancestors",
       },
     },
-    { $project: { allIds: { $concatArrays: [["$_id"], "$ancestors._id"] } } },
+    { $unwind: { path: "$ancestors", preserveNullAndEmptyArrays: false } },
+    {
+      $group: {
+        _id: null,
+        allAncestorAttributes: { $push: "$ancestors.attributes" },
+      },
+    },
+    {
+      $project: {
+        allAttributes: {
+          $reduce: {
+            input: "$allAncestorAttributes",
+            initialValue: [],
+            in: { $setUnion: ["$$value", "$$this"] },
+          },
+        },
+      },
+    },
   ]);
 
-  const allIds = categories[0]?.allIds ?? [catObjectId];
+  const attributeIds = categories.length > 0 ? categories[0].allAttributes : [];
 
-  // 2️⃣ Get CategoryAttributes mapped to these categories
-  const categoryAttrs = await CategoryAttribute.find({
-    category_id: { $in: allIds },
-  }).lean();
-  const mergedAttrs: Attribute[] = categoryAttrs.flatMap(
-    (ca) => ca.attributes || []
-  );
-
-  // Deduplicate attribute IDs
-  const attrIds = Array.from(new Set(mergedAttrs.map((a) => a._id.toString())));
-
-  if (attrIds.length === 0) return [];
-
-  // 3️⃣ Find AttributeGroups that include any of these attribute IDs
+  // Find AttributeGroups containing these attribute IDs, populate attributes
   const groups = await AttributeGroup.find({
-    attributes: { $in: attrIds },
+    attributes: { $in: attributeIds },
   })
     .populate({ path: "attributes" })
     .lean();
 
-  console.log("groups", groups);
-
   return groups;
 }
 
-async function buildGroupTree(attributes: Attribute[]): Promise<GroupNode[]> {
-  // 1) Load all groups sorted by group_order
-  const allGroups = await AttributeGroup.find()
-    .sort("group_order")
-    .lean<GroupNode[]>();
-
-  // 2) Initialize nodes map
-  const nodes: Record<string, GroupNode> = allGroups.reduce((acc, g) => {
-    acc[g._id.toString()] = {
-      _id: g._id,
-      code: g.code,
-      name: g.name,
-      parent_id: g.parent_id,
-      group_order: g.group_order,
-      attributes: [],
-      subgroups: [],
-    };
-    return acc;
-  }, {} as Record<string, GroupNode>);
-
-  // 3) Build hierarchy
-  const roots: GroupNode[] = [];
-  allGroups.forEach((g) => {
-    const key = g._id.toString();
-    if (g.parent_id) {
-      const parentKey = g.parent_id.toString();
-      nodes[parentKey].subgroups.push(nodes[key]);
-    } else {
-      roots.push(nodes[key]);
-    }
-  });
-
-  // 4) Attach attributes
-  attributes.forEach((attr) => {
-    const gid = attr.groupId?._id.toString();
-    if (gid && nodes[gid]) {
-      nodes[gid].attributes.push(attr);
-    }
-  });
-
-  // 5) Sort and prune empty groups
-  function recurse(list: GroupNode[]): GroupNode[] {
-    return list
-      .map((node) => {
-        node.subgroups = recurse(node.subgroups).sort(
-          (a, b) => a.group_order - b.group_order
-        );
-        return node;
-      })
-      .filter((node) => node.attributes.length > 0 || node.subgroups.length > 0)
-      .sort((a, b) => a.group_order - b.group_order);
-  }
-
-  return recurse(roots);
-}
-
-export async function getAttributesByCategoryAndGroupName(
-  categoryId: string,
-  code?: string
+export async function find_category_attribute_groups(
+  categoryId: string | null = null
 ) {
-  let objectCategoryId: Types.ObjectId;
-  try {
-    objectCategoryId = new Types.ObjectId(categoryId);
-  } catch (e) {
-    console.error("Invalid categoryId passed:", categoryId, e);
-    return null;
-  }
+  if (!categoryId) return [];
+  await connection();
 
-  const result = await Category.aggregate<{
-    allAncestors: Types.ObjectId[];
-  }>([
-    { $match: { _id: objectCategoryId } },
+  const catObjectId = new Types.ObjectId(categoryId);
+
+  // 1️⃣ Get category and ancestor attribute IDs from Category.attributes directly
+  const categories = await Category.aggregate([
+    { $match: { _id: catObjectId } },
     {
       $graphLookup: {
         from: "categories",
@@ -362,113 +276,52 @@ export async function getAttributesByCategoryAndGroupName(
         connectFromField: "parent_id",
         connectToField: "_id",
         as: "ancestors",
-        maxDepth: 20,
+      },
+    },
+    { $unwind: { path: "$ancestors", preserveNullAndEmptyArrays: false } },
+    {
+      $group: {
+        _id: null,
+        allAncestorAttributes: { $push: "$ancestors.attributes" },
       },
     },
     {
       $project: {
-        _id: 1,
-        allAncestors: {
-          $concatArrays: [
-            ["$_id"],
-            { $map: { input: "$ancestors", as: "a", in: "$$a._id" } },
-          ],
+        allAttributes: {
+          $reduce: {
+            input: "$allAncestorAttributes",
+            initialValue: [],
+            in: { $setUnion: ["$$value", "$$this"] },
+          },
         },
       },
     },
   ]);
 
-  if (!result.length) return null;
+  const attributeIds = categories.length > 0 ? categories[0].allAttributes : [];
+  console.log("attributeIds (category + ancestors)", attributeIds);
 
-  const allCategoryIds = result[0].allAncestors;
-  const catAttrDocs = await CategoryAttribute.find({
-    category_id: { $in: allCategoryIds },
+  // 2️⃣ Find groups containing any of these attributes and populate attributes
+  const groups = await AttributeGroup.find({
+    attributes: { $in: attributeIds },
   })
-    .select("attributes")
+    .populate({ path: "attributes" })
     .lean();
 
-  if (!catAttrDocs.length) return null;
-
-  const allAttributeIdsSet = new Set<string>();
-  for (const doc of catAttrDocs) {
-    for (const attrId of doc.attributes || []) {
-      allAttributeIdsSet.add(attrId.toString());
-    }
-  }
-
-  const allAttributeIds = Array.from(allAttributeIdsSet).map(
-    (s) => new Types.ObjectId(s)
-  );
-
-  const allGroups = await AttributeGroup.find({
-    attributes: { $elemMatch: { $in: allAttributeIds } },
-  })
-    .select("_id code name parent_id attributes group_order")
-    .lean();
-
-  if (!allGroups.length) return null;
-
+  // 3️⃣ Build tree structure based on parent_id
   const groupMap = new Map();
-  for (const g of allGroups) {
-    groupMap.set(g._id as string, g);
-  }
+  groups.forEach((g) => groupMap.set(String(g._id), { ...g, children: [] }));
 
-  let parentGroup = allGroups.find((g) => g.code === code) || null;
-  if (!parentGroup) {
-    parentGroup = await AttributeGroup.findOne({ code })
-      .select("_id code name parent_id attributes group_order")
-      .lean();
-  }
+  const rootGroups: any[] = [];
+  groups.forEach((g) => {
+    if (g.parent_id && groupMap.has(String(g.parent_id))) {
+      groupMap
+        .get(String(g.parent_id))
+        .children.push(groupMap.get(String(g._id)));
+    } else {
+      rootGroups.push(groupMap.get(String(g._id)));
+    }
+  });
 
-  if (!parentGroup) return null;
-
-  const isTopParent = !parentGroup.parent_id;
-
-  const attributesById = new Map();
-  const rawAttributes = await Attribute.find({ _id: { $in: allAttributeIds } })
-    .select("_id code name option type")
-    .lean();
-  rawAttributes.forEach((attr: any) =>
-    attributesById.set(attr._id.toString(), attr)
-  );
-
-  if (!isTopParent) {
-    const leafAttrs = (parentGroup.attributes || [])
-      .filter((id: string) => attributesById.has(id.toString()))
-      .map((id: string) => attributesById.get(id.toString())!);
-
-    return leafAttrs.length ? leafAttrs : null;
-  }
-
-  const childGroups = await AttributeGroup.find({ parent_id: parentGroup._id })
-    .select("_id code name attributes group_order")
-    .sort({ group_order: 1 })
-    .lean();
-
-  const parentAttributes = (parentGroup.attributes || [])
-    .filter((id: string) => attributesById.has(id.toString()))
-    .map((id: string) => attributesById.get(id.toString())!);
-
-  const childrenStructured = childGroups.map((child) => ({
-    group: {
-      _id: child._id,
-      code: child.code,
-      name: child.name,
-      group_order: child.group_order,
-    },
-    attributes: (child.attributes || [])
-      .filter((id: string) => attributesById.has(id.toString()))
-      .map((id: string) => attributesById.get(id.toString())!),
-  }));
-
-  return {
-    group: {
-      _id: parentGroup._id,
-      code: parentGroup.code,
-      name: parentGroup.name,
-      group_order: parentGroup.group_order,
-    },
-    attributes: parentAttributes,
-    children: childrenStructured,
-  };
+  return rootGroups;
 }

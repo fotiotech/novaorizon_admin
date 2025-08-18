@@ -5,7 +5,7 @@ import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { persistor, RootState } from "@/app/store/store";
 import { addProduct, clearProduct } from "@/app/store/slices/productSlice";
 import { getBrands } from "@/app/actions/brand";
-import { getAttributesByCategoryAndGroupName } from "@/app/actions/category";
+import { find_category_attribute_groups } from "@/app/actions/category";
 import { updateProduct, createProduct } from "@/app/actions/products";
 import router from "next/router";
 import { v4 as uuidv4, validate, version } from "uuid";
@@ -56,7 +56,10 @@ const ProductForm = () => {
       try {
         setIsLoading(true);
         if (product.category_id) {
-          const resp = await getAttributesByCategoryAndGroupName(product.category_id);
+          const resp = await find_category_attribute_groups(
+            product.category_id
+          );
+          console.log({ resp });
           setGroups(resp as unknown as GroupNode[]);
         }
       } finally {
@@ -67,7 +70,9 @@ const ProductForm = () => {
   }, [product.category_id]);
 
   useEffect(() => {
-    getBrands().then(setBrands).catch((err) => console.error("Brand fetch error:", err));
+    getBrands()
+      .then(setBrands)
+      .catch((err) => console.error("Brand fetch error:", err));
   }, []);
 
   const handleChange = (groupCode: string, field: string, value: any) => {
@@ -87,10 +92,17 @@ const ProductForm = () => {
       if (!isLocalId) {
         res = await updateProduct(productId, { product });
       } else {
-        res = await createProduct({ category_id: product.category_id, product } as any);
+        res = await createProduct({
+          category_id: product.category_id,
+          product,
+        } as any);
       }
       if (res) {
-        alert(isLocalId ? "Product submitted successfully!" : "Product updated successfully!");
+        alert(
+          isLocalId
+            ? "Product submitted successfully!"
+            : "Product updated successfully!"
+        );
         await clearStoreAndRedirect();
         redirect("/admin/products/products_list");
       }
@@ -102,7 +114,12 @@ const ProductForm = () => {
 
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="64px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="64px"
+      >
         <CircularProgress />
       </Box>
     );
@@ -122,12 +139,9 @@ const ProductForm = () => {
 
           return (
             <section key={group._id} className="space-y-4">
-              <h2 className="text-lg font-semibold text-gray-300 pb-2">{name}</h2>
-
-              {code === "variants_options" && <VariantsManager productId={productId} />}
-              {code === "related_products" && (
-                <ManageRelatedProduct product={product} id={productId} />
-              )}
+              <h2 className="text-lg font-semibold text-gray-300 pb-2">
+                {name}
+              </h2>
 
               <CollabsibleSection>
                 <div className="flex gap-2">
@@ -144,6 +158,13 @@ const ProductForm = () => {
                   ))}
                 </div>
               </CollabsibleSection>
+
+              {code === "variants_options" && (
+                <VariantsManager productId={productId} />
+              )}
+              {code === "related_products" && (
+                <ManageRelatedProduct product={product} id={productId} />
+              )}
             </section>
           );
         })}

@@ -4,11 +4,10 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 interface ICategory extends Document {
   url_slug: string;
   categoryName: string;
-  department_id?: mongoose.Types.ObjectId;
   parent_id?: mongoose.Types.ObjectId;
   description?: string;
   imageUrl?: string[];
-  attributes?: [object];
+  attributes?: mongoose.Types.ObjectId[];
   seo_title?: string;
   seo_desc?: string;
   keywords?: string;
@@ -31,10 +30,7 @@ const CategorySchema = new Schema<ICategory>({
     unique: true,
     required: [true, "Category name is required"],
   },
-  department_id: {
-    type: mongoose.Types.ObjectId,
-    ref: "Department",
-  },
+
   parent_id: {
     type: mongoose.Types.ObjectId,
     ref: "Category",
@@ -50,7 +46,7 @@ const CategorySchema = new Schema<ICategory>({
       },
     },
   ],
-  
+  attributes: [{ type: Schema.Types.ObjectId, ref: "Attribute", unique: true }],
   seo_title: { type: String, maxLength: 60 },
   seo_desc: { type: String, maxLength: 160 },
   keywords: { type: String },
