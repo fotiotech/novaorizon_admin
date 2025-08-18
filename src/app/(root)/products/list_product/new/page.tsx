@@ -16,6 +16,7 @@ import ManageRelatedProduct from "@/components/products/ManageRelatedProduct";
 import { AttributeField } from "@/components/products/AttributeFields";
 import { Brand } from "@/constant/types";
 import { redirect } from "next/navigation";
+import GroupPagination from "../../component/GroupPagination";
 
 export type AttributeDetail = {
   _id: string;
@@ -144,7 +145,7 @@ const ProductForm = () => {
               </h2>
 
               <CollabsibleSection>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                   {attributes?.map((a) => (
                     <div key={a._id}>
                       <AttributeField

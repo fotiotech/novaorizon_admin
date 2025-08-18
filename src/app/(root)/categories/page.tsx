@@ -24,6 +24,7 @@ const Categories = () => {
   const [categoryData, setCategoryData] = useState<Cat>({
     _id: "",
     categoryName: "",
+    parent_id: "",
     description: "",
     imageUrl: [],
   });
@@ -31,6 +32,7 @@ const Categories = () => {
   const [categoryEdit, setCategoryEdit] = useState<Cat>({
     _id: "",
     categoryName: "",
+    parent_id: "",
     description: "",
     imageUrl: [],
     attributes: [],
@@ -78,6 +80,7 @@ const Categories = () => {
         setCategoryEdit({
           _id: editRes?._id,
           categoryName: editRes?.categoryName,
+          parent_id: editRes?.parent_id,
           description: editRes?.description,
           imageUrl: editRes?.imageUrl,
         });
@@ -127,8 +130,8 @@ const Categories = () => {
             </label>
             <select
               title="parentCategory"
-              name="_id"
-              value={editId ? categoryEdit._id : categoryData._id}
+              name="parent_id"
+              value={editId ? categoryEdit.parent_id : categoryData.parent_id}
               onChange={handleCategoryData}
               className="w-full p-2 rounded-lg border bg-gray-100 dark:bg-gray-700 dark:text-white"
             >
@@ -180,7 +183,7 @@ const Categories = () => {
           <button
             type="button"
             onClick={() => setToggleCreateAttribute((prev) => !prev)}
-            className="text-blue-600 dark:text-blue-400 font-medium hover:underline"
+            className="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline"
           >
             Map Attributes for this Category?
           </button>
@@ -190,7 +193,12 @@ const Categories = () => {
             handleSubmit={handleSubmit}
             attributes={attributes}
             setAttributes={setAttributes}
-            categoryId={categoryData._id || categoryEdit._id || ""}
+            categoryId={
+              categoryData._id ||
+              categoryEdit._id ||
+              categoryData.parent_id ||
+              ""
+            }
           />
         </div>
 

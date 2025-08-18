@@ -7,9 +7,11 @@ import { RootState } from "@/app/store/store";
 
 interface MainImageUploaderProps {
   productId: string;
+  path: string;
+  stored: string;
 }
 
-const GalleryUploader: React.FC<MainImageUploaderProps> = ({ productId }) => {
+const GalleryUploader: React.FC<MainImageUploaderProps> = ({ productId, path, stored }) => {
   const dispatch = useAppDispatch();
   const { files, loading, addFiles, removeFile } = useFileUploader();
 
@@ -19,8 +21,8 @@ const GalleryUploader: React.FC<MainImageUploaderProps> = ({ productId }) => {
       dispatch(
         addProduct({
           _id: productId,
-          path: "media_visuals.gallery",
-          value: files,
+          path,
+          value: files ?? stored,
         })
       );
     }

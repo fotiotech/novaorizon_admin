@@ -59,9 +59,8 @@ const Attributes = () => {
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
   const [name, setName] = useState<string>("");
   const [code, setCode] = useState<string>("");
-  const [groupOrder, setGroupOrder] = useState<number>(0);
-  const [pGroupOrder, setPGroupOrder] = useState<number>(0);
-  const [sortOrder, setSortOrder] = useState<number>(0);
+  const [groupOrder, setGroupOrder] = useState<number | null>(null);
+  const [sortOrder, setSortOrder] = useState<number | null>(null);
   const [groupId, setGroupId] = useState<string>("");
   const [action, setAction] = useState<string>("");
   const [editGroupId, setEditGroupId] = useState<string>("");
@@ -171,8 +170,8 @@ const Attributes = () => {
       code,
       parentGroupId,
       selectedAttributes,
-      groupOrder,
-      sortOrder
+      groupOrder as number,
+      sortOrder as number
     );
     if (response) {
       setName("");
@@ -190,8 +189,8 @@ const Attributes = () => {
         code,
         parent_id: parentGroupId,
         attributes: selectedAttributes,
-        group_order: groupOrder,
-        sort_order: sortOrder,
+        group_order: groupOrder as number,
+        sort_order: sortOrder as number,
       };
 
       const response = await updateAttributeGroup(editGroupId, data);
@@ -398,11 +397,7 @@ const Attributes = () => {
                 <option value="">Select parent group</option>
                 {groups?.length > 0 &&
                   groups.map((group) => (
-                    <option
-                      key={group._id}
-                      value={group._id}
-                      onClick={() => setPGroupOrder(group.group_order)}
-                    >
+                    <option key={group._id} value={group._id}>
                       {group.name}
                     </option>
                   ))}
@@ -428,7 +423,7 @@ const Attributes = () => {
                 <input
                   type="number"
                   name="groupOrder"
-                  value={groupOrder}
+                  value={groupOrder as number}
                   onChange={(e) => setGroupOrder(Number(e.target.value))}
                   placeholder="Enter new group order"
                   className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
@@ -436,7 +431,7 @@ const Attributes = () => {
                 <input
                   type="number"
                   name="sortOrder"
-                  value={sortOrder}
+                  value={sortOrder as number}
                   onChange={(e) => setSortOrder(Number(e.target.value))}
                   placeholder="Enter new group name"
                   className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"

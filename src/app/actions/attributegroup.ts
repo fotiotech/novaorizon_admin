@@ -125,8 +125,8 @@ export async function createAttributeGroup(
           attributes: attributes.map(
             (attr) => new mongoose.Types.ObjectId(attr)
           ),
-          group_order,
-          sort_order,
+          group_order: group_order ?? null,
+          sort_order: sort_order ?? null,
         },
         { upsert: true, new: true, lean: true }
       );
@@ -159,6 +159,7 @@ export async function updateAttributeGroup(
     parent_id: string;
     attributes: string[];
     group_order: number;
+    sort_order: number;
   }>
 ) {
   await connection();

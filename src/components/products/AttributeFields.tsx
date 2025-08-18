@@ -25,10 +25,18 @@ export const AttributeField: React.FC<{
 
       <div>
         {type === "file" && code === "main_image" && (
-          <MainImageUploader productId={productId} />
+          <MainImageUploader
+            productId={productId}
+            path={groupCode}
+            stored={stored}
+          />
         )}
         {type === "file" && code === "gallery" && (
-          <GalleryUploader productId={productId} />
+          <GalleryUploader
+            productId={productId}
+            path={groupCode}
+            stored={stored}
+          />
         )}
 
         {type === "text" && (

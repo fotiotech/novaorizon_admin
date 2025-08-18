@@ -7,6 +7,7 @@ import {
   create_update_mapped_attributes_ids,
   find_mapped_attributes_ids,
   getCategory,
+  updateCategoryAttributes,
 } from "@/app/actions/category";
 import {
   findAllAttributeGroups,
@@ -177,7 +178,13 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
         </div>
       </div>
       <div className="flex justify-end">
-        <button type="button" onClick={handleSubmit} className="btn block my-2">
+        <button
+          type="button"
+          onClick={async () =>
+            updateCategoryAttributes(categoryId as string, attributes)
+          }
+          className="btn block my-2"
+        >
           Map Attributes
         </button>
       </div>
