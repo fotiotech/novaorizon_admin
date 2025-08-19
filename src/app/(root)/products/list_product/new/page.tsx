@@ -126,6 +126,8 @@ const ProductForm = () => {
     );
   }
 
+  console.log({ product });
+
   return (
     <form
       onSubmit={(e) => {

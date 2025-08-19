@@ -26,7 +26,7 @@ const MainImageUploader: React.FC<MainImageUploaderProps> = ({
         addProduct({
           _id: productId,
           path,
-          value: files[0] ?? stored,
+          value: files[0] ,
         })
       );
     }
