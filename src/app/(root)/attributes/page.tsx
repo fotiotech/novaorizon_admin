@@ -171,7 +171,6 @@ const Attributes = () => {
       parentGroupId,
       selectedAttributes,
       groupOrder as number,
-      sortOrder as number
     );
     if (response) {
       setName("");
@@ -190,7 +189,6 @@ const Attributes = () => {
         parent_id: parentGroupId,
         attributes: selectedAttributes,
         group_order: groupOrder as number,
-        sort_order: sortOrder as number,
       };
 
       const response = await updateAttributeGroup(editGroupId, data);
@@ -428,14 +426,7 @@ const Attributes = () => {
                   placeholder="Enter new group order"
                   className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
                 />
-                <input
-                  type="number"
-                  name="sortOrder"
-                  value={sortOrder as number}
-                  onChange={(e) => setSortOrder(Number(e.target.value))}
-                  placeholder="Enter new group name"
-                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
-                />
+                
                 <button
                   type="button"
                   onClick={() =>

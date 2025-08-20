@@ -67,9 +67,14 @@ const ProductList = () => {
         <TableBody component={Paper} sx={{ backgroundColor: "#d0d0d0" }}>
           {products.allIds.map((id) => {
             const p = products.byId[id];
+            console.log({ p });
+
             if (!p) return null;
 
-            const { name } = p.identification_branding || {};
+            const name =
+              p.identification_branding?.name ||
+              p.basic_informations?.name ||
+              {};
             const media = p.media_visuals || {};
             const imageUrl = media.main_image || media.gallery?.[0] || null;
             const pricing = p.pricing_availability || {};

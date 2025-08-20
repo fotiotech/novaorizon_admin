@@ -13,9 +13,7 @@ const defaultConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const defaultApp =
-  getApps().find((app) => app.name === "[DEFAULT]") ??
-  initializeApp(defaultConfig);
+const defaultApp = initializeApp(defaultConfig);
 
 // Secondary app (only for Realtime Database)
 const secondaryConfig = {
@@ -30,14 +28,8 @@ const secondaryConfig = {
 };
 
 const SECONDARY_APP_NAME = "secondary";
-const secondaryApp =
-  getApps().find((app) => app.name === SECONDARY_APP_NAME) ??
-  initializeApp(secondaryConfig, SECONDARY_APP_NAME);
+const secondaryApp = initializeApp(secondaryConfig, SECONDARY_APP_NAME);
 
 // Exports
 export const storage = getStorage(defaultApp);
 export const db = getFirestore(secondaryApp);
-
-// Optional: log to verify
-console.log("Default projectId:", defaultApp.options.projectId);
-console.log("Secondary projectId:", secondaryApp.options.projectId);

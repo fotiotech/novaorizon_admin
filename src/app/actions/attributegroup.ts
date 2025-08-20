@@ -97,8 +97,7 @@ export async function createAttributeGroup(
   code: string,
   parent_id: string,
   attributes: string[] = [],
-  group_order: number,
-  sort_order: number
+  group_order: number
 ) {
   await connection();
   try {
@@ -126,7 +125,6 @@ export async function createAttributeGroup(
             (attr) => new mongoose.Types.ObjectId(attr)
           ),
           group_order: group_order ?? null,
-          sort_order: sort_order ?? null,
         },
         { upsert: true, new: true, lean: true }
       );
@@ -159,13 +157,12 @@ export async function updateAttributeGroup(
     parent_id: string | null;
     attributes: string[];
     group_order: number;
-    sort_order: number;
   }>
 ) {
   await connection();
   try {
     // Remove attributes index temporarily to avoid duplicate key errors
-    await AttributeGroup.collection.dropIndex("attributes_1").catch(() => {});
+    
 
     const updateData: any = { ...updates };
 

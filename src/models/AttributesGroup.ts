@@ -21,7 +21,6 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
     },
     attributes: [{ type: Schema.Types.ObjectId, ref: "Attribute" }],
     group_order: { type: Number, default: 0 },
-    sort_order: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -30,7 +29,6 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
 
 // Indexing for faster queries
 attributeGroupSchema.index({ code: 1 }, { unique: true });
-attributeGroupSchema.index({ group_order: 1 });
 
 const AttributeGroup =
   mongoose.models.AttributeGroup ||

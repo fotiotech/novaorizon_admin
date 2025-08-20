@@ -203,7 +203,7 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
                   {group.name}
                 </h3>
                 <ul className="list-disc pl-5">
-                  {group.attributes.map((attr: any) => (
+                  {group.attributes?.map((attr: any) => (
                     <li
                       key={attr._id}
                       className="text-gray-700 dark:text-gray-300"

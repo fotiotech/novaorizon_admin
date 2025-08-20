@@ -111,7 +111,6 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
                       <p>{top.name}</p>
                       <div className="flex gap-2 items-center text-xs text-gray-300">
                         <p>group: {top.group_order}</p>
-                        <p>sort: {top.sort_order}</p>
                       </div>
                     </div>
                   </div>
@@ -162,7 +161,6 @@ const GroupDropdown: React.FC<GroupDropdownProps> = ({
                             <p>{child.name}</p>
                             <div className="flex gap-2 items-center text-xs text-gray-300">
                               <p>group: {top.group_order}</p>
-                              <p>sort: {top.sort_order}</p>
                             </div>
                           </div>
                         </div>

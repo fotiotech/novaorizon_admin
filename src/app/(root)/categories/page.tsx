@@ -45,6 +45,8 @@ const Categories = () => {
   const [toggleCreateAttribute, setToggleCreateAttribute] =
     useState<boolean>(false);
 
+    console.log({categories})
+
   const action = async (formData: Cat) => {
     const result = await createCategory(formData, editId);
     if (result) {

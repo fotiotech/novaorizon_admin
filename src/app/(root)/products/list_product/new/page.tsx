@@ -36,6 +36,43 @@ export type GroupNode = {
   group_order: number;
 };
 
+function buildPath(groupCode: string, field: string, idx?: number | null) {
+  if (!groupCode && !field) return "";
+
+  // fullBase is the prefix we'll prepend (if groupCode present)
+  const prefix = groupCode ? `${groupCode}.` : "";
+
+  if (idx == null) {
+    return `${prefix}${field}`;
+  }
+
+  // split into segments and insert index into the first segment that is not an index-only numeric
+  const segments = field.split(".");
+
+  const targetIdx = (() => {
+    for (let i = 0; i < segments.length; i++) {
+      const s = segments[i];
+      if (/^\d+$/.test(s)) {
+        // numeric-only seg like "0" -> convert to "[0]" form on that seg
+        segments[i] = `[${s}]`;
+        return segments.join(".");
+      }
+      if (/\[\d+\]$/.test(s)) {
+        // already contains index, leave it
+        return segments.join(".");
+      }
+      // common case: attach index to the first non-numeric segment
+      // attach and return
+      segments[i] = `${s}[${idx}]`;
+      return segments.join(".");
+    }
+    // fallback: append to end
+    return `${field}[${idx}]`;
+  })();
+
+  return `${prefix}${targetIdx}`;
+}
+
 const ProductForm = () => {
   const dispatch = useAppDispatch();
   const productState = useAppSelector((state: RootState) => state.product);
@@ -61,6 +98,7 @@ const ProductForm = () => {
             product.category_id
           );
           console.log({ resp });
+
           setGroups(resp as unknown as GroupNode[]);
         }
       } finally {
@@ -76,11 +114,19 @@ const ProductForm = () => {
       .catch((err) => console.error("Brand fetch error:", err));
   }, []);
 
-  const handleChange = (groupCode: string, field: string, value: any) => {
+  const handleChange = (
+    groupCode: string,
+    field: string,
+    value: any,
+    idx?: number | null
+  ) => {
+    const path = buildPath(groupCode, field, idx);
+    // debug
+    // console.log("handleChange", { productId, path, value });
     dispatch(
       addProduct({
         _id: productId,
-        path: `${groupCode}.${field}`,
+        path,
         value,
       })
     );
@@ -128,6 +174,44 @@ const ProductForm = () => {
 
   console.log({ product });
 
+  function renderGroup(group: any) {
+    const { _id, code, name, attributes, children } = group;
+
+    return (
+      <section key={_id} className="space-y-4">
+        {/* special managers (now actually rendered) */}
+        {code === "variants_options" && (
+          <VariantsManager productId={productId} />
+        )}
+        {code === "related_products" && (
+          <ManageRelatedProduct product={product} id={productId} />
+        )}
+
+        <h2 className="text-lg font-semibold text-gray-300 pb-2">{name}</h2>
+
+        <CollabsibleSection>
+          <div className="flex flex-col gap-2">
+            {attributes?.map((a: any) => (
+              <div key={a._id}>
+                <AttributeField
+                  productId={productId}
+                  attribute={a}
+                  field={product[code]?.[a.code]}
+                  path={code}
+                  handleAttributeChange={handleChange}
+                />
+              </div>
+            ))}
+
+            {/* render children recursively (works for any depth) */}
+            {children?.length > 0 &&
+              children.map((child: any) => renderGroup(child))}
+          </div>
+        </CollabsibleSection>
+      </section>
+    );
+  }
+
   return (
     <form
       onSubmit={(e) => {
@@ -136,41 +220,7 @@ const ProductForm = () => {
       }}
       className="space-y-8 max-w-3xl mx-auto rounded-lg shadow"
     >
-      {groups.length > 0 &&
-        groups.map((group) => {
-          const { code, name, parent_id, attributes } = group;
-
-          return (
-            <section key={group._id} className="space-y-4">
-              <h2 className="text-lg font-semibold text-gray-300 pb-2">
-                {name}
-              </h2>
-
-              <CollabsibleSection>
-                <div className="flex flex-col gap-2">
-                  {attributes?.map((a) => (
-                    <div key={a._id}>
-                      <AttributeField
-                        productId={productId}
-                        attribute={a}
-                        field={product?.[code]?.[a.code]}
-                        path={code}
-                        handleAttributeChange={handleChange}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </CollabsibleSection>
-
-              {code === "variants_options" && (
-                <VariantsManager productId={productId} />
-              )}
-              {code === "related_products" && (
-                <ManageRelatedProduct product={product} id={productId} />
-              )}
-            </section>
-          );
-        })}
+      {groups.length > 0 && groups.map((group) => renderGroup(group))}
 
       <div className="flex justify-between mt-6 items-center">
         <button

@@ -63,6 +63,7 @@ export async function findProducts(id?: string) {
     };
   } else {
     const products = await Product.find().sort({ created_at: -1 }).exec();
+    console.log({ products });
 
     return products.map((doc) => ({
       ...doc.toObject(),
@@ -118,11 +119,13 @@ export async function createProduct(formData: CreateProductForm) {
   try {
     session.startTransaction();
 
+
     const prodDoc = new Product(docData);
     await prodDoc.save({ session });
 
     await session.commitTransaction();
     revalidatePath("/admin/products/products_list");
+
 
     return {
       ...prodDoc.toObject(),

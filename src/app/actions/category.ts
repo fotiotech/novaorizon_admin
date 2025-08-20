@@ -281,6 +281,7 @@ export async function find_mapped_attributes_ids(
   return groups;
 }
 
+// TypeScript-friendly implementation
 export async function find_category_attribute_groups(
   categoryId: string | null = null
 ) {
@@ -289,7 +290,7 @@ export async function find_category_attribute_groups(
 
   const catObjectId = new Types.ObjectId(categoryId);
 
-  // 1️⃣ Get category and ancestor attribute IDs from Category.attributes directly
+  // --- 1) build attributeIds as before (defensive aggregation) ---
   const categories = await Category.aggregate([
     { $match: { _id: catObjectId } },
     {
@@ -305,10 +306,16 @@ export async function find_category_attribute_groups(
       $project: {
         allAttributes: {
           $setUnion: [
-            "$attributes",
+            { $ifNull: ["$attributes", []] },
             {
               $reduce: {
-                input: "$ancestors.attributes",
+                input: {
+                  $map: {
+                    input: { $ifNull: ["$ancestors", []] },
+                    as: "a",
+                    in: { $ifNull: ["$$a.attributes", []] },
+                  },
+                },
                 initialValue: [],
                 in: { $setUnion: ["$$value", "$$this"] },
               },
@@ -319,37 +326,98 @@ export async function find_category_attribute_groups(
     },
   ]);
 
-  const attributeIds = categories.length > 0 ? categories[0].allAttributes : [];
-  console.log("attributeIds (category + ancestors)", attributeIds);
+  const attributeIds = Array.isArray(categories?.[0]?.allAttributes)
+    ? categories[0].allAttributes
+    : [];
+  if (attributeIds.length === 0) return [];
 
-  // 2️⃣ Find groups containing any of these attributes and populate attributes
-  const groups = await AttributeGroup.find({
+  // --- 2) initial groups that reference the attributes (populate attributes) ---
+  const initialGroups = await AttributeGroup.find({
     attributes: { $in: attributeIds },
   })
-    .populate({ path: "attributes", options: { sort: { sort_order: 1 } } })
+    .populate("attributes") // populate attributes here
     .lean();
 
-  // Sort all groups by group_order first
-  groups.sort((a, b) => (a.group_order || 0) - (b.group_order || 0));
+  if (!initialGroups || initialGroups.length === 0) return [];
 
-  // 3️⃣ Build tree structure based on parent_id
-  const groupMap = new Map();
-  groups.forEach((g) => groupMap.set(String(g._id), { ...g, children: [] }));
+  // --- 3) iteratively fetch ancestors (parents) and populate attributes ---
+  const allGroupsMap = new Map<string, any>();
+  initialGroups.forEach((g) => allGroupsMap.set(String(g._id), { ...g }));
 
-  const rootGroups: any = [];
-  groups.forEach((g) => {
-    if (g.parent_id && groupMap.has(String(g.parent_id))) {
-      const parent = groupMap.get(String(g.parent_id));
-      parent.children.push(groupMap.get(String(g._id)));
-      // Ensure children are sorted by sort_order
-      parent.children.sort(
-        (a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0)
-      );
-    } else {
-      rootGroups.push(groupMap.get(String(g._id)));
+  // seed parent ids to fetch
+  let toFetch = new Set<string>();
+  initialGroups.forEach((g) => {
+    if (g.parent_id) {
+      const pid = String(g.parent_id);
+      if (!allGroupsMap.has(pid)) toFetch.add(pid);
     }
   });
 
-  // rootGroups already sorted by group_order due to previous sort
-  return rootGroups; // This can be paginated directly
+  const MAX_ITER = 50;
+  let iter = 0;
+
+  while (toFetch.size > 0 && iter < MAX_ITER) {
+    iter += 1;
+    // convert to ObjectId array
+    const ids = Array.from(toFetch).map((id) => new Types.ObjectId(id));
+    toFetch = new Set();
+
+    const parents = await AttributeGroup.find({ _id: { $in: ids } })
+      .populate({ path: "attributes" }) // populate attributes for parents too
+      .lean();
+
+    if (!parents || parents.length === 0) break;
+
+    parents.forEach((p) => {
+      const pid = String(p._id);
+      if (!allGroupsMap.has(pid)) {
+        allGroupsMap.set(pid, { ...p });
+        if (p.parent_id) {
+          const ppid = String(p.parent_id);
+          if (!allGroupsMap.has(ppid)) toFetch.add(ppid);
+        }
+      }
+    });
+  }
+
+  // optional: log a warning if iter === MAX_ITER (possible cycle)
+  if (iter === MAX_ITER) {
+    console.warn(
+      "find_category_attribute_groups: reached MAX_ITER — possible cycle in group parents"
+    );
+  }
+
+  // --- 4) Build tree using allGroupsMap (use Array.from to avoid MapIterator TS errors) ---
+  const groupMap = new Map<string, any>();
+  for (const [id, g] of Array.from(allGroupsMap.entries())) {
+    groupMap.set(id, { ...g, children: [] });
+  }
+
+  const rootGroups: any[] = [];
+
+  // again use Array.from to iterate map entries safely in TS target < es2015
+  for (const [id, node] of Array.from(groupMap.entries())) {
+    const parentId = node.parent_id ? String(node.parent_id) : null;
+    if (parentId && groupMap.has(parentId)) {
+      const parent = groupMap.get(parentId);
+      parent.children.push(node);
+    } else {
+      rootGroups.push(node);
+    }
+  }
+
+  // --- 5) sort tree by group_order only ---
+  const sortByGroupOrder = (a: any, b: any) =>
+    (a.group_order || 0) - (b.group_order || 0);
+
+  const sortTreeRecursively = (nodes: any[]) => {
+    nodes.sort(sortByGroupOrder);
+    nodes.forEach((n) => {
+      if (n.children && n.children.length > 0) sortTreeRecursively(n.children);
+    });
+  };
+
+  sortTreeRecursively(rootGroups);
+
+  return rootGroups;
 }
