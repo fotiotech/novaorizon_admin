@@ -2,7 +2,7 @@ import React from "react";
 import Select, { MultiValue } from "react-select";
 import MainImageUploader from "./MainImageUploader";
 import GalleryUploader from "./GalleryUploader";
-import { AttributeDetail } from "@/app/(root)/products/list_product/new/page";
+import { AttributeDetail } from "@/app/(root)/products/new/page";
 
 export const AttributeField: React.FC<{
   productId: string;

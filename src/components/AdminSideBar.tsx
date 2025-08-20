@@ -73,14 +73,9 @@ const menuConfig = [
     title: "Products",
     links: [
       {
-        name: "All Products",
-        href: "/products/products_list",
+        name: "Products",
+        href: "/products",
         icon: <ShoppingCart />,
-      },
-      {
-        name: "List Product",
-        href: "/products/list_product",
-        icon: <ListAlt />,
       },
       { name: "Category", href: "/categories", icon: <Category /> },
       { name: "Brands", href: "/brands", icon: <Tag /> },

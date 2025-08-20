@@ -129,7 +129,7 @@ const Category = () => {
             : "Please select a category to continue"}
         </div>
         <Link
-          href={parentId ? "/products/list_product/new" : "#"}
+          href={parentId ? "/products/new" : "#"}
           className={`${
             parentId
               ? "bg-blue-500 hover:bg-blue-600"
