@@ -2,8 +2,7 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { getDatabase } from "firebase/database";
-import { getAuth } from "firebase/auth";
+
 
 const defaultConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
