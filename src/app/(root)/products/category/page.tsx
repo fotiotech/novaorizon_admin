@@ -9,9 +9,17 @@ import { addCategory } from "@/app/store/slices/categorySlice";
 import { addProduct, resetProduct } from "@/app/store/slices/productSlice";
 import { v4 as uuidv4 } from "uuid";
 import { fetchCategory } from "@/fetch/fetchCategory";
+import { useRouter, useSearchParams } from "next/navigation";
+import { fetchProducts } from "@/fetch/fetchProducts";
 
 const Category = () => {
   const dispatch = useAppDispatch();
+  const pId = useSearchParams().get("id");
+  useEffect(() => {
+    if (pId) {
+      dispatch(fetchProducts(pId));
+    }
+  });
   const category = useAppSelector((state) => state.category);
   const products = useAppSelector((state) => state.product);
 
@@ -67,8 +75,6 @@ const Category = () => {
 
   const [filter, setFilter] = useState<string>("");
 
-
-
   return (
     <div className=" mt-4">
       <h3 className="text-lg font-semibold mb-4">Select Category</h3>
@@ -106,14 +112,15 @@ const Category = () => {
                     >
                       {categoryData?.categoryName}
                     </p>
-                    
                   </div>
                   <span
                     onClick={(e) => {
                       e.stopPropagation();
                       handleSelect(categoryData._id);
                     }}
-                    className={`${parentId === categoryData._id ? "bg-blue-400" : ""} px-2 rounded-lg border`}
+                    className={`${
+                      parentId === categoryData._id ? "bg-blue-400" : ""
+                    } px-2 rounded-lg border`}
                   >
                     Select
                   </span>
