@@ -119,13 +119,14 @@ export async function createProduct(formData: CreateProductForm) {
   try {
     session.startTransaction();
 
+    await Product.collection.dropIndex("identification_branding.name_1");
+    console.log(await Product.collection.getIndexes());
 
     const prodDoc = new Product(docData);
     await prodDoc.save({ session });
 
     await session.commitTransaction();
     revalidatePath("/admin/products/products_list");
-
 
     return {
       ...prodDoc.toObject(),
