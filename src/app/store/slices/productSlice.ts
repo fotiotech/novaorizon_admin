@@ -53,7 +53,7 @@ const productSlice = createSlice({
       state.byId = action.payload.byId;
       state.allIds = action.payload.allIds;
     },
-    // reducer
+
     addProduct: (state, action: PayloadAction<any | null>) => {
       const { _id, path, value } = action.payload ?? {};
       if (!_id) {
@@ -135,7 +135,6 @@ const productSlice = createSlice({
                 cursor = state.byId[_id];
               } else {
                 const last = parentStack[parentStack.length - 1];
-                // last.key may be a string prop or a numeric index; assign accordingly
                 if (typeof last.key === "number") {
                   last.node[last.key] = [];
                   cursor = last.node[last.key];
@@ -166,6 +165,29 @@ const productSlice = createSlice({
         } else {
           // Case B: property segment ("name" / "details")
           const key = prop as string;
+
+          // IMPORTANT FIX:
+          // If cursor is an Array and we're about to set a named property (non-numeric),
+          // Immer will throw. Replace the array in its parent with an object so we can set fields.
+          if (Array.isArray(cursor) && !isNumeric(key)) {
+            if (parentStack.length === 0) {
+              // replace root
+              state.byId[_id] = {};
+              cursor = state.byId[_id];
+            } else {
+              const last = parentStack[parentStack.length - 1];
+              if (typeof last.key === "number") {
+                // parent is an array, last.key is index
+                last.node[last.key] = {};
+                cursor = last.node[last.key];
+              } else {
+                // parent is object, last.key is property name
+                last.node[last.key as string] = {};
+                cursor = last.node[last.key as string];
+              }
+            }
+          }
+
           if (isLast) {
             if (isObject(cursor[key]) && isObject(value)) {
               deepMerge(cursor[key], value);

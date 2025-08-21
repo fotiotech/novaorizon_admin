@@ -15,12 +15,13 @@ export const AttributeField: React.FC<{
     selected: any
   ) => void;
 }> = ({ productId, attribute, field, path, handleAttributeChange }) => {
-  const { code, name, _id, type, option } = attribute;
-  const groupCode = path;
+  const { code, name, type, option } = attribute;
   const stored = field ?? "";
+  const groupCode = path;
+  console.log({ groupCode, stored, code });
 
   return (
-    <div key={_id} className="mb-4">
+    <div className="mb-4">
       <label className="block mb-1">{name}</label>
 
       <div>
@@ -145,7 +146,6 @@ export const AttributeField: React.FC<{
                 <input
                   type="radio"
                   className="mr-2"
-                  name={_id}
                   value={opt}
                   checked={stored === opt}
                   onChange={() => handleAttributeChange(groupCode, code, opt)}

@@ -187,9 +187,7 @@ const ProductForm = () => {
           <ManageRelatedProduct product={product} id={productId} />
         )}
 
-        <h2 className="text-lg font-semibold text-gray-300 pb-2">{name}</h2>
-
-        <CollabsibleSection>
+        <CollabsibleSection name={name}>
           <div className="flex flex-col gap-2">
             {attributes?.map((a: any) => (
               <div key={a._id}>
