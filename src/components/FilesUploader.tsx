@@ -9,7 +9,7 @@ type StoredFile = {
 };
 
 type FilesUploaderProps = {
-  productId: string;
+  productId?: string;
   files: StoredFile[]; // now array of { url, path }
   addFiles: (newFiles: File[]) => void;
   removeFile: (
@@ -90,7 +90,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
             />
           )}
           <button
-            onClick={() => removeFile(productId, index, files)}
+            onClick={() => removeFile(productId as string, index, files)}
             className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full"
             aria-label="Remove image"
           >

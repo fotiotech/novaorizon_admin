@@ -10,11 +10,13 @@ import { useAppDispatch } from "@/app/hooks";
 interface ManageRelatedProductProps {
   product: any;
   id: string;
+  name: string ;
 }
 
 const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   product,
   id,
+  name
 }) => {
   const dispatch = useAppDispatch();
   const [products, setProducts] = useState<any[]>([]);
@@ -53,7 +55,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   return (
     <div>
       <h3 className="text-lg font-semibold text-gray-300 pb-2">Related Product</h3>
-      <CollabsibleSection>
+      <CollabsibleSection name={name}>
         <div className="h-72 overflow-y-auto space-y-4 p-2">
           {products.map((item, idx) => {
             const isSelected = selectedProductId === item._id;

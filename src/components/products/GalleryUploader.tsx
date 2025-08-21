@@ -11,7 +11,11 @@ interface MainImageUploaderProps {
   stored: string;
 }
 
-const GalleryUploader: React.FC<MainImageUploaderProps> = ({ productId, path, stored }) => {
+const GalleryUploader: React.FC<MainImageUploaderProps> = ({
+  productId,
+  path,
+  stored,
+}) => {
   const dispatch = useAppDispatch();
   const { files, loading, addFiles, removeFile } = useFileUploader();
 
@@ -28,7 +32,14 @@ const GalleryUploader: React.FC<MainImageUploaderProps> = ({ productId, path, st
     }
   }, [files, dispatch, productId]);
 
-  return <FilesUploader files={files} addFiles={addFiles} />;
+  return (
+    <FilesUploader
+      files={files}
+      loading={loading}
+      addFiles={addFiles}
+      removeFile={removeFile}
+    />
+  );
 };
 
 export default GalleryUploader;

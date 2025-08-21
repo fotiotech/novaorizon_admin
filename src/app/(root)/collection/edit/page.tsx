@@ -14,7 +14,7 @@ const EditCollection = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
-  const { files, addFiles } = useFileUploader();
+  const { files, loading: load, addFiles, removeFile } = useFileUploader();
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +139,12 @@ const EditCollection = () => {
 
       <div className=" rounded-lg shadow p-6">
         <div className="mb-6">
-          <FilesUploader files={files} addFiles={addFiles} />
+          <FilesUploader
+            files={files}
+            loading={load}
+            addFiles={addFiles}
+            removeFile={removeFile}
+          />
         </div>
 
         <form action={handleSubmit}>

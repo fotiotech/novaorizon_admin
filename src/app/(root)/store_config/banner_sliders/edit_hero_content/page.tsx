@@ -21,7 +21,7 @@ const EditHeroContent = () => {
   const toUpdateHeroContent = updateHeroContent.bind(
     null,
     id as string,
-    imageFile as string[]
+    imageFile as any[]
   );
 
   const [hero, setHero] = useState<HeroSection>({
@@ -59,7 +59,12 @@ const EditHeroContent = () => {
         <h2>Add Hero Content</h2>
       </div>
       <div>
-        <FilesUploader files={files} addFiles={addFiles} />
+        <FilesUploader
+          files={files}
+          loading={loading}
+          addFiles={addFiles}
+          removeFile={removeFile}
+        />
       </div>
       <form action={toUpdateHeroContent}>
         <div>

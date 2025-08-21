@@ -196,7 +196,7 @@ const ProductForm = () => {
           <VariantsManager productId={productId} />
         )}
         {code === "related_products" && (
-          <ManageRelatedProduct product={product} id={productId} />
+          <ManageRelatedProduct product={product} id={productId} name={name}/>
         )}
 
         <CollabsibleSection name={name}>

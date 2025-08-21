@@ -47,6 +47,7 @@ export default function ChatWidget({
     };
 
     try {
+      if (!db) return null;
       const msgRef = collection(db, "chats", roomId, "messages");
       const roomRef = doc(db, "chatRooms", roomId);
 
@@ -60,6 +61,7 @@ export default function ChatWidget({
 
   const updateMessage = async (id: string, newText: string) => {
     try {
+      if (!db) return null;
       const msgDoc = doc(db, "chats", roomId, "messages", id);
       await updateDoc(msgDoc, { text: newText });
     } catch (err) {
@@ -69,6 +71,7 @@ export default function ChatWidget({
 
   const deleteMessage = async (id: string) => {
     try {
+      if (!db) return null;
       const msgDoc = doc(db, "chats", roomId, "messages", id);
       await deleteDoc(msgDoc);
     } catch (err) {
@@ -78,6 +81,7 @@ export default function ChatWidget({
 
   useEffect(() => {
     async function fetchRoom() {
+      if (!db) return null;
       const roomRef = doc(db, "chatRooms", roomId);
       const snap = await getDoc(roomRef);
       if (snap.exists()) {
@@ -88,7 +92,7 @@ export default function ChatWidget({
       }
     }
     fetchRoom();
-
+    if (!db) return;
     const msgsRef = collection(db, "chats", roomId, "messages");
     const q = query(msgsRef, orderBy("sentAt", "asc"));
 

@@ -19,6 +19,7 @@ export default function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
 
   useEffect(() => {
+    if(!db) return;
     const roomsRef = collection(db, "chatRooms");
     const unsubscribe = onSnapshot(roomsRef, (snapshot) => {
       const parsedRooms = snapshot.docs.map((doc) => ({

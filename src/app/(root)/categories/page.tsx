@@ -45,7 +45,7 @@ const Categories = () => {
   const [toggleCreateAttribute, setToggleCreateAttribute] =
     useState<boolean>(false);
 
-    console.log({categories})
+  console.log({ categories });
 
   const action = async (formData: Cat) => {
     const result = await createCategory(formData, editId);
@@ -110,8 +110,8 @@ const Categories = () => {
     e.preventDefault();
     const images = files?.length! > 1 ? files : files?.[0];
     const formData = editId
-      ? { ...categoryEdit, imageUrl: images as string[], attributes }
-      : { ...categoryData, imageUrl: images as string[], attributes };
+      ? { ...categoryEdit, imageUrl: images as any[], attributes }
+      : { ...categoryData, imageUrl: images as any[], attributes };
     await action(formData);
   };
 
@@ -164,7 +164,12 @@ const Categories = () => {
         </div>
 
         <div>
-          <FilesUploader files={files} addFiles={addFiles} />
+          <FilesUploader
+            files={files}
+            loading={loading}
+            addFiles={addFiles}
+            removeFile={removeFile}
+          />
         </div>
 
         <div>

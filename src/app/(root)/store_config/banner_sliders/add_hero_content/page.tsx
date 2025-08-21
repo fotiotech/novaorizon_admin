@@ -11,7 +11,7 @@ const AddHeroContent = () => {
 
   const file = files?.length! > 1 ? files : files?.[0];
 
-  const toCreateHeroContent = createHeroContent.bind(null, file as string[]);
+  const toCreateHeroContent = createHeroContent.bind(null, file as any[]);
 
   return (
     <>
@@ -19,7 +19,12 @@ const AddHeroContent = () => {
         <h2>Add Hero Content</h2>
       </div>
       <div>
-        <FilesUploader files={files} addFiles={addFiles} />
+        <FilesUploader
+          files={files}
+          loading={loading}
+          addFiles={addFiles}
+          removeFile={removeFile}
+        />
       </div>
       <form action={toCreateHeroContent}>
         <div>

@@ -31,7 +31,12 @@ const VariantImageUploader: React.FC<VariantImageUploaderProps> = ({
     }
   }, [files, dispatch, productId]);
 
-  return <FilesUploader files={files} addFiles={addFiles} />;
+  return <FilesUploader
+      files={files}
+      loading={loading}
+      addFiles={addFiles}
+      removeFile={removeFile}
+    />;
 };
 
 export default VariantImageUploader;
