@@ -16,7 +16,7 @@ export const AttributeField: React.FC<{
   ) => void;
 }> = ({ productId, attribute, field, path, handleAttributeChange }) => {
   const { code, name, type, option } = attribute;
-  const stored = field ?? "";
+  const stored = field;
   const groupCode = path;
   console.log({ groupCode, stored, code });
 

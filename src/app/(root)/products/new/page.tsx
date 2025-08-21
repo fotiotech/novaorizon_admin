@@ -174,9 +174,20 @@ const ProductForm = () => {
 
   console.log({ product });
 
+  function getAtPath(obj: any, path?: string) {
+    if (!obj || !path) return undefined;
+    // convert bracket form a[0] -> a.0 then split by dot
+    const parts = path.replace(/\[(\d+)\]/g, ".$1").split(".");
+    return parts.reduce((acc: any, key: string) => {
+      if (acc == null) return undefined;
+      return acc[key];
+    }, obj);
+  }
+
   function renderGroup(group: any) {
     const { _id, code, name, attributes, children } = group;
-
+    // get group object at product[code] even if code is "a.b[0].c"
+    const groupObject = getAtPath(product, code);
     return (
       <section key={_id} className="space-y-4">
         {/* special managers (now actually rendered) */}
@@ -189,19 +200,23 @@ const ProductForm = () => {
 
         <CollabsibleSection name={name}>
           <div className="flex flex-col gap-2">
-            {attributes?.map((a: any) => (
-              <div key={a._id}>
-                <AttributeField
-                  productId={productId}
-                  attribute={a}
-                  field={product[code]?.[a.code]}
-                  path={code}
-                  handleAttributeChange={handleChange}
-                />
-              </div>
-            ))}
+            {attributes?.map((a: any) => {
+              // attribute field under the group object (may be primitive or nested obj)
+              const fieldValue = groupObject ? groupObject[a.code] : undefined;
 
-            {/* render children recursively (works for any depth) */}
+              return (
+                <div key={a._id}>
+                  <AttributeField
+                    productId={productId}
+                    attribute={a}
+                    field={fieldValue}
+                    path={code}
+                    handleAttributeChange={handleChange}
+                  />
+                </div>
+              );
+            })}
+
             {children?.length > 0 &&
               children.map((child: any) => renderGroup(child))}
           </div>
