@@ -186,6 +186,7 @@ const ProductForm = () => {
 
   function renderGroup(group: any) {
     const { _id, code, name, attributes, children } = group;
+
     // get group object at product[code] even if code is "a.b[0].c"
     const groupObject = getAtPath(product, code);
     return (

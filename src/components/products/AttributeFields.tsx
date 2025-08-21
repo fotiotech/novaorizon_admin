@@ -18,7 +18,6 @@ export const AttributeField: React.FC<{
   const { code, name, type, option } = attribute;
   const stored = field;
   const groupCode = path;
-  console.log({ groupCode, stored, code });
 
   return (
     <div className="mb-4">

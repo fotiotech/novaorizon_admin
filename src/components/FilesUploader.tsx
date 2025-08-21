@@ -2,28 +2,34 @@ import React, { useEffect, useRef } from "react";
 import { AttachFile } from "@mui/icons-material";
 import { useDropzone } from "react-dropzone";
 import Image from "next/image";
-import { useFileUploader } from "@/hooks/useFileUploader";
-import Spinner from "./Spinner";
-import { useAppSelector } from "@/app/hooks";
-import { RootState } from "@/app/store/store";
+
+type StoredFile = {
+  url: string;
+  path: string; // storage path used to upload (useful for deletion)
+};
 
 type FilesUploaderProps = {
-  files: string[];
+  productId: string;
+  files: StoredFile[]; // now array of { url, path }
   addFiles: (newFiles: File[]) => void;
-  instanceId?: string; // Add instanceId prop
+  removeFile: (
+    productId: string,
+    index: number,
+    filesContent?: StoredFile[]
+  ) => Promise<any> | void;
+  loading?: boolean;
+  instanceId?: string; // optional, if you need to namespace client-side
 };
 
 const FilesUploader: React.FC<FilesUploaderProps> = ({
+  productId,
   files,
   addFiles,
-  instanceId,
+  removeFile,
+  loading = false,
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const productState = useAppSelector((state: RootState) => state.product);
-  const productId = productState.allIds[0];
-
-  const { loading, removeFile } = useFileUploader(instanceId);
 
   const onDrop = (acceptedFiles: File[]) => {
     addFiles(acceptedFiles);
@@ -36,8 +42,6 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     },
     multiple: true,
   });
-
-  const handleClick = () => inputRef.current?.click();
 
   // Scroll to the left when files are updated
   useEffect(() => {
@@ -57,10 +61,28 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
           className="relative inline-block border-2 border-gray-600 w-44 h-56 rounded-md overflow-hidden"
         >
           {loading ? (
-            <Spinner />
+            // you can replace this with your Spinner component
+            <div className="flex items-center justify-center w-full h-full">
+              <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v8z"
+                />
+              </svg>
+            </div>
           ) : (
             <Image
-              src={file}
+              src={file.url}
               alt={`Uploaded image ${index + 1}`}
               width={500}
               height={500}
@@ -88,7 +110,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
           w-44 h-56 rounded-md cursor-pointer transition-colors`}
       >
         <input {...getInputProps()} ref={inputRef} className="hidden" />
-        <div className="text-center">
+        <div className="text-center px-2">
           <AttachFile className="mx-auto mb-2" />
           <p className="text-sm text-gray-600">
             {isDragActive
