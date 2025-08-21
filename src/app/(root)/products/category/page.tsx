@@ -19,7 +19,7 @@ const Category = () => {
     if (pId) {
       dispatch(fetchProducts(pId));
     }
-  });
+  }, [pId]);
   const category = useAppSelector((state) => state.category);
   const products = useAppSelector((state) => state.product);
 

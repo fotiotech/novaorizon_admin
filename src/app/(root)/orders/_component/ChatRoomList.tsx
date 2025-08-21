@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { db } from "@/utils/firebaseConfig";
+import { db } from "@/utils/firebasedb";
 import { collection, onSnapshot } from "firebase/firestore";
 
 interface ChatRoom {

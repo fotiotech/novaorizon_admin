@@ -1,7 +1,7 @@
 // components/ChatWidget.tsx
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { db } from "@/utils/firebaseConfig";
+import { db } from "@/utils/firebasedb";
 import {
   addDoc,
   collection,
