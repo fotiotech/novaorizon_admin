@@ -27,7 +27,7 @@
     "bcryptjs": "^2.4.3",
     "cinetpay-nodejs": "^1.0.2",
     "date-fns": "^3.6.0",
-    "firebase": "^10.13.0",
+    "firebase": "^10.14.1",
     "formidable": "^3.5.1",
     "i18next": "^24.0.2",
     "immer": "^10.1.1",

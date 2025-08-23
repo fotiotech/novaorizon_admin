@@ -111,13 +111,48 @@ const Attributes = () => {
       if (!editGroupId) return;
       try {
         const groupResponse = await findGroup(editGroupId);
-        console.log(groupResponse);
         if (groupResponse) {
           setCode(groupResponse?.code ?? "");
           setName(groupResponse?.name ?? "");
           setGroupOrder(groupResponse?.group_order ?? "");
           setSortOrder(groupResponse?.group_order ?? "");
           setParentGroupId(groupResponse?.parent_id ?? "");
+
+          // Pre-select the current attributes of the group
+          // Extract just the attribute IDs from the response
+          const currentAttributeIds = groupResponse.attributes?.map(
+            (attr: any) => attr._id
+          );
+          setSelectedAttributes(currentAttributeIds as any[]);
+
+          setError(null);
+        } else {
+          setError("No attribute groups found");
+        }
+      } catch (err) {
+        console.error("[Attributes] Error fetching groups:", err);
+        setError(err instanceof Error ? err.message : "Failed to load groups");
+      }
+    }
+
+    async function findSelectedGroup() {
+      if (!groupId) return;
+      try {
+        const groupResponse = await findGroup(groupId);
+        if (groupResponse) {
+          setCode(groupResponse?.code ?? "");
+          setName(groupResponse?.name ?? "");
+          setGroupOrder(groupResponse?.group_order ?? "");
+          setSortOrder(groupResponse?.group_order ?? "");
+          setParentGroupId(groupResponse?.parent_id ?? "");
+
+          // Pre-select the current attributes of the group
+          // Extract just the attribute IDs from the response
+          const currentAttributeIds = groupResponse.attributes?.map(
+            (attr: any) => attr._id
+          );
+          setSelectedAttributes(currentAttributeIds as any[]);
+
           setError(null);
         } else {
           setError("No attribute groups found");
@@ -131,6 +166,7 @@ const Attributes = () => {
     fetchData();
     getGroups();
     findGroupToEdit();
+    findSelectedGroup();
   }, [groupId, editGroupId]);
 
   function addAttributes() {
@@ -170,7 +206,7 @@ const Attributes = () => {
       code,
       parentGroupId,
       selectedAttributes,
-      groupOrder as number,
+      groupOrder as number
     );
     if (response) {
       setName("");
@@ -367,7 +403,7 @@ const Attributes = () => {
         </div>
       )}
 
-      {/* Category Selection */}
+      {/* Group Selection */}
       <div className="grid gap-4 mb-6">
         {/* Group Selection */}
         <div className="w-full space-y-4">
@@ -426,7 +462,7 @@ const Attributes = () => {
                   placeholder="Enter new group order"
                   className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
                 />
-                
+
                 <button
                   type="button"
                   onClick={() =>
@@ -443,10 +479,12 @@ const Attributes = () => {
       </div>
 
       {/* Attributes for group selection */}
-
-      {action === "add attributes" && (
+      {action === "add attributes" || selectedAttributes.length > 0 ? (
         <div>
           <h3>Select Attributes for group</h3>
+          <div className="my-2">
+            <p>Selected: {selectedAttributes.length} attributes</p>
+          </div>
           <div className="h-64 overflow-y-auto">
             <div className="my-3 flex md:flex-row gap-2 items-center">
               <input
@@ -494,14 +532,14 @@ const Attributes = () => {
           <div className="flex justify-end my-4 mb-8">
             <button
               type="button"
-              onClick={handleCreateGroup}
+              onClick={editGroupId ? handleUpdateGroup : handleCreateGroup} // Use handleUpdateGroup instead of handleCreateGroup
               className="btn text-sm mt-2 "
             >
-              Assign Attributes{" "}
+              {editGroupId ? "Update Attributes" : "Assign Attributes"}
             </button>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Attributes Creation Form */}
       <div className="space-y-4 mb-6">

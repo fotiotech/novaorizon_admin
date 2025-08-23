@@ -9,7 +9,7 @@ import { addCategory } from "@/app/store/slices/categorySlice";
 import { addProduct, resetProduct } from "@/app/store/slices/productSlice";
 import { v4 as uuidv4 } from "uuid";
 import { fetchCategory } from "@/fetch/fetchCategory";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { fetchProducts } from "@/fetch/fetchProducts";
 
 const Category = () => {
