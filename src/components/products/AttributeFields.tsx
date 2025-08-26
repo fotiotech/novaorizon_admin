@@ -29,6 +29,7 @@ export const AttributeField: React.FC<{
             productId={productId}
             path={groupCode}
             stored={stored}
+            code={code}
           />
         )}
         {type === "file" && code === "gallery" && (
@@ -36,6 +37,7 @@ export const AttributeField: React.FC<{
             productId={productId}
             path={groupCode}
             stored={stored}
+            code={code}
           />
         )}
 

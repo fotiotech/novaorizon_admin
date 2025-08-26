@@ -63,7 +63,7 @@ export async function findProducts(id?: string) {
     };
   } else {
     const products = await Product.find().sort({ created_at: -1 }).exec();
-    console.log({ products });
+    console.log(products);
 
     return products.map((doc) => ({
       ...doc.toObject(),
@@ -79,128 +79,75 @@ export interface CreateProductForm {
   attributes?: Record<string, any>;
 }
 
-function cleanGroup<T extends Record<string, any>>(
-  group: T | undefined
+function cleanObject<T extends Record<string, any>>(
+  obj: T | undefined
 ): T | undefined {
-  if (!group || typeof group !== "object") return undefined;
-  const out: any = {};
-  Object.entries(group).forEach(([k, v]) => {
-    const emptyString = typeof v === "string" && !v.trim();
-    const emptyArray = Array.isArray(v) && v.length === 0;
-    const nullish = v === null || v === undefined;
-    if (!emptyString && !emptyArray && !nullish) {
-      out[k] = v;
+  if (!obj || typeof obj !== "object") return undefined;
+
+  const cleaned: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value != null && !(typeof value === "string" && !value.trim())) {
+      cleaned[key] = value;
     }
-  });
-  return Object.keys(out).length ? out : undefined;
+  }
+  return Object.keys(cleaned).length ? cleaned : undefined;
 }
 
 export async function createProduct(formData: CreateProductForm) {
   const { category_id, attributes } = formData;
 
-  if (!category_id || typeof category_id !== "string") {
-    throw new Error("A valid category_id is required.");
-  }
 
-  const docData: any = {
+  if (!category_id) throw new Error("Valid category_id is required.");
+
+  const cleanedAttributes = cleanObject(attributes);
+  if (!cleanedAttributes)
+    throw new Error("At least one attribute is required.");
+
+  const docData = {
     category_id: new mongoose.Types.ObjectId(category_id),
+    attributes: cleanedAttributes,
   };
-
-  const cleanedAttributes = cleanGroup(attributes);
-  if (cleanedAttributes) {
-    docData.attributes = cleanedAttributes;
-  }
-
-  if (!docData.attributes) {
-    throw new Error("At least one attribute must be provided.");
-  }
 
   const session = await mongoose.startSession();
   try {
     session.startTransaction();
 
-    await Product.collection.dropIndex("identification_branding.name_1");
-    console.log(await Product.collection.getIndexes());
-
-    const prodDoc = new Product(docData);
-    await prodDoc.save({ session });
-
+    const prodDoc = await Product.create([docData], { session });
     await session.commitTransaction();
-    revalidatePath("/admin/products/products_list");
+  console.log({ prodDoc });
 
+    revalidatePath("/admin/products/products_list");
     return {
-      ...prodDoc.toObject(),
-      _id: prodDoc._id.toString(),
-      category_id: prodDoc.category_id.toString(),
+      ...prodDoc[0].toObject(),
+      _id: prodDoc[0]._id.toString(),
+      category_id: prodDoc[0].category_id.toString(),
     };
-  } catch (err) {
+  } catch (error) {
     await session.abortTransaction();
-    throw err;
+    throw error;
   } finally {
     session.endSession();
   }
 }
 
-export interface UpdateProductForm {
-  attributes?: Record<string, any>;
-}
-
-function cleanGroupUpdate<T extends Record<string, any> | any[]>(
-  group: T | undefined
-): T | undefined {
-  if (group == null) return undefined;
-  if (Array.isArray(group)) {
-    const arr = group.filter((v) => v !== null && v !== undefined);
-    return arr.length > 0 ? (arr as T) : undefined;
-  }
-  if (typeof group === "object") {
-    const out: any = {};
-    Object.entries(group).forEach(([k, v]) => {
-      const emptyString = typeof v === "string" && !v.trim();
-      const emptyArray = Array.isArray(v) && v.length === 0;
-      const nullish = v === null || v === undefined;
-      if (!emptyString && !emptyArray && !nullish) {
-        out[k] = v;
-      }
-    });
-    return Object.keys(out).length ? (out as T) : undefined;
-  }
-  return undefined;
-}
-
-export async function updateProduct(
-  productId: string,
-  formData: UpdateProductForm
-) {
+export async function updateProduct(productId: string, formData: any) {
   const { attributes } = formData;
 
-  if (!productId || typeof productId !== "string") {
-    throw new Error("A valid product ID is required.");
-  }
-  if (!attributes || typeof attributes !== "object") {
+  if (!productId) throw new Error("Valid product ID is required.");
+  if (typeof attributes !== "object")
     throw new Error("Attributes object is required.");
-  }
 
-  const cleanedAttributes = cleanGroupUpdate(attributes);
-  if (!cleanedAttributes) {
-    throw new Error("No valid attributes after cleaning.");
-  }
+  const cleanedAttributes = cleanObject(attributes);
+  if (!cleanedAttributes) throw new Error("No valid attributes provided.");
 
-  const objId = new mongoose.Types.ObjectId(productId);
-  const doc = await Product.findById(objId);
-  if (!doc) {
-    throw new Error(`Product with ID ${productId} not found.`);
-  }
+  const doc = await Product.findById(productId);
+  if (!doc) throw new Error(`Product ${productId} not found.`);
 
-  const existingAttrs = doc.attributes || {};
-  doc.attributes = { ...existingAttrs, ...cleanedAttributes };
+  doc.attributes = { ...doc.attributes, ...cleanedAttributes };
+  await doc.save();
 
-  const updated = await doc.save();
-
-  // Optional: Revalidate path if needed
   revalidatePath("/admin/products/products_list");
-
-  return updated.toObject();
+  return doc.toObject();
 }
 
 export async function deleteProduct(id: string) {

@@ -3,22 +3,17 @@ import { AttachFile } from "@mui/icons-material";
 import { useDropzone } from "react-dropzone";
 import Image from "next/image";
 
-type StoredFile = {
-  url: string;
-  path: string; // storage path used to upload (useful for deletion)
-};
-
 type FilesUploaderProps = {
   productId?: string;
-  files: StoredFile[]; // now array of { url, path }
+  files: string[];
   addFiles: (newFiles: File[]) => void;
   removeFile: (
     productId: string,
     index: number,
-    filesContent?: StoredFile[]
-  ) => Promise<any> | void;
+    filesContent?: string[]
+  ) => Promise<{ success: boolean; message?: string }>;
   loading?: boolean;
-  instanceId?: string; // optional, if you need to namespace client-side
+  progressByName?: Record<string, number>;
 };
 
 const FilesUploader: React.FC<FilesUploaderProps> = ({
@@ -27,6 +22,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   addFiles,
   removeFile,
   loading = false,
+  progressByName = {},
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -43,61 +39,87 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     multiple: true,
   });
 
-  // Scroll to the left when files are updated
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollLeft = 0;
     }
   }, [files]);
 
+  const handleRemove = async (e: React.MouseEvent, index: number) => {
+    e.preventDefault(); // Prevent form submission
+    e.stopPropagation(); // Prevent any other event handlers
+
+    if (!productId) {
+      console.error("Product ID is required to remove files");
+      return;
+    }
+
+    const fileName = files[index]?.split("/").pop() || "";
+    const isUploading =
+      progressByName[fileName] !== undefined && progressByName[fileName] < 100;
+
+    if (isUploading) {
+      alert("Please wait for the upload to complete before removing the file");
+      return;
+    }
+
+    try {
+      const result = await removeFile(productId, index, files);
+      if (!result?.success) {
+        console.error("Failed to remove file:", result?.message);
+      }
+    } catch (error) {
+      console.error("Error removing file:", error);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
       className="flex flex-wrap gap-2 w-full overflow-x-auto scrollbar-none my-4"
     >
-      {files?.map((file, index) => (
-        <div
-          key={index}
-          className="relative inline-block border-2 border-gray-600 w-44 h-56 rounded-md overflow-hidden"
-        >
-          {loading ? (
-            // you can replace this with your Spinner component
-            <div className="flex items-center justify-center w-full h-full">
-              <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  fill="none"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v8z"
-                />
-              </svg>
-            </div>
-          ) : (
-            <Image
-              src={file.url}
-              alt={`Uploaded image ${index + 1}`}
-              width={500}
-              height={500}
-              className="w-full h-full object-cover"
-            />
-          )}
-          <button
-            onClick={() => removeFile(productId as string, index, files)}
-            className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full"
-            aria-label="Remove image"
+      {files?.map((fileUrl, index) => {
+        const fileName = fileUrl.split("/").pop() || "";
+        const uploadProgress = progressByName[fileName];
+        const isUploading =
+          uploadProgress !== undefined && uploadProgress < 100;
+
+        return (
+          <div
+            key={index}
+            className="relative inline-block border-2 border-gray-600 w-44 h-56 rounded-md overflow-hidden"
           >
-            ×
-          </button>
-        </div>
-      ))}
+            {isUploading ? (
+              <div className="flex flex-col items-center justify-center w-full h-full p-4">
+                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                  <div
+                    className="bg-blue-600 h-2.5 rounded-full"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+                <span className="text-sm text-gray-600">{uploadProgress}%</span>
+              </div>
+            ) : (
+              <Image
+                src={fileUrl}
+                alt={`Uploaded image ${index + 1}`}
+                width={500}
+                height={500}
+                className="w-full h-full object-cover"
+              />
+            )}
+            <button
+              type="button" // Explicitly set button type to prevent form submission
+              onClick={(e) => handleRemove(e, index)}
+              className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full w-6 h-6 flex items-center justify-center"
+              aria-label="Remove image"
+              disabled={isUploading}
+            >
+              ×
+            </button>
+          </div>
+        );
+      })}
 
       <div
         {...getRootProps()}

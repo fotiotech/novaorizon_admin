@@ -14,7 +14,7 @@ export const fetchCategory =
         data = await getCategory(id, null, null);
       } else if (parentId) {
         const res = parentId !== '' ? await getCategory(null, parentId, null) : null;
-        if (res.length > 0) {
+        if (res?.length > 0) {
           console.log("Fetched category res:", res);
           data = res;
         }

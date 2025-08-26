@@ -81,8 +81,8 @@ const Product = () => {
 
               const name =
                 p.identification_branding?.name || p.basic_informations?.name;
-              const media = p.media_visuals || {};
-              const imageUrl = media.main_image || media.gallery?.[0] || null;
+              const media = p?.media_visuals || {};
+              const imageUrl = media?.main_image || null;
               const pricing = p.pricing_availability || {};
               const salePrice = pricing.price;
               const currency = pricing.currency || "";
