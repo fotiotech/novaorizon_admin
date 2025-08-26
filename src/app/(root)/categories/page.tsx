@@ -10,10 +10,8 @@ import {
 import { Category as Cat } from "@/constant/types";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import { v4 as uuidv4 } from "uuid";
-import Spinner from "@/components/Spinner";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import CategoryAttribute from "@/components/category/CategoryAttribute";
-import { findAllAttributeGroups } from "@/app/actions/attributegroup";
 
 const Categories = () => {
   const dispatch = useAppDispatch();

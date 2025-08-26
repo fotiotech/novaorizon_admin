@@ -8,7 +8,7 @@ interface Product {
 }
 
 export interface OrderDocument extends Document {
-  _id?: string;
+  _id: mongoose.Types.ObjectId;
   orderNumber: string;
   userId: mongoose.Types.ObjectId;
   email: string;

@@ -1,5 +1,5 @@
 // lib/firebase.ts
-import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { initializeApp, FirebaseApp } from "firebase/app";
 import { getStorage } from "firebase/storage";
 
 const defaultConfig = {
@@ -12,9 +12,7 @@ const defaultConfig = {
 };
 
 // initialize default app only if none exists (safe for HMR / Next dev)
-const defaultApp: FirebaseApp = getApps().length
-  ? getApp()
-  : initializeApp(defaultConfig);
+const defaultApp: FirebaseApp = initializeApp(defaultConfig, "primary");
 
 // Exports: be explicit about which app each service belongs to
 export const storage = getStorage(defaultApp);
