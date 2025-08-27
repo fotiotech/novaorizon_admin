@@ -51,7 +51,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     dispatch(
       addProduct({
         _id: productId,
-        path: "variants_options.variant_theme",
+        field: "variant_theme",
         value: newTheme,
       })
     );
@@ -59,7 +59,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     dispatch(
       addProduct({
         _id: productId,
-        path: "variants_options.variants",
+        field: "variants",
         value: updatedVariants,
       })
     );
@@ -74,7 +74,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     dispatch(
       addProduct({
         _id: productId,
-        path,
+        field: path,
         value,
       })
     );
@@ -91,7 +91,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     dispatch(
       addProduct({
         _id: productId,
-        path: "variants_options.variants",
+        field: "variants_options.variants",
         value: updatedVariants,
       })
     );
@@ -104,7 +104,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     dispatch(
       addProduct({
         _id: productId,
-        path: "variants_options.variants",
+        field: "variants_options.variants",
         value: updatedVariants,
       })
     );

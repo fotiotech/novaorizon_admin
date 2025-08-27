@@ -1,7 +1,7 @@
 "use server";
 
 import { connection } from "@/utils/connection";
-import Attribute from "@/models/Attributes";
+import Attribute from "@/models/Attribute";
 import AttributeGroup from "@/models/AttributesGroup";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";

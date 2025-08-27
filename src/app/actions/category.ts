@@ -7,7 +7,7 @@ import mongoose, { Types } from "mongoose";
 import CategoryAttribute from "@/models/CategoryAttribute";
 import { revalidatePath } from "next/cache";
 import AttributeGroup from "@/models/AttributesGroup";
-import "@/models/Attributes";
+import "@/models/Attribute";
 
 function generateSlug(name: string) {
   return slugify(name, { lower: true });

@@ -8,16 +8,9 @@ export const AttributeField: React.FC<{
   productId: string;
   attribute: AttributeDetail;
   field: any;
-  path: string; // group code only
-  handleAttributeChange: (
-    groupCode: string,
-    attrName: string,
-    selected: any
-  ) => void;
-}> = ({ productId, attribute, field, path, handleAttributeChange }) => {
+  handleAttributeChange: (field: string, value: any) => void;
+}> = ({ productId, attribute, field, handleAttributeChange }) => {
   const { code, name, type, option } = attribute;
-  const stored = field;
-  const groupCode = path;
 
   return (
     <div className="mb-4">
@@ -25,42 +18,28 @@ export const AttributeField: React.FC<{
 
       <div>
         {type === "file" && code === "main_image" && (
-          <MainImageUploader
-            productId={productId}
-            path={groupCode}
-            stored={stored}
-            code={code}
-          />
+          <MainImageUploader productId={productId} field={field} code={code} />
         )}
         {type === "file" && code === "gallery" && (
-          <GalleryUploader
-            productId={productId}
-            path={groupCode}
-            stored={stored}
-            code={code}
-          />
+          <GalleryUploader productId={productId} field={field} code={code} />
         )}
 
         {type === "text" && (
           <input
             type="text"
             className="w-full"
-            value={stored || ""}
+            value={field || ""}
             placeholder={`Enter ${name}`}
-            onChange={(e) =>
-              handleAttributeChange(groupCode, code, e.target.value)
-            }
+            onChange={(e) => handleAttributeChange(code, e.target.value)}
           />
         )}
 
         {type === "textarea" && (
           <textarea
             className="w-full bg-transparent"
-            value={stored || ""}
+            value={field || ""}
             placeholder={`Enter ${name}`}
-            onChange={(e) =>
-              handleAttributeChange(groupCode, code, e.target.value)
-            }
+            onChange={(e) => handleAttributeChange(code, e.target.value)}
           />
         )}
 
@@ -68,10 +47,10 @@ export const AttributeField: React.FC<{
           <input
             type="number"
             className="w-full"
-            value={stored || 0}
+            value={field || 0}
             placeholder={`Enter ${name}`}
             onChange={(e) =>
-              handleAttributeChange(groupCode, code, Number(e.target.value))
+              handleAttributeChange(code, Number(e.target.value))
             }
           />
         )}
@@ -81,15 +60,14 @@ export const AttributeField: React.FC<{
             isMulti
             options={option.map((v) => ({ value: v, label: v }))}
             value={
-              Array.isArray(stored)
+              Array.isArray(field)
                 ? option
-                    .filter((v) => stored.includes(v))
+                    .filter((v) => field.includes(v))
                     .map((v) => ({ value: v, label: v }))
                 : []
             }
             onChange={(opts: MultiValue<{ value: string; label: string }>) =>
               handleAttributeChange(
-                groupCode,
                 code,
                 opts.map((o) => o.value)
               )
@@ -108,16 +86,16 @@ export const AttributeField: React.FC<{
                 <input
                   type="checkbox"
                   className="mr-2"
-                  checked={Array.isArray(stored) ? stored.includes(opt) : false}
+                  checked={Array.isArray(field) ? field.includes(opt) : false}
                   onChange={(e) => {
-                    const newVals = Array.isArray(stored)
+                    const newVals = Array.isArray(field)
                       ? e.target.checked
-                        ? [...stored, opt]
-                        : stored.filter((v: any) => v !== opt)
+                        ? [...field, opt]
+                        : field.filter((v: any) => v !== opt)
                       : e.target.checked
                       ? [opt]
                       : [];
-                    handleAttributeChange(groupCode, code, newVals);
+                    handleAttributeChange(code, newVals);
                   }}
                 />
                 {opt}
@@ -131,12 +109,10 @@ export const AttributeField: React.FC<{
             <input
               type="checkbox"
               className="mr-2"
-              checked={!!stored}
-              onChange={(e) =>
-                handleAttributeChange(groupCode, code, e.target.checked)
-              }
+              checked={!!field}
+              onChange={(e) => handleAttributeChange(code, e.target.checked)}
             />
-            {stored ? "Yes" : "No"}
+            {field ? "Yes" : "No"}
           </label>
         )}
 
@@ -148,8 +124,8 @@ export const AttributeField: React.FC<{
                   type="radio"
                   className="mr-2"
                   value={opt}
-                  checked={stored === opt}
-                  onChange={() => handleAttributeChange(groupCode, code, opt)}
+                  checked={field === opt}
+                  onChange={() => handleAttributeChange(code, opt)}
                 />
                 {opt}
               </label>
@@ -162,10 +138,8 @@ export const AttributeField: React.FC<{
             title="date"
             type="date"
             className="w-full"
-            value={stored || ""}
-            onChange={(e) =>
-              handleAttributeChange(groupCode, code, e.target.value)
-            }
+            value={field || ""}
+            onChange={(e) => handleAttributeChange(code, e.target.value)}
           />
         )}
 
@@ -174,10 +148,8 @@ export const AttributeField: React.FC<{
             title="color"
             type="color"
             className="w-full h-10 p-0"
-            value={stored || "#000000"}
-            onChange={(e) =>
-              handleAttributeChange(groupCode, code, e.target.value)
-            }
+            value={field || "#000000"}
+            onChange={(e) => handleAttributeChange(code, e.target.value)}
           />
         )}
 
@@ -186,10 +158,8 @@ export const AttributeField: React.FC<{
             title="url"
             type="url"
             className="w-full"
-            value={stored || ""}
-            onChange={(e) =>
-              handleAttributeChange(groupCode, code, e.target.value)
-            }
+            value={field || ""}
+            onChange={(e) => handleAttributeChange(code, e.target.value)}
           />
         )}
 
@@ -198,13 +168,12 @@ export const AttributeField: React.FC<{
             isMulti
             options={option.map((v) => ({ value: v, label: v }))}
             value={
-              Array.isArray(stored)
-                ? stored.map((v) => ({ value: v, label: v }))
+              Array.isArray(field)
+                ? field.map((v) => ({ value: v, label: v }))
                 : []
             }
             onChange={(opts) =>
               handleAttributeChange(
-                groupCode,
                 code,
                 opts.map((o: any) => o.value)
               )

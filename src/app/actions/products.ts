@@ -1,16 +1,16 @@
 "use server";
 import { connection } from "@/utils/connection";
 
-import "@/models/Brand";
-import "@/models/User";
 import { revalidatePath } from "next/cache";
 import slugify from "slugify";
-import { VariantAttribute } from "@/models/VariantAttributes";
 import { ref, deleteObject } from "firebase/storage";
 import { storage } from "@/utils/firebaseConfig";
 import mongoose from "mongoose";
 import Product from "@/models/Product";
-
+import AttributeGroup from "@/models/AttributesGroup";
+import "@/models/Attribute";
+import "@/models/Brand";
+import "@/models/User";
 // Generate a slug from the product name and department
 function generateSlug(name: string, department: string | null) {
   return slugify(`${name}${department ? `-${department}` : ""}`, {
@@ -26,6 +26,30 @@ function generateDsin() {
     dsin += characters.charAt(Math.floor(Math.random() * characters.length));
   }
   return dsin;
+}
+
+export interface CreateProductForm {
+  category_id: string;
+  [key: string]: any; // Allow any additional fields
+}
+
+function cleanObject<T extends Record<string, any>>(
+  obj: T | undefined
+): T | undefined {
+  if (!obj || typeof obj !== "object") return undefined;
+
+  const cleaned: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value != null && !(typeof value === "string" && !value.trim())) {
+      if (key === "attributes" && typeof value === "object") {
+        // flatten attributes into top-level
+        Object.assign(cleaned, value);
+      } else {
+        cleaned[key] = value;
+      }
+    }
+  }
+  return Object.keys(cleaned).length ? cleaned : undefined;
 }
 
 export async function getProductsByAttributes(filters: {
@@ -50,52 +74,96 @@ export async function getProductsByAttributes(filters: {
 export async function findProducts(id?: string) {
   await connection();
 
+  const buildGroupTreeWithValues = (
+    groups: any[],
+    product: any,
+    parentId: string | null = null
+  ): any => {
+    return groups
+      .filter(
+        (group) =>
+          (!parentId && !group.parent_id) ||
+          (parentId &&
+            group.parent_id &&
+            group.parent_id.toString() === parentId)
+      )
+      .sort((a, b) => a.group_order - b.group_order)
+      .map((group) => {
+        const attributesWithValues = (group.attributes || [])
+          .sort((a: any, b: any) => a.sort_order - b.sort_order)
+          .map((attr: any) => {
+            const value = product[attr.code] ?? null;
+            return value !== null && value !== undefined
+              ? {
+                  _id: attr._id,
+                  code: attr.code,
+                  [attr.code]: value,
+                  name: attr.name,
+                }
+              : null;
+          })
+          .filter(Boolean);
+
+        const children = buildGroupTreeWithValues(
+          groups,
+          product,
+          group._id.toString()
+        );
+
+        return attributesWithValues.length > 0 || children.length > 0
+          ? {
+              _id: group._id,
+              code: group.code,
+              name: group.name,
+              parent_id: group.parent_id,
+              group_order: group.group_order,
+              attributes: attributesWithValues,
+              children,
+            }
+          : null;
+      })
+      .filter(Boolean);
+  };
+
   if (id) {
     const product = await Product.findOne({ _id: id }).exec();
-
     if (!product) return null;
 
+    const groups = await AttributeGroup.find()
+      .populate({ path: "attributes" })
+      .sort({ group_order: 1 })
+      .exec();
+
+    const productObj = product.toObject();
+    const rootGroup = buildGroupTreeWithValues(groups, productObj || {});
+
     return {
-      ...product?.toObject(),
-      _id: product._id.toString(),
-      category_id: product.category_id?.toString() ?? null,
-      ...product?.attributes,
+      ...productObj,
+      rootGroup,
     };
   } else {
-    const products = await Product.find().sort({ created_at: -1 }).exec();
-    console.log(products);
+    const products = await Product.find().sort({ createdAt: -1 }).exec();
 
-    return products.map((doc) => ({
-      ...doc.toObject(),
-      _id: doc._id.toString(),
-      category_id: doc.category_id?.toString() ?? null,
-      ...doc?.attributes,
-    }));
+    const groups = await AttributeGroup.find()
+      .populate({ path: "attributes" })
+      .sort({ group_order: 1 })
+      .exec();
+
+    return products.map((product) => {
+      const productObj = product.toObject();
+      const rootGroup = buildGroupTreeWithValues(groups, productObj || {});
+
+      return {
+        ...productObj,
+        rootGroup,
+      };
+    });
   }
-}
-
-export interface CreateProductForm {
-  category_id: string;
-  attributes?: Record<string, any>;
-}
-
-function cleanObject<T extends Record<string, any>>(
-  obj: T | undefined
-): T | undefined {
-  if (!obj || typeof obj !== "object") return undefined;
-
-  const cleaned: any = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value != null && !(typeof value === "string" && !value.trim())) {
-      cleaned[key] = value;
-    }
-  }
-  return Object.keys(cleaned).length ? cleaned : undefined;
 }
 
 export async function createProduct(formData: CreateProductForm) {
-  const { category_id, attributes } = formData;
-
+  await connection();
+  const { category_id, ...attributes } = formData;
 
   if (!category_id) throw new Error("Valid category_id is required.");
 
@@ -105,22 +173,18 @@ export async function createProduct(formData: CreateProductForm) {
 
   const docData = {
     category_id: new mongoose.Types.ObjectId(category_id),
-    attributes: cleanedAttributes,
+    ...cleanedAttributes, // Spread attributes as top-level fields
   };
 
   const session = await mongoose.startSession();
   try {
     session.startTransaction();
 
-    const prodDoc = await Product.create([docData], { session });
+    const r = await Product.create([docData], { session });
     await session.commitTransaction();
-  console.log({ prodDoc });
-
     revalidatePath("/admin/products/products_list");
     return {
-      ...prodDoc[0].toObject(),
-      _id: prodDoc[0]._id.toString(),
-      category_id: prodDoc[0].category_id.toString(),
+      ok: true,
     };
   } catch (error) {
     await session.abortTransaction();
@@ -131,11 +195,10 @@ export async function createProduct(formData: CreateProductForm) {
 }
 
 export async function updateProduct(productId: string, formData: any) {
-  const { attributes } = formData;
+  await connection();
+  const { category_id, ...attributes } = formData;
 
   if (!productId) throw new Error("Valid product ID is required.");
-  if (typeof attributes !== "object")
-    throw new Error("Attributes object is required.");
 
   const cleanedAttributes = cleanObject(attributes);
   if (!cleanedAttributes) throw new Error("No valid attributes provided.");
@@ -143,11 +206,29 @@ export async function updateProduct(productId: string, formData: any) {
   const doc = await Product.findById(productId);
   if (!doc) throw new Error(`Product ${productId} not found.`);
 
-  doc.attributes = { ...doc.attributes, ...cleanedAttributes };
-  await doc.save();
+  // Update fields directly instead of nesting under attributes
+  for (const [key, value] of Object.entries(cleanedAttributes)) {
+    doc[key] = value;
+  }
 
-  revalidatePath("/admin/products/products_list");
-  return doc.toObject();
+  // Ensure updatedAt is set correctly
+  doc.updatedAt = new Date();
+
+  // Update category_id if provided
+  if (category_id) {
+    doc.category_id = new mongoose.Types.ObjectId(category_id);
+  }
+
+  try {
+    await doc.save();
+    console.log("Product updated:", doc);
+    revalidatePath("/admin/products/products_list");
+    return { ok: true };
+  } catch (validationError: any) {
+    throw new Error(
+      `Validation failed: ${validationError.message || validationError}`
+    );
+  }
 }
 
 export async function deleteProduct(id: string) {

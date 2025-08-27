@@ -16,7 +16,6 @@ import ManageRelatedProduct from "@/components/products/ManageRelatedProduct";
 import { AttributeField } from "@/components/products/AttributeFields";
 import { Brand } from "@/constant/types";
 import { redirect } from "next/navigation";
-import GroupPagination from "../component/GroupPagination";
 
 export type AttributeDetail = {
   _id: string;
@@ -114,19 +113,11 @@ const ProductForm = () => {
       .catch((err) => console.error("Brand fetch error:", err));
   }, []);
 
-  const handleChange = (
-    groupCode: string,
-    field: string,
-    value: any,
-    idx?: number | null
-  ) => {
-    const path = buildPath(groupCode, field, idx);
-    // debug
-    // console.log("handleChange", { productId, path, value });
+  const handleChange = (field: string, value: any) => {
     dispatch(
       addProduct({
         _id: productId,
-        path,
+        field,
         value,
       })
     );
@@ -144,14 +135,14 @@ const ProductForm = () => {
           attributes: product,
         } as any);
       }
-      if (res) {
+      if (res.ok) {
         alert(
           isLocalId
             ? "Product submitted successfully!"
             : "Product updated successfully!"
         );
-        await clearStoreAndRedirect();
-        redirect("/admin/products/products_list");
+        // await clearStoreAndRedirect();
+        // redirect("/admin/products/products_list");
       }
     } catch (error) {
       console.error("Error submitting product:", error);
@@ -174,21 +165,9 @@ const ProductForm = () => {
 
   console.log({ product });
 
-  function getAtPath(obj: any, path?: string) {
-    if (!obj || !path) return undefined;
-    // convert bracket form a[0] -> a.0 then split by dot
-    const parts = path.replace(/\[(\d+)\]/g, ".$1").split(".");
-    return parts.reduce((acc: any, key: string) => {
-      if (acc == null) return undefined;
-      return acc[key];
-    }, obj);
-  }
-
   function renderGroup(group: any) {
     const { _id, code, name, attributes, children } = group;
 
-    // get group object at product[code] even if code is "a.b[0].c"
-    const groupObject = getAtPath(product, code);
     return (
       <section key={_id} className="space-y-4">
         {/* special managers (now actually rendered) */}
@@ -196,22 +175,20 @@ const ProductForm = () => {
           <VariantsManager productId={productId} />
         )}
         {code === "related_products" && (
-          <ManageRelatedProduct product={product} id={productId} name={name}/>
+          <ManageRelatedProduct product={product} id={productId} name={name} />
         )}
 
         <CollabsibleSection name={name}>
           <div className="flex flex-col gap-2">
             {attributes?.map((a: any) => {
               // attribute field under the group object (may be primitive or nested obj)
-              const fieldValue = groupObject ? groupObject[a.code] : undefined;
 
               return (
                 <div key={a._id}>
                   <AttributeField
                     productId={productId}
                     attribute={a}
-                    field={fieldValue}
-                    path={code}
+                    field={product[a.code]}
                     handleAttributeChange={handleChange}
                   />
                 </div>

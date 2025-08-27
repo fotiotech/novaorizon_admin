@@ -10,13 +10,13 @@ import { useAppDispatch } from "@/app/hooks";
 interface ManageRelatedProductProps {
   product: any;
   id: string;
-  name: string ;
+  name: string;
 }
 
 const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   product,
   id,
-  name
+  name,
 }) => {
   const dispatch = useAppDispatch();
   const [products, setProducts] = useState<any[]>([]);
@@ -41,7 +41,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     dispatch(
       addProduct({
         _id: id,
-        path: `${group}.${index}.${field}`,
+        field,
         value,
       })
     );
@@ -54,7 +54,9 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
 
   return (
     <div>
-      <h3 className="text-lg font-semibold text-gray-300 pb-2">Related Product</h3>
+      <h3 className="text-lg font-semibold text-gray-300 pb-2">
+        Related Product
+      </h3>
       <CollabsibleSection name={name}>
         <div className="h-72 overflow-y-auto space-y-4 p-2">
           {products.map((item, idx) => {
@@ -64,9 +66,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                 key={item._id}
                 onClick={() => handleProductClick(idx, item._id)}
                 className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer border transition hover:shadow-md ${
-                  isSelected
-                    ? "border-indigo-500 "
-                    : "border-gray-200"
+                  isSelected ? "border-indigo-500 " : "border-gray-200"
                 }`}
               >
                 <div className="w-12 h-12 relative flex-shrink-0">
@@ -87,7 +87,9 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                       title="Relation Type"
                       className="mt-1 block w-full p-1 border rounded"
                       name="relationship_type"
-                      value={product?.related_products[idx]?.relationship_type || ""}
+                      value={
+                        product?.related_products[idx]?.relationship_type || ""
+                      }
                       placeholder="Enter relationship type e.g. Similar, Related"
                       onChange={(e) =>
                         handleChange(

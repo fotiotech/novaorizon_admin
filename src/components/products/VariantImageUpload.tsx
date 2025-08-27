@@ -24,19 +24,21 @@ const VariantImageUploader: React.FC<VariantImageUploaderProps> = ({
       dispatch(
         addProduct({
           _id: productId,
-          path,
+          field: path,
           value: files[0],
         })
       );
     }
   }, [files, dispatch, productId]);
 
-  return <FilesUploader
+  return (
+    <FilesUploader
       files={files}
       loading={loading}
       addFiles={addFiles}
       removeFile={removeFile}
-    />;
+    />
+  );
 };
 
 export default VariantImageUploader;

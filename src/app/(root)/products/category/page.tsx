@@ -1,8 +1,7 @@
 "use client";
 
-import { getCategory } from "@/app/actions/category";
-import { Category as Cat } from "@/constant/types";
-import React, { useEffect, useRef, useState } from "react";
+
+import React, { useEffect, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
 import Link from "next/link";
 import { addCategory } from "@/app/store/slices/categorySlice";
@@ -67,7 +66,7 @@ const Category = () => {
     dispatch(
       addProduct({
         _id: id,
-        path: "category_id",
+        field: "category_id",
         value: catId,
       })
     );
