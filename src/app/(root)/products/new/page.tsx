@@ -141,8 +141,8 @@ const ProductForm = () => {
             ? "Product submitted successfully!"
             : "Product updated successfully!"
         );
-        // await clearStoreAndRedirect();
-        // redirect("/admin/products/products_list");
+        await clearStoreAndRedirect();
+        redirect("/admin/products/products_list");
       }
     } catch (error) {
       console.error("Error submitting product:", error);
@@ -171,12 +171,12 @@ const ProductForm = () => {
     return (
       <section key={_id} className="space-y-4">
         {/* special managers (now actually rendered) */}
-        {code === "variants_options" && (
+        {/* {code === "variants_options" && (
           <VariantsManager productId={productId} />
         )}
         {code === "related_products" && (
           <ManageRelatedProduct product={product} id={productId} name={name} />
-        )}
+        )} */}
 
         <CollabsibleSection name={name}>
           <div className="flex flex-col gap-2">
@@ -188,7 +188,7 @@ const ProductForm = () => {
                   <AttributeField
                     productId={productId}
                     attribute={a}
-                    field={product[a.code]}
+                    field={product?.[a.code]}
                     handleAttributeChange={handleChange}
                   />
                 </div>

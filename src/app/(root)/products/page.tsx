@@ -72,8 +72,19 @@ const Product: React.FC = () => {
 
   const handleMenuClose = useCallback(() => {
     setAnchorEl(null);
-    setSelectedId(null);
   }, []);
+  const handleMenuAction = useCallback(
+    (event?: React.MouseEvent<HTMLElement>, action?: "edit" | "delete") => {
+      setAnchorEl(null);
+      if (action === "edit" && selectedId) {
+        window.location.href = `/products/category?id=${selectedId}`;
+      } else if (action === "delete" && selectedId) {
+        // Implement delete functionality here
+        window.location.href = `/products/delete?id=${selectedId}`;
+      }
+    },
+    [selectedId]
+  );
 
   const renderProductImage = (attribute: ProductAttribute) => {
     const { main_image } = attribute;
@@ -205,8 +216,10 @@ const Product: React.FC = () => {
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
       >
-        <MenuItem onClick={handleMenuClose}>Edit</MenuItem>
-        <MenuItem onClick={handleMenuClose}>Delete</MenuItem>
+        <MenuItem onClick={(e) => handleMenuAction(e, "edit")}>Edit</MenuItem>
+        <MenuItem onClick={(e) => handleMenuAction(e, "delete")}>
+          Delete
+        </MenuItem>
       </Menu>
     </Box>
   );

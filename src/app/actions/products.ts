@@ -115,7 +115,7 @@ export async function findProducts(id?: string) {
         return { success: false, error: "Product not found" };
       }
       return {
-        // ...product?.toObject(),
+        product,
         _id: product?._id,
         category_id: product?.category_id,
         rootGroup: buildGroupTreeWithValues(groups, product),
