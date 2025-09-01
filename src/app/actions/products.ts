@@ -1,6 +1,6 @@
 "use server";
-import { connection } from "@/utils/connection";
 
+import { connection } from "@/utils/connection";
 import { revalidatePath } from "next/cache";
 import slugify from "slugify";
 import { ref, deleteObject } from "firebase/storage";
@@ -11,327 +11,299 @@ import AttributeGroup from "@/models/AttributesGroup";
 import "@/models/Attribute";
 import "@/models/Brand";
 import "@/models/User";
-// Generate a slug from the product name and department
-function generateSlug(name: string, department: string | null) {
+
+// Types
+export interface CreateProductForm {
+  category_id: string;
+  name?: string;
+  department?: string;
+  [key: string]: any;
+}
+
+interface ProductResponse {
+  success: boolean;
+  data?: any;
+  error?: string;
+}
+
+// Helper Functions
+function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
+  if (!obj || typeof obj !== "object") return {};
+
+  return Object.entries(obj).reduce((acc, [key, value]) => {
+    if (value != null && !(typeof value === "string" && !value.trim())) {
+      if (key === "attributes" && typeof value === "object") {
+        return { ...acc, ...value };
+      }
+      return { ...acc, [key]: value };
+    }
+    return acc;
+  }, {});
+}
+
+function generateSlug(name: string, department: string | null): string {
   return slugify(`${name}${department ? `-${department}` : ""}`, {
     lower: true,
   });
 }
 
-// Generate a random DSIN (Digital Serial Identification Number)
-function generateDsin() {
-  const characters = "ABCDEFGHIJKLMNOPQRSTUVWYZ0123456789";
-  let dsin = "";
-  for (let i = 0; i < 10; i++) {
-    dsin += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-  return dsin;
+function generateDsin(): string {
+  return Array(10)
+    .fill(null)
+    .map(
+      () =>
+        "ABCDEFGHIJKLMNOPQRSTUVWYZ0123456789"[Math.floor(Math.random() * 35)]
+    )
+    .join("");
 }
 
-export interface CreateProductForm {
-  category_id: string;
-  [key: string]: any; // Allow any additional fields
-}
-
-function cleanObject<T extends Record<string, any>>(
-  obj: T | undefined
-): T | undefined {
-  if (!obj || typeof obj !== "object") return undefined;
-
-  const cleaned: any = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value != null && !(typeof value === "string" && !value.trim())) {
-      if (key === "attributes" && typeof value === "object") {
-        // flatten attributes into top-level
-        Object.assign(cleaned, value);
-      } else {
-        cleaned[key] = value;
-      }
-    }
-  }
-  return Object.keys(cleaned).length ? cleaned : undefined;
-}
-
-export async function getProductsByAttributes(filters: {
-  brand?: string;
-  priceRange?: [number, number];
-  tags?: string[];
-}) {
-  await connection();
-
-  const query: any = {};
-
-  if (filters.brand) query.brand = filters.brand;
-  if (filters.priceRange)
-    query.price = { $gte: filters.priceRange[0], $lte: filters.priceRange[1] };
-  if (filters.tags && filters.tags.length > 0)
-    query.tags = { $in: filters.tags };
-
-  const products = await Product.find(query).populate("tags", "name");
-  return products;
-}
-
+// CRUD Operations
 export async function findProducts(id?: string) {
-  await connection();
+  try {
+    await connection();
 
-  const buildGroupTreeWithValues = (
-    groups: any[],
-    product: any,
-    parentId: string | null = null
-  ): any => {
-    return groups
-      .filter(
-        (group) =>
-          (!parentId && !group.parent_id) ||
-          (parentId &&
-            group.parent_id &&
-            group.parent_id.toString() === parentId)
-      )
-      .sort((a, b) => a.group_order - b.group_order)
-      .map((group) => {
-        const attributesWithValues = (group.attributes || [])
-          .sort((a: any, b: any) => a.sort_order - b.sort_order)
-          .map((attr: any) => {
-            const value = product[attr.code] ?? null;
-            return value !== null && value !== undefined
-              ? {
-                  _id: attr._id,
-                  code: attr.code,
-                  [attr.code]: value,
-                  name: attr.name,
-                }
-              : null;
-          })
-          .filter(Boolean);
+    const buildGroupTreeWithValues = (
+      groups: any[],
+      product: any,
+      parentId: string | null = null
+    ): any[] => {
+      return groups
+        .filter(
+          (group) =>
+            (!parentId && !group.parent_id) ||
+            (parentId && group.parent_id?.toString() === parentId)
+        )
+        .sort((a, b) => a.group_order - b.group_order)
+        .map((group) => {
+          const attributesWithValues = group.attributes
+            ?.sort((a: any, b: any) => a.sort_order - b.sort_order)
+            .map((attr: any) => {
+              const value = product[attr.code];
+              return value != null
+                ? {
+                    [attr.code]: value,
+                  }
+                : null;
+            });
+          const children = buildGroupTreeWithValues(
+            groups,
+            product,
+            group?._id?.toString()
+          );
 
-        const children = buildGroupTreeWithValues(
-          groups,
-          product,
-          group._id.toString()
-        );
-
-        return attributesWithValues.length > 0 || children.length > 0
-          ? {
-              _id: group._id,
-              code: group.code,
-              name: group.name,
-              parent_id: group.parent_id,
-              group_order: group.group_order,
-              attributes: attributesWithValues,
-              children,
-            }
-          : null;
-      })
-      .filter(Boolean);
-  };
-
-  if (id) {
-    const product = await Product.findOne({ _id: id }).exec();
-    if (!product) return null;
-
-    const groups = await AttributeGroup.find()
-      .populate({ path: "attributes" })
-      .sort({ group_order: 1 })
-      .exec();
-
-    const productObj = product.toObject();
-    const rootGroup = buildGroupTreeWithValues(groups, productObj || {});
-
-    return {
-      ...productObj,
-      rootGroup,
+          return {
+            _id: group?._id?.toString(),
+            code: group.code,
+            name: group.name,
+            parent_id: group?.parent_id?.toString(),
+            group_order: group.group_order,
+            attributes: attributesWithValues,
+            children,
+          };
+        });
     };
-  } else {
-    const products = await Product.find().sort({ createdAt: -1 }).exec();
 
     const groups = await AttributeGroup.find()
-      .populate({ path: "attributes" })
+      .populate("attributes")
       .sort({ group_order: 1 })
+      .lean()
       .exec();
 
-    return products.map((product) => {
-      const productObj = product.toObject();
-      const rootGroup = buildGroupTreeWithValues(groups, productObj || {});
-
+    if (id) {
+      const product: any = await Product.findById(id).lean().exec();
+      if (!product) {
+        return { success: false, error: "Product not found" };
+      }
       return {
-        ...productObj,
+        // ...product?.toObject(),
+        _id: product?._id,
+        category_id: product?.category_id,
+        rootGroup: buildGroupTreeWithValues(groups, product),
+      };
+    }
+
+    const products = await Product.find().sort({ createdAt: -1 }).lean().exec();
+    if (!products) {
+      console.error("No products found");
+    }
+    const productsWithGroups = products.map((product) => {
+      const rootGroup = buildGroupTreeWithValues(groups, product);
+      return {
+        // ...product,
+        _id: product?._id?.toString(),
+        category_id: product?.category_id?.toString(),
         rootGroup,
       };
     });
+    console.log("Products with groups:", productsWithGroups);
+    return productsWithGroups;
+  } catch (error) {
+    console.error("Error finding products:", error);
+    return { success: false, error: "Failed to fetch products" };
   }
 }
 
-export async function createProduct(formData: CreateProductForm) {
-  await connection();
-  const { category_id, ...attributes } = formData;
-
-  if (!category_id) throw new Error("Valid category_id is required.");
-
-  const cleanedAttributes = cleanObject(attributes);
-  if (!cleanedAttributes)
-    throw new Error("At least one attribute is required.");
-
-  const docData = {
-    category_id: new mongoose.Types.ObjectId(category_id),
-    ...cleanedAttributes, // Spread attributes as top-level fields
-  };
-
+export async function createProduct(
+  formData: CreateProductForm
+): Promise<ProductResponse> {
   const session = await mongoose.startSession();
+
   try {
+    await connection();
+    const { category_id, ...attributes } = formData;
+
+    if (!category_id) {
+      return { success: false, error: "Valid category_id is required" };
+    }
+
+    const cleanedAttributes = cleanObject(attributes);
+    if (Object.keys(cleanedAttributes).length === 0) {
+      return { success: false, error: "At least one attribute is required" };
+    }
+
     session.startTransaction();
 
-    const r = await Product.create([docData], { session });
+    const product = await Product.create(
+      [
+        {
+          category_id: new mongoose.Types.ObjectId(category_id),
+          ...cleanedAttributes,
+          slug: attributes.name
+            ? generateSlug(attributes.name, attributes.department ?? null)
+            : undefined,
+          dsin: generateDsin(),
+        },
+      ],
+      { session }
+    );
+
     await session.commitTransaction();
     revalidatePath("/admin/products/products_list");
-    return {
-      ok: true,
-    };
+
+    return { success: true, data: product[0] };
   } catch (error) {
     await session.abortTransaction();
-    throw error;
+    console.error("Error creating product:", error);
+    return { success: false, error: "Failed to create product" };
   } finally {
     session.endSession();
   }
 }
 
-export async function updateProduct(productId: string, formData: any) {
-  await connection();
-  const { category_id, ...attributes } = formData;
-
-  if (!productId) throw new Error("Valid product ID is required.");
-
-  const cleanedAttributes = cleanObject(attributes);
-  if (!cleanedAttributes) throw new Error("No valid attributes provided.");
-
-  const doc = await Product.findById(productId);
-  if (!doc) throw new Error(`Product ${productId} not found.`);
-
-  // Update fields directly instead of nesting under attributes
-  for (const [key, value] of Object.entries(cleanedAttributes)) {
-    doc[key] = value;
-  }
-
-  // Ensure updatedAt is set correctly
-  doc.updatedAt = new Date();
-
-  // Update category_id if provided
-  if (category_id) {
-    doc.category_id = new mongoose.Types.ObjectId(category_id);
-  }
-
-  try {
-    await doc.save();
-    console.log("Product updated:", doc);
-    revalidatePath("/admin/products/products_list");
-    return { ok: true };
-  } catch (validationError: any) {
-    throw new Error(
-      `Validation failed: ${validationError.message || validationError}`
-    );
-  }
-}
-
-export async function deleteProduct(id: string) {
+export async function updateProduct(
+  productId: string,
+  formData: any
+): Promise<any> {
   try {
     await connection();
-    const deletedProduct = id ? await Product.findByIdAndDelete(id) : null;
-    if (!deletedProduct) {
-      throw new Error("Product not found");
+    const { category_id, ...attributes } = formData;
+
+    if (!productId) {
+      return { success: false, error: "Valid product ID is required" };
     }
 
-    await revalidatePath("/admin/products/products_list");
+    const cleanedAttributes = cleanObject(attributes);
+    if (Object.keys(cleanedAttributes).length === 0) {
+      return { success: false, error: "No valid attributes provided" };
+    }
 
-    return "Product deleted successfully";
+    const product = await Product.findById(productId);
+    if (!product) {
+      return { success: false, error: "Product not found" };
+    }
+
+    Object.assign(product, cleanedAttributes);
+
+    if (category_id) {
+      product.category_id = new mongoose.Types.ObjectId(category_id);
+    }
+
+    if (attributes.name) {
+      product.slug = generateSlug(
+        attributes.name ?? "",
+        attributes.department ?? null
+      );
+    }
+
+    product.updatedAt = new Date();
+    await product.save();
+
+    revalidatePath("/admin/products/products_list");
+    return { success: true, data: product };
   } catch (error) {
-    console.error("Error deleting product:", error);
+    console.error("Error updating product:", error);
+    return { success: false, error: "Failed to update product" };
   }
 }
 
-function isUUID(value: string): boolean {
-  const uuidRegex =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(value);
+export async function deleteProduct(id: string): Promise<ProductResponse> {
+  try {
+    await connection();
+
+    if (!id) {
+      return { success: false, error: "Product ID is required" };
+    }
+
+    const deletedProduct = await Product.findByIdAndDelete(id);
+    if (!deletedProduct) {
+      return { success: false, error: "Product not found" };
+    }
+
+    revalidatePath("/admin/products/products_list");
+    return { success: true, data: "Product deleted successfully" };
+  } catch (error) {
+    console.error("Error deleting product:", error);
+    return { success: false, error: "Failed to delete product" };
+  }
 }
 
 export async function deleteProductImages(
   productId: string,
   imageUrl?: string
-) {
+): Promise<ProductResponse> {
   try {
-    // Ensure database connection
     await connection();
+
     if (!productId && !imageUrl) {
-      return { success: false, message: "No productId or imageUrl provided" };
+      return { success: false, error: "ProductId or imageUrl is required" };
     }
-    // Validate the productId
-    if (isUUID(productId)) {
-      // Delete the image from Firebase Storage
-      const url = imageUrl ? new URL(imageUrl) : new URL("");
-      const encodedFileName = url.pathname.split("/").pop();
+
+    const deleteFromStorage = async (url: string) => {
+      const urlObj = new URL(url);
+      const encodedFileName = urlObj.pathname.split("/").pop();
       if (encodedFileName) {
         const fileName = decodeURIComponent(encodedFileName);
-        const storageRef = ref(
-          storage,
-          fileName.startsWith("uploads/") ? fileName : `uploads/${fileName}`
-        );
-        await deleteObject(storageRef);
+        const path = fileName.startsWith("uploads/")
+          ? fileName
+          : `uploads/${fileName}`;
+        await deleteObject(ref(storage, path));
       }
-    } else if (mongoose.isValidObjectId(productId)) {
-      // Find the product by ID
+    };
+
+    if (mongoose.isValidObjectId(productId)) {
       const product = await Product.findById(productId);
       if (!product) {
-        console.log("Product not found");
+        return { success: false, error: "Product not found" };
       }
 
-      // If `imageUrl` is provided, delete the specific image
       if (imageUrl) {
-        // Check if the image exists in the product's imageUrls
         if (!product.imageUrls.includes(imageUrl)) {
-          console.log("Image URL not found in product");
+          return { success: false, error: "Image URL not found in product" };
         }
 
-        // Remove the image URL from the product's imageUrls array
+        await deleteFromStorage(imageUrl);
         product.imageUrls = product.imageUrls.filter(
           (url: string) => url !== imageUrl
         );
-
-        // Delete the image from Firebase Storage
-        const url = new URL(imageUrl);
-        const encodedFileName = url.pathname.split("/").pop();
-        if (encodedFileName) {
-          const fileName = decodeURIComponent(encodedFileName);
-          const storageRef = ref(
-            storage,
-            fileName.startsWith("uploads/") ? fileName : `uploads/${fileName}`
-          );
-          await deleteObject(storageRef);
-        }
-
-        // Save the updated product
         await product.save();
       }
+    } else if (imageUrl) {
+      await deleteFromStorage(imageUrl);
     }
-    // else {
-    //   // If no `imageUrl` is provided, delete all images
-    //   for (const url of product.imageUrls) {
-    //     const fileUrl = new URL(url);
-    //     const encodedFileName = fileUrl.pathname.split("/").pop();
-    //     if (encodedFileName) {
-    //       const fileName = decodeURIComponent(encodedFileName);
-    //       const storageRef = ref(
-    //         storage,
-    //         fileName.startsWith("uploads/") ? fileName : `uploads/${fileName}`
-    //       );
-    //       await deleteObject(storageRef);
-    //     }
-    //   }
 
-    //   // Clear the imageUrls array
-    //   product.imageUrls = [];
-    // }
-
-    return { success: true, message: "Image(s) deleted successfully" };
-  } catch (error: any) {
+    return { success: true, data: "Images deleted successfully" };
+  } catch (error) {
     console.error("Error deleting product images:", error);
+    return { success: false, error: "Failed to delete product images" };
   }
 }

@@ -16,7 +16,7 @@ const DeleteProduct = () => {
         if (!response) {
           throw new Error("Failed to delete product");
         }
-        setResponse(response);
+        setResponse(response as any);
       } catch (error) {
         console.error("Error deleting product:", error);
       }

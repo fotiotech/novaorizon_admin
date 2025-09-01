@@ -91,7 +91,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     dispatch(
       addProduct({
         _id: productId,
-        field: "variants_options.variants",
+        field: "variants",
         value: updatedVariants,
       })
     );
@@ -104,7 +104,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
     dispatch(
       addProduct({
         _id: productId,
-        field: "variants_options.variants",
+        field: "variants",
         value: updatedVariants,
       })
     );
@@ -114,9 +114,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({ productId }) => {
 
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-semibold text-gray-300 pb-2">
-        Variants &amp; Options
-      </h2>
+      
 
       <div className="flex flex-col">
         <label className="mb-1 font-medium">

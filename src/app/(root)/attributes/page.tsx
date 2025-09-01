@@ -64,6 +64,7 @@ const Attributes = () => {
   const [groupId, setGroupId] = useState<string>("");
   const [action, setAction] = useState<string>("");
   const [editGroupId, setEditGroupId] = useState<string>("");
+  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
 
   const [parentGroupId, setParentGroupId] = useState<string>("");
   const [editingAttribute, setEditingAttribute] =
@@ -74,7 +75,6 @@ const Attributes = () => {
     value: "asc",
     label: "A → Z",
   });
-  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -111,11 +111,11 @@ const Attributes = () => {
       if (!editGroupId) return;
       try {
         const groupResponse = await findGroup(editGroupId);
+
         if (groupResponse) {
           setCode(groupResponse?.code ?? "");
           setName(groupResponse?.name ?? "");
           setGroupOrder(groupResponse?.group_order ?? "");
-          setSortOrder(groupResponse?.group_order ?? "");
           setParentGroupId(groupResponse?.parent_id ?? "");
 
           // Pre-select the current attributes of the group
@@ -391,7 +391,7 @@ const Attributes = () => {
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
 
-  console.log("editGroupId:", editGroupId);
+  console.log("groupResponse:", code, name, groupOrder, parentGroupId);
 
   return (
     <div className="max-w-7xl mx-auto lg:px-8 w-full">
@@ -423,10 +423,9 @@ const Attributes = () => {
             <div className="space-y-4 pl-0 md:pl-4">
               <select
                 title="group"
-                name="parentGroupId"
                 value={parentGroupId}
                 onChange={(e) => setParentGroupId(e.target.value)}
-                className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+                className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">Select parent group</option>
                 {groups?.length > 0 &&
@@ -440,27 +439,28 @@ const Attributes = () => {
               <div className="flex flex-col md:flex-row gap-2">
                 <input
                   type="text"
-                  name="code"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="Enter new group code e.g. name_top10"
-                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
                 <input
                   type="text"
-                  name="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Enter new group name"
-                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
                 <input
                   type="number"
-                  name="groupOrder"
-                  value={groupOrder as number}
-                  onChange={(e) => setGroupOrder(Number(e.target.value))}
+                  value={groupOrder === null ? "" : groupOrder}
+                  onChange={(e) =>
+                    setGroupOrder(
+                      e.target.value === "" ? null : Number(e.target.value)
+                    )
+                  }
                   placeholder="Enter new group order"
-                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
 
                 <button
@@ -468,7 +468,7 @@ const Attributes = () => {
                   onClick={() =>
                     editGroupId ? handleUpdateGroup() : handleCreateGroup()
                   }
-                  className="btn text-sm w-full md:w-auto"
+                  className="btn text-sm w-full md:w-auto bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded"
                 >
                   {editGroupId ? "Edit Group" : "Create Group"}
                 </button>
