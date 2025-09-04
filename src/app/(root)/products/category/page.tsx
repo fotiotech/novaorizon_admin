@@ -3,38 +3,64 @@
 
 import React, { useEffect, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
+import { persistor } from "@/app/store/store";
 import Link from "next/link";
 import { addCategory } from "@/app/store/slices/categorySlice";
-import { addProduct, resetProduct } from "@/app/store/slices/productSlice";
+import {
+  addProduct,
+  clearProduct,
+  resetProduct,
+  setProducts,
+} from "@/app/store/slices/productSlice";
 import { v4 as uuidv4 } from "uuid";
 import { fetchCategory } from "@/fetch/fetchCategory";
 import { useSearchParams } from "next/navigation";
-import { fetchProducts } from "@/fetch/fetchProducts";
+import { findProducts } from "@/app/actions/products";
 
 const Category = () => {
   const dispatch = useAppDispatch();
   const pId = useSearchParams().get("id");
+  const [prodUpdate, setProdUpdate] = useState<any>({});
+
   useEffect(() => {
-    if (pId) {
-      dispatch(fetchProducts(pId));
+    async function fetchProduct() {
+      try {
+        if (!pId) return;
+        const res = await findProducts(pId);
+        if (res) {
+          setProdUpdate(res);
+          if (res && typeof res === "object" && "_id" in res && res._id) {
+            console.log("Dispatching resetProduct with ID:", res._id);
+            dispatch(
+              setProducts({
+                byId: {
+                  [res?._id]: { _id: res?._id, category_id: res?.category_id },
+                },
+                allIds: [res?._id],
+              })
+            );
+          }
+        }
+      } catch (error) {
+        console.log(error);
+      }
     }
-  }, [pId]);
+    fetchProduct();
+  }, [pId, dispatch]);
+
   const category = useAppSelector((state) => state.category);
   const products = useAppSelector((state) => state.product);
 
-  // 1️⃣ Create a ref that holds our “working” ID.  It only gets set once.
+  const _id = products.allIds.length ? products.allIds[0] : uuidv4();
 
-  const id = products.allIds.length ? products.allIds[0] : uuidv4();
-
-  // Initialize product in Redux if it doesn't exist
   useEffect(() => {
     if (!products.allIds.length) {
-      dispatch(resetProduct(id));
+      dispatch(resetProduct(_id));
     }
-  }, [dispatch, id, products.allIds.length]);
+  }, [dispatch, _id, products.allIds.length]);
 
-  // Get the category_id from the product state
-  const category_id = products.byId[id]?.category_id || "";
+  const category_id = products.byId[_id]?.category_id || "";
+  console.log({ _id, category_id, products });
   const [parentId, setParentId] = useState<string>(category_id);
 
   // Update local state when Redux category_id changes
@@ -65,7 +91,7 @@ const Category = () => {
     dispatch(addCategory({ categoryId: catId }));
     dispatch(
       addProduct({
-        _id: id,
+        _id,
         field: "category_id",
         value: catId,
       })

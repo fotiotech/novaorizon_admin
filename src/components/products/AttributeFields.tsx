@@ -10,6 +10,8 @@ export const AttributeField: React.FC<{
   field: any;
   handleAttributeChange: (field: string, value: any) => void;
 }> = ({ productId, attribute, field, handleAttributeChange }) => {
+  console.log({ attribute, field });
+  if (!attribute || !attribute.code) return null;
   const { code, name, type, option } = attribute;
 
   return (

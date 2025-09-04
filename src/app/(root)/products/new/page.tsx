@@ -3,10 +3,18 @@
 import React, { useState, useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { persistor, RootState } from "@/app/store/store";
-import { addProduct, clearProduct } from "@/app/store/slices/productSlice";
+import {
+  addProduct,
+  clearProduct,
+  setProducts,
+} from "@/app/store/slices/productSlice";
 import { getBrands } from "@/app/actions/brand";
 import { find_category_attribute_groups } from "@/app/actions/category";
-import { updateProduct, createProduct } from "@/app/actions/products";
+import {
+  updateProduct,
+  createProduct,
+  findProducts,
+} from "@/app/actions/products";
 import router from "next/router";
 import { v4 as uuidv4, validate, version } from "uuid";
 import { Box, CircularProgress } from "@mui/material";
@@ -35,43 +43,6 @@ export type GroupNode = {
   group_order: number;
 };
 
-function buildPath(groupCode: string, field: string, idx?: number | null) {
-  if (!groupCode && !field) return "";
-
-  // fullBase is the prefix we'll prepend (if groupCode present)
-  const prefix = groupCode ? `${groupCode}.` : "";
-
-  if (idx == null) {
-    return `${prefix}${field}`;
-  }
-
-  // split into segments and insert index into the first segment that is not an index-only numeric
-  const segments = field.split(".");
-
-  const targetIdx = (() => {
-    for (let i = 0; i < segments.length; i++) {
-      const s = segments[i];
-      if (/^\d+$/.test(s)) {
-        // numeric-only seg like "0" -> convert to "[0]" form on that seg
-        segments[i] = `[${s}]`;
-        return segments.join(".");
-      }
-      if (/\[\d+\]$/.test(s)) {
-        // already contains index, leave it
-        return segments.join(".");
-      }
-      // common case: attach index to the first non-numeric segment
-      // attach and return
-      segments[i] = `${s}[${idx}]`;
-      return segments.join(".");
-    }
-    // fallback: append to end
-    return `${field}[${idx}]`;
-  })();
-
-  return `${prefix}${targetIdx}`;
-}
-
 const ProductForm = () => {
   const dispatch = useAppDispatch();
   const productState = useAppSelector((state: RootState) => state.product);
@@ -90,9 +61,36 @@ const ProductForm = () => {
 
   useEffect(() => {
     const fetchAttributes = async () => {
+      const isLocalId = validate(productId) && version(productId) === 4;
       try {
         setIsLoading(true);
-        if (product.category_id) {
+        if (!isLocalId) {
+          const res = productId ? await findProducts(productId) : null;
+          if (res) {
+            if ("rootGroup" in res && Array.isArray(res.rootGroup)) {
+              setGroups(res.rootGroup as unknown as GroupNode[]);
+              res.rootGroup.forEach((group: any) => {
+                group.attributes?.forEach((attr: any) => {
+                  if (attr && typeof attr === "object") {
+                    Object.entries(attr).forEach(([k, v]) => {
+                      if (k !== null && v !== undefined && v !== null) {
+                        dispatch(
+                          addProduct({
+                            _id: productId,
+                            field: k,
+                            value: v || "",
+                          })
+                        );
+                      }
+                    });
+                  }
+                });
+              });
+            } else {
+              setGroups([]);
+            }
+          }
+        } else if (product.category_id) {
           const resp = await find_category_attribute_groups(
             product.category_id
           );
@@ -105,7 +103,7 @@ const ProductForm = () => {
       }
     };
     fetchAttributes();
-  }, [product.category_id]);
+  }, [product.category_id, productId]);
 
   useEffect(() => {
     getBrands()
@@ -163,6 +161,7 @@ const ProductForm = () => {
     );
   }
 
+  console.log({ groups });
   console.log({ product });
 
   function renderGroup(group: any) {
@@ -184,11 +183,11 @@ const ProductForm = () => {
               // attribute field under the group object (may be primitive or nested obj)
 
               return (
-                <div key={a._id}>
+                <div key={a?._id}>
                   <AttributeField
                     productId={productId}
                     attribute={a}
-                    field={product?.[a.code]}
+                    field={product[a?.code]}
                     handleAttributeChange={handleChange}
                   />
                 </div>

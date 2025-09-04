@@ -81,6 +81,11 @@ export async function findProducts(id?: string) {
               const value = product[attr.code];
               return value != null
                 ? {
+                    _id: attr._id,
+                    code: attr.code,
+                    name: attr.name,
+                    type: attr.type,
+                    option: attr.option,
                     [attr.code]: value,
                   }
                 : null;
