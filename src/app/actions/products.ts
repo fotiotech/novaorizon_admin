@@ -222,7 +222,7 @@ export async function updateProduct(
     Object.assign(product, cleanedAttributes);
 
     if (category_id) {
-      product.category_id = new mongoose.Types.ObjectId(category_id);
+      product.category_id =category_id.toString();
     }
 
     if (attributes.name) {
