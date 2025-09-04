@@ -1,26 +1,22 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { RootState } from "@/app/store/store";
 import { fetchProducts } from "@/fetch/fetchProducts";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   IconButton,
-  Paper,
-  Menu,
-  MenuItem,
   Typography,
   Box,
   CircularProgress,
   Avatar,
+  Button,
+  Card,
+  CardContent,
+  Grid,
+  Menu,
+  MenuItem,
 } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 
@@ -73,13 +69,13 @@ const Product: React.FC = () => {
   const handleMenuClose = useCallback(() => {
     setAnchorEl(null);
   }, []);
+
   const handleMenuAction = useCallback(
-    (event?: React.MouseEvent<HTMLElement>, action?: "edit" | "delete") => {
+    (_?: React.MouseEvent<HTMLElement>, action?: "edit" | "delete") => {
       setAnchorEl(null);
       if (action === "edit" && selectedId) {
         window.location.href = `/products/category?id=${selectedId}`;
       } else if (action === "delete" && selectedId) {
-        // Implement delete functionality here
         window.location.href = `/products/delete?id=${selectedId}`;
       }
     },
@@ -88,21 +84,15 @@ const Product: React.FC = () => {
 
   const renderProductImage = (attribute: ProductAttribute) => {
     const { main_image } = attribute;
-
     return (
       main_image && (
-        <Box key={main_image} className="p-2 bg-white rounded shadow m-1">
-          <Avatar
-            src={main_image}
-            alt="Product Image"
-            sx={{ width: 60, height: 60 }}
-            variant="rounded"
-          >
-            {!main_image && (
-              <Image src="/fallback-image.png" fill alt="Fallback" />
-            )}
-          </Avatar>
-        </Box>
+        <Avatar
+          key={main_image}
+          src={main_image}
+          alt="Product"
+          sx={{ width: 72, height: 72, borderRadius: 3, boxShadow: 2 }}
+          variant="rounded"
+        />
       )
     );
   };
@@ -111,31 +101,37 @@ const Product: React.FC = () => {
     const { title } = attribute;
     return (
       title && (
-        <Box key={title} className="p-2 m-1">
-          <Typography variant="body2" className="font-medium">
-            {title || "No Title"}
-          </Typography>
-        </Box>
+        <Typography key={title} variant="subtitle1" fontWeight="600">
+          {title || "No Title"}
+        </Typography>
       )
     );
   };
 
   if (loading) {
     return (
-      <Box className="flex justify-center py-6">
-        <CircularProgress />
+      <Box className="flex justify-center py-16">
+        <CircularProgress size={48} />
       </Box>
     );
   }
 
   if (!products.allIds.length) {
     return (
-      <Box className="text-center py-10">
-        <Typography color="textSecondary">
-          No products found. Please add some products.
+      <Box className="text-center py-20 px-4">
+        <Typography color="textSecondary" variant="h6" gutterBottom>
+          No products found
         </Typography>
-        <Link href="/products/category" className="btn mt-4 inline-block">
-          Add Product
+        <Typography variant="body2" color="textSecondary">
+          Start by creating your first product.
+        </Typography>
+        <Link href="/products/category" passHref>
+          <Button
+            variant="contained"
+            sx={{ mt: 4, borderRadius: 3, textTransform: "none", px: 4 }}
+          >
+            Add Product
+          </Button>
         </Link>
       </Box>
     );
@@ -143,73 +139,62 @@ const Product: React.FC = () => {
 
   return (
     <Box>
-      <Box className="flex items-center justify-between py-4">
-        <Typography variant="h6" component="h2" fontWeight="semibold">
+      <Box className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4">
+        <Typography variant="h5" fontWeight="700">
           Products
         </Typography>
-        <Link href="/products/category" className="btn">
-          New
+        <Link href="/products/category" passHref>
+          <Button
+            variant="contained"
+            color="primary"
+            sx={{ borderRadius: 3, textTransform: "none", px: 3 }}
+          >
+            + New Product
+          </Button>
         </Link>
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Images</TableCell>
-              <TableCell>Product Information</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {products.allIds.map((id) => {
-              const product = products.byId[id] as Product | undefined;
-              if (!product) return null;
+      <Grid container spacing={3}>
+        {products.allIds.map((id) => {
+          const product = products.byId[id] as Product | undefined;
+          if (!product) return null;
 
-              // Extract attributes based on group code
-              const basicInfoAttrs =
-                product.rootGroup?.flatMap((group) =>
-                  group.code === "basic_informations"
-                    ? group.attributes || []
-                    : []
-                ) || [];
+          const basicInfoAttrs =
+            product.rootGroup?.flatMap((group) =>
+              group.code === "basic_informations" ? group.attributes || [] : []
+            ) || [];
 
-              const mediaAttrs =
-                product.rootGroup?.flatMap((group) =>
-                  group.code === "media_visuals" ? group.attributes || [] : []
-                ) || [];
+          const mediaAttrs =
+            product.rootGroup?.flatMap((group) =>
+              group.code === "media_visuals" ? group.attributes || [] : []
+            ) || [];
 
-              return (
-                <TableRow key={product._id} hover className="text-black">
-                  <TableCell>
-                    <Box className="flex flex-col gap-2 overflow-x-auto">
+          return (
+            <Grid item xs={12} sm={6} md={4} key={product._id}>
+              <Card sx={{ borderRadius: 4, boxShadow: 3, height: "100%" }}>
+                <CardContent className="flex flex-col gap-4">
+                  <Box className="flex items-center justify-between">
+                    <Box className="flex gap-2">
                       {mediaAttrs
-                        .filter((attr) => attr !== null && attr !== undefined)
+                        .filter((attr) => attr)
+                        .slice(0, 2)
                         .map((a) => renderProductImage(a))}
                     </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Box className="flex flex-col gap-2">
-                      {basicInfoAttrs
-                        .filter((attr) => attr !== null && attr !== undefined)
-                        .map((a) => renderProductInfo(a))}
-                    </Box>
-                  </TableCell>
-
-                  <TableCell align="right">
-                    <IconButton
-                      onClick={(e) => handleMenuOpen(e, product._id)}
-                      size="large"
-                    >
+                    <IconButton onClick={(e) => handleMenuOpen(e, product._id)}>
                       <MoreHorizIcon />
                     </IconButton>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                  </Box>
+                  <Box>
+                    {basicInfoAttrs
+                      .filter((attr) => attr)
+                      .map((a) => renderProductInfo(a))}
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          );
+        })}
+      </Grid>
 
       <Menu
         anchorEl={anchorEl}
@@ -217,9 +202,7 @@ const Product: React.FC = () => {
         onClose={handleMenuClose}
       >
         <MenuItem onClick={(e) => handleMenuAction(e, "edit")}>Edit</MenuItem>
-        <MenuItem onClick={(e) => handleMenuAction(e, "delete")}>
-          Delete
-        </MenuItem>
+        <MenuItem onClick={(e) => handleMenuAction(e, "delete")}>Delete</MenuItem>
       </Menu>
     </Box>
   );
