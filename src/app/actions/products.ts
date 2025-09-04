@@ -96,15 +96,17 @@ export async function findProducts(id?: string) {
             group?._id?.toString()
           );
 
-          return {
-            _id: group?._id?.toString(),
-            code: group.code,
-            name: group.name,
-            parent_id: group?.parent_id?.toString(),
-            group_order: group.group_order,
-            attributes: attributesWithValues,
-            children,
-          };
+          if (attributesWithValues && attributesWithValues.length > 0) {
+            return {
+              _id: group?._id?.toString(),
+              code: group.code,
+              name: group.name,
+              parent_id: group?.parent_id?.toString(),
+              group_order: group.group_order,
+              attributes: attributesWithValues,
+              children,
+            };
+          }
         });
     };
 
