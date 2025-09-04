@@ -79,7 +79,7 @@ export async function findProducts(id?: string) {
             ?.sort((a: any, b: any) => a.sort_order - b.sort_order)
             .map((attr: any) => {
               const value = product[attr.code];
-              return value != null
+              return attr !== null && attr.code !== null && value != null
                 ? {
                     _id: attr._id,
                     code: attr.code,
