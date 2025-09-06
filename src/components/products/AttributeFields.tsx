@@ -3,6 +3,7 @@ import Select, { MultiValue } from "react-select";
 import MainImageUploader from "./MainImageUploader";
 import GalleryUploader from "./GalleryUploader";
 import { AttributeDetail } from "@/app/(root)/products/new/page";
+import ManageRelatedProduct from "./ManageRelatedProduct";
 
 export const AttributeField: React.FC<{
   productId: string;
@@ -23,6 +24,10 @@ export const AttributeField: React.FC<{
         )}
         {type === "file" && code === "gallery" && (
           <GalleryUploader productId={productId} field={field} code={code} />
+        )}
+
+        {code === "related_products" && type === "select" && (
+          <ManageRelatedProduct id={productId} code={code} />
         )}
 
         {type === "text" && (

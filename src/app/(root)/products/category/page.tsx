@@ -1,6 +1,5 @@
 "use client";
 
-
 import React, { useEffect, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
 import { persistor } from "@/app/store/store";
@@ -16,6 +15,7 @@ import { v4 as uuidv4 } from "uuid";
 import { fetchCategory } from "@/fetch/fetchCategory";
 import { useSearchParams } from "next/navigation";
 import { findProducts } from "@/app/actions/products";
+import { fetchProducts } from "@/fetch/fetchProducts";
 
 const Category = () => {
   const dispatch = useAppDispatch();
@@ -23,29 +23,8 @@ const Category = () => {
   const [prodUpdate, setProdUpdate] = useState<any>({});
 
   useEffect(() => {
-    async function fetchProduct() {
-      try {
-        if (!pId) return;
-        const res = await findProducts(pId);
-        if (res) {
-          setProdUpdate(res);
-          if (res && typeof res === "object" && "_id" in res && res._id) {
-            console.log("Dispatching resetProduct with ID:", res._id);
-            dispatch(
-              setProducts({
-                byId: {
-                  [res?._id]: { _id: res?._id, category_id: res?.category_id },
-                },
-                allIds: [res?._id],
-              })
-            );
-          }
-        }
-      } catch (error) {
-        console.log(error);
-      }
-    }
-    fetchProduct();
+    if (!pId) return;
+    dispatch(fetchProducts(pId));
   }, [pId, dispatch]);
 
   const category = useAppSelector((state) => state.category);
@@ -60,7 +39,6 @@ const Category = () => {
   }, [dispatch, _id, products.allIds.length]);
 
   const category_id = products.byId[_id]?.category_id || "";
-  console.log({ _id, category_id, products });
   const [parentId, setParentId] = useState<string>(category_id);
 
   // Update local state when Redux category_id changes

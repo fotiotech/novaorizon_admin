@@ -141,16 +141,63 @@ export async function createAttributeGroup(
 }
 
 export async function findGroup(id?: string) {
-  await connection();
   try {
-    if (!id) return;
-    const attributeGroups = await AttributeGroup.findOne({ _id: id }).populate({
-      path: "attributes",
-    }).lean();
-    return serializeGroup(attributeGroups);
+    await connection();
+
+    const buildGroupTreeWithValues = (
+      groups: any[],
+      parentId: string | null = null
+    ): any[] => {
+      return groups
+        .filter(
+          (group) =>
+            (!parentId && !group.parent_id) ||
+            (parentId && group.parent_id?.toString() === parentId)
+        )
+        .sort((a, b) => a.group_order - b.group_order)
+        .map((group) => ({
+          _id: group._id?.toString(),
+          code: group.code,
+          name: group.name,
+          parent_id: group.parent_id?.toString(),
+          group_order: group.group_order,
+          attributes: group.attributes,
+          children: buildGroupTreeWithValues(groups, group._id?.toString()),
+        }));
+    };
+
+    if (id) {
+      // Use findById for single document lookup
+      const group = await AttributeGroup.findById(id)
+        .populate("attributes")
+        .sort({ sort_order: 1 })
+        .lean()
+        .exec();
+
+      if (!group) {
+        return { success: false, error: "Group not found" };
+      }
+
+      // Wrap single group in array for tree builder
+      return buildGroupTreeWithValues([group]);
+    }
+
+    // Get all groups when no ID is specified
+    const groups = await AttributeGroup.find({})
+      .populate("attributes")
+      .sort({ sort_order: 1 })
+      .lean()
+      .exec();
+
+    if (!groups || groups.length === 0) {
+      console.error("No groups found");
+      return []; // Return empty array instead of undefined
+    }
+
+    return buildGroupTreeWithValues(groups);
   } catch (error) {
-    console.error("[AttributeGroup] Error in findAttributeForGroups:", error);
-    return null;
+    console.error("Error finding groups:", error);
+    return { success: false, error: "Failed to fetch groups" };
   }
 }
 

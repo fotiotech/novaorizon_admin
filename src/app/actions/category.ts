@@ -13,6 +13,28 @@ function generateSlug(name: string) {
   return slugify(name, { lower: true });
 }
 
+const buildGroupTreeWithValues = (
+  groups: any[],
+  parentId: string | null = null
+): any[] => {
+  return groups
+    .filter(
+      (group) =>
+        (!parentId && !group.parent_id) ||
+        (parentId && group.parent_id?.toString() === parentId)
+    )
+    .sort((a, b) => a.group_order - b.group_order)
+    .map((group) => ({
+      _id: group._id?.toString(),
+      code: group.code,
+      name: group.name,
+      parent_id: group.parent_id?.toString(),
+      group_order: group.group_order,
+      attributes: group.attributes,
+      children: buildGroupTreeWithValues(groups, group._id?.toString()),
+    }));
+};
+
 export async function getCategory(
   id?: string | null,
   parentId?: string | null,
@@ -283,7 +305,8 @@ export async function find_mapped_attributes_ids(
 
 // TypeScript-friendly implementation
 export async function find_category_attribute_groups(
-  categoryId: string | null = null
+  categoryId: string,
+  groupId?: string | null
 ) {
   if (!categoryId) return [];
   await connection();
@@ -331,93 +354,21 @@ export async function find_category_attribute_groups(
     : [];
   if (attributeIds.length === 0) return [];
 
-  // --- 2) initial groups that reference the attributes (populate attributes) ---
-  const initialGroups = await AttributeGroup.find({
+  if (groupId) {
+    const group = await AttributeGroup.find({
+      _id: new mongoose.Types.ObjectId(groupId),
+      attributes: { $in: attributeIds },
+    })
+      .populate("attributes") // populate attributes here
+      .lean();
+    return buildGroupTreeWithValues([group[0]]);
+  }
+
+  const groups = await AttributeGroup.find({
     attributes: { $in: attributeIds },
   })
     .populate("attributes") // populate attributes here
     .lean();
 
-  if (!initialGroups || initialGroups.length === 0) return [];
-
-  // --- 3) iteratively fetch ancestors (parents) and populate attributes ---
-  const allGroupsMap = new Map<string, any>();
-  initialGroups.forEach((g) => allGroupsMap.set(String(g._id), { ...g }));
-
-  // seed parent ids to fetch
-  let toFetch = new Set<string>();
-  initialGroups.forEach((g) => {
-    if (g.parent_id) {
-      const pid = String(g.parent_id);
-      if (!allGroupsMap.has(pid)) toFetch.add(pid);
-    }
-  });
-
-  const MAX_ITER = 50;
-  let iter = 0;
-
-  while (toFetch.size > 0 && iter < MAX_ITER) {
-    iter += 1;
-    // convert to ObjectId array
-    const ids = Array.from(toFetch).map((id) => new Types.ObjectId(id));
-    toFetch = new Set();
-
-    const parents = await AttributeGroup.find({ _id: { $in: ids } })
-      .populate({ path: "attributes" }) // populate attributes for parents too
-      .lean();
-
-    if (!parents || parents.length === 0) break;
-
-    parents.forEach((p) => {
-      const pid = String(p._id);
-      if (!allGroupsMap.has(pid)) {
-        allGroupsMap.set(pid, { ...p });
-        if (p.parent_id) {
-          const ppid = String(p.parent_id);
-          if (!allGroupsMap.has(ppid)) toFetch.add(ppid);
-        }
-      }
-    });
-  }
-
-  // optional: log a warning if iter === MAX_ITER (possible cycle)
-  if (iter === MAX_ITER) {
-    console.warn(
-      "find_category_attribute_groups: reached MAX_ITER — possible cycle in group parents"
-    );
-  }
-
-  // --- 4) Build tree using allGroupsMap (use Array.from to avoid MapIterator TS errors) ---
-  const groupMap = new Map<string, any>();
-  for (const [id, g] of Array.from(allGroupsMap.entries())) {
-    groupMap.set(id, { ...g, children: [] });
-  }
-
-  const rootGroups: any[] = [];
-
-  // again use Array.from to iterate map entries safely in TS target < es2015
-  for (const [id, node] of Array.from(groupMap.entries())) {
-    const parentId = node.parent_id ? String(node.parent_id) : null;
-    if (parentId && groupMap.has(parentId)) {
-      const parent = groupMap.get(parentId);
-      parent.children.push(node);
-    } else {
-      rootGroups.push(node);
-    }
-  }
-
-  // --- 5) sort tree by group_order only ---
-  const sortByGroupOrder = (a: any, b: any) =>
-    (a.group_order || 0) - (b.group_order || 0);
-
-  const sortTreeRecursively = (nodes: any[]) => {
-    nodes.sort(sortByGroupOrder);
-    nodes.forEach((n) => {
-      if (n.children && n.children.length > 0) sortTreeRecursively(n.children);
-    });
-  };
-
-  sortTreeRecursively(rootGroups);
-
-  return rootGroups;
+  return buildGroupTreeWithValues(groups);
 }

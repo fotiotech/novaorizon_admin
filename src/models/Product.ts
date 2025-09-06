@@ -5,15 +5,11 @@ const ES_INDEX = process.env.ELASTIC_INDEX || "";
 // Product Schema with flat field structure
 const ProductSchema = new Schema(
   {
-    // Reference to the category/type
     category_id: {
       type: Schema.Types.ObjectId,
       ref: "Category",
       required: true,
     },
-
-    // All other fields are stored as top-level properties
-    // No need for an attributes object anymore
   },
   {
     timestamps: true, // createdAt, updatedAt

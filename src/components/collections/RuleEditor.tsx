@@ -152,69 +152,69 @@ const attributeOptions = [
     value: "category_id",
   },
   {
-    label: "name",
-    value: "identification_branding.name",
+    label: "title",
+    value: "title",
   },
   {
     label: "brand",
-    value: "identification_branding.brand",
+    value: "brand",
   },
   {
     label: "weight",
-    value: "product_specifications.weight",
+    value: "weight",
   },
   {
     label: "length",
-    value: "product_specifications.dimensions.length",
+    value: "length",
   },
   {
     label: "width",
-    value: "product_specifications.dimensions.width",
+    value: "width",
   },
   {
     label: "height",
-    value: "product_specifications.dimensions.height",
+    value: "height",
   },
   {
     label: "color",
-    value: "product_specifications.color",
+    value: "color",
   },
-  { label: "main image", value: "media_visuals.main_image" },
-  { label: "price", value: "pricing_availability.price" },
+  { label: "main image", value: "main_image" },
+  { label: "price", value: "price" },
   {
     label: "currency",
-    value: "pricing_availability.currency",
+    value: "currency",
   },
   {
     label: "stock status",
-    value: "pricing_availability.stock_status",
+    value: "stock_status",
   },
   {
     label: "quantity",
-    value: "pricing_availability.quantity",
+    value: "quantity",
   },
-  { label: "short descriptions", value: "descriptions.short" },
-  { label: "long descriptions", value: "descriptions.long" },
+  { label: "short descriptions", value: "short_description" },
+  { label: "long descriptions", value: "long_description" },
   {
     label: "primary material",
-    value: "materials_composition.primary_material",
+    value: "primary_material",
   },
   {
     label: "shipping weight",
-    value: "logistics_shipping.shipping_weight",
+    value: "shipping_weight",
   },
   {
     label: "origin country",
-    value: "logistics_shipping.origin_country",
+    value: "origin_country",
   },
   {
     label: "warranty period",
-    value: "warranty_returns.warranty_period",
+    value: "warranty_period",
   },
-  { label: "meta title", value: "seo_marketing.meta_title" },
+  { label: "meta title", value: "meta_title" },
   {
     label: "safety certifications",
-    value: "legal_compliance.safety_certifications",
+    value: "safety_certifications",
   },
   // Add more fields as needed...
 ];

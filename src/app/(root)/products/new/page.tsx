@@ -18,6 +18,7 @@ import CollabsibleSection from "@/components/products/CollabsibleSection";
 import { AttributeField } from "@/components/products/AttributeFields";
 import { Brand } from "@/constant/types";
 import { redirect } from "next/navigation";
+import ManageRelatedProduct from "../../../../components/products/ManageRelatedProduct";
 
 export type AttributeDetail = {
   _id: string;
@@ -57,40 +58,12 @@ const ProductForm = () => {
 
   useEffect(() => {
     const fetchAttributes = async () => {
-      const isLocalId = validate(productId) && version(productId) === 4;
       try {
         setIsLoading(true);
         setError(null);
-        if (!isLocalId) {
-          const res = productId ? await findProducts(productId) : null;
-          if (res && "rootGroup" in res && Array.isArray(res.rootGroup)) {
-            setGroups(res.rootGroup as unknown as GroupNode[]);
-            res.rootGroup.forEach((group: any) => {
-              group.attributes?.forEach((attr: any) => {
-                if (attr && typeof attr === "object") {
-                  Object.entries(attr).forEach(([k, v]) => {
-                    if (k !== null && v !== undefined && v !== null) {
-                      dispatch(
-                        addProduct({
-                          _id: productId,
-                          field: k,
-                          value: v || "",
-                        })
-                      );
-                    }
-                  });
-                }
-              });
-            });
-          } else {
-            setGroups([]);
-          }
-        } else if (product.category_id) {
-          const resp = await find_category_attribute_groups(
-            product.category_id
-          );
-          setGroups(resp as unknown as GroupNode[]);
-        }
+        const resp = await find_category_attribute_groups(product.category_id);
+        console.log("Fetched attribute groups:", resp);
+        setGroups(resp as unknown as GroupNode[]);
       } catch (err) {
         console.error("Error fetching attributes:", err);
         setError("Failed to load product attributes. Please try again.");
@@ -167,6 +140,8 @@ const ProductForm = () => {
       </Box>
     );
   }
+
+  console.log("Rendering groups:", product);
 
   function renderGroup(group: any) {
     const { _id, code, name, attributes, children } = group;

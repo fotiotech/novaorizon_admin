@@ -10,32 +10,15 @@ import {
   Typography,
   Box,
   CircularProgress,
-  Avatar,
   Button,
   Card,
   CardContent,
   Grid,
   Menu,
   MenuItem,
+  Avatar,
 } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-
-interface ProductAttribute {
-  _id: string;
-  main_image?: string;
-  title?: string;
-}
-
-interface ProductGroup {
-  _id: string;
-  code: string;
-  attributes?: ProductAttribute[];
-}
-
-interface Product {
-  _id: string;
-  rootGroup?: ProductGroup[];
-}
 
 const Product: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -81,32 +64,6 @@ const Product: React.FC = () => {
     },
     [selectedId]
   );
-
-  const renderProductImage = (attribute: ProductAttribute) => {
-    const { main_image } = attribute;
-    return (
-      main_image && (
-        <Avatar
-          key={main_image}
-          src={main_image}
-          alt="Product"
-          sx={{ width: 72, height: 72, borderRadius: 3, boxShadow: 2 }}
-          variant="rounded"
-        />
-      )
-    );
-  };
-
-  const renderProductInfo = (attribute: ProductAttribute) => {
-    const { title } = attribute;
-    return (
-      title && (
-        <Typography key={title} variant="subtitle1" fontWeight="600">
-          {title || "No Title"}
-        </Typography>
-      )
-    );
-  };
 
   if (loading) {
     return (
@@ -156,38 +113,46 @@ const Product: React.FC = () => {
 
       <Grid container spacing={3}>
         {products.allIds.map((id) => {
-          const product = products.byId[id] as Product | undefined;
+          const product = products.byId[id] as any;
           if (!product) return null;
-
-          const basicInfoAttrs =
-            product.rootGroup?.flatMap((group) =>
-              group.code === "basic_informations" ? group.attributes || [] : []
-            ) || [];
-
-          const mediaAttrs =
-            product.rootGroup?.flatMap((group) =>
-              group.code === "media_visuals" ? group.attributes || [] : []
-            ) || [];
 
           return (
             <Grid item xs={12} sm={6} md={4} key={product._id}>
               <Card sx={{ borderRadius: 4, boxShadow: 3, height: "100%" }}>
                 <CardContent className="flex flex-col gap-4">
                   <Box className="flex items-center justify-between">
-                    <Box className="flex gap-2">
-                      {mediaAttrs
-                        .filter((attr) => attr)
-                        .slice(0, 2)
-                        .map((a) => renderProductImage(a))}
-                    </Box>
+                    <Typography variant="h6" noWrap>
+                      {product.title || "Untitled Product"}
+                    </Typography>
                     <IconButton onClick={(e) => handleMenuOpen(e, product._id)}>
                       <MoreHorizIcon />
                     </IconButton>
                   </Box>
-                  <Box>
-                    {basicInfoAttrs
-                      .filter((attr) => attr)
-                      .map((a) => renderProductInfo(a))}
+
+                  <Box className="flex items-center gap-3">
+                    <Avatar
+                      src={product.main_image || "/placeholder.png"}
+                      alt={product.title || "Product Image"}
+                      sx={{ width: 56, height: 56, borderRadius: 2 }}
+                      variant="square"
+                    />
+                    <Box>
+                      <Typography variant="body1" fontWeight="600">
+                        {product.model}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        SKU: {product.sku}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Box className="flex flex-col gap-1 mt-2">
+                    <Typography variant="body2" color="textSecondary">
+                      Price: {product.sale_price || product.list_price}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Stock: {product.stock_status?.join(", ") || "N/A"}
+                    </Typography>
                   </Box>
                 </CardContent>
               </Card>
@@ -202,7 +167,9 @@ const Product: React.FC = () => {
         onClose={handleMenuClose}
       >
         <MenuItem onClick={(e) => handleMenuAction(e, "edit")}>Edit</MenuItem>
-        <MenuItem onClick={(e) => handleMenuAction(e, "delete")}>Delete</MenuItem>
+        <MenuItem onClick={(e) => handleMenuAction(e, "delete")}>
+          Delete
+        </MenuItem>
       </Menu>
     </Box>
   );

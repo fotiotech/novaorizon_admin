@@ -11,6 +11,7 @@ import AttributeGroup from "@/models/AttributesGroup";
 import "@/models/Attribute";
 import "@/models/Brand";
 import "@/models/User";
+import { ObjectId } from "mongodb";
 
 // Types
 export interface CreateProductForm {
@@ -62,70 +63,15 @@ export async function findProducts(id?: string) {
   try {
     await connection();
 
-    const buildGroupTreeWithValues = (
-      groups: any[],
-      product: any,
-      parentId: string | null = null
-    ): any[] => {
-      return groups
-        .filter(
-          (group) =>
-            (!parentId && !group.parent_id) ||
-            (parentId && group.parent_id?.toString() === parentId)
-        )
-        .sort((a, b) => a.group_order - b.group_order)
-        .map((group) => {
-          const attributesWithValues = group.attributes
-            ?.sort((a: any, b: any) => a.sort_order - b.sort_order)
-            .map((attr: any) => {
-              const value = product[attr.code];
-              return attr !== null && attr.code !== null && value != null
-                ? {
-                    _id: attr._id,
-                    code: attr.code,
-                    name: attr.name,
-                    type: attr.type,
-                    option: attr.option,
-                    [attr.code]: value,
-                  }
-                : null;
-            });
-          const children = buildGroupTreeWithValues(
-            groups,
-            product,
-            group?._id?.toString()
-          );
-
-          if (attributesWithValues && attributesWithValues.length > 0) {
-            return {
-              _id: group?._id?.toString(),
-              code: group.code,
-              name: group.name,
-              parent_id: group?.parent_id?.toString(),
-              group_order: group.group_order,
-              attributes: attributesWithValues,
-              children,
-            };
-          }
-        });
-    };
-
-    const groups = await AttributeGroup.find()
-      .populate("attributes")
-      .sort({ group_order: 1 })
-      .lean()
-      .exec();
-
     if (id) {
       const product: any = await Product.findById(id).lean().exec();
       if (!product) {
         return { success: false, error: "Product not found" };
       }
       return {
-        product,
-        _id: product?._id,
-        category_id: product?.category_id,
-        rootGroup: buildGroupTreeWithValues(groups, product),
+        ...product,
+        _id: product._id?.toString(),
+        category_id: product.category_id?.toString(),
       };
     }
 
@@ -133,17 +79,12 @@ export async function findProducts(id?: string) {
     if (!products) {
       console.error("No products found");
     }
-    const productsWithGroups = products.map((product) => {
-      const rootGroup = buildGroupTreeWithValues(groups, product);
-      return {
-        // ...product,
-        _id: product?._id?.toString(),
-        category_id: product?.category_id?.toString(),
-        rootGroup,
-      };
-    });
-    console.log("Products with groups:", productsWithGroups);
-    return productsWithGroups;
+
+    return products.map((product: any) => ({
+      ...product,
+      _id: product._id?.toString(),
+      category_id: product.category_id?.toString(),
+    }));
   } catch (error) {
     console.error("Error finding products:", error);
     return { success: false, error: "Failed to fetch products" };
@@ -205,6 +146,8 @@ export async function updateProduct(
     await connection();
     const { category_id, ...attributes } = formData;
 
+    console.log("Updating product with data:", productId, formData);
+
     if (!productId) {
       return { success: false, error: "Valid product ID is required" };
     }
@@ -214,7 +157,10 @@ export async function updateProduct(
       return { success: false, error: "No valid attributes provided" };
     }
 
-    const product = await Product.findById(productId);
+    const product = await Product.findOne({
+      _id: new mongoose.Types.ObjectId(productId),
+    });
+
     if (!product) {
       return { success: false, error: "Product not found" };
     }
@@ -222,13 +168,13 @@ export async function updateProduct(
     Object.assign(product, cleanedAttributes);
 
     if (category_id) {
-      product.category_id =category_id.toString();
+      product.category_id = category_id.toString();
     }
 
     if (attributes.name) {
       product.slug = generateSlug(
         attributes.name ?? "",
-        attributes.department ?? null
+        attributes.code ?? null
       );
     }
 
