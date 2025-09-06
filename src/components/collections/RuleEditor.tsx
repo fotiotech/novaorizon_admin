@@ -180,7 +180,7 @@ const attributeOptions = [
     value: "color",
   },
   { label: "main image", value: "main_image" },
-  { label: "price", value: "price" },
+  { label: "list price", value: "list_price" },
   {
     label: "currency",
     value: "currency",

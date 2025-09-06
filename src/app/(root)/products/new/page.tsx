@@ -19,6 +19,8 @@ import { AttributeField } from "@/components/products/AttributeFields";
 import { Brand } from "@/constant/types";
 import { redirect } from "next/navigation";
 import ManageRelatedProduct from "../../../../components/products/ManageRelatedProduct";
+import VariantsManager from "@/components/products/VariantOption";
+import { product } from '../../../store/slices/schemas';
 
 export type AttributeDetail = {
   _id: string;
@@ -145,7 +147,15 @@ const ProductForm = () => {
 
   function renderGroup(group: any) {
     const { _id, code, name, attributes, children } = group;
-
+    {
+      code === "variant_options" && (
+        <VariantsManager
+          productId={productId}
+          product={product}
+          attribute={attributes}
+        />
+      );
+    }
     return (
       <section key={_id} className="space-y-4">
         <CollabsibleSection name={name}>

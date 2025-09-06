@@ -613,6 +613,7 @@ const Attributes = () => {
                   <option value="file">file</option>
                   <option value="url">url</option>
                   <option value="multi-select">multi-select</option>
+                  <option value="any">any</option>
                 </select>
               </div>
               {attr.type === "select" && (

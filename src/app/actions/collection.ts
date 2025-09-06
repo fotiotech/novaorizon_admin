@@ -57,7 +57,7 @@ export async function createCollection(formData: FormData) {
       display,
       category_id: new mongoose.Types.ObjectId(category_id),
       rules,
-      status: status === "inactive" ? "inactive" : "active",
+      status,
     });
 
     await collection.save();
@@ -72,7 +72,7 @@ export async function createCollection(formData: FormData) {
 export async function getCollectionsWithProducts() {
   try {
     await connection();
-    const collections = await Collection.find({ status: "active" })
+    const collections = await Collection.find({})
       .sort({ created_at: -1 })
       .lean();
 
@@ -169,7 +169,7 @@ export async function updateCollection(id: string, formData: FormData) {
       display,
       category_id: new mongoose.Types.ObjectId(category_id),
       rules,
-      status: status === "inactive" ? "inactive" : "active",
+      status,
     };
 
     const collection = await Collection.findByIdAndUpdate(

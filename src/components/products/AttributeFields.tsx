@@ -4,6 +4,7 @@ import MainImageUploader from "./MainImageUploader";
 import GalleryUploader from "./GalleryUploader";
 import { AttributeDetail } from "@/app/(root)/products/new/page";
 import ManageRelatedProduct from "./ManageRelatedProduct";
+import VariantsManager from "./VariantOption";
 
 export const AttributeField: React.FC<{
   productId: string;
@@ -26,6 +27,7 @@ export const AttributeField: React.FC<{
           <GalleryUploader productId={productId} field={field} code={code} />
         )}
 
+        
         {code === "related_products" && type === "select" && (
           <ManageRelatedProduct id={productId} code={code} />
         )}

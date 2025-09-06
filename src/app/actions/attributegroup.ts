@@ -177,9 +177,9 @@ export async function findGroup(id?: string) {
       if (!group) {
         return { success: false, error: "Group not found" };
       }
-
+      const g = buildGroupTreeWithValues([group]);
       // Wrap single group in array for tree builder
-      return buildGroupTreeWithValues([group]);
+      return g[0];
     }
 
     // Get all groups when no ID is specified
