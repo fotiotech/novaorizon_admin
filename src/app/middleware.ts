@@ -2,7 +2,7 @@
 import { auth } from "@/app/auth";
 import { signIn } from "next-auth/react";
 
-export default auth((req) => {
+export default auth((req:any) => {
   console.log(req);
   if (!req.auth && req.nextUrl.pathname !== "/auth/login") signIn();
 });
