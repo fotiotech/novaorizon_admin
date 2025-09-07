@@ -14,6 +14,7 @@ import {
 } from "@/app/actions/attributes";
 import GroupSelector from "@/components/category/groupSelection";
 import { Delete, Edit } from "@mui/icons-material";
+import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import Select from "react-select";
 
@@ -58,17 +59,7 @@ const Attributes = () => {
   const [formData, setFormData] = useState<AttributeType[]>([
     { code: "", name: "", type: "", option: "", sort_order: 0 },
   ]);
-  const [groups, setGroups] = useState<AttributesGroup[]>([]);
-  const [name, setName] = useState<string>("");
-  const [code, setCode] = useState<string>("");
-  const [groupOrder, setGroupOrder] = useState<number | null>(null);
-  const [sortOrder, setSortOrder] = useState<number | null>(null);
-  const [groupId, setGroupId] = useState<string>("");
-  const [action, setAction] = useState<string>("");
-  const [editGroupId, setEditGroupId] = useState<string>("");
-  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
 
-  const [parentGroupId, setParentGroupId] = useState<string>("");
   const [editingAttribute, setEditingAttribute] =
     useState<EditingAttributeType | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,82 +85,8 @@ const Attributes = () => {
       }
     };
 
-    async function getGroups() {
-      try {
-        const res = await findAllAttributeGroups();
-        if (res) {
-          setGroups(res as unknown as AttributesGroup[]);
-          setError(null);
-        } else {
-          setError("No attribute groups found");
-        }
-      } catch (err) {
-        console.error("[Attributes] Error fetching groups:", err);
-        setError(err instanceof Error ? err.message : "Failed to load groups");
-      }
-    }
-
-    async function findGroupToEdit() {
-      if (!editGroupId) return;
-      try {
-        const groupResponse = await findGroup(editGroupId);
-
-        if (groupResponse) {
-          setCode(groupResponse?.code ?? "");
-          setName(groupResponse?.name ?? "");
-          setGroupOrder(groupResponse?.group_order ?? "");
-          setParentGroupId(groupResponse?.parent_id ?? "");
-
-          // Pre-select the current attributes of the group
-          // Extract just the attribute IDs from the response
-          const currentAttributeIds = groupResponse.attributes?.map(
-            (attr: any) => attr._id
-          );
-          setSelectedAttributes(currentAttributeIds as any[]);
-
-          setError(null);
-        } else {
-          setError("No attribute groups found");
-        }
-      } catch (err) {
-        console.error("[Attributes] Error fetching groups:", err);
-        setError(err instanceof Error ? err.message : "Failed to load groups");
-      }
-    }
-
-    async function findSelectedGroup() {
-      if (!groupId) return;
-      try {
-        const groupResponse = await findGroup(groupId);
-        if (groupResponse) {
-          setCode(groupResponse?.code ?? "");
-          setName(groupResponse?.name ?? "");
-          setGroupOrder(groupResponse?.group_order ?? "");
-          setSortOrder(groupResponse?.group_order ?? "");
-          setParentGroupId(groupResponse?.parent_id ?? "");
-
-          // Pre-select the current attributes of the group
-          // Extract just the attribute IDs from the response
-          const currentAttributeIds = groupResponse.attributes?.map(
-            (attr: any) => attr._id
-          );
-          setSelectedAttributes(currentAttributeIds as any[]);
-
-          setError(null);
-        } else {
-          setError("No attribute groups found");
-        }
-      } catch (err) {
-        console.error("[Attributes] Error fetching groups:", err);
-        setError(err instanceof Error ? err.message : "Failed to load groups");
-      }
-    }
-
     fetchData();
-    getGroups();
-    findGroupToEdit();
-    findSelectedGroup();
-  }, [groupId, editGroupId]);
+  }, []);
 
   function addAttributes() {
     setFormData((prev) => [
@@ -198,48 +115,6 @@ const Attributes = () => {
           : attr
       )
     );
-  };
-
-  const handleCreateGroup = async () => {
-    // if (newGroupName.trim() === "") return;
-
-    const response = await createAttributeGroup(
-      action,
-      groupId,
-      name,
-      code,
-      parentGroupId,
-      selectedAttributes,
-      groupOrder as number
-    );
-    if (response) {
-      setName("");
-      // Refresh groups list
-      const res = await findAllAttributeGroups();
-      setGroups(res as unknown as AttributesGroup[]);
-    }
-  };
-
-  const handleUpdateGroup = async () => {
-    // if (newGroupName.trim() === "") return;
-    if (editGroupId) {
-      const data = {
-        name,
-        code,
-        parent_id: parentGroupId,
-        attributes: selectedAttributes,
-        group_order: groupOrder as number,
-      };
-
-      const response = await updateAttributeGroup(editGroupId, data);
-
-      if (response) {
-        setName("");
-        // Refresh groups list
-        const groupResponse = await findAllAttributeGroups();
-        setGroups(groupResponse as unknown as AttributesGroup[]);
-      }
-    }
   };
 
   const manageAttribute = async (
@@ -401,155 +276,21 @@ const Attributes = () => {
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
 
-  console.log("groupResponse:", code, name, groupOrder, parentGroupId);
-
   return (
-    <div className="max-w-7xl mx-auto lg:px-8 w-full">
-      <h2 className="font-bold text-xl my-2">Attributes</h2>
+    <div className="max-w-7xl mx-auto lg:px-8 w-full text-text">
+      <div className="flex justify-between items-center">
+        <h2 className="font-bold text-xl my-2">Attributes</h2>
+        <Link href={"/attributes/group"} className="p-2 font-semibold">
+          + Group
+        </Link>
+      </div>
+
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
           <strong className="font-bold">Error:</strong>
           <span className="block sm:inline"> {error}</span>
         </div>
       )}
-
-      {/* Group Selection */}
-      <div className="grid gap-4 mb-6">
-        {/* Group Selection */}
-        <div className="w-full space-y-4">
-          <div className="flex flex-col gap-2 ">
-            <p className="">Group:</p>
-
-            <GroupSelector
-              groups={groups}
-              groupId={groupId}
-              setGroupId={setGroupId}
-              setAction={setAction}
-              setEditGroupId={setEditGroupId}
-            />
-          </div>
-
-          {action === "create" || action === "edit" ? (
-            <div className="space-y-4 pl-0 md:pl-4">
-              <select
-                title="group"
-                value={parentGroupId}
-                onChange={(e) => setParentGroupId(e.target.value)}
-                className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">Select parent group</option>
-                {groups?.length > 0 &&
-                  groups.map((group) => (
-                    <option key={group._id} value={group._id}>
-                      {group.name}
-                    </option>
-                  ))}
-              </select>
-
-              <div className="flex flex-col md:flex-row gap-2">
-                <input
-                  type="text"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="Enter new group code e.g. name_top10"
-                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter new group name"
-                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-                <input
-                  type="number"
-                  value={groupOrder === null ? "" : groupOrder}
-                  onChange={(e) =>
-                    setGroupOrder(
-                      e.target.value === "" ? null : Number(e.target.value)
-                    )
-                  }
-                  placeholder="Enter new group order"
-                  className="w-full md:w-3/4 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    editGroupId ? handleUpdateGroup() : handleCreateGroup()
-                  }
-                  className="btn text-sm w-full md:w-auto bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded"
-                >
-                  {editGroupId ? "Edit Group" : "Create Group"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Attributes for group selection */}
-      {action === "add attributes" || selectedAttributes.length > 0 ? (
-        <div>
-          <h3>Select Attributes for group</h3>
-          <div className="my-2">
-            <p>Selected: {selectedAttributes.length} attributes</p>
-          </div>
-          <div className="h-64 overflow-y-auto">
-            <div className="my-3 flex md:flex-row gap-2 items-center">
-              <input
-                type="text"
-                placeholder="Filter attributes..."
-                value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
-                className="w-full md:w-1/2 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
-              />
-              <Select
-                options={sortOptions}
-                value={sortAttrOrder}
-                onChange={(opt) => setSortAttrOrder(opt as Option)}
-                className="w-1/3 md:w-1/4 dark:bg-sec-dark"
-              />
-            </div>
-            {visibleAttributes.map((attr) => (
-              <div key={attr._id} className="flex items-center gap-2 ">
-                <input
-                  type="checkbox"
-                  id={`attr-${attr._id}`}
-                  checked={selectedAttributes.includes(attr._id || "")}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedAttributes((prev) => [
-                        ...prev,
-                        attr._id || "",
-                      ]);
-                    } else {
-                      setSelectedAttributes((prev) =>
-                        prev.filter((id) => id !== attr._id)
-                      );
-                    }
-                  }}
-                  className={
-                    selectedAttributes.includes(attr._id || "")
-                      ? "checked:bg-blue-500"
-                      : ""
-                  }
-                />
-                <label htmlFor={`attr-${attr._id}`}>{attr.name}</label>
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-end my-4 mb-8">
-            <button
-              type="button"
-              onClick={editGroupId ? handleUpdateGroup : handleCreateGroup} // Use handleUpdateGroup instead of handleCreateGroup
-              className="btn text-sm mt-2 "
-            >
-              {editGroupId ? "Update Attributes" : "Assign Attributes"}
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {/* Attributes Creation Form */}
       <div className="space-y-4 mb-6">
@@ -696,11 +437,11 @@ const Attributes = () => {
           {visibleAttributes.map((attr) => (
             <li
               key={`${attr.name}-${attr._id || "nogroup"}`}
-              className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 space-y-4"
+              className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-4"
             >
               <div className="flex justify-between items-center">
                 <div className="flex gap-2 items-center">
-                  <span className="text-sm text-gray-300">{attr.name} </span>
+                  <span className="text-sm text-text">{attr.name} </span>
                   <span
                     onClick={() => handleEditClick(attr)}
                     className="cursor-pointer"
