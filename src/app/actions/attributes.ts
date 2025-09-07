@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 interface AttributeFormData {
   codes: string[];
   names: string[];
+  sort_orders: number[];
   option?: string[][];
   type: string[];
 }
@@ -17,6 +18,7 @@ interface AttributeFormData {
 interface AttributeUpdateParams {
   code: string;
   name: string;
+  sort_order: number;
   option?: string | string[]; // ← allow both
   type: string | string[];
 }
@@ -38,7 +40,7 @@ export async function findAttributesAndValues(id?: string) {
 }
 
 export async function createAttribute(formData: AttributeFormData) {
-  const { codes, names } = formData;
+  const { codes, names, sort_orders, option, type } = formData;
 
   if (!Array.isArray(names) || names.length === 0) {
     throw new Error("Missing required fields");
@@ -47,7 +49,7 @@ export async function createAttribute(formData: AttributeFormData) {
   await connection();
 
   try {
-    const attributes: (typeof Attribute)[] = [];
+    const attributes = [];
     const len = Math.max(codes.length, names.length);
 
     for (let i = 0; i < len; i++) {
@@ -57,14 +59,11 @@ export async function createAttribute(formData: AttributeFormData) {
       if (!rawCode) throw new Error(`Invalid attribute code at idx ${i}`);
       if (!rawName) throw new Error(`Invalid attribute name at idx ${i}`);
 
-      const rawOpt = Array.isArray(formData.option) ? formData.option[i] : [];
-      const optionsArr = Array.isArray(rawOpt)
-        ? rawOpt.map((o) => o.trim()).filter(Boolean)
-        : [];
-
-      const attrType = Array.isArray(formData.type)
-        ? formData.type[i] ?? "text"
-        : formData.type ?? "text";
+      const optionsArr = (option?.[i] || [])
+        .map((o: string) => o.trim())
+        .filter(Boolean);
+      const attrType = (type[i] || "text").trim();
+      const attrSortOrder = sort_orders[i] || 0;
 
       const filter = { code: rawCode };
       const update = {
@@ -72,6 +71,7 @@ export async function createAttribute(formData: AttributeFormData) {
           name: rawName,
           option: optionsArr,
           type: attrType,
+          sort_order: attrSortOrder,
         },
       };
 
@@ -79,7 +79,7 @@ export async function createAttribute(formData: AttributeFormData) {
         upsert: true,
         new: true,
       });
-      attributes.push(attribute!);
+      attributes.push(attribute);
     }
 
     revalidatePath("/admin/attributes");
@@ -90,61 +90,46 @@ export async function createAttribute(formData: AttributeFormData) {
   }
 }
 
-// Function to update attribute
 export async function updateAttribute(
   id: string,
   params: AttributeUpdateParams
 ) {
   await connection();
-  // no need for a full transaction unless you’re updating multiple docs
-  try {
-    // 1) Normalize `option` into string[]
-    let optionsArr: string[] = [];
-    if (Array.isArray(params.option)) {
-      // could be string[] or even string[][]
-      optionsArr = (params.option as any[])
-        .flat()
-        .map((o) => (typeof o === "string" ? o.trim() : ""))
-        .filter(Boolean);
-    } else if (typeof params.option === "string") {
-      // split comma-list or JSON-string
-      try {
-        // try JSON first
-        const parsed = JSON.parse(params.option);
 
-        if (Array.isArray(parsed)) {
-          optionsArr = parsed.map((o) => String(o).trim()).filter(Boolean);
-        } else {
-          throw new Error("not-an-array");
-        }
-      } catch {
-        // fallback to comma-split
+  try {
+    let optionsArr: string[] = [];
+
+    // Handle option normalization
+    if (params.option !== undefined) {
+      if (Array.isArray(params.option)) {
+        optionsArr = params.option.map((o) => o.trim()).filter(Boolean);
+      } else if (typeof params.option === "string") {
         optionsArr = params.option
           .split(",")
           .map((o) => o.trim())
           .filter(Boolean);
       }
-    } else {
-      optionsArr = [];
     }
 
-    // 2) Normalize `type` into string
-    const attrType =
-      Array.isArray(params.type) && params.type.length > 0
-        ? String(params.type[0]).trim()
-        : String(params.type || "text").trim();
+    // Normalize type to string
+    let typeStr: string;
+    if (Array.isArray(params.type)) {
+      typeStr = params.type.join(",").trim();
+    } else {
+      typeStr = params.type.trim();
+    }
 
-    // 3) Perform the update
+    const updateData = {
+      code: params.code.trim(),
+      name: params.name.trim(),
+      option: optionsArr,
+      type: typeStr,
+      sort_order: params.sort_order,
+    };
+
     const updated = await Attribute.findByIdAndUpdate(
-      { _id: id },
-      {
-        $set: {
-          code: params.code.trim(),
-          name: params.name.trim(),
-          option: optionsArr,
-          type: attrType,
-        },
-      },
+      id,
+      { $set: updateData },
       { new: true }
     );
 
@@ -152,9 +137,8 @@ export async function updateAttribute(
       throw new Error("Attribute not found");
     }
 
-    console.log(updated);
-
     revalidatePath("/admin/attributes");
+    return updated;
   } catch (err) {
     console.error("Error in updateAttribute:", err);
     throw err;

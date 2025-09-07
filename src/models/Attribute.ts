@@ -4,6 +4,7 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 interface IAttribute extends Document {
   code: string;
   name: string;
+  sort_order: number;
   option?: string[];
   type:
     | "text"
@@ -31,6 +32,10 @@ const AttributeSchema = new Schema<IAttribute>({
     type: String,
     unique: true,
     required: [true, "Attribute name is required"],
+  },
+  sort_order: {
+    type: Number,
+    required: [true, "Attribute sort_order is required"],
   },
   option: [{ type: String }],
 

@@ -25,6 +25,7 @@ type AttributeType = {
   name: string;
   option?: string;
   type: string;
+  sort_order: number;
 };
 
 // Update the AttributesGroup type
@@ -44,6 +45,7 @@ type EditingAttributeType = {
   name: string;
   option?: string;
   type: string;
+  sort_order: number;
 };
 
 interface Option {
@@ -54,7 +56,7 @@ interface Option {
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
   const [formData, setFormData] = useState<AttributeType[]>([
-    { code: "", name: "", type: "", option: "" },
+    { code: "", name: "", type: "", option: "", sort_order: 0 },
   ]);
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
   const [name, setName] = useState<string>("");
@@ -172,7 +174,7 @@ const Attributes = () => {
   function addAttributes() {
     setFormData((prev) => [
       ...prev,
-      { code: "", name: "", option: "", type: "" },
+      { code: "", name: "", option: "", type: "", sort_order: 0 },
     ]);
   }
 
@@ -190,6 +192,8 @@ const Attributes = () => {
               name: field === "name" ? (value as string) : attr.name,
               option: field === "option" ? (value as string) : attr.option,
               type: field === "type" ? (value as string) : attr.type,
+              sort_order:
+                field === "sort_order" ? Number(value) : attr.sort_order,
             }
           : attr
       )
@@ -260,6 +264,7 @@ const Attributes = () => {
         const attributeData = {
           codes: formData.map((attr) => attr.code.trim()),
           names: formData.map((attr) => attr.name.trim()),
+          sort_orders: formData.map((attr) => attr.sort_order),
           option: formData.map((attr) =>
             attr.option?.split(",")
           ) as unknown as string[][],
@@ -276,6 +281,7 @@ const Attributes = () => {
               name: "",
               option: "",
               type: "",
+              sort_order: 0,
             },
           ]);
           setError(null);
@@ -309,6 +315,7 @@ const Attributes = () => {
             name: updateData.name.trim(),
             option: updateData.option.split(","),
             type: updateData.type.trim(),
+            sort_order: updateData.sort_order,
           });
         }
       }
@@ -335,7 +342,8 @@ const Attributes = () => {
     code: string,
     name: string,
     option: string,
-    type: string
+    type: string,
+    sort_order: number
   ) => {
     try {
       await manageAttribute("update", id, "attribute", {
@@ -343,6 +351,7 @@ const Attributes = () => {
         name,
         option,
         type,
+        sort_order,
       });
       setEditingAttribute(null);
 
@@ -371,6 +380,7 @@ const Attributes = () => {
       name: attr.name,
       option: optionString,
       type: attr.type || "",
+      sort_order: attr.sort_order || 0,
     });
   };
 
@@ -572,6 +582,21 @@ const Attributes = () => {
                 />
               </div>
               <div>
+                <label htmlFor={`sort_order-${index}`} className="block mb-1">
+                  Sort Order:
+                </label>
+                <input
+                  id={`sort_order-${index}`}
+                  type="text"
+                  name={`sort_order-${index}`}
+                  value={attr.sort_order}
+                  onChange={(e) =>
+                    handleInputChange(index, "sort_order", e.target.value)
+                  }
+                  className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+                />
+              </div>
+              <div>
                 <label htmlFor={`name-${index}`} className="block mb-1">
                   Name:
                 </label>
@@ -713,6 +738,21 @@ const Attributes = () => {
                         aria-label="Edit attribute code"
                       />
                       <input
+                        type="number"
+                        name={editingAttribute.sort_order.toString()}
+                        value={editingAttribute.sort_order}
+                        onChange={(e) =>
+                          setEditingAttribute({
+                            ...editingAttribute,
+                            sort_order: Number(e.target.value),
+                          })
+                        }
+                        className="p-1 rounded bg-none border dark:bg-gray-400"
+                        title="Edit attribute sort_order"
+                        placeholder="Enter attribute sort_order"
+                        aria-label="Edit attribute sort_order"
+                      />
+                      <input
                         type="text"
                         name={editingAttribute.name}
                         value={editingAttribute.name}
@@ -782,7 +822,8 @@ const Attributes = () => {
                             editingAttribute.code,
                             editingAttribute.name,
                             editingAttribute.option as string,
-                            editingAttribute.type
+                            editingAttribute.type,
+                            editingAttribute.sort_order
                           )
                         }
                         className="btn-sm bg-green-500 hover:bg-green-600 text-white rounded px-2"
