@@ -8,10 +8,10 @@ import {
   deleteAttributeGroup,
 } from "@/app/actions/attributegroup";
 import { findAttributesAndValues } from "@/app/actions/attributes";
-import GroupDropdown from "@/components/category/groupSelection";
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Select from "react-select";
 
+// Types
 type AttributeType = {
   _id?: string;
   id?: string;
@@ -38,17 +38,7 @@ interface Option {
   label: string;
 }
 
-// GroupDropdown Component
-interface GroupDropdownProps {
-  groups: AttributesGroup[];
-  groupId: string;
-  setGroupId: (id: string) => void;
-  setAction: (p: string) => void;
-  setEditGroupId: (id: string) => void;
-  onDeleteGroup: (id: string) => void;
-  placeholder?: string;
-}
-
+// Main Group Component
 const Group = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
@@ -68,6 +58,7 @@ const Group = () => {
     label: "A → Z",
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Fetch data on component mount
   useEffect(() => {
@@ -231,6 +222,19 @@ const Group = () => {
     setSelectedAttributes([]);
   };
 
+  // Toggle group expansion in overview
+  const toggleGroupExpansion = (id: string) => {
+    setExpandedGroups((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
   // Sort options for attributes
   const sortOptions: Option[] = [
     { value: "asc", label: "A → Z" },
@@ -257,6 +261,120 @@ const Group = () => {
     return groups.find((g) => g._id === (editGroupId || groupId));
   }, [groups, editGroupId, groupId]);
 
+  // Recursive function to render groups with children
+  const renderGroupWithChildren = (group: AttributesGroup, level = 0) => {
+    const hasChildren = group.children && group.children.length > 0;
+    const isExpanded = expandedGroups.has(group._id);
+    const isSelected = group._id === groupId || group._id === editGroupId;
+
+    return (
+      <div key={group._id} className={`mb-3 ${level > 0 ? "ml-6" : ""}`}>
+        <div
+          className={`p-4 border rounded-lg ${
+            isSelected
+              ? "border-blue-500 bg-blue-50"
+              : "border-gray-200 bg-white"
+          }`}
+        >
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <div className="flex items-center">
+                {hasChildren && (
+                  <button
+                    onClick={() => toggleGroupExpansion(group._id)}
+                    className="mr-2 w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200"
+                  >
+                    {isExpanded ? "−" : "+"}
+                  </button>
+                )}
+                <div>
+                  <h4 className="font-medium">{group.name}</h4>
+                  <p className="text-sm text-gray-500">{group.code}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Order: {group.group_order} | Attributes:{" "}
+                    {group.attributes?.length || 0}
+                    {group.parent_id &&
+                      ` | Parent: ${
+                        groups.find((g) => g._id === group.parent_id)?.name ||
+                        group.parent_id
+                      }`}
+                  </p>
+                </div>
+              </div>
+
+              {group.attributes && group.attributes.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-gray-100">
+                  <p className="text-xs font-medium text-gray-500 mb-1">
+                    Attributes:
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {group.attributes.slice(0, 3).map((attrId) => {
+                      const attr = attributes.find((a) => a._id === attrId);
+                      return attr ? (
+                        <span
+                          key={attrId}
+                          className="text-xs bg-gray-100 px-2 py-1 rounded"
+                        >
+                          {attr.name}
+                        </span>
+                      ) : null;
+                    })}
+                    {group.attributes.length > 3 && (
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        +{group.attributes.length - 3} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAction("add attributes");
+                  setGroupId(group._id);
+                }}
+                className="text-sm text-blue-500 hover:text-blue-700"
+                title="Add attributes"
+              >
+                + Attributes
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAction("edit");
+                  setEditGroupId(group._id);
+                }}
+                className="text-sm text-blue-500 hover:text-blue-700"
+                title="Edit group"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteGroup(group._id)}
+                className="text-sm text-red-500 hover:text-red-700"
+                title="Delete group"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {hasChildren && isExpanded && (
+          <div className="mt-2">
+            {group.children!.map((child) =>
+              renderGroupWithChildren(child, level + 1)
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto lg:px-8 w-full">
       <h2 className="font-bold text-2xl my-4">Attribute Groups Management</h2>
@@ -275,21 +393,8 @@ const Group = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Group Selection and Form */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="lg:col-span-1 space-y-4">
-          <div className="flex flex-col gap-2">
-            <p className="font-medium">Group Selection:</p>
-            <GroupDropdown
-              groups={groups}
-              groupId={groupId}
-              setGroupId={setGroupId}
-              setAction={setAction}
-              setEditGroupId={setEditGroupId}
-              onDeleteGroup={handleDeleteGroup}
-            />
-          </div>
-
           {(action === "create" || action === "edit") && (
             <div className="bg-white p-4 rounded-lg shadow">
               <h3 className="font-medium mb-3 flex items-center justify-between">
@@ -314,7 +419,7 @@ const Group = () => {
                     Parent Group
                   </label>
                   <select
-                    title="parent group"
+                    title="parent"
                     value={parentGroupId}
                     onChange={(e) => setParentGroupId(e.target.value)}
                     className="w-full p-2 rounded-lg bg-gray-50 border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -414,13 +519,10 @@ const Group = () => {
           )}
         </div>
 
-        {/* Attributes Selection */}
-        <div className="lg:col-span-2">
-          {(action === "add attributes" ||
-            selectedAttributes.length > 0 ||
-            (currentGroup &&
-              currentGroup.attributes &&
-              currentGroup.attributes.length > 0)) && (
+        {/* Attributes Selection and Groups Overview */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Attributes Selection */}
+          {action === "add attributes" && (
             <div className="bg-white p-4 rounded-lg shadow">
               <h3 className="font-medium mb-3">Assign Attributes to Group</h3>
 
@@ -499,74 +601,31 @@ const Group = () => {
             </div>
           )}
 
-          {/* Groups Overview */}
-          <div className="mt-6 bg-white p-4 rounded-lg shadow">
-            <h3 className="font-medium mb-3">All Groups</h3>
+          {/* Groups Overview with Children */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-medium">All Groups</h3>
+              <button
+                onClick={() => {
+                  setAction("create");
+                  setEditGroupId("");
+                  resetForm();
+                }}
+                className="text-sm bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded"
+              >
+                + New Group
+              </button>
+            </div>
 
             {groups.length === 0 ? (
               <p className="text-center text-gray-500 py-4">
                 No groups created yet
               </p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {groups.map((group) => (
-                  <div
-                    key={group._id}
-                    className={`p-3 border rounded-lg ${
-                      group._id === groupId || group._id === editGroupId
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200"
-                    }`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-medium">{group.name}</h4>
-                        <p className="text-sm text-gray-500">{group.code}</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          Order: {group.group_order} | Attributes:{" "}
-                          {group.attributes?.length || 0}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setEditGroupId(group._id);
-                          setAction("edit");
-                        }}
-                        className="text-blue-500 hover:text-blue-700 text-sm"
-                      >
-                        Edit
-                      </button>
-                    </div>
-
-                    {group.attributes && group.attributes.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-gray-100">
-                        <p className="text-xs font-medium text-gray-500 mb-1">
-                          Attributes:
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {group.attributes.slice(0, 3).map((attrId) => {
-                            const attr = attributes.find(
-                              (a) => a._id === attrId
-                            );
-                            return attr ? (
-                              <span
-                                key={attrId}
-                                className="text-xs bg-gray-100 px-2 py-1 rounded"
-                              >
-                                {attr.name}
-                              </span>
-                            ) : null;
-                          })}
-                          {group.attributes.length > 3 && (
-                            <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                              +{group.attributes.length - 3} more
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div>
+                {groups
+                  .filter((group) => !group.parent_id) // Show only root groups initially
+                  .map((group) => renderGroupWithChildren(group))}
               </div>
             )}
           </div>
