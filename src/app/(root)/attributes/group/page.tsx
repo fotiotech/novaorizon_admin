@@ -93,7 +93,7 @@ const Group = () => {
   // Fetch group details when groupId or editGroupId changes
   useEffect(() => {
     const fetchGroupDetails = async () => {
-      if (!groupId && !editGroupId) return;
+      if (!groupId || !editGroupId) return;
 
       setIsLoading(true);
       try {
@@ -571,7 +571,11 @@ const Group = () => {
                           id={`attr-${attr._id}`}
                           checked={selectedAttributes.includes(attr._id || "")}
                           onChange={() => handleAttributeToggle(attr._id || "")}
-                          className="h-4 w-4 text-blue-500 rounded focus:ring-blue-400"
+                          className={`${
+                            selectedAttributes.includes(attr?._id as string)
+                              ? "text-blue-600"
+                              : ""
+                          } "h-4 w-4  rounded focus:ring-blue-400"`}
                         />
                         <label
                           htmlFor={`attr-${attr._id}`}

@@ -91,7 +91,7 @@ const AdminTopBar = ({
 
   return (
     <div
-      className="flex justify-between items-center p-2 shadow mb-4
+      className="flex justify-between items-center p-2 bg-white text-gray-800 shadow mb-4
     dark:bg-pri-dark"
     >
       <div className="flex items-center gap-3 ">
