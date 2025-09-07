@@ -13,17 +13,18 @@ const Unauthorize = () => {
             </div>
           </div>
         </div>
-        
+
         <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        
+
         <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">
           Access Denied
         </h1>
-        
+
         <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
-          You don't have permission to access this page. This area is restricted to authorized users only.
+          You don't have permission to access this page. This area is restricted
+          to authorized users only.
         </p>
-        
+
         <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-6 text-left">
           <h2 className="font-semibold text-blue-800 dark:text-blue-300 mb-2 flex items-center">
             <Shield size={18} className="mr-2" />
@@ -35,29 +36,29 @@ const Unauthorize = () => {
             <li>• Sign in with a different account</li>
           </ul>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link 
+          <Link
             href="/"
             className="flex items-center justify-center px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200"
           >
             <Home size={18} className="mr-2" />
             Go Home
           </Link>
-          
-          <Link 
+
+          <Link
             href="/auth/login"
             className="flex items-center justify-center px-5 py-3 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-colors duration-200"
           >
             Sign In
           </Link>
         </div>
-        
+
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Need help?{" "}
-            <a 
-              href="mailto:support@example.com" 
+            <a
+              href="mailto:support@example.com"
               className="text-blue-600 dark:text-blue-400 hover:underline"
             >
               Contact support
