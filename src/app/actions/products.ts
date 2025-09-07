@@ -109,7 +109,7 @@ export async function createProduct(
     const dsin = generateDsin();
 
     // Use findOneAndUpdate with upsert to create or update
-    const product = await Product.findOneAndUpdate(
+    await Product.findOneAndUpdate(
       { dsin }, // Use a unique field to find if product exists
       {
         $set: {
@@ -132,7 +132,7 @@ export async function createProduct(
       }
     );
 
-    revalidatePath("/admin/products/products_list");
+    revalidatePath("/products");
     return { success: true };
   } catch (error) {
     console.error("Error creating product:", error);
@@ -184,9 +184,7 @@ export async function updateProduct(
       return { success: false, error: "Product not found" };
     }
 
-    console.log("Updated product:", updatedProduct);
-
-    revalidatePath("/admin/products/products_list");
+    revalidatePath("/products");
     return { success: true };
   } catch (error) {
     console.error("Error updating product:", error);
@@ -207,7 +205,7 @@ export async function deleteProduct(id: string): Promise<ProductResponse> {
       return { success: false, error: "Product not found" };
     }
 
-    revalidatePath("/admin/products/products_list");
+    revalidatePath("/products");
     return { success: true, data: "Product deleted successfully" };
   } catch (error) {
     console.error("Error deleting product:", error);

@@ -20,7 +20,7 @@ import { Brand } from "@/constant/types";
 import { redirect } from "next/navigation";
 import ManageRelatedProduct from "../../../../components/products/ManageRelatedProduct";
 import VariantsManager from "@/components/products/VariantOption";
-import { product } from '../../../store/slices/schemas';
+import { product } from "../../../store/slices/schemas";
 
 export type AttributeDetail = {
   _id: string;
@@ -55,7 +55,7 @@ const ProductForm = () => {
   const clearStoreAndRedirect = async () => {
     await persistor.purge();
     dispatch(clearProduct());
-    router.push("/products/list_product");
+    router.push("/products");
   };
 
   useEffect(() => {
@@ -118,7 +118,6 @@ const ProductForm = () => {
             : "Product updated successfully!"
         );
         await clearStoreAndRedirect();
-        redirect("/admin/products/products_list");
       } else {
         setError(res.error || "Failed to submit product.");
       }
