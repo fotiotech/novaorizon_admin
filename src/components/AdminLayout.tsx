@@ -1,54 +1,85 @@
 "use client";
 
-import React, { ReactNode, useState, useEffect } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import useClickOutside, { useScreenSize } from "@/components/Hooks";
 import AdminSideBar from "./AdminSideBar";
 import AdminTopBar from "./AdminTopBar";
+import { useSession } from "next-auth/react";
 
-interface AdminLayoutProps {
+// Extend the User type to include 'role'
+declare module "next-auth" {
+  interface User {
+    role?: string;
+  }
+}
+import { useRouter } from "next/navigation";
+import Spinner from "./Spinner";
+
+interface adminLayoutProps {
   children: ReactNode;
 }
 
-const AdminLayout = ({ children }: AdminLayoutProps) => {
+const AdminLayout = ({ children }: adminLayoutProps) => {
   const [sideBarToggle, setSideBarToggle] = useState(false);
-  const [screenSize, setScreenSize] = useState<number | null>(null);
+  const [screenSize, setScreenSize] = useState(0);
+  const { data: session, status } = useSession();
+  const router = useRouter();
 
   const domNode = useClickOutside(() => {
-    if (screenSize && screenSize < 1024) { // Only close on mobile
-      setSideBarToggle(false);
-    }
+    setSideBarToggle(false);
   });
 
-  // Improved screen size handling
-  useEffect(() => {
-    const handleResize = () => setScreenSize(window.innerWidth);
-    
-    // Set initial size
+  useScreenSize(() => {
     setScreenSize(window.innerWidth);
-    
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  });
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (status === "loading") return;
+
+    if (!session) {
+      router.push("/auth/login");
+      return;
+    }
+
+    // Check if user has admin role
+    if (!session.user || session.user.role !== "admin") {
+      router.push("/auth/unauthorized");
+    }
+  }, [session, status, router]);
+
+  if (status === "loading") {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (!session || !session.user || session.user.role !== "admin") {
+    return null;
+  }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-sec-dark text-pri">
+    <div className=" flex h-screen overflow-hidden bg-gray-100 dark:bg-sec-dark text-pri ">
       <AdminSideBar
         domNode={domNode}
         sideBarToggle={sideBarToggle}
         setSideBarToggle={setSideBarToggle}
-        screenSize={screenSize ?? 0}
+        screenSize={screenSize}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden whitespace-nowrap ml-0">
         <AdminTopBar
+          domNode={domNode}
           sideBarToggle={sideBarToggle}
           setSideBarToggle={setSideBarToggle}
-          screenSize={screenSize ?? 0}
+          screenSize={screenSize}
         />
 
-        <main className="flex-1 overflow-auto p-6 text-sec dark:text-pri">
+        <div className="flex-1 overflow-auto scrollbar-none p-6  text-sec dark:text-pri">
           {children}
-        </main>
+        </div>
       </div>
     </div>
   );
