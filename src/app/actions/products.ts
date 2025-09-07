@@ -7,11 +7,9 @@ import { ref, deleteObject } from "firebase/storage";
 import { storage } from "@/utils/firebaseConfig";
 import mongoose from "mongoose";
 import Product from "@/models/Product";
-import AttributeGroup from "@/models/AttributesGroup";
 import "@/models/Attribute";
 import "@/models/Brand";
 import "@/models/User";
-import { ObjectId } from "mongodb";
 
 // Types
 export interface CreateProductForm {
@@ -94,8 +92,6 @@ export async function findProducts(id?: string) {
 export async function createProduct(
   formData: CreateProductForm
 ): Promise<ProductResponse> {
-  const session = await mongoose.startSession();
-
   try {
     await connection();
     const { category_id, ...attributes } = formData;
@@ -109,32 +105,38 @@ export async function createProduct(
       return { success: false, error: "At least one attribute is required" };
     }
 
-    session.startTransaction();
+    // Generate a unique identifier for upsert operation
+    const dsin = generateDsin();
 
-    const product = await Product.create(
-      [
-        {
+    // Use findOneAndUpdate with upsert to create or update
+    const product = await Product.findOneAndUpdate(
+      { dsin }, // Use a unique field to find if product exists
+      {
+        $set: {
           category_id: new mongoose.Types.ObjectId(category_id),
           ...cleanedAttributes,
           slug: attributes.name
             ? generateSlug(attributes.name, attributes.department ?? null)
             : undefined,
-          dsin: generateDsin(),
+          dsin,
+          updatedAt: new Date(),
         },
-      ],
-      { session }
+        $setOnInsert: {
+          createdAt: new Date(),
+        },
+      },
+      {
+        upsert: true, // Create if doesn't exist
+        new: true, // Return the updated document
+        runValidators: true, // Run schema validators
+      }
     );
 
-    await session.commitTransaction();
     revalidatePath("/admin/products/products_list");
-
-    return { success: true, data: product[0] };
+    return { success: true, data: product };
   } catch (error) {
-    await session.abortTransaction();
     console.error("Error creating product:", error);
     return { success: false, error: "Failed to create product" };
-  } finally {
-    session.endSession();
   }
 }
 
