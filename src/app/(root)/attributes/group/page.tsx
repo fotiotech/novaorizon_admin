@@ -93,13 +93,12 @@ const Group = () => {
   // Fetch group details when groupId or editGroupId changes
   useEffect(() => {
     const fetchGroupDetails = async () => {
-      if (!groupId || !editGroupId) return;
-
+      if (!groupId && !editGroupId) return;
       setIsLoading(true);
       try {
         const idToFetch = editGroupId || groupId;
         const groupResponse = await findGroup(idToFetch);
-
+        
         if (groupResponse) {
           setCode(groupResponse.code || "");
           setName(groupResponse.name || "");
@@ -281,6 +280,7 @@ const Group = () => {
               <div className="flex items-center">
                 {hasChildren && (
                   <button
+                  type="button"
                     onClick={() => toggleGroupExpansion(group._id)}
                     className="mr-2 w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200"
                   >
@@ -334,7 +334,7 @@ const Group = () => {
                 type="button"
                 onClick={() => {
                   setAction("add attributes");
-                  setGroupId(group._id);
+                  setGroupId(group?._id);
                 }}
                 className="text-sm text-blue-500 hover:text-blue-700"
                 title="Add attributes"
@@ -345,7 +345,7 @@ const Group = () => {
                 type="button"
                 onClick={() => {
                   setAction("edit");
-                  setEditGroupId(group._id);
+                  setEditGroupId(group?._id);
                 }}
                 className="text-sm text-blue-500 hover:text-blue-700"
                 title="Edit group"

@@ -162,27 +162,11 @@ export async function findGroup(id?: string) {
           parent_id: group.parent_id?.toString(),
           group_order: group.group_order,
           attributes: group.attributes,
-          children: buildGroupTreeWithValues(groups, group._id?.toString()),
+          children: buildGroupTreeWithValues(groups, group?._id?.toString()),
         }));
     };
 
-    if (id) {
-      // Use findById for single document lookup
-      const group = await AttributeGroup.findById(id)
-        .populate("attributes")
-        .sort({ sort_order: 1 })
-        .lean()
-        .exec();
-
-      if (!group) {
-        return { success: false, error: "Group not found" };
-      }
-      const g = buildGroupTreeWithValues([group]);
-      // Wrap single group in array for tree builder
-      return g[0];
-    }
-
-    // Get all groups when no ID is specified
+    // Always fetch all groups to build the complete tree
     const groups = await AttributeGroup.find({})
       .populate("attributes")
       .sort({ sort_order: 1 })
@@ -191,9 +175,31 @@ export async function findGroup(id?: string) {
 
     if (!groups || groups.length === 0) {
       console.error("No groups found");
-      return []; // Return empty array instead of undefined
+      return []; // Return empty array if no groups exist
     }
 
+    // If an ID is provided, find the specific group within the complete tree
+    if (id) {
+      const entireTree = buildGroupTreeWithValues(groups);
+      const findGroupInTree = (tree: any[], targetId: string): any => {
+        for (const node of tree) {
+          if (node._id === targetId) return node;
+          if (node.children) {
+            const found = findGroupInTree(node.children, targetId);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+
+      const groupNode = findGroupInTree(entireTree, id);
+      if (!groupNode) {
+        return { success: false, error: "Group not found" };
+      }
+      return groupNode;
+    }
+
+    // If no ID is provided, return the entire tree
     return buildGroupTreeWithValues(groups);
   } catch (error) {
     console.error("Error finding groups:", error);
