@@ -69,10 +69,11 @@ const InventoryPage: React.FC = () => {
     try {
       const rows: ProductRow[] = productState.allIds.map((id) => {
         const p = productState.byId[id];
-        const pricing = p.pricing_availability || {};
-        const quantity = pricing.quantity ?? 0;
-        const threshold =
-          pricing.attributes?.LowStockThreshold ?? pricing.backorder ? 0 : 10;
+        console.log({ p });
+
+        const quantity = p.quantity ?? 0;
+        const threshold = 10; // default threshold, can be customized later
+
         const status: ProductRow["stockStatus"] =
           quantity <= 0
             ? "out_of_stock"
@@ -80,9 +81,8 @@ const InventoryPage: React.FC = () => {
             ? "low_stock"
             : "in_stock";
 
-        const branding = p.identification_branding || {};
-        const productName = branding.name || "";
-        const sku = branding.sku || "";
+        const productName = p.title || "";
+        const sku = p.sku || p.code_value || "";
 
         return {
           _id: p._id,
