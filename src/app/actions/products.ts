@@ -133,7 +133,7 @@ export async function createProduct(
     );
 
     revalidatePath("/admin/products/products_list");
-    return { success: true, data: product };
+    return { success: true };
   } catch (error) {
     console.error("Error creating product:", error);
     return { success: false, error: "Failed to create product" };
@@ -187,7 +187,7 @@ export async function updateProduct(
     console.log("Updated product:", updatedProduct);
 
     revalidatePath("/admin/products/products_list");
-    return { success: true, data: updatedProduct };
+    return { success: true };
   } catch (error) {
     console.error("Error updating product:", error);
     return { success: false, error: "Failed to update product" };
