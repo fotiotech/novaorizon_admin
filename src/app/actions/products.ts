@@ -146,8 +146,6 @@ export async function updateProduct(
     await connection();
     const { category_id, ...attributes } = formData;
 
-    console.log("Updating product with data:", productId, formData);
-
     if (!productId) {
       return { success: false, error: "Valid product ID is required" };
     }
@@ -157,32 +155,37 @@ export async function updateProduct(
       return { success: false, error: "No valid attributes provided" };
     }
 
-    const product = await Product.findOne({
-      _id: new mongoose.Types.ObjectId(productId),
-    });
+    // Create update object
+    const updateData: any = { ...cleanedAttributes, updatedAt: new Date() };
 
-    if (!product) {
-      return { success: false, error: "Product not found" };
-    }
-
-    Object.assign(product, cleanedAttributes);
-
+    // Handle category_id if provided
     if (category_id) {
-      product.category_id = category_id.toString();
+      updateData.category_id = category_id.toString();
     }
 
-    if (attributes.name) {
-      product.slug = generateSlug(
-        attributes.name ?? "",
-        attributes.code ?? null
+    // Handle slug generation if title is provided
+    if (attributes.title) {
+      updateData.slug = generateSlug(
+        attributes.model ?? "",
+        attributes.title ?? null
       );
     }
 
-    product.updatedAt = new Date();
-    await product.save();
+    // Use findOneAndUpdate to directly update the document
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: new mongoose.Types.ObjectId(productId) },
+      updateData,
+      { new: true, runValidators: true } // Return the updated document and run validators
+    );
+
+    if (!updatedProduct) {
+      return { success: false, error: "Product not found" };
+    }
+
+    console.log("Updated product:", updatedProduct);
 
     revalidatePath("/admin/products/products_list");
-    return { success: true, data: product };
+    return { success: true, data: updatedProduct };
   } catch (error) {
     console.error("Error updating product:", error);
     return { success: false, error: "Failed to update product" };
