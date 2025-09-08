@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { RootState } from "@/app/store/store";
+import { persistor, RootState } from "@/app/store/store";
 import { fetchProducts } from "@/fetch/fetchProducts";
 import {
   IconButton,
@@ -19,6 +19,7 @@ import {
   Avatar,
 } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
+import { clearProduct } from "@/app/store/slices/productSlice";
 
 const Product: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -94,6 +95,15 @@ const Product: React.FC = () => {
     );
   }
 
+  const clearStoreAndRedirect = async () => {
+    try {
+      await persistor.purge();
+      dispatch(clearProduct());
+    } catch (err) {
+      console.error("Error during cleanup and redirect:", err);
+    }
+  };
+
   return (
     <Box>
       <Box className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4">
@@ -103,6 +113,7 @@ const Product: React.FC = () => {
         <Link href="/products/category" passHref>
           <Button
             variant="contained"
+            onClick={clearStoreAndRedirect}
             color="primary"
             sx={{ borderRadius: 3, textTransform: "none", px: 3 }}
           >

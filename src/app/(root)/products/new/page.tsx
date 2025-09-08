@@ -17,10 +17,8 @@ import { Box, CircularProgress, Alert } from "@mui/material";
 import CollabsibleSection from "@/components/products/CollabsibleSection";
 import { AttributeField } from "@/components/products/AttributeFields";
 import { Brand } from "@/constant/types";
-import { redirect } from "next/navigation";
 import ManageRelatedProduct from "../../../../components/products/ManageRelatedProduct";
 import VariantsManager from "@/components/products/variants/VariantOption";
-import { product } from "../../../store/slices/schemas";
 
 export type AttributeDetail = {
   _id: string;
@@ -51,11 +49,19 @@ const ProductForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
 
   const clearStoreAndRedirect = async () => {
-    await persistor.purge();
-    dispatch(clearProduct());
-    router.push("/products");
+    try {
+      setRedirecting(true);
+      await persistor.purge();
+      dispatch(clearProduct());
+      router.push("/products");
+    } catch (err) {
+      console.error("Error during cleanup and redirect:", err);
+      setError("Failed to redirect. Please try again.");
+      setRedirecting(false);
+    }
   };
 
   useEffect(() => {
@@ -72,7 +78,10 @@ const ProductForm = () => {
         setIsLoading(false);
       }
     };
-    fetchAttributes();
+
+    if (product.category_id) {
+      fetchAttributes();
+    }
   }, [product.category_id, productId, dispatch]);
 
   useEffect(() => {
@@ -94,15 +103,18 @@ const ProductForm = () => {
     );
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
     const isLocalId = validate(productId) && version(productId) === 4;
     try {
       setIsLoading(true);
       setError(null);
       setSuccess(null);
+
       let res;
       if (!isLocalId) {
-        res = await updateProduct(productId, { attributes: product });
+        res = await updateProduct(productId, product);
       } else {
         res = await createProduct({
           category_id: product.category_id,
@@ -116,7 +128,10 @@ const ProductForm = () => {
             ? "Product submitted successfully!"
             : "Product updated successfully!"
         );
-        await clearStoreAndRedirect();
+        // Small delay to show success message before redirect
+        setTimeout(() => {
+          clearStoreAndRedirect();
+        }, 1000);
       } else {
         setError(res.error || "Failed to submit product.");
       }
@@ -128,7 +143,7 @@ const ProductForm = () => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || redirecting) {
     return (
       <Box
         display="flex"
@@ -141,12 +156,9 @@ const ProductForm = () => {
     );
   }
 
-  console.log("product:", product);
-
   function renderGroup(group: any) {
     const { _id, code, name, attributes, children } = group;
 
-    // Determine the type of group using switch statement
     const renderGroupContent = () => {
       switch (code) {
         case "variants_options":
@@ -195,7 +207,6 @@ const ProductForm = () => {
           <div className="flex flex-col gap-4">
             {renderGroupContent()}
 
-            {/* Render children recursively */}
             {children?.length > 0 &&
               children.map((child: any) => renderGroup(child))}
           </div>
@@ -205,17 +216,11 @@ const ProductForm = () => {
   }
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        handleSubmit();
-      }}
-      className="flex flex-col max-w-3xl mx-auto"
-    >
-      <div className="space-y-2 flex-1">
+    <form onSubmit={handleSubmit} className="flex flex-col max-w-3xl mx-auto">
+      <div className="flex-1">
         <div>
-          {error && <Alert severity="error">{error}</Alert>}
-          {success && <Alert severity="success">{success}</Alert>}
+          {error && !success && <Alert severity="error">{error}</Alert>}
+          {success && !error && <Alert severity="success">{success}</Alert>}
         </div>
 
         {groups.length > 0 && groups.map((group) => renderGroup(group))}
@@ -231,10 +236,10 @@ const ProductForm = () => {
         </button>
         <button
           type="submit"
-          disabled={isLoading}
-          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition"
+          disabled={isLoading || redirecting}
+          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
         >
-          Save Product
+          {isLoading ? "Saving..." : "Save Product"}
         </button>
       </div>
     </form>
