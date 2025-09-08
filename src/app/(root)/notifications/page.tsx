@@ -35,7 +35,7 @@ const NotificationPage = () => {
   };
 
   return (
-    <div>
+    <div className="">
       <h1 className="mb-4 text-2xl font-bold">Notifications</h1>
       <ul className="flex flex-col gap-3">
         {notifications.map((notification) => (
