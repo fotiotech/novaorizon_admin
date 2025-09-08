@@ -19,7 +19,7 @@ import { AttributeField } from "@/components/products/AttributeFields";
 import { Brand } from "@/constant/types";
 import { redirect } from "next/navigation";
 import ManageRelatedProduct from "../../../../components/products/ManageRelatedProduct";
-import VariantsManager from "@/components/products/VariantOption";
+import VariantsManager from "@/components/products/variants/VariantOption";
 import { product } from "../../../store/slices/schemas";
 
 export type AttributeDetail = {
@@ -64,7 +64,6 @@ const ProductForm = () => {
         setIsLoading(true);
         setError(null);
         const resp = await find_category_attribute_groups(product.category_id);
-        console.log("Fetched attribute groups:", resp);
         setGroups(resp as unknown as GroupNode[]);
       } catch (err) {
         console.error("Error fetching attributes:", err);
@@ -142,34 +141,47 @@ const ProductForm = () => {
     );
   }
 
-  console.log("Rendering groups:", product);
+  console.log("product:", product);
 
   function renderGroup(group: any) {
     const { _id, code, name, attributes, children } = group;
-    {
-      code === "variant_options" && (
-        <VariantsManager
-          productId={productId}
-          product={product}
-          attribute={attributes}
-        />
-      );
-    }
-    return (
-      <section key={_id} className="space-y-4">
-        <CollabsibleSection name={name}>
-          <div className="flex flex-col gap-2">
-            {attributes?.map((a: any) => (
-              <div key={a?._id}>
-                <AttributeField
-                  productId={productId}
-                  attribute={a}
-                  field={product[a?.code]}
-                  handleAttributeChange={handleChange}
-                />
-              </div>
-            ))}
 
+    // Check if this group has variants options
+    const hasVariantsOption = code === "variants_options";
+
+    return (
+      <section key={_id} className="mb-6">
+        <CollabsibleSection name={name}>
+          <div className="flex flex-col gap-4">
+            {hasVariantsOption && (
+              <VariantsManager
+                productId={productId}
+                product={product}
+                attribute={attributes.find(
+                  (a: any) =>
+                    a.code === "variation_themes" || a.code === "variants"
+                )}
+              />
+            )}
+
+            {attributes
+              .filter(
+                (a: any) =>
+                  !hasVariantsOption ||
+                  (a.code !== "variation_themes" && a.code !== "variants")
+              )
+              .map((a: any) => (
+                <div key={a?._id} className="mb-3">
+                  <AttributeField
+                    productId={productId}
+                    attribute={a}
+                    field={product[a?.code]}
+                    handleAttributeChange={handleChange}
+                  />
+                </div>
+              ))}
+
+            {/* Render children */}
             {children?.length > 0 &&
               children.map((child: any) => renderGroup(child))}
           </div>
@@ -184,12 +196,16 @@ const ProductForm = () => {
         e.preventDefault();
         handleSubmit();
       }}
-      className="space-y-8 max-w-3xl mx-auto rounded-lg shadow p-4"
+      className="flex flex-col max-w-3xl mx-auto"
     >
-      {error && <Alert severity="error">{error}</Alert>}
-      {success && <Alert severity="success">{success}</Alert>}
+      <div className="space-y-2 flex-1">
+        <div>
+          {error && <Alert severity="error">{error}</Alert>}
+          {success && <Alert severity="success">{success}</Alert>}
+        </div>
 
-      {groups.length > 0 && groups.map((group) => renderGroup(group))}
+        {groups.length > 0 && groups.map((group) => renderGroup(group))}
+      </div>
 
       <div className="flex justify-between mt-6 items-center">
         <button

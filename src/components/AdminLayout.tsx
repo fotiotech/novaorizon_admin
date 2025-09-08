@@ -34,31 +34,31 @@ const AdminLayout = ({ children }: adminLayoutProps) => {
   });
 
   // Redirect if not authenticated
-  // useEffect(() => {
-  //   if (status === "loading") return;
+  useEffect(() => {
+    if (status === "loading") return;
 
-  //   if (!session) {
-  //     router.push("/auth/login");
-  //     return;
-  //   }
+    if (!session) {
+      router.push("/auth/login");
+      return;
+    }
 
-  //   // Check if user has admin role
-  //   if (!session.user || session.user.role !== "admin") {
-  //     router.push("/auth/unauthorized");
-  //   }
-  // }, [session, status, router]);
+    // Check if user has admin role
+    if (!session.user || session.user.role !== "admin") {
+      router.push("/auth/unauthorized");
+    }
+  }, [session, status, router]);
 
-  // if (status === "loading") {
-  //   return (
-  //     <div className="flex h-screen items-center justify-center">
-  //       <Spinner />
-  //     </div>
-  //   );
-  // }
+  if (status === "loading") {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
 
-  // if (!session || !session.user || session.user.role !== "admin") {
-  //   return null;
-  // }
+  if (!session || !session.user || session.user.role !== "admin") {
+    return null;
+  }
 
   return (
     <div className=" flex h-screen overflow-hidden  whitespace-nowrap bg-gray-100 dark:bg-sec-dark text-pri ">

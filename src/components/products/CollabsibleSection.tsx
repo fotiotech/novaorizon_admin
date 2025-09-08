@@ -17,7 +17,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   return (
     <div className="">
       <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold text-gray-300 pb-2">{name}</h2>
+        <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
 
         <button
           type="button"

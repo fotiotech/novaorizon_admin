@@ -1,18 +1,20 @@
 import React from "react";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import FilesUploader from "@/components/FilesUploader";
-import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { addProduct } from "@/app/store/slices/productSlice";
-import { RootState } from "@/app/store/store";
+import { useAppDispatch } from "@/app/hooks";
 
 interface VariantImageUploaderProps {
-  productId: string;
   index: number;
+  handleVariantChange: (
+    index: number,
+    field: string,
+    value: string | number | string[]
+  ) => void;
 }
 
 const VariantImageUploader: React.FC<VariantImageUploaderProps> = ({
-  productId,
   index,
+  handleVariantChange,
 }) => {
   const dispatch = useAppDispatch();
   const { files, loading, addFiles, removeFile } = useFileUploader();
@@ -20,16 +22,9 @@ const VariantImageUploader: React.FC<VariantImageUploaderProps> = ({
   // Update Redux when files change
   React.useEffect(() => {
     if (files.length > 0) {
-      const path = `variants_options.variants.${index}.main_image`;
-      dispatch(
-        addProduct({
-          _id: productId,
-          field: path,
-          value: files[0],
-        })
-      );
+      return handleVariantChange(index, "gallery", files);
     }
-  }, [files, dispatch, productId]);
+  }, [files, dispatch]);
 
   return (
     <FilesUploader
