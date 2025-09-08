@@ -146,32 +146,36 @@ const ProductForm = () => {
   function renderGroup(group: any) {
     const { _id, code, name, attributes, children } = group;
 
-    // Check if this group has variants options
-    const hasVariantsOption = code === "variants_options";
-
-    return (
-      <section key={_id} className="mb-6">
-        <CollabsibleSection name={name}>
-          <div className="flex flex-col gap-4">
-            {hasVariantsOption && (
+    // Determine the type of group using switch statement
+    const renderGroupContent = () => {
+      switch (code) {
+        case "variants_options":
+          return (
+            <>
               <VariantsManager
                 productId={productId}
                 product={product}
-                attribute={attributes.find(
-                  (a: any) =>
-                    a.code === "variation_themes" || a.code === "variants"
-                )}
+                attributes={attributes}
               />
-            )}
+            </>
+          );
 
-            {attributes
-              .filter(
-                (a: any) =>
-                  !hasVariantsOption ||
-                  (a.code !== "variation_themes" && a.code !== "variants")
-              )
-              .map((a: any) => (
-                <div key={a?._id} className="mb-3">
+        case "related_products":
+          return (
+            <>
+              <ManageRelatedProduct
+                id={productId}
+                product={product}
+                attribute={attributes}
+              />
+            </>
+          );
+
+        default:
+          return (
+            <>
+              {attributes.map((a: any) => (
+                <div key={a?._id} className="">
                   <AttributeField
                     productId={productId}
                     attribute={a}
@@ -180,8 +184,18 @@ const ProductForm = () => {
                   />
                 </div>
               ))}
+            </>
+          );
+      }
+    };
 
-            {/* Render children */}
+    return (
+      <section key={_id} className="mb-6">
+        <CollabsibleSection name={name}>
+          <div className="flex flex-col gap-4">
+            {renderGroupContent()}
+
+            {/* Render children recursively */}
             {children?.length > 0 &&
               children.map((child: any) => renderGroup(child))}
           </div>
