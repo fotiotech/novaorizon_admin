@@ -1,10 +1,11 @@
+// components/AdminLayout.tsx
 "use client";
 
 import React, { ReactNode, useEffect, useState } from "react";
-import useClickOutside, { useScreenSize } from "@/components/Hooks";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import AdminSideBar from "./AdminSideBar";
 import AdminTopBar from "./AdminTopBar";
-import { useSession } from "next-auth/react";
 
 // Extend the User type to include 'role'
 declare module "next-auth" {
@@ -12,26 +13,28 @@ declare module "next-auth" {
     role?: string;
   }
 }
-import { useRouter } from "next/navigation";
-import Spinner from "./Spinner";
 
-interface adminLayoutProps {
+interface AdminLayoutProps {
   children: ReactNode;
 }
 
-const AdminLayout = ({ children }: adminLayoutProps) => {
+const AdminLayout = ({ children }: AdminLayoutProps) => {
   const [sideBarToggle, setSideBarToggle] = useState(false);
   const [screenSize, setScreenSize] = useState(0);
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const domNode = useClickOutside(() => {
-    setSideBarToggle(false);
-  });
+  const handleClickOutside = () => {
+    if (screenSize <= 1024) setSideBarToggle(false);
+  };
 
-  useScreenSize(() => {
-    setScreenSize(window.innerWidth);
-  });
+  // Handle screen resize
+  useEffect(() => {
+    const handleResize = () => setScreenSize(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    handleResize();
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -50,8 +53,15 @@ const AdminLayout = ({ children }: adminLayoutProps) => {
 
   if (status === "loading") {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Spinner />
+      <div className="flex h-screen items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md w-full max-w-md">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mx-auto"></div>
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
+            <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-full mt-4"></div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -61,25 +71,23 @@ const AdminLayout = ({ children }: adminLayoutProps) => {
   }
 
   return (
-    <div className=" flex h-screen overflow-hidden  whitespace-nowrap bg-gray-100 dark:bg-sec-dark text-pri ">
+    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
       <AdminSideBar
-        domNode={domNode}
         sideBarToggle={sideBarToggle}
         setSideBarToggle={setSideBarToggle}
         screenSize={screenSize}
       />
 
-      <div className="flex-1 flex flex-col overflow-hidden ml-0">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <AdminTopBar
-          domNode={domNode}
           sideBarToggle={sideBarToggle}
           setSideBarToggle={setSideBarToggle}
           screenSize={screenSize}
         />
 
-        <div className="flex-1 overflow-auto scrollbar-none p-6  text-sec dark:text-pri">
+        <main className="flex-1 overflow-auto p-4 md:p-6 bg-white dark:bg-gray-800 m-4 rounded-lg shadow">
           {children}
-        </div>
+        </main>
       </div>
     </div>
   );

@@ -1,24 +1,16 @@
-'use client'
+// components/AdminTopBar.tsx
+"use client";
 
-import { useUser } from "@/app/context/UserContext";
-import {
-  Menu,
-  NotificationAddRounded,
-  NotificationsSharp,
-  Person,
-} from "@mui/icons-material";
+import { Menu, Notifications } from "@mui/icons-material";
 import Image from "next/image";
 import Link from "next/link";
-import Pusher from "pusher-js";
-import React, { LegacyRef, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { ToastContainer, toast } from "react-toastify";
-import axios from "axios";
 import { useSession } from "next-auth/react";
 import { SignIn } from "./auth/SignInButton";
 
-interface adminTopBarProps {
-  domNode?: LegacyRef<HTMLDivElement>;
+interface AdminTopBarProps {
   sideBarToggle: boolean;
   screenSize: number;
   setSideBarToggle: (param: (arg: boolean) => boolean) => void;
@@ -32,106 +24,93 @@ type NotificationType = {
 };
 
 const AdminTopBar = ({
-  domNode,
   sideBarToggle,
   screenSize,
   setSideBarToggle,
-}: adminTopBarProps) => {
+}: AdminTopBarProps) => {
   const session = useSession();
   const user = session?.data?.user as any;
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
 
   useEffect(() => {
-    // Initialize Pusher client
-    const pusher = new Pusher(
-      process.env.NEXT_PUBLIC_PUSHER_APP_KEY as string,
-      {
-        cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER as string,
-      }
-    );
-
-    // Subscribe to a channel
-    const channel = pusher.subscribe("admin-notifications");
-
-    // Listen for 'new-notification' events
-    channel.bind("new-notification", (data: { message: string }) => {
-      // Show notification with React Toastify
-      toast.success(data.message);
-    });
-
-    async function fetchNotifications() {
-      try {
-        // Fetch notifications from the API
-        const result = await axios.get("/api/notify");
-
-        // Validate that data is an array
-        if (Array.isArray(result.data)) {
-          // Filter unread notifications
-          const isNotReadNotification = result.data.filter(
-            (res: NotificationType) => !res.isRead // Use `!res.isRead` for clarity
-          );
-
-          // Update state with unread notifications
-          setNotifications(isNotReadNotification);
-        } else {
-          console.error("Unexpected data format from API:", result.data);
-        }
-      } catch (error) {
-        console.error("Error fetching notifications:", error);
-      }
-    }
+    // Simulated notifications fetch
+    const fetchNotifications = async () => {
+      // In a real app, you would fetch from your API
+      const mockNotifications = [
+        {
+          _id: "1",
+          message: "New order received",
+          isRead: false,
+          timestamp: new Date().toISOString(),
+        },
+        {
+          _id: "2",
+          message: "User signed up",
+          isRead: false,
+          timestamp: new Date().toISOString(),
+        },
+      ];
+      setNotifications(mockNotifications);
+    };
 
     fetchNotifications();
-
-    // Cleanup when component unmounts
-    return () => {
-      pusher.unsubscribe("admin-notifications");
-    };
   }, []);
 
   return (
-    <div
-      className="flex justify-between items-center p-2 bg-white text-gray-800 shadow mb-4
-    dark:bg-pri-dark"
-    >
-      <div className="flex items-center gap-3 ">
-        <div className={`${screenSize >= 1024 ? "invisible" : ""} `}>
-          <span
+    <div className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow-md">
+      <div className="flex items-center gap-3">
+        <div className={`${screenSize >= 1024 ? "invisible" : ""}`}>
+          <button
+            title="button"
+            type="button"
             onClick={() => setSideBarToggle((sideBarToggle) => !sideBarToggle)}
-            className=" "
+            className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
           >
-            <Menu style={{ fontSize: 30 }} />
-          </span>
+            <Menu className="h-6 w-6" />
+          </button>
         </div>
-        <div>
+        <div className="hidden md:block">
           <Link href={"/"}>
             <Image
               title="logo"
               src="/logo.png"
-              width={60}
-              height={40}
+              width={40}
+              height={30}
               alt="logo"
-              className=" w-auto h-auto"
+              className="w-auto h-auto"
             />
           </Link>
         </div>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         <Link href={"/notifications"} className="relative">
-          <NotificationsSharp />
-          <ToastContainer />
-          <span
-            className="absolute top-0 left-0 bg-red-500 
-          rounded-full text-xs px-1"
-          >
-            {notifications.length}
-          </span>
+          <button className="relative p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800">
+            <Notifications className="h-5 w-5" />
+            {notifications.length > 0 && (
+              <span className="absolute top-0 right-0 flex h-4 w-4 -mt-1 -mr-1">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex items-center justify-center rounded-full h-4 w-4 bg-red-500 text-xs text-white">
+                  {notifications.length}
+                </span>
+              </span>
+            )}
+          </button>
+          <ToastContainer position="top-right" autoClose={3000} />
         </Link>
 
-        <div className="flex items-center gap-1">
-          {user ? <p className="font-bold">{user?.email.slice(0,7)}...</p> : <SignIn />}
-
-          <Person style={{ fontSize: 30 }} />
+        <div className="flex items-center gap-2">
+          {user ? (
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-gray-700 dark:text-gray-300 hidden sm:block">
+                {user?.email?.slice(0, 7)}...
+              </p>
+              <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-200 font-medium">
+                {user?.email?.charAt(0).toUpperCase() || "U"}
+              </div>
+            </div>
+          ) : (
+            <SignIn />
+          )}
         </div>
       </div>
     </div>
