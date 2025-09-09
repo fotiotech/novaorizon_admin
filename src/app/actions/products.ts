@@ -67,12 +67,7 @@ export async function findProducts(id?: string) {
 
     if (id) {
       const product: any = await Product.findById(id)
-        .populate("brand", "name") // Populate brand name
-        .populate("category_id", "name") // Populate category name
-        .populate({
-          path: "related_products.ids",
-          select: "name price image slug", // Select fields for related products
-        })
+        
         .lean()
         .exec();
 
@@ -91,7 +86,7 @@ export async function findProducts(id?: string) {
       };
 
       // If related products exist, convert their IDs to strings
-      if (result.related_products?.ids) {
+      if (result?.related_products?.ids) {
         result.related_products.ids = result.related_products.ids.map(
           (relatedProduct: any) => ({
             ...relatedProduct,
@@ -105,8 +100,7 @@ export async function findProducts(id?: string) {
     }
 
     const products = await Product.find()
-      .populate("brand", "name")
-      .populate("category_id", "name")
+      
       .sort({ createdAt: -1 })
       .lean()
       .exec();
