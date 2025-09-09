@@ -1,9 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Select, { MultiValue } from "react-select";
 import MainImageUploader from "./MainImageUploader";
 import GalleryUploader from "./GalleryUploader";
+import { getBrands } from "@/app/actions/brand";
+import { Brand } from "@/constant/types";
 
 interface FieldProps {
   type?: string;
@@ -24,6 +26,17 @@ const Fields: React.FC<FieldProps> = ({
   handleAttributeChange,
   productId,
 }) => {
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getBrands()
+      .then(setBrands)
+      .catch((err) => {
+        console.error("Brand fetch error:", err);
+        setError("Failed to fetch brands. Please refresh.");
+      });
+  }, []);
   const renderField = () => {
     switch (type) {
       case "file":
@@ -81,6 +94,35 @@ const Fields: React.FC<FieldProps> = ({
         );
 
       case "select":
+        if (code === "brand") {
+          return (
+            <Select
+              isMulti
+              options={brands.map((v) => ({ value: v._id, label: v.name }))}
+              value={
+                Array.isArray(field)
+                  ? brands
+                      .filter((v) => field.includes(v._id))
+                      .map((v) => ({ value: v._id, label: v.name }))
+                  : []
+              }
+              onChange={(opts: MultiValue<{ value: string; label: string }>) =>
+                handleAttributeChange(
+                  code,
+                  opts.map((o) => o.value)
+                )
+              }
+              styles={{
+                control: (prov) => ({
+                  ...prov,
+                  backgroundColor: "transparent",
+                }),
+                menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
+              }}
+            />
+          );
+        }
+
         return (
           <Select
             isMulti

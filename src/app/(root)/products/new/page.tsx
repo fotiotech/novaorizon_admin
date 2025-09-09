@@ -44,7 +44,6 @@ const ProductForm = () => {
   const productId = productState.allIds[0];
   const product = productState.byId[productId] || {};
 
-  const [brands, setBrands] = useState<Brand[]>([]);
   const [groups, setGroups] = useState<GroupNode[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,14 +83,7 @@ const ProductForm = () => {
     }
   }, [product.category_id, productId, dispatch]);
 
-  useEffect(() => {
-    getBrands()
-      .then(setBrands)
-      .catch((err) => {
-        console.error("Brand fetch error:", err);
-        setError("Failed to fetch brands. Please refresh.");
-      });
-  }, []);
+  
 
   const handleChange = (field: string, value: any) => {
     dispatch(
