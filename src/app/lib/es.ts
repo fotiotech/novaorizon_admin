@@ -61,7 +61,7 @@ export async function ensureProductIndex(): Promise<void> {
       },
       mappings: {
         properties: {
-          name: {
+          title: {
             type: "text",
             fields: {
               keyword: { type: "keyword" },
@@ -73,7 +73,7 @@ export async function ensureProductIndex(): Promise<void> {
             },
           },
           description: { type: "text" },
-          price: { type: "double" },
+          sale_price: { type: "double" },
           category_id: { type: "keyword" },
           brand: { type: "keyword" },
           createdAt: { type: "date" },

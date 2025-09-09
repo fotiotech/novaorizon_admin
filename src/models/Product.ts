@@ -21,6 +21,7 @@ const ProductSchema = new Schema(
         {
           type: Schema.Types.ObjectId,
           ref: "Product",
+          default: [],
         },
       ],
       relationship_type: {
@@ -52,6 +53,8 @@ async function indexToES(doc: any) {
         createdAt: doc.createdAt,
       },
     });
+
+    console.log("Successfully indexed document to Elasticsearch");
   } catch (err) {
     console.error("ES index error:", err);
   }
