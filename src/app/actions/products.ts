@@ -8,6 +8,7 @@ import { storage } from "@/utils/firebaseConfig";
 import mongoose from "mongoose";
 import Product from "@/models/Product";
 import "@/models/Attribute";
+import "@/models/Category";
 import "@/models/Brand";
 import "@/models/User";
 
@@ -67,7 +68,12 @@ export async function findProducts(id?: string) {
 
     if (id) {
       const product: any = await Product.findById(id)
+        .populate("brand", "name") // Populate brand name
         .populate("category_id", "name") // Populate category name
+        .populate({
+          path: "related_products.ids",
+          select: "name price image slug", // Select fields for related products
+        })
         .lean()
         .exec();
 
@@ -100,6 +106,7 @@ export async function findProducts(id?: string) {
     }
 
     const products = await Product.find()
+      .populate("brand", "name")
       .populate("category_id", "name")
       .sort({ createdAt: -1 })
       .lean()
