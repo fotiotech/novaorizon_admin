@@ -242,15 +242,15 @@ const Group = () => {
 
   // Filter and sort attributes based on user input
   const visibleAttributes = useMemo(() => {
-    const filtered = attributes.filter(
+    const filtered = attributes?.filter(
       (a) =>
-        a.name.toLowerCase().includes(filterText.toLowerCase()) ||
-        a.code.toLowerCase().includes(filterText.toLowerCase())
+        a?.name?.toLowerCase().includes(filterText?.toLowerCase()) ||
+        a?.code?.toLowerCase().includes(filterText?.toLowerCase())
     );
     const sorted = filtered.sort((a, b) =>
       sortAttrOrder.value === "asc"
-        ? a.name.localeCompare(b.name)
-        : b.name.localeCompare(a.name)
+        ? a?.name?.localeCompare(b.name)
+        : b?.name?.localeCompare(a.name)
     );
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
