@@ -28,14 +28,14 @@ export default function FilterableCategorySelect({
   }, []);
 
   const filtered = category.filter((cat: any) =>
-    cat.categoryName.toLowerCase().includes(search.toLowerCase())
+    cat.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleSelect = (val: any) => {
     onChange(val, index ?? 0); // Use the provided index or default to 0
     setIsCategorySelected(true);
     setShowDropdown(false);
-    setSearch(category.find((c: any) => c._id === val)?.categoryName || "");
+    setSearch(category.find((c: any) => c._id === val)?.name || "");
   };
 
   return (
@@ -63,7 +63,7 @@ export default function FilterableCategorySelect({
                   handleSelect({ target: { name: "value", value: cat._id } });
                 }}
               >
-                {cat.categoryName}
+                {cat.name}
               </li>
             ))
           ) : (

@@ -3,7 +3,7 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 // Category Interface
 interface ICategory extends Document {
   url_slug: string;
-  categoryName: string;
+  name: string;
   parent_id?: mongoose.Types.ObjectId;
   description?: string;
   imageUrl?: string[];
@@ -25,7 +25,7 @@ const CategorySchema = new Schema<ICategory>({
     required: [true, "URL slug is required"],
     match: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
   },
-  categoryName: {
+  name: {
     type: String,
     unique: true,
     required: [true, "Category name is required"],

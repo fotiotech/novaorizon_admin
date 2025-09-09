@@ -61,7 +61,7 @@ const Category = () => {
               onClick={() => handleSelect(item?._id as string)} // Ensure handleSelect is called
               className="flex-1 cursor-pointer"
             >
-              {item.categoryName}
+              {item.name}
             </p>
             <span
               onClick={(e) => {

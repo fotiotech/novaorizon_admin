@@ -10,6 +10,24 @@ const ProductSchema = new Schema(
       ref: "Category",
       required: true,
     },
+    brand: {
+      type: Schema.Types.ObjectId,
+      ref: "Brand",
+      required: true,
+    },
+    // Add related_products field definition
+    related_products: {
+      ids: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: "Product",
+        },
+      ],
+      relationship_type: {
+        type: String,
+      },
+      // You can add other fields like 'title', 'position', etc. if needed
+    },
   },
   {
     timestamps: true, // createdAt, updatedAt

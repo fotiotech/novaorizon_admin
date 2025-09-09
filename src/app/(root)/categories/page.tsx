@@ -21,7 +21,7 @@ const Categories = () => {
 
   const [categoryData, setCategoryData] = useState<Cat>({
     _id: "",
-    categoryName: "",
+    name: "",
     parent_id: "",
     description: "",
     imageUrl: [],
@@ -29,7 +29,7 @@ const Categories = () => {
   const [categories, setCategories] = useState<Cat[]>([]);
   const [categoryEdit, setCategoryEdit] = useState<Cat>({
     _id: "",
-    categoryName: "",
+    name: "",
     parent_id: "",
     description: "",
     imageUrl: [],
@@ -79,7 +79,7 @@ const Categories = () => {
         const editRes = await getCategory(editId, null, null);
         setCategoryEdit({
           _id: editRes?._id,
-          categoryName: editRes?.categoryName,
+          name: editRes?.name,
           parent_id: editRes?.parent_id,
           description: editRes?.description,
           imageUrl: editRes?.imageUrl,
@@ -138,7 +138,7 @@ const Categories = () => {
               <option value="">Select Parent Category</option>
               {categories.map((cat) => (
                 <option key={cat._id} value={cat._id}>
-                  {cat.categoryName}
+                  {cat.name}
                 </option>
               ))}
             </select>
@@ -153,7 +153,7 @@ const Categories = () => {
               type="text"
               name="categoryName"
               value={
-                editId ? categoryEdit.categoryName : categoryData.categoryName
+                editId ? categoryEdit.name : categoryData.name
               }
               onChange={handleCategoryData}
               className="w-full p-2 rounded-lg border bg-gray-100 dark:bg-gray-700 dark:text-white"
@@ -233,7 +233,7 @@ const Categories = () => {
                   onClick={() => setCatId(cat._id as string)}
                   className="flex-1 cursor-pointer font-medium hover:text-blue-600"
                 >
-                  {cat.categoryName}
+                  {cat.name}
                 </span>
                 <div className="flex gap-2">
                   <button
@@ -259,7 +259,7 @@ const Categories = () => {
                 key={sub._id}
                 className="p-2 rounded-lg font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition"
               >
-                {sub.categoryName}
+                {sub.name}
               </li>
             ))}
           </ul>

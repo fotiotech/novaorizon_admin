@@ -61,7 +61,6 @@ function generateDsin(): string {
     .join("");
 }
 
-// CRUD Operations
 export async function findProducts(id?: string) {
   try {
     await connection();
@@ -75,12 +74,12 @@ export async function findProducts(id?: string) {
         }) // Populate brand name
         .populate({
           path: "category_id",
-          select: "name",
+          select: "_id name",
           options: { strictPopulate: false },
         }) // Populate category name
         .populate({
           path: "related_products.ids",
-          select: "name price image slug", // Select fields for related products
+          select: "name list_price main_image slug", // Select fields for related products
           options: { strictPopulate: false },
         })
         .lean()
@@ -122,7 +121,7 @@ export async function findProducts(id?: string) {
       }) // Populate brand name
       .populate({
         path: "category_id",
-        select: "name",
+        select: "_id name",
         options: { strictPopulate: false },
       })
       .sort({ createdAt: -1 })
@@ -184,7 +183,9 @@ export async function createProduct(
     // Handle related products if provided
     if (related_products?.ids) {
       updateData.related_products = {
-        ids: related_products.ids.map((id) => new mongoose.Types.ObjectId(id)),
+        ids: related_products?.ids?.map(
+          (id) => new mongoose.Types.ObjectId(id)
+        ),
       };
     }
 
@@ -224,6 +225,8 @@ export async function updateProduct(
       return { success: false, error: "Valid product ID is required" };
     }
 
+    console.log({ formData });
+
     const cleanedAttributes = cleanObject(attributes);
     if (
       Object.keys(cleanedAttributes).length === 0 &&
@@ -250,7 +253,7 @@ export async function updateProduct(
     // Handle related_products if provided
     if (related_products) {
       updateData.related_products = {
-        ids: related_products.ids.map(
+        ids: related_products?.ids?.map(
           (id: string) => new mongoose.Types.ObjectId(id)
         ),
       };

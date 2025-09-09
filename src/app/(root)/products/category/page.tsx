@@ -63,7 +63,7 @@ const Category = () => {
       const categoryData = category.byId[idx];
       if (!categoryData) return false;
       if (!filter) return true;
-      return categoryData.categoryName
+      return categoryData.name
         ?.toLowerCase()
         .includes(filter.toLowerCase());
     });
@@ -100,7 +100,7 @@ const Category = () => {
                       onClick={() => handleSelect(categoryData._id)}
                       className="text-left w-full font-medium text-gray-800 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                     >
-                      {categoryData.categoryName}
+                      {categoryData.name}
                     </button>
                   </div>
                   <button

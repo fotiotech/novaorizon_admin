@@ -28,7 +28,7 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
 );
 
 // Indexing for faster queries
-attributeGroupSchema.index({ code: 1 }, { unique: true });
+attributeGroupSchema.index({ code: 1 });
 
 const AttributeGroup =
   mongoose.models.AttributeGroup ||

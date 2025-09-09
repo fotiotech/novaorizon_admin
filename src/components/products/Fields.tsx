@@ -97,20 +97,16 @@ const Fields: React.FC<FieldProps> = ({
         if (code === "brand") {
           return (
             <Select
-              isMulti
               options={brands.map((v) => ({ value: v._id, label: v.name }))}
               value={
-                Array.isArray(field)
+                field
                   ? brands
-                      .filter((v) => field.includes(v._id))
-                      .map((v) => ({ value: v._id, label: v.name }))
-                  : []
+                      .filter((v) => v._id === field)
+                      .map((v) => ({ value: v._id, label: v.name }))[0] || null
+                  : null
               }
-              onChange={(opts: MultiValue<{ value: string; label: string }>) =>
-                handleAttributeChange(
-                  code,
-                  opts.map((o) => o.value)
-                )
+              onChange={(opt: { value: string; label: string } | null) =>
+                handleAttributeChange(code, opt ? opt.value : null)
               }
               styles={{
                 control: (prov) => ({

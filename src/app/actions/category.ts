@@ -70,7 +70,6 @@ export async function getCategory(
     }
   } else if (parentId) {
     const subCategories = await Category.find({ parent_id: parentId });
-    console.log("Subcategories:", subCategories);
     if (subCategories.length > 0) {
       return subCategories.map((subCategory) => ({
         ...subCategory?.toObject(),
@@ -95,7 +94,7 @@ export async function getCategory(
 export async function createCategory(
   formData: {
     _id?: string;
-    categoryName?: string;
+    name?: string;
     parent_id?: string;
     description?: string;
     imageUrl?: string[];
@@ -104,10 +103,9 @@ export async function createCategory(
   id?: string | null
 ) {
   try {
-    const { categoryName, parent_id, description, imageUrl, attributes } =
-      formData;
+    const { name, parent_id, description, imageUrl, attributes } = formData;
 
-    const url_slug = generateSlug(categoryName + (description || ""));
+    const url_slug = generateSlug(name + (description || ""));
     await connection();
 
     const existingCategory = id ? await Category.findById(id) : null;
@@ -124,7 +122,7 @@ export async function createCategory(
         {
           $set: {
             url_slug,
-            categoryName,
+            name,
             parent_id: parent_id || undefined,
             description,
             imageUrl: imageUrl || undefined,
@@ -135,7 +133,7 @@ export async function createCategory(
     } else {
       const newCategory = new Category({
         url_slug,
-        categoryName,
+        name,
         parent_id,
         description,
         imageUrl: imageUrl || undefined,

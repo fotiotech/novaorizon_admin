@@ -16,7 +16,7 @@ export type Category = {
   _id?: string;
   parent_id?: string;
   url_slug?: string;
-  categoryName?: string;
+  name?: string;
   description?: string;
   imageUrl?: string[];
   attributes?: any[];
