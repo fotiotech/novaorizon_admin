@@ -14,8 +14,12 @@ import "@/models/User";
 // Types
 export interface CreateProductForm {
   category_id: string;
+  brand: string;
   name?: string;
   department?: string;
+  related_products?: {
+    ids: string[];
+  };
   [key: string]: any;
 }
 
@@ -62,18 +66,51 @@ export async function findProducts(id?: string) {
     await connection();
 
     if (id) {
-      const product: any = await Product.findById(id).lean().exec();
+      const product: any = await Product.findById(id)
+        .populate("brand", "name") // Populate brand name
+        .populate("category_id", "name") // Populate category name
+        .populate({
+          path: "related_products.ids",
+          select: "name price image slug", // Select fields for related products
+        })
+        .lean()
+        .exec();
+
       if (!product) {
         return { success: false, error: "Product not found" };
       }
-      return {
+
+      // Convert MongoDB ObjectIds to strings for the main product
+      const result = {
         ...product,
         _id: product._id?.toString(),
-        category_id: product.category_id?.toString(),
+        category_id:
+          product.category_id?._id?.toString() ||
+          product.category_id?.toString(),
+        brand: product.brand?._id?.toString() || product.brand?.toString(),
       };
+
+      // If related products exist, convert their IDs to strings
+      if (result.related_products?.ids) {
+        result.related_products.ids = result.related_products.ids.map(
+          (relatedProduct: any) => ({
+            ...relatedProduct,
+            _id: relatedProduct._id?.toString(),
+            category_id: relatedProduct.category_id?.toString(),
+          })
+        );
+      }
+
+      return result;
     }
 
-    const products = await Product.find().sort({ createdAt: -1 }).lean().exec();
+    const products = await Product.find()
+      .populate("brand", "name")
+      .populate("category_id", "name")
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
     if (!products) {
       console.error("No products found");
     }
@@ -81,7 +118,9 @@ export async function findProducts(id?: string) {
     return products.map((product: any) => ({
       ...product,
       _id: product._id?.toString(),
-      category_id: product.category_id?.toString(),
+      category_id:
+        product.category_id?._id?.toString() || product.category_id?.toString(),
+      brand: product.brand?._id?.toString() || product.brand?.toString(),
     }));
   } catch (error) {
     console.error("Error finding products:", error);
@@ -94,10 +133,14 @@ export async function createProduct(
 ): Promise<ProductResponse> {
   try {
     await connection();
-    const { category_id, ...attributes } = formData;
+    const { category_id, brand, related_products, ...attributes } = formData;
 
     if (!category_id) {
       return { success: false, error: "Valid category_id is required" };
+    }
+
+    if (!brand) {
+      return { success: false, error: "Valid brand is required" };
     }
 
     const cleanedAttributes = cleanObject(attributes);
@@ -108,19 +151,30 @@ export async function createProduct(
     // Generate a unique identifier for upsert operation
     const dsin = generateDsin();
 
+    // Prepare update data
+    const updateData: any = {
+      category_id: new mongoose.Types.ObjectId(category_id),
+      brand: new mongoose.Types.ObjectId(brand),
+      ...cleanedAttributes,
+      slug: attributes.name
+        ? generateSlug(attributes.name, attributes.department ?? null)
+        : undefined,
+      dsin,
+      updatedAt: new Date(),
+    };
+
+    // Handle related products if provided
+    if (related_products?.ids) {
+      updateData.related_products = {
+        ids: related_products.ids.map((id) => new mongoose.Types.ObjectId(id)),
+      };
+    }
+
     // Use findOneAndUpdate with upsert to create or update
     await Product.findOneAndUpdate(
       { dsin }, // Use a unique field to find if product exists
       {
-        $set: {
-          category_id: new mongoose.Types.ObjectId(category_id),
-          ...cleanedAttributes,
-          slug: attributes.name
-            ? generateSlug(attributes.name, attributes.department ?? null)
-            : undefined,
-          dsin,
-          updatedAt: new Date(),
-        },
+        $set: updateData,
         $setOnInsert: {
           createdAt: new Date(),
         },
@@ -146,14 +200,19 @@ export async function updateProduct(
 ): Promise<any> {
   try {
     await connection();
-    const { category_id, ...attributes } = formData;
+    const { category_id, brand, related_products, ...attributes } = formData;
 
     if (!productId) {
       return { success: false, error: "Valid product ID is required" };
     }
 
     const cleanedAttributes = cleanObject(attributes);
-    if (Object.keys(cleanedAttributes).length === 0) {
+    if (
+      Object.keys(cleanedAttributes).length === 0 &&
+      !category_id &&
+      !brand &&
+      !related_products
+    ) {
       return { success: false, error: "No valid attributes provided" };
     }
 
@@ -162,14 +221,28 @@ export async function updateProduct(
 
     // Handle category_id if provided
     if (category_id) {
-      updateData.category_id = category_id.toString();
+      updateData.category_id = new mongoose.Types.ObjectId(category_id);
     }
 
-    // Handle slug generation if title is provided
-    if (attributes.title) {
+    // Handle brand if provided
+    if (brand) {
+      updateData.brand = new mongoose.Types.ObjectId(brand);
+    }
+
+    // Handle related_products if provided
+    if (related_products) {
+      updateData.related_products = {
+        ids: related_products.ids.map(
+          (id: string) => new mongoose.Types.ObjectId(id)
+        ),
+      };
+    }
+
+    // Handle slug generation if name is provided
+    if (attributes.name) {
       updateData.slug = generateSlug(
-        attributes.model ?? "",
-        attributes.title ?? null
+        attributes.name,
+        attributes.department ?? null
       );
     }
 
