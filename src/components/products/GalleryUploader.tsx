@@ -17,7 +17,9 @@ const GalleryUploader: React.FC<MainImageUploaderProps> = ({
   code,
 }) => {
   const dispatch = useAppDispatch();
-  const { files, loading, addFiles, removeFile } = useFileUploader();
+  const { files, loading, addFiles, removeFile } = useFileUploader(productId, [
+    field as string,
+  ]);
 
   // Update Redux when files change
   React.useEffect(() => {

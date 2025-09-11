@@ -18,18 +18,17 @@ const MainImageUploader: React.FC<MainImageUploaderProps> = ({
   const dispatch = useAppDispatch();
 
   // pass productId as instanceId so uploads are namespaced by product
-  const { files, loading, addFiles, removeFile } = useFileUploader();
+  const { files, loading, addFiles, removeFile } = useFileUploader(productId, [
+    field as string,
+  ]);
   // Update Redux when the main image changes
   useEffect(() => {
-    // prefer newly uploaded URL; fallback to stored prop if present
-    const url = files.length > 0 ? files[0] : field ?? "";
-    // only update if we have something meaningful
-    if (url) {
+    if (files.length > 0) {
       dispatch(
         addProduct({
           _id: productId,
           field: code,
-          value: url,
+          value: files[0],
         })
       );
     }
