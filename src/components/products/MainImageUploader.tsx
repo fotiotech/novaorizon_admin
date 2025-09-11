@@ -18,9 +18,7 @@ const MainImageUploader: React.FC<MainImageUploaderProps> = ({
   const dispatch = useAppDispatch();
 
   // pass productId as instanceId so uploads are namespaced by product
-  const { files, loading, addFiles, removeFile } = useFileUploader(productId, [
-    field as string,
-  ]);
+  const { files, loading, addFiles, removeFile } = useFileUploader();
   // Update Redux when the main image changes
   useEffect(() => {
     if (files.length > 0) {
