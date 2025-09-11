@@ -1,16 +1,24 @@
 "use server";
 
-// CRUD Operations for Shipping
-
 import { connection } from "@/utils/connection";
 import Shipping from "@/models/Shipping";
 import Order from "@/models/Order";
 
+// Define status transition rules
+const statusTransitions: Record<string, string[]> = {
+  pending: ["cancelled", "assigned"],
+  assigned: ["in-transit"],
+  "in-transit": ["delivered"],
+  delivered: ["completed", "returned"],
+  returned: [],
+  completed: [],
+  cancelled: [],
+};
+
 // Create a new Shipping entry
 export async function createShipping(data: any) {
   await connection();
-  const shipping = new Shipping(data);
-  return await shipping.save();
+  return await Shipping.create(data);
 }
 
 // Get a single Shipping entry by ID
@@ -19,7 +27,7 @@ export async function getShippingById(id: string) {
   return await Shipping.findById(id).exec();
 }
 
-// Get all Shipping entries (optional: add filter logic later)
+// Get all Shipping entries
 export async function getAllShippings() {
   await connection();
   return await Shipping.find({}).exec();
@@ -28,68 +36,64 @@ export async function getAllShippings() {
 // Update a Shipping entry by ID
 export async function updateShipping(id: string, data: any) {
   await connection();
-  let response;
+  
   const shipping = await Shipping.findById(id).exec();
   if (!shipping) {
-    throw new Error(`Shipping entry with ID ${id} not found`);
-  }
-  // Update the shipping entry with the provided data
-  if (shipping.status === "pending" && data.status === "cancelled") {
-    const res = await Shipping.findByIdAndUpdate(
-      id,
-      { status: data.status },
-      { new: true }
-    ).exec();
-    response = { success: true, data: res };
-  } else if (shipping.status === "pending" && data.status === "assigned") {
-    const res = await Shipping.findByIdAndUpdate(id, data, {
-      new: true,
-    }).exec();
-    response = { success: true, data: res };
-  } else if (shipping.status === "assigned" && data.status === "in-transit") {
-    const res = await Shipping.findByIdAndUpdate(
-      id,
-      { status: data.status },
-      { new: true }
-    ).exec();
-    response = { success: true, data: res };
-  } else if (shipping.status === "in-transit" && data.status === "delivered") {
-    const res = await Shipping.findByIdAndUpdate(
-      id,
-      { status: data.status },
-      { new: true }
-    ).exec();
-    response = { success: true, data: res };
-  } else if (shipping.status === "delivered" && data.status === "completed") {
-    const res = await Shipping.findByIdAndUpdate(
-      id,
-      { status: data.status },
-      { new: true }
-    ).exec();
-    response = { success: true, data: res };
-  } else if (shipping.status === "delivered" && data.status === "returned") {
-    const res = await Shipping.findByIdAndUpdate(
-      id,
-      { status: data.status, returnReason: data.returnReason },
-      { new: true }
-    ).exec();
-    response = { success: true, data: res };
-  } else {
-    response = {
+    return {
       success: false,
-      data: `Invalid status transition from ${shipping.status} to ${data.status}`,
+      error: `Shipping entry with ID ${id} not found`
     };
   }
-  await Order.findByIdAndUpdate(
-    { _id: shipping.orderId },
-    {
-      shippingStatus: response?.data?.status,
-      orderStatus:
-        response?.data?.status === "completed" ? response?.data?.status : "",
-    },
-    { new: true }
-  );
-  return response;
+
+  // If status is being changed, validate the transition
+  if (data.status && data.status !== shipping.status) {
+    // Check if status transition is valid
+    if (!statusTransitions[shipping.status]?.includes(data.status)) {
+      return {
+        success: false,
+        error: `Invalid status transition from ${shipping.status} to ${data.status}`
+      };
+    }
+  }
+
+  // Prepare update data
+  const updateData: any = { ...data };
+  
+  // Only add returnReason if status is being changed to returned
+  if (data.status === "returned") {
+    updateData.returnReason = data.returnReason;
+  } else if (shipping.status !== "returned" && data.status !== "returned") {
+    // Clear returnReason if not in returned status
+    updateData.returnReason = undefined;
+  }
+
+  try {
+    // Update shipping
+    const updatedShipping = await Shipping.findByIdAndUpdate(
+      id, 
+      updateData, 
+      { new: true, runValidators: true }
+    ).exec();
+
+    // Update order if status changed
+    if (data.status && data.status !== shipping.status) {
+      await Order.findByIdAndUpdate(
+        shipping.orderId,
+        {
+          shippingStatus: data.status,
+          ...(data.status === "completed" && { orderStatus: "completed" })
+        },
+        { new: true }
+      ).exec();
+    }
+
+    return { success: true, data: updatedShipping };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error occurred" 
+    };
+  }
 }
 
 // Delete a Shipping entry by ID

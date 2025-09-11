@@ -2,7 +2,7 @@
 
 import { updateShipping } from "@/app/actions/shipping";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { addShipping } from "@/app/store/slices/shippingSlice";
+import { updateShippingLocal } from "@/app/store/slices/shippingSlice";
 import { RootState } from "@/app/store/store";
 import { fetchShipping } from "@/fetch/fetchShipping";
 import Link from "next/link";
@@ -73,14 +73,13 @@ const Shipping = () => {
   const handleChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const { name, value } = event.target;
-      if (!shipping) return;
+      if (!shipping || !selectedId) return;
 
+      // Only update the specific field, don't change status
       dispatch(
-        addShipping({
-          ...shipping,
-          _id: selectedId,
-          [name]: value,
-          status: "assigned",
+        updateShippingLocal({
+          id: selectedId,
+          changes: { [name]: value },
         })
       );
     },
@@ -104,6 +103,27 @@ const Shipping = () => {
     },
     [selectedId, shipping]
   );
+
+  const assignShipping = useCallback(async () => {
+    if (!selectedId || !shipping) return;
+
+    setIsLoading(true);
+    try {
+      const dataToSend = {
+        ...shipping,
+        status: "assigned",
+        assigned_driver: shipping.assigned_driver || "",
+        driver_number: shipping.driver_number || "",
+      };
+
+      await updateShipping(selectedId, dataToSend);
+      toast.success("Shipping assigned successfully");
+    } catch (error) {
+      toast.error("Failed to assign shipping");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedId, shipping]);
 
   const changeStatus = useCallback(
     async (newStatus: string) => {
@@ -208,6 +228,7 @@ const Shipping = () => {
               shipping={shipping}
               onChange={handleChange}
               onSubmit={updateShippingInfos}
+              onAssign={assignShipping}
               onStatusChange={changeStatus}
               availableTransitions={availableStatusTransitions}
               onReturnClick={() => setShowReturnReason(true)}
@@ -282,6 +303,7 @@ const ShippingForm = React.memo(
     shipping,
     onChange,
     onSubmit,
+    onAssign,
     onStatusChange,
     availableTransitions,
     onReturnClick,
@@ -290,6 +312,7 @@ const ShippingForm = React.memo(
     shipping: any;
     onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
     onSubmit: (e: React.FormEvent) => void;
+    onAssign: () => void;
     onStatusChange: (status: string) => void;
     availableTransitions: string[];
     onReturnClick: () => void;
@@ -331,13 +354,29 @@ const ShippingForm = React.memo(
           />
         </div>
 
-        <button
-          type="submit"
-          disabled={!isAssignable || isLoading}
-          className="btn-primary"
-        >
-          {isLoading ? "Processing..." : "Assign Shipping"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onAssign}
+            disabled={
+              !isAssignable ||
+              isLoading ||
+              !shipping.assigned_driver ||
+              !shipping.driver_number
+            }
+            className="btn-primary flex-1"
+          >
+            {isLoading ? "Processing..." : "Assign Shipping"}
+          </button>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="btn-secondary flex-1"
+          >
+            {isLoading ? "Saving..." : "Save Details"}
+          </button>
+        </div>
 
         <div className="mt-4">
           <h4 className="font-medium mb-2">Update Status</h4>
