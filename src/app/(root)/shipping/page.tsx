@@ -6,9 +6,32 @@ import { addShipping } from "@/app/store/slices/shippingSlice";
 import { RootState } from "@/app/store/store";
 import { fetchShipping } from "@/fetch/fetchShipping";
 import Link from "next/link";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useCallback, useState } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+
+// Status options for consistent reference
+const STATUS_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "assigned", label: "Assigned" },
+  { value: "in-transit", label: "In Transit" },
+  { value: "delivered", label: "Delivered" },
+  { value: "completed", label: "Completed" },
+  { value: "returned", label: "Returned" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+// Status transition rules
+const STATUS_TRANSITIONS = {
+  pending: ["cancelled", "assigned"],
+  assigned: ["in-transit"],
+  "in-transit": ["delivered"],
+  delivered: ["completed", "returned"],
+  returned: [],
+  completed: [],
+  cancelled: [],
+};
 
 const Shipping = () => {
   const dispatch = useAppDispatch();
@@ -17,194 +40,186 @@ const Shipping = () => {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [showReturnReason, setShowReturnReason] = useState(false);
   const [returnReason, setReturnReason] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const shipping = useAppSelector((state: RootState) =>
     selectedId ? state.shipping.byId[selectedId] : null
   );
 
   useEffect(() => {
-    dispatch(fetchShipping());
+    const loadShippingData = async () => {
+      setIsLoading(true);
+      try {
+        await dispatch(fetchShipping());
+      } catch (error) {
+        toast.error("Failed to load shipping data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadShippingData();
   }, [dispatch]);
 
-  const filteredShippingIds = statusFilter
-    ? shippings.allIds.filter(
-        (id) => shippings.byId[id]?.status === statusFilter
-      )
-    : shippings.allIds;
+  // Memoized filtered shipping IDs
+  const filteredShippingIds = useMemo(() => {
+    if (!statusFilter) return shippings.allIds;
 
-  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const { name, value } = event.target;
-    if (!shipping) return;
-    dispatch(
-      addShipping({
-        ...shipping,
-        _id: selectedId,
-        [name]: value,
-        status: "assigned",
-      })
+    return shippings.allIds.filter(
+      (id) => shippings.byId[id]?.status === statusFilter
     );
-  }
+  }, [shippings, statusFilter]);
 
-  async function updateShippingInfos(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedId || !shipping) return;
-    try {
-      await updateShipping(selectedId, shipping);
-      toast.success("Shipping updated successfully");
-    } catch (error) {
-      toast.error("Failed to update shipping");
-    }
-  }
+  const handleChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const { name, value } = event.target;
+      if (!shipping) return;
 
-  async function changeStatus(newStatus: string) {
-    if (!selectedId || !shipping) return;
-    try {
-      const dataToSend = { ...shipping, status: newStatus };
-      if (newStatus === "returned") {
-        dataToSend.returnReason = returnReason;
+      dispatch(
+        addShipping({
+          ...shipping,
+          _id: selectedId,
+          [name]: value,
+          status: "assigned",
+        })
+      );
+    },
+    [shipping, selectedId, dispatch]
+  );
+
+  const updateShippingInfos = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!selectedId || !shipping) return;
+
+      setIsLoading(true);
+      try {
+        await updateShipping(selectedId, shipping);
+        toast.success("Shipping updated successfully");
+      } catch (error) {
+        toast.error("Failed to update shipping");
+      } finally {
+        setIsLoading(false);
       }
-      await updateShipping(selectedId, dataToSend);
-      toast.success(`Status updated to '${newStatus}'`);
-      setShowReturnReason(false);
-      setReturnReason("");
-    } catch (error) {
-      toast.error("Failed to update status");
-    }
-  }
+    },
+    [selectedId, shipping]
+  );
+
+  const changeStatus = useCallback(
+    async (newStatus: string) => {
+      if (!selectedId || !shipping) return;
+
+      setIsLoading(true);
+      try {
+        const dataToSend = { ...shipping, status: newStatus };
+        if (newStatus === "returned") {
+          dataToSend.returnReason = returnReason;
+        }
+        await updateShipping(selectedId, dataToSend);
+        toast.success(`Status updated to '${newStatus}'`);
+        setShowReturnReason(false);
+        setReturnReason("");
+      } catch (error) {
+        toast.error("Failed to update status");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [selectedId, shipping, returnReason]
+  );
+
+  // Determine which status buttons to show based on current status
+  const availableStatusTransitions = useMemo(() => {
+    if (!shipping?.status) return [];
+    return (
+      STATUS_TRANSITIONS[shipping.status as keyof typeof STATUS_TRANSITIONS] ||
+      []
+    );
+  }, [shipping?.status]);
 
   return (
     <div className="p-2 lg:p-4 flex flex-col gap-4">
       <div className="flex justify-between items-center">
-        <h2>Shipping</h2>
+        <h2 className="text-xl font-semibold">Shipping Management</h2>
         <Link href="/shipping/manage_shipping">
-          <button title="Add carrier" type="button" className="btn">
+          <button
+            title="Add carrier"
+            type="button"
+            className="btn-primary"
+            disabled={isLoading}
+          >
             Add Carrier
           </button>
         </Link>
       </div>
 
       <div className="flex gap-2 items-center">
-        <label htmlFor="statusFilter">Filter by Status:</label>
+        <label htmlFor="statusFilter" className="font-medium">
+          Filter by Status:
+        </label>
         <select
           id="statusFilter"
+          value={statusFilter || ""}
           onChange={(e) => setStatusFilter(e.target.value || null)}
-          className="border p-2 rounded"
+          className="border p-2 rounded w-40"
+          disabled={isLoading}
         >
-          <option value="">All</option>
-          <option value="pending">Pending</option>
-          <option value="assigned">Assigned</option>
-          <option value="in-transit">In Transit</option>
-          <option value="delivered">Delivered</option>
-          <option value="completed">Completed</option>
-          <option value="returned">Returned</option>
-          <option value="cancelled">Cancelled</option>
+          {STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
       </div>
 
-      <form onSubmit={updateShippingInfos} className="flex flex-col gap-4">
-        <h2>Assign Shipping</h2>
-        <div className="flex flex-col gap-2">
-          <p>Select Order</p>
-          <ul className="flex flex-col gap-3 h-44 overflow-y-auto rounded-lg border p-2 border-gray-600">
-            {filteredShippingIds.map((id) => (
-              <li key={id} className="flex flex-col gap-1">
-                <Link
-                  href={`/orders/order_details?orderNumber=${shippings.byId[id]?.orderNumber}`}
-                >
-                  <p>#{shippings.byId[id]?.orderNumber || "Order " + id}</p>
-                </Link>
-
-                <div className="flex items-center gap-3">
-                  <p>{shippings.byId[id]?.userId.name}</p>
-                  <p>{shippings.byId[id]?.status}</p>
-                  <button
-                    type="button"
-                    onClick={() => setSelectId(shippings.byId[id]?._id)}
-                    className="btn ml-2"
-                  >
-                    Select
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Order Selection Panel */}
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="text-lg font-medium mb-3">Select Order</h3>
+          {isLoading ? (
+            <div className="flex justify-center items-center h-44">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-2 max-h-64 overflow-y-auto rounded-lg border p-3 border-gray-300">
+              {filteredShippingIds.length === 0 ? (
+                <li className="text-center py-4 text-gray-500">
+                  No orders found
+                </li>
+              ) : (
+                filteredShippingIds.map((id) => (
+                  <ShippingListItem
+                    key={id}
+                    shipping={shippings.byId[id]}
+                    onSelect={() => setSelectId(shippings.byId[id]?._id)}
+                    isSelected={selectedId === id}
+                  />
+                ))
+              )}
+            </ul>
+          )}
         </div>
 
-        <div>
-          <p className="text-sm text-gray-500">Driver:</p>
-          <input
-            title="assigned driver"
-            type="text"
-            name="assigned_driver"
-            value={shipping?.assigned_driver || ""}
-            placeholder="Assigned Driver"
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-          />
+        {/* Shipping Details Form */}
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="text-lg font-medium mb-3">Shipping Details</h3>
+          {shipping ? (
+            <ShippingForm
+              shipping={shipping}
+              onChange={handleChange}
+              onSubmit={updateShippingInfos}
+              onStatusChange={changeStatus}
+              availableTransitions={availableStatusTransitions}
+              onReturnClick={() => setShowReturnReason(true)}
+              isLoading={isLoading}
+            />
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              Select an order to view details
+            </div>
+          )}
         </div>
-        <div>
-          <p className="text-sm text-gray-500">Driver Number:</p>
-          <input
-            title="Driver Number"
-            type="text"
-            name="driver_number"
-            value={shipping?.driver_number || ""}
-            placeholder="Driver Number"
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={shipping?.status !== "pending"}
-          className="btn"
-        >
-          Assign
-        </button>
-
-        <div className="flex flex-wrap gap-2 mt-4">
-          <button
-            type="button"
-            onClick={() => changeStatus("cancelled")}
-            disabled={shipping?.status !== "pending"}
-            className="btn border border-red-500 text-red-500 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => changeStatus("in-transit")}
-            disabled={shipping?.status !== "assigned"}
-            className="btn border border-blue-500 text-blue-500 disabled:opacity-50"
-          >
-            Mark In-Transit
-          </button>
-          <button
-            type="button"
-            onClick={() => changeStatus("delivered")}
-            disabled={shipping?.status !== "in-transit"}
-            className="btn border border-green-500 text-green-500 disabled:opacity-50"
-          >
-            Mark Delivered
-          </button>
-          <button
-            type="button"
-            onClick={() => changeStatus("completed")}
-            disabled={shipping?.status !== "delivered"}
-            className="btn border border-gray-500 text-gray-500 disabled:opacity-50"
-          >
-            Complete
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowReturnReason(true)}
-            disabled={shipping?.status !== "delivered"}
-            className="btn border border-yellow-500 text-yellow-600 disabled:opacity-50"
-          >
-            Return
-          </button>
-        </div>
-      </form>
+      </div>
 
       <ReturnReasonModal
         open={showReturnReason}
@@ -212,54 +227,258 @@ const Shipping = () => {
         onConfirm={() => changeStatus("returned")}
         reason={returnReason}
         setReason={setReturnReason}
+        isLoading={isLoading}
       />
     </div>
   );
 };
 
-export default Shipping;
+// Extracted Shipping List Item Component
+const ShippingListItem = React.memo(
+  ({
+    shipping,
+    onSelect,
+    isSelected,
+  }: {
+    shipping: any;
+    onSelect: () => void;
+    isSelected: boolean;
+  }) => (
+    <li
+      className={`p-3 rounded border ${
+        isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200"
+      }`}
+    >
+      <Link
+        href={`/orders/order_details?orderNumber=${shipping?.orderNumber}`}
+        className="text-blue-600 hover:underline font-medium"
+      >
+        #{shipping?.orderNumber || "Order " + shipping?._id}
+      </Link>
+      <div className="flex justify-between items-center mt-2">
+        <div>
+          <p className="text-sm">{shipping?.userId?.name}</p>
+          <span className={`status-badge status-${shipping?.status}`}>
+            {shipping?.status}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onSelect}
+          className="btn-secondary text-sm py-1 px-3"
+        >
+          {isSelected ? "Selected" : "Select"}
+        </button>
+      </div>
+    </li>
+  )
+);
 
-const ReturnReasonModal = ({
-  open,
-  onClose,
-  onConfirm,
-  reason,
-  setReason,
+ShippingListItem.displayName = "ShippingListItem";
+
+// Extracted Shipping Form Component
+const ShippingForm = React.memo(
+  ({
+    shipping,
+    onChange,
+    onSubmit,
+    onStatusChange,
+    availableTransitions,
+    onReturnClick,
+    isLoading,
+  }: {
+    shipping: any;
+    onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    onSubmit: (e: React.FormEvent) => void;
+    onStatusChange: (status: string) => void;
+    availableTransitions: string[];
+    onReturnClick: () => void;
+    isLoading: boolean;
+  }) => {
+    const isAssignable = shipping.status === "pending";
+
+    return (
+      <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Driver:
+          </label>
+          <input
+            title="assigned driver"
+            type="text"
+            name="assigned_driver"
+            value={shipping.assigned_driver || ""}
+            placeholder="Assigned Driver"
+            onChange={onChange}
+            className="w-full p-2 border rounded"
+            disabled={!isAssignable || isLoading}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Driver Number:
+          </label>
+          <input
+            title="Driver Number"
+            type="text"
+            name="driver_number"
+            value={shipping.driver_number || ""}
+            placeholder="Driver Number"
+            onChange={onChange}
+            className="w-full p-2 border rounded"
+            disabled={!isAssignable || isLoading}
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={!isAssignable || isLoading}
+          className="btn-primary"
+        >
+          {isLoading ? "Processing..." : "Assign Shipping"}
+        </button>
+
+        <div className="mt-4">
+          <h4 className="font-medium mb-2">Update Status</h4>
+          <div className="flex flex-wrap gap-2">
+            {availableTransitions.includes("cancelled") && (
+              <StatusButton
+                status="cancelled"
+                label="Cancel"
+                onClick={() => onStatusChange("cancelled")}
+                disabled={isLoading}
+              />
+            )}
+            {availableTransitions.includes("in-transit") && (
+              <StatusButton
+                status="in-transit"
+                label="Mark In-Transit"
+                onClick={() => onStatusChange("in-transit")}
+                disabled={isLoading}
+              />
+            )}
+            {availableTransitions.includes("delivered") && (
+              <StatusButton
+                status="delivered"
+                label="Mark Delivered"
+                onClick={() => onStatusChange("delivered")}
+                disabled={isLoading}
+              />
+            )}
+            {availableTransitions.includes("completed") && (
+              <StatusButton
+                status="completed"
+                label="Complete"
+                onClick={() => onStatusChange("completed")}
+                disabled={isLoading}
+              />
+            )}
+            {availableTransitions.includes("returned") && (
+              <button
+                type="button"
+                onClick={onReturnClick}
+                disabled={isLoading}
+                className="status-button status-returned"
+              >
+                Return
+              </button>
+            )}
+          </div>
+        </div>
+      </form>
+    );
+  }
+);
+
+ShippingForm.displayName = "ShippingForm";
+
+// Status Button Component
+const StatusButton = ({
+  status,
+  label,
+  onClick,
+  disabled,
 }: {
-  open: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  reason: string;
-  setReason: (value: string) => void;
+  status: string;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
 }) => {
-  if (!open) return null;
+  const statusColors = {
+    cancelled: "border-red-500 text-red-600 hover:bg-red-50",
+    "in-transit": "border-blue-500 text-blue-600 hover:bg-blue-50",
+    delivered: "border-green-500 text-green-600 hover:bg-green-50",
+    completed: "border-gray-500 text-gray-600 hover:bg-gray-50",
+    returned: "border-yellow-500 text-yellow-600 hover:bg-yellow-50",
+  };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-      <div className="bg-white rounded shadow-lg w-96 p-6">
-        <h3 className="text-lg font-semibold mb-4">Return Reason</h3>
-        <textarea
-          className="w-full p-2 border rounded mb-4"
-          placeholder="Enter reason for return..."
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-100"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={!reason.trim()}
-            className="px-4 py-2 bg-yellow-500 text-white rounded disabled:opacity-50"
-          >
-            Confirm Return
-          </button>
-        </div>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`px-3 py-2 border rounded text-sm font-medium transition-colors ${
+        statusColors[status as keyof typeof statusColors]
+      } disabled:opacity-50 disabled:cursor-not-allowed`}
+    >
+      {label}
+    </button>
   );
 };
+
+// Optimized Modal Component
+const ReturnReasonModal = React.memo(
+  ({
+    open,
+    onClose,
+    onConfirm,
+    reason,
+    setReason,
+    isLoading,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+    reason: string;
+    setReason: (value: string) => void;
+    isLoading: boolean;
+  }) => {
+    if (!open) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+          <h3 className="text-lg font-semibold mb-4">Return Reason</h3>
+          <textarea
+            className="w-full p-3 border rounded mb-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Enter reason for return..."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={4}
+          />
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={onClose}
+              disabled={isLoading}
+              className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={!reason.trim() || isLoading}
+              className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
+            >
+              {isLoading ? "Processing..." : "Confirm Return"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+);
+
+ReturnReasonModal.displayName = "ReturnReasonModal";
+
+export default Shipping;

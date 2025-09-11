@@ -25,6 +25,8 @@ const ProductCollectionPage = () => {
       const result = await getCollectionsWithProducts();
       if (result.success) {
         const mappedCollections = result.data || [];
+        console.log({ mappedCollections });
+
         setCollections(mappedCollections);
       } else {
         setError(result.error || "Failed to fetch collections");
