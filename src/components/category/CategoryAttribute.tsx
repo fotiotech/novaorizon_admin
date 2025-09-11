@@ -1,16 +1,25 @@
-// components/category/CategoryAttribute.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import Select from "react-select";
-import { findAttributeForGroups } from "@/app/actions/attributegroup";
-import { find_mapped_attributes_ids } from "@/app/actions/category";
+import { findAttributesAndValues } from "@/app/actions/attributes";
+import {
+  create_update_mapped_attributes_ids,
+  find_mapped_attributes_ids,
+  getCategory,
+  updateCategoryAttributes,
+} from "@/app/actions/category";
+import {
+  findAllAttributeGroups,
+  findAttributeForGroups,
+} from "@/app/actions/attributegroup";
 
-interface AttributeGroup {
+type AttributeGroup = {
   _id: string;
   name: string;
-  attributes: { _id: string; name: string }[];
-}
+  parent_id?: string;
+  attributes: string[] | [{ name: string; _id?: string }];
+};
 
 interface Option {
   value: string;
@@ -18,50 +27,57 @@ interface Option {
 }
 
 interface CategoryAttributeProps {
+  toggleCreateAttribute: boolean;
+  attributes: string[];
+  handleSubmit: (e: React.FormEvent) => void;
+  setAttributes: (attrs: string[]) => void;
   categoryId?: string;
-  onAttributesChange: (attributes: string[]) => void;
-  selectedAttributes: string[];
 }
 
 const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
+  toggleCreateAttribute,
+  attributes,
+  handleSubmit,
+  setAttributes,
   categoryId,
-  onAttributesChange,
-  selectedAttributes,
 }) => {
-  const [attributeGroups, setAttributeGroups] = useState<AttributeGroup[]>([]);
-  const [filterText, setFilterText] = useState("");
+  const selectedAttributes = Array.isArray(attributes) ? attributes : [];
+
+  const [attributeGroups, setAttributeGroups] = useState<
+    AttributeGroup[] | null
+  >([{ _id: "", name: "", attributes: [{ name: "", _id: "" }] }]);
+
+  const [filterText, setFilterText] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<Option>({
     value: "asc",
     label: "A → Z",
   });
-  const [mappedAttributes, setMappedAttributes] = useState<AttributeGroup[]>([]);
+  const [mappedAttributes, setMappedAttributes] = useState<any>([]);
 
   useEffect(() => {
-    const fetchAttributeGroups = async () => {
+    (async () => {
       try {
         const allAttributeGroups = await findAttributeForGroups();
         if (Array.isArray(allAttributeGroups)) {
           setAttributeGroups(allAttributeGroups as AttributeGroup[]);
         }
       } catch (err) {
-        console.error("Failed to fetch attribute groups:", err);
+        console.error(err);
       }
-    };
-
-    fetchAttributeGroups();
+    })();
   }, []);
 
   useEffect(() => {
-    const fetchMappedAttributes = async () => {
-      if (!categoryId) return;
-      
-      try {
-        const res = await find_mapped_attributes_ids(categoryId);
-        if (res) setMappedAttributes(res as any);
-      } catch (err) {
-        console.error("Failed to fetch mapped attributes:", err);
+    async function fetchMappedAttributes() {
+      if (!categoryId) {
+        console.error("Category ID is required");
+        return;
       }
-    };
+      const res = await find_mapped_attributes_ids(categoryId);
+      if (res) {
+        setMappedAttributes(res);
+      }
+    }
 
     fetchMappedAttributes();
   }, [categoryId]);
@@ -72,41 +88,53 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
   ];
 
   const visibleAttributes = useMemo(() => {
-    if (!attributeGroups.length) return [];
+    const allAttributes =
+      attributeGroups?.map((g) => ({
+        _id: g._id,
+        name: g.name,
+        attributes: g.attributes.map((a) => ({
+          ...(a as { name: string; _id?: string }),
+        })),
+      })) || [];
 
-    return attributeGroups
+    const filteredGroups = allAttributes
       .filter(
         (group) =>
           group.name.toLowerCase().includes(filterText.toLowerCase()) ||
           group.attributes.some((a) =>
-            a.name.toLowerCase().includes(filterText.toLowerCase())
+            a.name?.toLowerCase().includes(filterText.toLowerCase())
           )
       )
       .map((group) => ({
         ...group,
-        attributes: group.attributes
-          .filter((a) =>
-            a.name.toLowerCase().includes(filterText.toLowerCase())
-          )
-          .sort((a, b) =>
-            sortOrder.value === "asc"
-              ? a.name.localeCompare(b.name)
-              : b.name.localeCompare(a.name)
-          ),
-      }))
-      .filter(group => group.attributes.length > 0);
+        attributes: group.attributes.filter((a) =>
+          a.name?.toLowerCase().includes(filterText.toLowerCase())
+        ),
+      }));
+
+    const sortedGroups = filteredGroups.map((group) => ({
+      ...group,
+      attributes: group.attributes.sort((a, b) =>
+        sortOrder.value === "asc"
+          ? a.name.localeCompare(b.name)
+          : b.name.localeCompare(a.name)
+      ),
+    }));
+
+    return sortedGroups;
   }, [attributeGroups, filterText, sortOrder]);
 
-  const toggleAttribute = useCallback((id: string) => {
-    const newAttributes = selectedAttributes.includes(id)
-      ? selectedAttributes.filter((n) => n !== id)
-      : [...selectedAttributes, id];
-      
-    onAttributesChange(newAttributes);
-  }, [selectedAttributes, onAttributesChange]);
+  const toggleAttribute = (id: string) => {
+    if (selectedAttributes.includes(id)) {
+      setAttributes(selectedAttributes.filter((n) => n !== id));
+    } else {
+      setAttributes([...selectedAttributes, id]);
+    }
+  };
 
   return (
-    <div className="mb-4">
+    <div className={`${toggleCreateAttribute ? "block" : "hidden"} mb-4`}>
+      {/* Filter & Sort */}
       <div className="mt-4 flex md:flex-row gap-2 items-center">
         <input
           type="text"
@@ -123,15 +151,16 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
         />
       </div>
 
+      {/* Custom attribute list */}
       <div className="mt-4">
         <label>Map Attributes:</label>
         <div className="flex flex-col gap-2 border border-gray-600 rounded-md p-3 h-80 my-2 overflow-auto bg-white dark:bg-sec-dark">
-          {visibleAttributes.map((group) => (
-            <div key={group._id} className="p-1 px-2 cursor-pointer rounded">
-              <h3 className="font-bold text-lg mb-2">{group.name}</h3>
-              {group.attributes.map((attr) => (
+          {visibleAttributes?.map((g) => (
+            <div key={g._id} className="p-1 px-2 cursor-pointer rounded">
+              <h3 className="font-bold text-lg mb-2">{g.name}</h3>
+              {g.attributes.map((attr: any) => (
                 <div
-                  key={attr._id}
+                  key={attr?._id}
                   onClick={() => toggleAttribute(attr._id)}
                   className={`flex justify-between items-center p-1 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${
                     selectedAttributes.includes(attr._id)
@@ -148,12 +177,24 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
           ))}
         </div>
       </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={async () =>
+            updateCategoryAttributes(categoryId as string, attributes)
+          }
+          className="btn block my-2"
+        >
+          Map Attributes
+        </button>
+      </div>
 
-      {mappedAttributes.length > 0 && (
+      {/* Mapped attributes */}
+      {mappedAttributes && (
         <div className="flex flex-col gap-2 ">
           <h3 className="text-lg font-bold">Mapped Attributes:</h3>
           <ul className="list-disc pl-5 h-60 overflow-y-auto">
-            {mappedAttributes.map((group) => (
+            {mappedAttributes.map((group: any) => (
               <div
                 key={group._id}
                 className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg "
@@ -162,7 +203,7 @@ const CategoryAttribute: React.FC<CategoryAttributeProps> = ({
                   {group.name}
                 </h3>
                 <ul className="list-disc pl-5">
-                  {group.attributes?.map((attr) => (
+                  {group.attributes?.map((attr: any) => (
                     <li
                       key={attr._id}
                       className="text-gray-700 dark:text-gray-300"

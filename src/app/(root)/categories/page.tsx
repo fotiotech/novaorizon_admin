@@ -1,26 +1,24 @@
-// app/categories/page.tsx (Main Component)
 "use client";
 
-import React, { ChangeEvent, useEffect, useState, useCallback } from "react";
-import { v4 as uuidv4 } from "uuid";
-
-
-import CategoryAttribute from "@/components/category/CategoryAttribute";
-import { useFileUploader } from "@/hooks/useFileUploader";
+import React, { ChangeEvent, useEffect, useState } from "react";
+import FilesUploader from "@/components/FilesUploader";
 import {
   deleteCategory,
   getCategory,
   createCategory,
-  updateCategoryAttributes,
 } from "@/app/actions/category";
 import { Category as Cat } from "@/constant/types";
-import CategoryForm from "./_component/CategoryForm";
-import CategoryList from "./_component/CategoryList";
+import { useFileUploader } from "@/hooks/useFileUploader";
+import { v4 as uuidv4 } from "uuid";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import CategoryAttribute from "@/components/category/CategoryAttribute";
 
-const Categories: React.FC = () => {
+const Categories = () => {
+  const dispatch = useAppDispatch();
+  const category = useAppSelector((state) => state.category);
+  const id = category.allIds.length ? category.allIds[0] : uuidv4();
   const { files, loading, addFiles, removeFile } = useFileUploader();
-  const [categories, setCategories] = useState<Cat[]>([]);
-  const [subCategories, setSubCategories] = useState<Cat[]>([]);
+
   const [categoryData, setCategoryData] = useState<Cat>({
     _id: "",
     name: "",
@@ -28,162 +26,244 @@ const Categories: React.FC = () => {
     description: "",
     imageUrl: [],
   });
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Cat[]>([]);
+  const [categoryEdit, setCategoryEdit] = useState<Cat>({
+    _id: "",
+    name: "",
+    parent_id: "",
+    description: "",
+    imageUrl: [],
+    attributes: [],
+  });
+  const [subCategory, setSubcategory] = useState<Cat[] | null>([]);
+  const [catId, setCatId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
-  const [attributes, setAttributes] = useState<string[]>([]);
-  const [showAttributes, setShowAttributes] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [attributes, setAttributes] = useState<any | null>(null);
+  const [toggleCreateAttribute, setToggleCreateAttribute] =
+    useState<boolean>(false);
 
-  const fetchCategories = useCallback(async () => {
-    const res = await getCategory();
-    if (res) setCategories(res);
-  }, []);
+  console.log({ categories });
 
-  const fetchSubCategories = useCallback(async (id: string) => {
-    const res = await getCategory(null, id, null);
-    if (res) setSubCategories(res);
-  }, []);
-
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
-
-  useEffect(() => {
-    if (selectedCategoryId) {
-      fetchSubCategories(selectedCategoryId);
+  const action = async (formData: Cat) => {
+    const result = await createCategory(formData, editId);
+    if (result) {
+      const updatedCategories = await getCategory();
+      setCategories(updatedCategories);
+      setEditId(null);
     } else {
-      setSubCategories([]);
+      console.log("Error while processing!");
     }
-  }, [selectedCategoryId, fetchSubCategories]);
+  };
+
+  const handleCategoryData = (
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    if (editId) {
+      setCategoryEdit((prev) => ({ ...prev, [name]: value }));
+    } else {
+      setCategoryData((prev) => ({ ...prev, [name]: value }));
+    }
+  };
 
   useEffect(() => {
-    const fetchEditData = async () => {
-      if (!editId) return;
-      
-      const editRes = await getCategory(editId, null, null);
-      if (editRes) {
-        setCategoryData({
-          _id: editRes._id,
-          name: editRes.name,
-          parent_id: editRes.parent_id || "",
-          description: editRes.description || "",
-          imageUrl: editRes.imageUrl || [],
+    const fetchData = async () => {
+      let urls = [];
+      if (catId) {
+        const subCatRes = await getCategory(null, catId, null);
+        setSubcategory(subCatRes || []);
+      }
+
+      if (editId) {
+        const editRes = await getCategory(editId, null, null);
+        setCategoryEdit({
+          _id: editRes?._id,
+          name: editRes?.name,
+          parent_id: editRes?.parent_id,
+          description: editRes?.description,
+          imageUrl: editRes?.imageUrl,
         });
-        
-        if (editRes.imageUrl) {
-          addFiles(editRes.imageUrl);
-        }
+        urls.push(editRes?.imageUrl);
+        addFiles(urls);
+      } else {
+        const res = await getCategory();
+        setCategories(res);
       }
     };
 
-    fetchEditData();
-  }, [editId, addFiles]);
-
-  const handleCategoryData = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setCategoryData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const images = files.length > 1 ? files : files[0];
-    const formData = { 
-      ...categoryData, 
-      imageUrl: images as any[], 
-      attributes 
-    };
-    
-    const result = await createCategory(formData, editId);
-    if (result) {
-      await fetchCategories();
-      resetForm();
-    }
-  };
+    fetchData();
+  }, [editId, catId]);
 
   const handleDelete = async (id: string) => {
     const result = await deleteCategory(id);
     if (result.success) {
       setCategories(categories.filter((cat) => cat._id !== id));
-      if (selectedCategoryId === id) {
-        setSelectedCategoryId(null);
-      }
+    } else {
+      console.error(result.error);
     }
   };
 
-  const handleEdit = (category: Cat) => {
-    setEditId(category._id as string);
-    setCategoryData({
-      _id: category._id || "",
-      name: category.name || "",
-      parent_id: category.parent_id || "",
-      description: category.description || "",
-      imageUrl: category.imageUrl || [],
-    });
-  };
-
-  const resetForm = () => {
-    setCategoryData({
-      _id: "",
-      name: "",
-      parent_id: "",
-      description: "",
-      imageUrl: [],
-    });
-    setEditId(null);
-    setAttributes([]);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const images = files?.length! > 1 ? files : files?.[0];
+    const formData = editId
+      ? { ...categoryEdit, imageUrl: images as any[], attributes }
+      : { ...categoryData, imageUrl: images as any[], attributes };
+    await action(formData);
   };
 
   return (
-    <div className="lg:p-8 space-y-6">
+    <div className=" lg:p-8 space-y-3">
       <h2 className="text-2xl font-bold my-2 text-gray-800 dark:text-gray-100">
         {editId ? "Edit Category" : "Create Category"}
       </h2>
 
-      <CategoryForm
-        categoryData={categoryData}
-        categories={categories}
-        editId={editId}
-        loading={loading}
-        files={files}
-        onDataChange={handleCategoryData}
-        onAddFiles={addFiles}
-        onRemoveFile={removeFile  as any}
+      <form
         onSubmit={handleSubmit}
-      />
+        className="space-y-6 bg-white dark:bg-gray-800 shadow rounded-xl p-4"
+      >
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex-1">
+            <label htmlFor="categoryId" className="block mb-1 font-medium">
+              Parent Category
+            </label>
+            <select
+              title="parentCategory"
+              name="parent_id"
+              value={editId ? categoryEdit.parent_id : categoryData.parent_id}
+              onChange={handleCategoryData}
+              className="w-full p-2 rounded-lg border bg-gray-100 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">Select Parent Category</option>
+              {categories.map((cat) => (
+                <option key={cat._id} value={cat._id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-4">
-        <button
-          type="button"
-          onClick={() => setShowAttributes(prev => !prev)}
-          className="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline mb-4"
-        >
-          {showAttributes ? "Hide" : "Show"} Attribute Mapping
-        </button>
+          <div className="flex-1">
+            <label htmlFor="category" className="block mb-1 font-medium">
+              New Category
+            </label>
+            <input
+              id="category"
+              type="text"
+              name="categoryName"
+              value={
+                editId ? categoryEdit.name : categoryData.name
+              }
+              onChange={handleCategoryData}
+              className="w-full p-2 rounded-lg border bg-gray-100 dark:bg-gray-700 dark:text-white"
+            />
+          </div>
+        </div>
 
-        {showAttributes && (
-          <CategoryAttribute
-            categoryId={categoryData._id || categoryData.parent_id}
-            onAttributesChange={setAttributes}
-            selectedAttributes={attributes}
+        <div>
+          <FilesUploader
+            files={files}
+            loading={loading}
+            addFiles={addFiles}
+            removeFile={removeFile}
           />
-        )}
-      </div>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <CategoryList
-          categories={categories}
-          title="Categories"
-          onCategoryClick={setSelectedCategoryId}
-          onEditCategory={handleEdit}
-          onDeleteCategory={handleDelete}
-          selectedCategoryId={selectedCategoryId}
-        />
+        <div>
+          <label htmlFor="description" className="block mb-1 font-medium">
+            Description
+          </label>
+          <input
+            id="description"
+            type="text"
+            name="description"
+            value={editId ? categoryEdit.description : categoryData.description}
+            onChange={handleCategoryData}
+            className="w-full p-2 rounded-lg border bg-gray-100 dark:bg-gray-700 dark:text-white"
+          />
+        </div>
 
-        <CategoryList
-          categories={subCategories}
-          title="Subcategories"
-          emptyMessage="No subcategories found"
-        />
+        <div className="w-full space-y-4">
+          <button
+            type="button"
+            onClick={() => setToggleCreateAttribute((prev) => !prev)}
+            className="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline"
+          >
+            Map Attributes for this Category?
+          </button>
+
+          <CategoryAttribute
+            toggleCreateAttribute={toggleCreateAttribute}
+            handleSubmit={handleSubmit}
+            attributes={attributes}
+            setAttributes={setAttributes}
+            categoryId={
+              categoryData._id ||
+              categoryEdit._id ||
+              categoryData.parent_id ||
+              ""
+            }
+          />
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+          >
+            {editId ? "Update Category" : "Add Category"}
+          </button>
+        </div>
+      </form>
+
+      <div>
+        <h2 className="font-bold text-xl my-2 text-gray-800 dark:text-gray-100">
+          Categories
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto scrollbar-thin">
+            {categories.map((cat) => (
+              <li
+                key={cat._id}
+                className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                <span
+                  onClick={() => setCatId(cat._id as string)}
+                  className="flex-1 cursor-pointer font-medium hover:text-blue-600"
+                >
+                  {cat.name}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditId(cat._id as string)}
+                    className="px-2 py-1 border rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(cat._id as string)}
+                    className="px-2 py-1 border rounded text-red-600 hover:bg-red-50 dark:hover:bg-gray-600"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto scrollbar-thin">
+            {subCategory?.map((sub) => (
+              <li
+                key={sub._id}
+                className="p-2 rounded-lg font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                {sub.name}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   );
