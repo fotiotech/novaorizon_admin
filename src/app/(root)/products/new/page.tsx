@@ -49,6 +49,8 @@ const ProductForm = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [topLevelGroups, setTopLevelGroups] = useState<GroupNode[]>([]);
 
   const clearStoreAndRedirect = async () => {
     try {
@@ -69,7 +71,12 @@ const ProductForm = () => {
         setIsLoading(true);
         setError(null);
         const resp = await find_category_attribute_groups(product.category_id);
-        setGroups(resp as unknown as GroupNode[]);
+        const allGroups = resp as unknown as GroupNode[];
+        setGroups(allGroups);
+
+        // Filter top-level groups (no parent_id)
+        const topGroups = allGroups.filter((group) => !group.parent_id);
+        setTopLevelGroups(topGroups);
       } catch (err) {
         console.error("Error fetching attributes:", err);
         setError("Failed to load product attributes. Please try again.");
@@ -83,7 +90,17 @@ const ProductForm = () => {
     }
   }, [product.category_id, productId, dispatch]);
 
-  
+  const handleNext = () => {
+    if (currentStep < topLevelGroups.length - 1) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
 
   const handleChange = (field: string, value: any) => {
     dispatch(
@@ -148,7 +165,7 @@ const ProductForm = () => {
     );
   }
 
-  function renderGroup(group: any) {
+  function renderGroup(group: any, isChild = false) {
     const { _id, code, name, attributes, children } = group;
 
     const renderGroupContent = () => {
@@ -210,29 +227,58 @@ const ProductForm = () => {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col max-w-3xl mx-auto">
       <div className="flex-1">
-        <div>
-          {error && !success && <Alert severity="error">{error}</Alert>}
-          {success && !error && <Alert severity="success">{success}</Alert>}
-        </div>
+        {error && !success && <Alert severity="error">{error}</Alert>}
+        {success && !error && <Alert severity="success">{success}</Alert>}
 
-        {groups.length > 0 && groups.map((group) => renderGroup(group))}
+        {/* Render only current step's group */}
+        {topLevelGroups.length > 0 && renderGroup(topLevelGroups[currentStep])}
       </div>
 
+      {/* Step Navigation */}
       <div className="flex justify-between mt-6 items-center">
-        <button
-          type="button"
-          onClick={clearStoreAndRedirect}
-          className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded transition"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isLoading || redirecting}
-          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
-        >
-          {isLoading ? "Saving..." : "Save Product"}
-        </button>
+        <div>
+          <button
+            type="button"
+            onClick={clearStoreAndRedirect}
+            className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded transition mr-4"
+          >
+            Cancel
+          </button>
+          {currentStep > 0 && (
+            <button
+              type="button"
+              onClick={handlePrev}
+              className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded transition"
+            >
+              Previous
+            </button>
+          )}
+        </div>
+
+        <div>
+          {currentStep < topLevelGroups.length - 1 ? (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={isLoading || redirecting}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
+            >
+              {isLoading ? "Saving..." : "Save Product"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Step Indicator */}
+      <div className="mt-4 text-center text-sm text-gray-500">
+        Step {currentStep + 1} of {topLevelGroups.length}
       </div>
     </form>
   );

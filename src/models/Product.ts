@@ -38,6 +38,11 @@ const ProductSchema = new Schema(
 
 async function indexToES(doc: any) {
   try {
+    // Check if Elasticsearch client is connected
+    if (!esClient) {
+      throw new Error("Elasticsearch client not initialized");
+    }
+
     // Convert the document to a plain object
     const docObject = doc.toObject ? doc.toObject() : doc;
 
@@ -45,22 +50,23 @@ async function indexToES(doc: any) {
     const { _id, __v, createdAt, updatedAt, ...indexedFields } = docObject;
 
     await esClient.index({
-      index: process.env.ELASTIC_INDEX || "",
+      index: process.env.ELASTIC_INDEX || "novaorizonsearch",
       id: doc._id.toString(),
-      document: {
+      body: {
         category_id: doc.category_id.toString(),
-        ...indexedFields, // Spread all other fields
+        ...indexedFields,
         createdAt: doc.createdAt,
       },
     });
 
     console.log("Successfully indexed document to Elasticsearch");
   } catch (err) {
-    console.error("ES index error:", err);
+    console.error("ES index error details:", err);
+    // Add retry logic here if needed
   }
 }
 
-// Hooks for Elasticsearch indexing
+// Hooks for Elasticsearch indexing - corrected version
 ProductSchema.post("save", async function (doc) {
   await indexToES(doc);
 });
@@ -72,10 +78,14 @@ ProductSchema.post("findOneAndUpdate", async function (doc) {
 ProductSchema.post("findOneAndDelete", async function (doc) {
   if (!doc) return;
   try {
-    await esClient.delete({ index: ES_INDEX, id: doc._id.toString() });
+    await esClient.delete({
+      index: process.env.ELASTIC_INDEX || "",
+      id: doc._id.toString(),
+    });
   } catch (err: any) {
-    if (err?.meta?.body?.result !== "not_found")
+    if (err?.meta?.body?.result !== "not_found") {
       console.error("ES delete error:", err);
+    }
   }
 });
 
