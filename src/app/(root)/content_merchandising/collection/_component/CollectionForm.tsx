@@ -33,9 +33,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    parent: "",
     category_id: "",
-    display: "grid",
     imageUrl: "",
     status: "active",
   });
@@ -81,9 +79,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
           setFormData({
             name: data.name || "",
             description: data.description || "",
-            parent: data.parent?._id || data.parent || "",
             category_id: data.category_id?._id || data.category_id || "",
-            display: data.display || "grid",
             imageUrl: data.imageUrl || "",
             status: data.status || "active",
           });
@@ -158,9 +154,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
       const submitFormData = new FormData();
       submitFormData.append("name", formData.name);
       submitFormData.append("description", formData.description);
-      submitFormData.append("parent", formData.parent);
       submitFormData.append("category_id", formData.category_id);
-      submitFormData.append("display", formData.display);
       submitFormData.append("imageUrl", files[0]);
       submitFormData.append("status", formData.status);
       submitFormData.append("rules", JSON.stringify(rules));
@@ -228,27 +222,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block mb-2 font-medium text-gray-700">
-              Parent (Optional)
-            </label>
-            <select
-              title="parent"
-              name="parent"
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-              disabled={isSubmitting}
-              value={formData.parent}
-              onChange={handleInputChange}
-            >
-              <option value="">Select a parent</option>
-              {collections?.map((collection: any) => (
-                <option key={collection._id} value={collection._id}>
-                  {collection.name}
-                </option>
-              ))}
-            </select>
-          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block mb-2 font-medium text-gray-700">
@@ -287,25 +260,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 ))}
               </select>
             </div>
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium text-gray-700">
-              Display Format
-            </label>
-            <select
-              title="display"
-              name="display"
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-              disabled={isSubmitting}
-              value={formData.display}
-              onChange={handleInputChange}
-            >
-              <option value="grid">Grid</option>
-              <option value="category">Category</option>
-              <option value="carrousel">Product Carousel</option>
-            </select>
           </div>
 
           <div>
@@ -388,7 +342,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
                       name: formData.name,
                       description: formData.description,
                       category_id: formData.category_id,
-                      display: formData.display,
                       status: formData.status,
                       rules,
                     },

@@ -129,9 +129,7 @@ export async function getCollectionsWithProducts() {
         collection: {
           _id: collection._id,
           name: collection.name,
-          display: collection.display,
           description: collection.description,
-          parent: collection.parent,
           category: collection.category_id,
           imageUrl: collection.imageUrl,
           rules: collection.rules,
@@ -160,8 +158,6 @@ export async function createCollection(formData: FormData) {
 
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
-    const display = formData.get("display") as string;
-    const parent = formData.get("parent") as string;
     const category_id = formData.get("category_id") as string;
     const imageUrl = formData.get("imageUrl") as string;
     const status = formData.get("status") as string;
@@ -242,8 +238,7 @@ export async function createCollection(formData: FormData) {
     const collection = new Collection({
       name: name.trim(),
       description: description?.trim() || "",
-      display: display || "grid",
-      parent: new mongoose.Types.ObjectId(parent),
+     
       category_id: new mongoose.Types.ObjectId(category_id),
       imageUrl,
       rules,
@@ -277,8 +272,6 @@ export async function updateCollection(id: string, formData: FormData) {
 
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
-    const display = formData.get("display") as string;
-    const parent = formData.get("parent") as string;
     const category_id = formData.get("category_id") as string;
     const imageUrl = formData.get("imageUrl") as string;
     const status = formData.get("status") as string;
@@ -358,8 +351,6 @@ export async function updateCollection(id: string, formData: FormData) {
     const updates = {
       name: name.trim(),
       description: description?.trim() || "",
-      display: display || "grid",
-      parent: new mongoose.Types.ObjectId(parent),
       category_id: new mongoose.Types.ObjectId(category_id),
       imageUrl,
       rules,

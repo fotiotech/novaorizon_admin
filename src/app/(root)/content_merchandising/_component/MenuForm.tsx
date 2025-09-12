@@ -1,0 +1,282 @@
+// components/MenuForm.tsx (updated)
+import { getAllCollections } from "@/app/actions/collection";
+import {
+  getMenuById,
+  createMenu,
+  updateMenu,
+  MenuData,
+} from "@/app/actions/menu";
+import React, { useEffect, useState } from "react";
+import Spinner from "@/components/Spinner";
+import Notification from "@/components/Notification";
+
+const MenuForm = ({ id }: { id?: string }) => {
+  const [menu, setMenu] = useState<MenuData>({
+    name: "",
+    description: "",
+    collections: [],
+    ctaUrl: "",
+    ctaText: "",
+  });
+  const [collections, setCollections] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // Fetch collections and existing menu data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+
+        // Fetch collections
+        const collectionsResult = await getAllCollections();
+        if (collectionsResult.success) {
+          setCollections(collectionsResult.data || []);
+        } else {
+          setError(collectionsResult.error || "Failed to fetch collections");
+        }
+
+        // If we have an ID, fetch the existing menu
+        if (id) {
+          const menuResult = await getMenuById(id);
+          if (menuResult.success) {
+            setMenu(menuResult.data);
+          } else {
+            setError(menuResult.error || "Failed to fetch menu");
+          }
+        }
+      } catch (err) {
+        setError("An unexpected error occurred");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id]);
+
+  // Handle form input changes
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setMenu((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // Handle collection selection changes
+  const handleCollectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const options = e.target.options;
+    const selectedCollections: any = [];
+
+    for (let i = 0; i < options.length; i++) {
+      if (options[i].selected) {
+        selectedCollections.push(options[i].value);
+      }
+    }
+
+    setMenu((prev) => ({ ...prev, collections: selectedCollections }));
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      let result;
+
+      if (id) {
+        // Update existing menu
+        result = await updateMenu(id, menu);
+      } else {
+        // Create new menu
+        result = await createMenu(menu);
+      }
+
+      if (result.success) {
+        setSuccess(
+          result.message ||
+            (id ? "Menu updated successfully" : "Menu created successfully")
+        );
+
+        // If creating a new menu, reset the form
+        if (!id) {
+          setMenu({
+            name: "",
+            description: "",
+            collections: [],
+            ctaUrl: "",
+            ctaText: "",
+          });
+        }
+      } else {
+        setError(
+          result.error ||
+            (id ? "Failed to update menu" : "Failed to create menu")
+        );
+      }
+    } catch (err) {
+      setError("An unexpected error occurred");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-64">
+        <Spinner />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-md">
+      {error && (
+        <Notification
+          type="error"
+          message={error}
+          onClose={() => setError(null)}
+        />
+      )}
+      {success && (
+        <Notification
+          type="success"
+          message={success}
+          onClose={() => setSuccess(null)}
+        />
+      )}
+
+      <h2 className="text-2xl font-bold mb-6">
+        {id ? "Edit Menu" : "Create New Menu"}
+      </h2>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label
+            htmlFor="name"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Menu Name *
+          </label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            value={menu.name}
+            onChange={handleInputChange}
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Enter menu name"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="description"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Description
+          </label>
+          <textarea
+            id="description"
+            name="description"
+            value={menu.description}
+            onChange={handleInputChange}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Enter menu description"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="collections"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Collections
+          </label>
+          <select
+            id="collections"
+            name="collections"
+            multiple
+            value={menu.collections}
+            onChange={handleCollectionChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            size={5}
+          >
+            {collections.map((collection) => (
+              <option key={collection._id} value={collection._id}>
+                {collection.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-sm text-gray-500 mt-1">
+            Hold Ctrl/Cmd to select multiple collections
+          </p>
+        </div>
+
+        <div>
+          <label
+            htmlFor="ctaText"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            CTA Text
+          </label>
+          <input
+            type="text"
+            id="ctaText"
+            name="ctaText"
+            value={menu.ctaText}
+            onChange={handleInputChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Enter call-to-action text"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="ctaUrl"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            CTA URL
+          </label>
+          <input
+            type="url"
+            id="ctaUrl"
+            name="ctaUrl"
+            value={menu.ctaUrl}
+            onChange={handleInputChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Enter call-to-action URL"
+          />
+        </div>
+
+        <div className="pt-4">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {submitting ? (
+              <span className="flex items-center justify-center">
+                <Spinner />
+                {id ? "Updating..." : "Creating..."}
+              </span>
+            ) : id ? (
+              "Update Menu"
+            ) : (
+              "Create Menu"
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+export default MenuForm;

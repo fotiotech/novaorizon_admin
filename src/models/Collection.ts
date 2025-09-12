@@ -31,16 +31,7 @@ const CollectionSchema = new Schema(
     description: {
       type: String,
     },
-    display: {
-      type: String,
-      enum: ["grid", "carousel", "category"],
-      default: "grid",
-    },
-    parent: {
-      type: Schema.Types.ObjectId,
-      ref: "Collection",
-      default: null,
-    },
+
     category_id: {
       type: Schema.Types.ObjectId,
       ref: "Category",

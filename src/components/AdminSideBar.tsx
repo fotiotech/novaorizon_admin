@@ -115,14 +115,14 @@ const menuConfig: MenuSection[] = [
     title: "Content & Merchandising",
     links: [
       {
+        name: "Content & Merchandising",
+        href: "/content_merchandising",
+        icon: <CollectionsBookmark />,
+      },
+      {
         name: "Store Configuration",
         href: "/store_config",
         icon: <Store />,
-      },
-      {
-        name: "Collection",
-        href: "/collection",
-        icon: <CollectionsBookmark />,
       },
     ],
   },
