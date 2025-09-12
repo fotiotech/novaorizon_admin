@@ -1,7 +1,17 @@
+"use client";
+
+import Order from "@/components/dashboard/Order";
 import React from "react";
 
-const Admin = () => {
-  return <>Admin</>;
+const Dashboard = () => {
+  return (
+    <div>
+      Dashboard{" "}
+      <div>
+        <Order />{" "}
+      </div>{" "}
+    </div>
+  );
 };
 
-export default Admin;
+export default Dashboard;

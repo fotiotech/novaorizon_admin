@@ -86,63 +86,7 @@ export type Product = {
   updated_at?: string; // Timestamp when the product was last updated
 };
 
-export type Smartphones = {
-  ModelName: string;
-  SerialNumber: string;
-  OperatingSystem: string;
-  RAmMemory: number;
-  InternalStorage: number;
-  ExpandableStorage: string;
-  RearCamera: string;
-  FrontCamera: string;
-  BatteryCapacity: number;
-  ChargingType: string;
-  Sensors: string;
-  ScreenSize: number;
-  CellularTechnology: string;
-  WirelessCarrier: string;
-  ConnectivityTechnology: string;
-  RefreshRate: number;
-  Weight: number;
-  Warranty: string;
-  Resolution: string;
-  processor: number;
-  BuildMaterial: string;
-  WaterDustResistance: string;
-  BoxContents: string;
-  OtherFeature: string;
-  Details: string;
-};
 
-export type SmartphonesVariants = {
-  VariantID: number;
-  id_product: number;
-  variantSku: string;
-  VariantName: string;
-  variantPrice: number;
-  variantSize: number;
-  variantWeight: number;
-  variantColor: string;
-  StorageCapacity: string;
-  RAM: number;
-  StockLevel: number;
-  Barcode: string;
-  Dimensions: string;
-  Weight: number;
-  BatteryCapacity: number;
-  ScreenSize: number;
-  CameraSpecifications: string;
-  OperatingSystem: string;
-  Connectivity: string;
-  Warranty: number;
-  ReleaseDate: string;
-  Discounts: string;
-  VariantImageUrl: string;
-  Features: string;
-  ShippingWeight: number;
-  Supplier: string;
-  Popularity: string;
-};
 
 export type Shipping = {
   ShippingCost: number;
