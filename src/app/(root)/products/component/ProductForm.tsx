@@ -217,7 +217,10 @@ const ProductForm = () => {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col max-w-3xl mx-auto">
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col max-w-3xl bg-white mx-auto"
+    >
       <div className="flex-1">
         {error && !success && <Alert severity="error">{error}</Alert>}
         {success && !error && <Alert severity="success">{success}</Alert>}
@@ -225,7 +228,7 @@ const ProductForm = () => {
         {/* Render only current step's group */}
         {topLevelGroups.length > 0 && renderGroup(topLevelGroups[currentStep])}
       </div>
-
+      <button type="submit" style={{ display: "none" }} aria-hidden="true" />
       {/* Step Navigation */}
       <div className="flex justify-between mt-6 items-center">
         <div>
@@ -258,7 +261,8 @@ const ProductForm = () => {
             </button>
           ) : (
             <button
-              type="submit"
+              type="button" // Changed from "submit" to "button"
+              onClick={handleSubmit}
               disabled={isLoading || redirecting}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
             >

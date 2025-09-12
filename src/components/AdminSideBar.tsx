@@ -62,7 +62,7 @@ const menuConfig: MenuSection[] = [
       { name: "Users", href: "/users", icon: <Person2 /> },
       {
         name: "Permissions & Roles",
-        href: "/users/permissions_roles",
+        href: "/permissions_roles",
         icon: <Group />,
       },
     ],
