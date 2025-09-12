@@ -124,6 +124,8 @@ const CollectionForm = ({ id }: { id?: string }) => {
     }));
   };
 
+  console.log({ files });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);

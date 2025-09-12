@@ -144,7 +144,7 @@ const ProductCollectionPage = () => {
                     {collection.name}
                     {level > 0 && (
                       <span className="ml-2 text-xs text-gray-500">
-                        (Child collection)
+                        (Child)
                       </span>
                     )}
                   </h3>

@@ -19,11 +19,6 @@ export const useFileUploader = (
     {}
   );
 
-  // Add this useEffect to update files when initialFiles changes
-  useEffect(() => {
-    setFiles(initialFiles);
-  }, [initialFiles]);
-
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
