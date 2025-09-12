@@ -277,7 +277,7 @@ const Attributes = () => {
   }, [attributes, filterText, sortAttrOrder]);
 
   return (
-    <div className="max-w-7xl mx-auto lg:px-8 w-full text-text">
+    <div className=" max-w-7xl mx-auto lg:px-8 w-full text-text">
       <div className="flex justify-between items-center">
         <h2 className="font-bold text-xl my-2">Attributes</h2>
         <Link href={"/attributes/group"} className="p-2 font-semibold">

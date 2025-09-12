@@ -47,7 +47,7 @@ const Dashboard = () => {
   if (!stats) return <div className="p-6">Loading...</div>;
 
   return (
-    <div className="lg:p-6 grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+    <div className="p-2 lg:p-6 grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
       {/* Stats Cards */}
       <Card>
         <CardContent className="p-4">

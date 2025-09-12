@@ -58,7 +58,7 @@ const Brands = () => {
   };
 
   return (
-    <div>
+    <div className="">
       <h2 className="font-bold text-xl mb-4">Brands</h2>
       <form onSubmit={handleSubmit} className="mb-4">
         <input type="text" name="name" value={formData.name} onChange={handleInputChange} placeholder="Brand Name" className="p-2 mb-2 rounded-lg w-full bg-transparent" required />

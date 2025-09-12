@@ -85,7 +85,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
           screenSize={screenSize}
         />
 
-        <main className="flex-1 overflow-auto p-2 md:p-6 bg-white">
+        <main className="flex-1 overflow-auto p-2 md:p-6 bg-white m-2 rounded-lg">
           {children}
         </main>
       </div>
