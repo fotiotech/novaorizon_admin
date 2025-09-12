@@ -212,14 +212,15 @@ const ProductForm = () => {
 
     return (
       <section key={_id} className="mb-6">
-        <CollabsibleSection name={name}>
-          <div className="flex flex-col gap-4">
-            {renderGroupContent()}
+        {/* <CollabsibleSection name={name}> */}
+        <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
+        <div className="flex flex-col gap-4">
+          {renderGroupContent()}
 
-            {children?.length > 0 &&
-              children.map((child: any) => renderGroup(child))}
-          </div>
-        </CollabsibleSection>
+          {children?.length > 0 &&
+            children.map((child: any) => renderGroup(child))}
+        </div>
+        {/* </CollabsibleSection> */}
       </section>
     );
   }
