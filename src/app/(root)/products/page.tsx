@@ -185,7 +185,7 @@ export default function ProductDashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-100 p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading product data...</p>
@@ -196,7 +196,7 @@ export default function ProductDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="bg-red-100 text-red-700 p-4 rounded-lg">
             <p className="font-semibold">Error</p>
@@ -208,7 +208,7 @@ export default function ProductDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <div className="min-h-screen bg-gray-100 lg:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4">
           <h1 className="text-3xl font-bold text-gray-800">Products</h1>

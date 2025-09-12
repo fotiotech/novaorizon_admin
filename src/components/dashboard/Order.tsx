@@ -73,7 +73,7 @@ export default function Order() {
   };
 
   return (
-    <div className="p-6">
+    <div className="lg:p-6">
       <h1 className="text-3xl font-bold mb-6">Order Analytics Dashboard</h1>
 
       {/* Summary Cards */}

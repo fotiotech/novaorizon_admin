@@ -178,7 +178,7 @@ export default function AdminOverview() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <div className="min-h-screen bg-gray-100 lg:p-6">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-800 mb-2">
           Admin Dashboard

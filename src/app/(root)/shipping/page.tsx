@@ -158,7 +158,7 @@ const Shipping = () => {
   }, [shipping?.status]);
 
   return (
-    <div className="p-2 lg:p-4 flex flex-col gap-4">
+    <div className=" lg:p-4 flex flex-col gap-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">Shipping Management</h2>
         <Link href="/shipping/manage_shipping">

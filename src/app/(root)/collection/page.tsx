@@ -17,7 +17,7 @@ const CollectionPage = async () => {
   };
 
   return (
-    <div className="p-4 lg:p-6 max-w-6xl mx-auto">
+    <div className=" lg:p-6 max-w-6xl mx-auto">
       <div className=" text-end font-semibold underline">
         <Link href={"/collection/productcollection"}>Product collection</Link>
       </div>
