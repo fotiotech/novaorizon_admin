@@ -31,7 +31,9 @@ const CollectionSchema = new Schema(
     description: {
       type: String,
     },
-
+    imageUrl: {
+      type: String,
+    },
     category_id: {
       type: Schema.Types.ObjectId,
       ref: "Category",

@@ -238,7 +238,6 @@ export async function createCollection(formData: FormData) {
     const collection = new Collection({
       name: name.trim(),
       description: description?.trim() || "",
-     
       category_id: new mongoose.Types.ObjectId(category_id),
       imageUrl,
       rules,
