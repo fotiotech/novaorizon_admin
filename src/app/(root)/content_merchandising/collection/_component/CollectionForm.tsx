@@ -173,7 +173,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
             : "Collection created successfully"
         );
         setTimeout(() => {
-          router.push("/collection/productcllection");
+          router.push("/content_merchandising/collection");
           router.refresh();
         }, 1500);
       } else {
