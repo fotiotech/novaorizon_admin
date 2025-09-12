@@ -2,60 +2,35 @@
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { addProduct, resetProduct } from "@/app/store/slices/productSlice";
+import { addProduct } from "@/app/store/slices/productSlice";
 import { fetchCategory } from "@/fetch/fetchCategory";
-import { fetchProducts } from "@/fetch/fetchProducts";
-import { v4 as uuidv4 } from "uuid";
 
 const Category = () => {
   const dispatch = useAppDispatch();
-  const pId = useSearchParams().get("id");
   const category = useAppSelector((state) => state.category);
   const products = useAppSelector((state) => state.product);
-
+  const _id = products.allIds[0];
   const [filter, setFilter] = useState("");
-  const _id = useMemo(
-    () => (products.allIds.length ? products.allIds[0] : uuidv4()),
-    [products.allIds]
+  const [category_id, setCategory_id] = useState(
+    _id ? products.byId[_id]?.category_id || "" : ""
   );
-  const category_id = products.byId[_id]?.category_id || "";
-
-  // Fetch products when ID changes
-  useEffect(() => {
-    if (pId) {
-      dispatch(fetchProducts(pId));
-    }
-  }, [pId, dispatch]);
-
-  // Reset product if no products exist
-  useEffect(() => {
-    if (!products.allIds.length) {
-      dispatch(resetProduct(_id));
-    }
-  }, [dispatch, _id, products.allIds.length]);
 
   // Fetch categories based on selected parent
   useEffect(() => {
     dispatch(fetchCategory(null, category_id || null, null));
   }, [category_id, dispatch]);
 
-  const handleSelect = useCallback(
-    (catId: string) => {
-      if (!catId) return;
+  const handleSelect = useCallback(() => {
+    if (!category_id) return;
 
-      // Update both category and product states
-      dispatch(
-        addProduct({
-          _id,
-          field: "category_id",
-          value: catId,
-        })
-      );
-    },
-    [dispatch, _id]
-  );
+    dispatch(
+      addProduct({
+        _id,
+        field: "category_id",
+        value: category_id,
+      })
+    );
+  }, [dispatch, category_id]);
 
   // Memoize filtered categories for performance
   const filteredCategories = useMemo(() => {
@@ -63,14 +38,12 @@ const Category = () => {
       const categoryData = category.byId[idx];
       if (!categoryData) return false;
       if (!filter) return true;
-      return categoryData.name
-        ?.toLowerCase()
-        .includes(filter.toLowerCase());
+      return categoryData.name?.toLowerCase().includes(filter.toLowerCase());
     });
   }, [category.allIds, category.byId, filter]);
 
   return (
-    <div className=" bg-white dark:bg-gray-800 rounded-lg shadow-md">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
       <h3 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
         Select Category
       </h3>
@@ -97,14 +70,14 @@ const Category = () => {
                 >
                   <div className="flex-1">
                     <button
-                      onClick={() => handleSelect(categoryData._id)}
+                      onClick={() => setCategory_id(categoryData._id)}
                       className="text-left w-full font-medium text-gray-800 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                     >
                       {categoryData.name}
                     </button>
                   </div>
                   <button
-                    onClick={() => handleSelect(categoryData._id)}
+                    onClick={() => setCategory_id(categoryData._id)}
                     className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
                       category_id === categoryData._id
                         ? "bg-blue-600 text-white"
@@ -130,21 +103,18 @@ const Category = () => {
             ? "Category selected"
             : "Please select a category to continue"}
         </div>
-        <Link
-          href={category_id ? "/products/new" : "#"}
+        <button
+          type="button"
+          disabled={!category_id}
           className={`px-4 py-2 rounded-md font-medium transition-colors ${
             category_id
               ? "bg-blue-600 hover:bg-blue-700 text-white"
               : "bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed"
           }`}
-          onClick={(e) => {
-            if (!category_id) {
-              e.preventDefault();
-            }
-          }}
+          onClick={handleSelect}
         >
           Next
-        </Link>
+        </button>
       </div>
     </div>
   );

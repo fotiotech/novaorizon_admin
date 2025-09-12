@@ -1,5 +1,5 @@
 import React from "react";
-import { AttributeDetail } from "@/app/(root)/products/new/page";
+import { AttributeDetail } from "@/app/(root)/products/component/ProductForm";
 import Fields from "./Fields";
 
 export const AttributeField: React.FC<{

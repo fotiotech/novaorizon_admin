@@ -17,6 +17,10 @@ import {
   LineElement,
 } from "chart.js";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
+import { useAppDispatch } from "@/app/hooks";
+import { clearProduct, resetProduct } from "@/app/store/slices/productSlice";
+import { v4 as uuidv4 } from "uuid";
+import { persistor } from "@/app/store/store";
 
 // Register ChartJS components
 ChartJS.register(
@@ -59,12 +63,24 @@ interface ProductAnalytics {
 }
 
 export default function ProductDashboard() {
+  const dispatch = useAppDispatch();
   const [productData, setProductData] = useState<ProductAnalytics | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const clearStoreAndRedirect = async () => {
+    try {
+      await persistor.purge();
+      dispatch(clearProduct());
+      dispatch(resetProduct(uuidv4()));
+    } catch (err) {
+      console.error("Error during cleanup and redirect:", err);
+      setError("Failed to redirect. Please try again.");
+    }
+  };
 
   // Fetch product data
   useEffect(() => {
@@ -212,12 +228,14 @@ export default function ProductDashboard() {
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4">
           <h1 className="text-3xl font-bold text-gray-800">Products</h1>
-          <Link
-            href="/products/category"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            + New Product
-          </Link>
+          <div onClick={clearStoreAndRedirect}>
+            <Link
+              href="/products/new"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              + New Product
+            </Link>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -497,7 +515,7 @@ export default function ProductDashboard() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <Link
-                            href={`/products/category?id=${product._id}`}
+                            href={`/products/edit?id=${product._id}`}
                             className="text-blue-600 hover:text-blue-900"
                           >
                             Edit
