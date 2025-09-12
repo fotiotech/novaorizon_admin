@@ -51,7 +51,7 @@ const menuConfig: MenuSection[] = [
       { name: "Reports", href: "/reports", icon: <BarChart /> },
       {
         name: "Collection",
-        href: "/collection",
+        href: "/content_merchandising/collection",
         icon: <CollectionsBookmark />,
       },
     ],
