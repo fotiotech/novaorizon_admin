@@ -3,6 +3,7 @@
 
 import { connection } from "@/utils/connection";
 import { Menu } from "@/models/Menu";
+import "@/models/Collection";
 import { revalidatePath } from "next/cache";
 
 // Define the Menu interface
@@ -13,8 +14,6 @@ export interface MenuData {
   ctaUrl?: string;
   ctaText?: string;
 }
-
-
 
 // Get menu by ID
 export async function getMenuById(id: string) {
