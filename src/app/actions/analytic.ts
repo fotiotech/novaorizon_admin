@@ -8,6 +8,7 @@ import {
   UsersByRole,
 } from "@/constant/types/user";
 import Product from "@/models/Product";
+import "@/models/Category";
 import { ProductAnalytics } from "@/constant/types/product";
 
 export async function getUserAnalytics(): Promise<UserAnalytics> {
