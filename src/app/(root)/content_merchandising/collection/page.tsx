@@ -115,9 +115,7 @@ const ProductCollectionPage = () => {
           <h1 className="text-2xl font-bold text-gray-800">
             Product Collections
           </h1>
-          <p className="text-gray-600 mt-1">
-            Manage your product collections
-          </p>
+          <p className="text-gray-600 mt-1">Manage your product collections</p>
         </div>
         <Link
           href="/collection/create"
@@ -168,7 +166,7 @@ const ProductCollectionPage = () => {
             </p>
             <div className="mt-6">
               <Link
-                href="/collection/create"
+                href="content_merchandising/collection/create"
                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Add Collection
@@ -260,7 +258,7 @@ const ProductCollectionPage = () => {
 
                   <div className="flex items-center space-x-2">
                     <Link
-                      href={`/collection/edit?id=${collection._id}`}
+                      href={`/content_merchandising/collection/edit?id=${collection._id}`}
                       className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
                       <svg
