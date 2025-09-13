@@ -118,7 +118,7 @@ const ProductCollectionPage = () => {
           <p className="text-gray-600 mt-1">Manage your product collections</p>
         </div>
         <Link
-          href="/collection/create"
+          href="/content_merchandising/collection/create"
           className="bg-blue-600 px-4 py-2 rounded-lg text-white hover:bg-blue-700 transition-colors flex items-center"
         >
           <svg
@@ -166,7 +166,7 @@ const ProductCollectionPage = () => {
             </p>
             <div className="mt-6">
               <Link
-                href="content_merchandising/collection/create"
+                href="/content_merchandising/collection/create"
                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Add Collection
