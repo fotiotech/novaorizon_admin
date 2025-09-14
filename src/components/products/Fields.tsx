@@ -37,6 +37,56 @@ const Fields: React.FC<FieldProps> = ({
         setError("Failed to fetch brands. Please refresh.");
       });
   }, []);
+
+  const customSelectStyles = {
+    control: (provided: any, state: any) => ({
+      ...provided,
+      backgroundColor: "transparent",
+      borderColor: state.isFocused ? "#6366f1" : "#d1d5db",
+      borderRadius: "0.5rem",
+      boxShadow: state.isFocused ? "0 0 0 2px rgba(99, 102, 241, 0.2)" : "none",
+      minHeight: "44px",
+      "&:hover": {
+        borderColor: state.isFocused ? "#6366f1" : "#9ca3af",
+      },
+    }),
+    menu: (provided: any) => ({
+      ...provided,
+      backgroundColor: "#1f2937",
+      borderRadius: "0.5rem",
+      overflow: "hidden",
+    }),
+    option: (provided: any, state: any) => ({
+      ...provided,
+      backgroundColor: state.isSelected
+        ? "#6366f1"
+        : state.isFocused
+        ? "#4b5563"
+        : "#1f2937",
+      color: state.isSelected ? "white" : provided.color,
+      "&:hover": {
+        backgroundColor: "#4b5563",
+      },
+    }),
+    multiValue: (provided: any) => ({
+      ...provided,
+      backgroundColor: "#6366f1",
+      borderRadius: "0.375rem",
+    }),
+    multiValueLabel: (provided: any) => ({
+      ...provided,
+      color: "white",
+    }),
+    multiValueRemove: (provided: any) => ({
+      ...provided,
+      color: "white",
+      "&:hover": {
+        backgroundColor: "#818cf8",
+        color: "white",
+      },
+    }),
+  };
+
   const renderField = () => {
     switch (type) {
       case "file":
@@ -63,7 +113,7 @@ const Fields: React.FC<FieldProps> = ({
         return (
           <input
             type="text"
-            className="w-full p-2 border rounded"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
             value={field || ""}
             placeholder={`Enter ${name}`}
             onChange={(e) => handleAttributeChange(code, e.target.value)}
@@ -73,7 +123,7 @@ const Fields: React.FC<FieldProps> = ({
       case "textarea":
         return (
           <textarea
-            className="w-full p-2 border rounded bg-transparent"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors min-h-[100px]"
             value={field || ""}
             placeholder={`Enter ${name}`}
             onChange={(e) => handleAttributeChange(code, e.target.value)}
@@ -84,7 +134,7 @@ const Fields: React.FC<FieldProps> = ({
         return (
           <input
             type="number"
-            className="w-full p-2 border rounded"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
             value={field || 0}
             placeholder={`Enter ${name}`}
             onChange={(e) =>
@@ -108,13 +158,9 @@ const Fields: React.FC<FieldProps> = ({
               onChange={(opt: { value: string; label: string } | null) =>
                 handleAttributeChange(code, opt ? opt.value : null)
               }
-              styles={{
-                control: (prov) => ({
-                  ...prov,
-                  backgroundColor: "transparent",
-                }),
-                menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
-              }}
+              styles={customSelectStyles}
+              className="react-select-container"
+              classNamePrefix="react-select"
             />
           );
         }
@@ -136,34 +182,62 @@ const Fields: React.FC<FieldProps> = ({
                 opts.map((o) => o.value)
               )
             }
-            styles={{
-              control: (prov) => ({ ...prov, backgroundColor: "transparent" }),
-              menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
-            }}
+            styles={customSelectStyles}
+            className="react-select-container"
+            classNamePrefix="react-select"
           />
         );
 
       case "checkbox":
         return (
-          <div className="flex flex-col space-y-2">
+          <div className="flex flex-col space-y-3">
             {option.map((opt) => (
-              <label key={opt} className="inline-flex items-center">
-                <input
-                  type="checkbox"
-                  className="mr-2"
-                  checked={Array.isArray(field) ? field.includes(opt) : false}
-                  onChange={(e) => {
-                    const newVals = Array.isArray(field)
-                      ? e.target.checked
-                        ? [...field, opt]
-                        : field.filter((v: any) => v !== opt)
-                      : e.target.checked
-                      ? [opt]
-                      : [];
-                    handleAttributeChange(code, newVals);
-                  }}
-                />
-                {opt}
+              <label
+                key={opt}
+                className="inline-flex items-center cursor-pointer"
+              >
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={Array.isArray(field) ? field.includes(opt) : false}
+                    onChange={(e) => {
+                      const newVals = Array.isArray(field)
+                        ? e.target.checked
+                          ? [...field, opt]
+                          : field.filter((v: any) => v !== opt)
+                        : e.target.checked
+                        ? [opt]
+                        : [];
+                      handleAttributeChange(code, newVals);
+                    }}
+                  />
+                  <div
+                    className={`w-5 h-5 border rounded-md mr-3 flex-shrink-0 flex items-center justify-center ${
+                      Array.isArray(field) && field.includes(opt)
+                        ? "bg-indigo-500 border-indigo-500"
+                        : "border-gray-300 dark:border-gray-600"
+                    }`}
+                  >
+                    {Array.isArray(field) && field.includes(opt) && (
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M5 13l4 4L19 7"
+                        ></path>
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <span className="text-gray-700 dark:text-gray-300">{opt}</span>
               </label>
             ))}
           </div>
@@ -171,30 +245,60 @@ const Fields: React.FC<FieldProps> = ({
 
       case "boolean":
         return (
-          <label className="inline-flex items-center">
-            <input
-              type="checkbox"
-              className="mr-2"
-              checked={!!field}
-              onChange={(e) => handleAttributeChange(code, e.target.checked)}
-            />
-            {field ? "Yes" : "No"}
+          <label className="inline-flex items-center cursor-pointer">
+            <div className="relative">
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={!!field}
+                onChange={(e) => handleAttributeChange(code, e.target.checked)}
+              />
+              <div
+                className={`w-11 h-6 rounded-full ${
+                  field ? "bg-indigo-500" : "bg-gray-300 dark:bg-gray-600"
+                } transition-colors`}
+              ></div>
+              <div
+                className={`absolute left-0.5 top-0.5 bg-white border rounded-full w-5 h-5 transition-transform ${
+                  field ? "transform translate-x-5" : ""
+                }`}
+              ></div>
+            </div>
+            <span className="ml-3 text-gray-700 dark:text-gray-300">
+              {field ? "Yes" : "No"}
+            </span>
           </label>
         );
 
       case "radio":
         return (
-          <div className="flex flex-col space-y-2">
+          <div className="flex flex-col space-y-3">
             {option.map((opt) => (
-              <label key={opt} className="inline-flex items-center">
-                <input
-                  type="radio"
-                  className="mr-2"
-                  value={opt}
-                  checked={field === opt}
-                  onChange={() => handleAttributeChange(code, opt)}
-                />
-                {opt}
+              <label
+                key={opt}
+                className="inline-flex items-center cursor-pointer"
+              >
+                <div className="relative flex items-center">
+                  <input
+                    type="radio"
+                    className="sr-only"
+                    value={opt}
+                    checked={field === opt}
+                    onChange={() => handleAttributeChange(code, opt)}
+                  />
+                  <div
+                    className={`w-5 h-5 border rounded-full mr-3 flex-shrink-0 flex items-center justify-center ${
+                      field === opt
+                        ? "border-indigo-500"
+                        : "border-gray-300 dark:border-gray-600"
+                    }`}
+                  >
+                    {field === opt && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div>
+                    )}
+                  </div>
+                </div>
+                <span className="text-gray-700 dark:text-gray-300">{opt}</span>
               </label>
             ))}
           </div>
@@ -205,7 +309,7 @@ const Fields: React.FC<FieldProps> = ({
           <input
             title="date"
             type="date"
-            className="w-full p-2 border rounded"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
             value={field || ""}
             onChange={(e) => handleAttributeChange(code, e.target.value)}
           />
@@ -213,15 +317,17 @@ const Fields: React.FC<FieldProps> = ({
 
       case "color":
         return (
-          <div className="flex items-center">
+          <div className="flex items-center space-x-3">
             <input
               title="color"
               type="color"
-              className="h-10 w-10 p-0 border rounded"
+              className="h-10 w-10 p-0 border rounded-lg cursor-pointer"
               value={field || "#000000"}
               onChange={(e) => handleAttributeChange(code, e.target.value)}
             />
-            <span className="ml-2">{field || "#000000"}</span>
+            <span className="text-gray-700 dark:text-gray-300 font-mono">
+              {field || "#000000"}
+            </span>
           </div>
         );
 
@@ -230,7 +336,7 @@ const Fields: React.FC<FieldProps> = ({
           <input
             title="url"
             type="url"
-            className="w-full p-2 border rounded"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
             value={field || ""}
             onChange={(e) => handleAttributeChange(code, e.target.value)}
           />
@@ -252,10 +358,9 @@ const Fields: React.FC<FieldProps> = ({
                 opts.map((o: any) => o.value)
               )
             }
-            styles={{
-              control: (prov) => ({ ...prov, backgroundColor: "transparent" }),
-              menu: (prov) => ({ ...prov, backgroundColor: "#111a2A" }),
-            }}
+            styles={customSelectStyles}
+            className="react-select-container"
+            classNamePrefix="react-select"
           />
         );
 
@@ -263,7 +368,7 @@ const Fields: React.FC<FieldProps> = ({
         return (
           <input
             type="text"
-            className="w-full p-2 border rounded"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
             value={field || ""}
             placeholder={`Enter ${name}`}
             onChange={(e) => handleAttributeChange(code, e.target.value)}
@@ -273,9 +378,14 @@ const Fields: React.FC<FieldProps> = ({
   };
 
   return (
-    <div className="mb-2">
-      <label className="text-md font-semibold mb-3">{name}</label>
+    <div className="mb-5">
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        {name}
+      </label>
       <div>{renderField()}</div>
+      {error && (
+        <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
     </div>
   );
 };

@@ -202,7 +202,7 @@ const ProductForm = () => {
     };
 
     return (
-      <section key={_id} className="mb-6">
+      <section key={_id} className="mb-3">
         {/* <CollabsibleSection name={name}> */}
         <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
         <div className="flex flex-col gap-4">
@@ -219,7 +219,7 @@ const ProductForm = () => {
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col max-w-3xl bg-white mx-auto"
+      className="flex flex-col max-w-3xl bg-white mx-auto  p-2 lg:p-4 rounded-lg"
     >
       <div className="flex-1">
         {error && !success && <Alert severity="error">{error}</Alert>}
