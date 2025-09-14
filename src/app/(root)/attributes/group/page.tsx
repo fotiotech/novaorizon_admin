@@ -8,6 +8,7 @@ import {
   deleteAttributeGroup,
 } from "@/app/actions/attributegroup";
 import { findAttributesAndValues } from "@/app/actions/attributes";
+import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import Select from "react-select";
 
@@ -98,7 +99,7 @@ const Group = () => {
       try {
         const idToFetch = editGroupId || groupId;
         const groupResponse = await findGroup(idToFetch);
-        
+
         if (groupResponse) {
           setCode(groupResponse.code || "");
           setName(groupResponse.name || "");
@@ -280,7 +281,7 @@ const Group = () => {
               <div className="flex items-center">
                 {hasChildren && (
                   <button
-                  type="button"
+                    type="button"
                     onClick={() => toggleGroupExpansion(group._id)}
                     className="mr-2 w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200"
                   >
@@ -330,17 +331,6 @@ const Group = () => {
             </div>
 
             <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setAction("add attributes");
-                  setGroupId(group?._id);
-                }}
-                className="text-sm text-blue-500 hover:text-blue-700"
-                title="Add attributes"
-              >
-                + Attributes
-              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -609,16 +599,24 @@ const Group = () => {
           <div className="bg-white p-4 rounded-lg shadow">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-medium">All Groups</h3>
-              <button
-                onClick={() => {
-                  setAction("create");
-                  setEditGroupId("");
-                  resetForm();
-                }}
-                className="text-sm bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded"
-              >
-                + New Group
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  href={"/attributes/group_attribute_category"}
+                  className="p-2 font-semibold bg-blue-600 text-white rounded"
+                >
+                  + Attributes
+                </Link>
+                <button
+                  onClick={() => {
+                    setAction("create");
+                    setEditGroupId("");
+                    resetForm();
+                  }}
+                  className="text-sm bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded"
+                >
+                  + New Group
+                </button>
+              </div>
             </div>
 
             {groups.length === 0 ? (

@@ -6,7 +6,6 @@ import { getCategory, createCategory } from "@/app/actions/category";
 import { Category as Cat } from "@/constant/types";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import { v4 as uuidv4 } from "uuid";
-import CategoryAttribute from "@/components/category/CategoryAttribute";
 
 interface CategoryFormProps {
   categoryId?: string; // Only receive ID for updates
@@ -218,24 +217,6 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             value={categoryData.description}
             onChange={handleInputChange}
             className="w-full p-2 rounded-lg border bg-gray-100 dark:bg-gray-700 dark:text-white"
-          />
-        </div>
-
-        <div className="w-full space-y-4">
-          <button
-            type="button"
-            onClick={() => setToggleCreateAttribute((prev) => !prev)}
-            className="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline"
-          >
-            Map Attributes for this Category?
-          </button>
-
-          <CategoryAttribute
-            toggleCreateAttribute={toggleCreateAttribute}
-            handleSubmit={handleSubmit} // Add the missing handleSubmit prop
-            attributes={attributes}
-            setAttributes={setAttributes}
-            categoryId={categoryData._id || categoryData.parent_id || ""}
           />
         </div>
 

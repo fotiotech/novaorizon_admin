@@ -164,13 +164,8 @@ export async function updateCategoryAttributes(
     const existingCategory = await Category.findById(categoryId);
     if (!existingCategory) return { error: "Category not found." };
 
-    // Merge old and new attributes without duplicates
-    const updatedAttributes: string[] = Array.from(
-      new Set([
-        ...(existingCategory.attributes || []),
-        ...newAttributes.map((id: string) => id.toString()),
-      ])
-    );
+    // Replace the attributes instead of merging
+    const updatedAttributes = newAttributes.map((id: string) => id.toString());
 
     console.log({ existingCategory, updatedAttributes });
 
@@ -298,7 +293,19 @@ export async function find_mapped_attributes_ids(
     .populate({ path: "attributes" })
     .lean();
 
-  return groups;
+  // Filter each group to only include attributes that are in attributeIds
+  const filteredGroups = groups.map((group) => {
+    const filteredAttributes = group.attributes.filter((attr:any) =>
+      attributeIds.some((id:any) => id.toString() === attr._id.toString())
+    );
+
+    return {
+      ...group,
+      attributes: filteredAttributes,
+    };
+  });
+
+  return filteredGroups;
 }
 
 // TypeScript-friendly implementation

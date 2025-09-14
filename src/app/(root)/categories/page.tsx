@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { deleteCategory, getCategory } from "@/app/actions/category";
 import { Category as Cat } from "@/constant/types";
 import CategoryForm from "./_component/CategoryForm";
+import Link from "next/link";
 
 const Categories = () => {
   const [categories, setCategories] = useState<Cat[]>([]);
@@ -86,12 +87,20 @@ const Categories = () => {
         <h2 className="text-2xl font-bold my-2 text-gray-800 dark:text-gray-100">
           Categories
         </h2>
-        <button
-          onClick={handleNewCategory}
-          className="p-2 font-semibold bg-blue-600 text-white rounded"
-        >
-          + New Category
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href={"/attributes/group_attribute_category"}
+            className="p-2 font-semibold bg-blue-600 text-white rounded"
+          >
+            + Attributes
+          </Link>
+          <button
+            onClick={handleNewCategory}
+            className="p-2 font-semibold bg-blue-600 text-white rounded"
+          >
+            + New Category
+          </button>
+        </div>
       </div>
 
       {error && (
