@@ -1,8 +1,12 @@
 // CategoryMapping.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Select from "react-select";
+import {
+  find_mapped_attributes_ids,
+  updateCategoryAttributes,
+} from "@/app/actions/category";
 
 interface Group {
   _id: string;
@@ -23,28 +27,104 @@ interface AttributeType {
 
 interface CategoryMappingProps {
   categoryData: any[];
-  selectedCategoryId: string;
-  setSelectedCategoryId: (id: string) => void;
   groups: Group[];
   allAttributes: AttributeType[];
-  mappedAttributes: any[];
-  onMapAttributesToCategory: (attributeIds: string[]) => void;
-  onUnmapAttributesFromCategory: (attributeIds: string[]) => void;
   isLoading: boolean;
 }
 
 const CategoryMapping: React.FC<CategoryMappingProps> = ({
   categoryData,
-  selectedCategoryId,
-  setSelectedCategoryId,
   groups,
   allAttributes,
-  mappedAttributes,
-  onMapAttributesToCategory,
-  onUnmapAttributesFromCategory,
-  isLoading,
+  isLoading: parentLoading,
 }) => {
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [mappedAttributes, setMappedAttributes] = useState<any>([]);
   const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch mapped attributes when category changes
+  useEffect(() => {
+    async function fetchMappedAttributes() {
+      if (!selectedCategoryId) return;
+
+      try {
+        setIsLoading(true);
+        const res = await find_mapped_attributes_ids(selectedCategoryId);
+        if (res) setMappedAttributes(res);
+      } catch (err) {
+        console.error("Error fetching mapped attributes:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchMappedAttributes();
+  }, [selectedCategoryId]);
+
+  // Handle mapping attributes to category
+  const handleMapAttributesToCategory = async (attributeIds: string[]) => {
+    if (!selectedCategoryId) return;
+
+    try {
+      setIsLoading(true);
+
+      // Get current mapped attribute IDs to prevent overriding
+      const currentMappedIds = mappedAttributes.flatMap((group: any) =>
+        group.attributes.map((attr: any) => attr._id)
+      );
+
+      // Combine with new attributes, avoiding duplicates
+      const allAttributeIds = [
+        ...new Set([...currentMappedIds, ...attributeIds]),
+      ];
+
+      await updateCategoryAttributes(selectedCategoryId, allAttributeIds);
+
+      // Refresh mapped attributes
+      const res = await find_mapped_attributes_ids(selectedCategoryId);
+      if (res) setMappedAttributes(res);
+
+      alert("Attributes mapped to category successfully!");
+    } catch (err) {
+      console.error("Error mapping attributes to category:", err);
+      alert("Failed to map attributes to category");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle removing attributes from category
+  const handleUnmapAttributesFromCategory = async (attributeIds: string[]) => {
+    if (!selectedCategoryId) return;
+
+    try {
+      setIsLoading(true);
+
+      // Get current mapped attribute IDs
+      const currentMappedIds = mappedAttributes.flatMap((group: any) =>
+        group.attributes.map((attr: any) => attr._id)
+      );
+
+      // Remove the specified attributes
+      const updatedAttributeIds = currentMappedIds.filter(
+        (id: any) => !attributeIds.includes(id)
+      );
+
+      await updateCategoryAttributes(selectedCategoryId, updatedAttributeIds);
+
+      // Refresh mapped attributes
+      const res = await find_mapped_attributes_ids(selectedCategoryId);
+      if (res) setMappedAttributes(res);
+
+      alert("Attributes removed from category successfully!");
+    } catch (err) {
+      console.error("Error removing attributes from category:", err);
+      alert("Failed to remove attributes from category");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Get all attributes that are in any group
   const allGroupAttributes = useMemo(() => {
@@ -87,17 +167,17 @@ const CategoryMapping: React.FC<CategoryMappingProps> = ({
 
   const handleMapAttributes = () => {
     if (selectedAttributes.length > 0) {
-      onMapAttributesToCategory(selectedAttributes);
+      handleMapAttributesToCategory(selectedAttributes);
       setSelectedAttributes([]);
     }
   };
 
   const handleUnmapAttribute = (attributeId: string) => {
-    onUnmapAttributesFromCategory([attributeId]);
+    handleUnmapAttributesFromCategory([attributeId]);
   };
 
   return (
-    <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+    <div className=" p-2 lg:p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
       <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
         Category Mapping
       </h2>

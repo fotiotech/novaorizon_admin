@@ -3,6 +3,10 @@
 
 import React, { useMemo, useState } from "react";
 import Select from "react-select";
+import {
+  updateAttributeGroup,
+  findAttributeForGroups,
+} from "@/app/actions/attributegroup";
 
 interface Option {
   value: string;
@@ -28,33 +32,104 @@ interface AttributeType {
 
 interface GroupManagementProps {
   groups: Group[];
-  selectedGroup: Group | null;
-  setSelectedGroup: (group: Group | null) => void;
   allAttributes: AttributeType[];
-  filterText: string;
-  setFilterText: (text: string) => void;
-  sortOrder: Option;
-  setSortOrder: (option: Option) => void;
-  onAddAttributesToGroup: (attributeIds: string[]) => void;
-  onRemoveAttributesFromGroup: (attributeIds: string[]) => void;
   isLoading: boolean;
 }
 
 const GroupManagement: React.FC<GroupManagementProps> = ({
   groups,
-  selectedGroup,
-  setSelectedGroup,
   allAttributes,
-  filterText,
-  setFilterText,
-  sortOrder,
-  setSortOrder,
-  onAddAttributesToGroup,
-  onRemoveAttributesFromGroup,
-  isLoading,
+  isLoading: parentLoading,
 }) => {
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [filterText, setFilterText] = useState<string>("");
+  const [sortOrder, setSortOrder] = useState<Option>({
+    value: "asc",
+    label: "A → Z",
+  });
   const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
   const [attributesToRemove, setAttributesToRemove] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Handle adding attributes to a group
+  const handleAddAttributesToGroup = async (attributeIds: string[]) => {
+    if (!selectedGroup) return;
+
+    try {
+      setIsLoading(true);
+
+      // Get current attribute IDs
+      const currentAttrIds = selectedGroup.attributes
+        .map((attr) => (typeof attr === "string" ? attr : attr._id))
+        .filter((id): id is string => id !== undefined);
+
+      // Combine with new attributes
+      const updatedAttrIds = [...currentAttrIds, ...attributeIds];
+
+      // Update group
+      await updateAttributeGroup(selectedGroup._id, {
+        attributes: updatedAttrIds,
+      });
+
+      // Refresh groups
+      const updatedGroups = await findAttributeForGroups();
+      if (Array.isArray(updatedGroups)) {
+        // Update selected group
+        const updatedGroup = updatedGroups.find(
+          (g) => g._id === selectedGroup._id
+        );
+        if (updatedGroup) setSelectedGroup(updatedGroup as Group);
+      }
+
+      alert("Attributes added to group successfully!");
+    } catch (err) {
+      console.error("Error adding attributes to group:", err);
+      alert("Failed to add attributes to group");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle removing attributes from a group
+  const handleRemoveAttributesFromGroup = async (attributeIds: string[]) => {
+    if (!selectedGroup) return;
+
+    try {
+      setIsLoading(true);
+
+      // Get current attribute IDs
+      const currentAttrIds = selectedGroup.attributes
+        .map((attr) => (typeof attr === "string" ? attr : attr._id))
+        .filter((id): id is string => id !== undefined);
+
+      // Remove specified attributes
+      const updatedAttrIds = currentAttrIds.filter(
+        (id) => !attributeIds.includes(id)
+      );
+
+      // Update group
+      await updateAttributeGroup(selectedGroup._id, {
+        attributes: updatedAttrIds,
+      });
+
+      // Refresh groups
+      const updatedGroups = await findAttributeForGroups();
+      if (Array.isArray(updatedGroups)) {
+        // Update selected group
+        const updatedGroup = updatedGroups.find(
+          (g) => g._id === selectedGroup._id
+        );
+        if (updatedGroup) setSelectedGroup(updatedGroup as Group);
+      }
+
+      alert("Attributes removed from group successfully!");
+    } catch (err) {
+      console.error("Error removing attributes from group:", err);
+      alert("Failed to remove attributes from group");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Get attributes that are not in the selected group
   const availableAttributes = useMemo(() => {
@@ -121,18 +196,18 @@ const GroupManagement: React.FC<GroupManagementProps> = ({
 
   const handleSaveChanges = () => {
     if (selectedAttributes.length > 0) {
-      onAddAttributesToGroup(selectedAttributes);
+      handleAddAttributesToGroup(selectedAttributes);
       setSelectedAttributes([]);
     }
 
     if (attributesToRemove.length > 0) {
-      onRemoveAttributesFromGroup(attributesToRemove);
+      handleRemoveAttributesFromGroup(attributesToRemove);
       setAttributesToRemove([]);
     }
   };
 
   return (
-    <div className="mb-8 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+    <div className="mb-8 p-2 lg:p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
       <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
         Group Management
       </h2>

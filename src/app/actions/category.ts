@@ -295,8 +295,8 @@ export async function find_mapped_attributes_ids(
 
   // Filter each group to only include attributes that are in attributeIds
   const filteredGroups = groups.map((group) => {
-    const filteredAttributes = group.attributes.filter((attr:any) =>
-      attributeIds.some((id:any) => id.toString() === attr._id.toString())
+    const filteredAttributes = group.attributes.filter((attr: any) =>
+      attributeIds.some((id: any) => id.toString() === attr._id.toString())
     );
 
     return {
@@ -308,7 +308,7 @@ export async function find_mapped_attributes_ids(
   return filteredGroups;
 }
 
-// TypeScript-friendly implementation
+// In your category.ts server actions
 export async function find_category_attribute_groups(
   categoryId: string,
   groupId?: string | null
@@ -316,64 +316,72 @@ export async function find_category_attribute_groups(
   if (!categoryId) return [];
   await connection();
 
-  const catObjectId = new Types.ObjectId(categoryId);
+  try {
+    const catObjectId = new Types.ObjectId(categoryId);
 
-  // --- 1) build attributeIds as before (defensive aggregation) ---
-  const categories = await Category.aggregate([
-    { $match: { _id: catObjectId } },
-    {
-      $graphLookup: {
-        from: "categories",
-        startWith: "$parent_id",
-        connectFromField: "parent_id",
-        connectToField: "_id",
-        as: "ancestors",
-      },
-    },
-    {
-      $project: {
-        allAttributes: {
-          $setUnion: [
-            { $ifNull: ["$attributes", []] },
-            {
-              $reduce: {
-                input: {
-                  $map: {
-                    input: { $ifNull: ["$ancestors", []] },
-                    as: "a",
-                    in: { $ifNull: ["$$a.attributes", []] },
-                  },
-                },
-                initialValue: [],
-                in: { $setUnion: ["$$value", "$$this"] },
-              },
-            },
-          ],
+    // Get category and its ancestors with their attributes
+    const categories = await Category.aggregate([
+      { $match: { _id: catObjectId } },
+      {
+        $graphLookup: {
+          from: "categories",
+          startWith: "$parent_id",
+          connectFromField: "parent_id",
+          connectToField: "_id",
+          as: "ancestors",
+          depthField: "depth",
         },
       },
-    },
-  ]);
+      {
+        $project: {
+          allAttributes: {
+            $setUnion: [
+              { $ifNull: ["$attributes", []] },
+              {
+                $reduce: {
+                  input: {
+                    $map: {
+                      input: { $ifNull: ["$ancestors", []] },
+                      as: "a",
+                      in: { $ifNull: ["$$a.attributes", []] },
+                    },
+                  },
+                  initialValue: [],
+                  in: { $setUnion: ["$$value", "$$this"] },
+                },
+              },
+            ],
+          },
+        },
+      },
+    ]);
 
-  const attributeIds = Array.isArray(categories?.[0]?.allAttributes)
-    ? categories[0].allAttributes
-    : [];
-  if (attributeIds.length === 0) return [];
+    const attributeIds = Array.isArray(categories?.[0]?.allAttributes)
+      ? categories[0].allAttributes
+      : [];
 
-  if (groupId) {
-    const group = await AttributeGroup.find({
-      _id: new mongoose.Types.ObjectId(groupId),
+    if (attributeIds.length === 0) return [];
+
+    // Find groups and populate only the attributes that are in attributeIds
+    const groups = await AttributeGroup.find({
       attributes: { $in: attributeIds },
     })
-      .populate("attributes") // populate attributes here
+      .populate({
+        path: "attributes",
+        match: { _id: { $in: attributeIds } }, // This ensures only mapped attributes are populated
+      })
       .lean();
-    return buildGroupTreeWithValues([group[0]]);
+
+    // Filter out groups with no matching attributes after population
+    const filteredGroups = groups.filter((group) =>
+      group.attributes.some((attr: any) =>
+        attributeIds.some((id: any) => id.equals(attr._id))
+      )
+    );
+
+    return buildGroupTreeWithValues(filteredGroups);
+  } catch (error) {
+    console.error("Error finding category attribute groups:", error);
+    return [];
   }
-
-  const groups = await AttributeGroup.find({
-    attributes: { $in: attributeIds },
-  })
-    .populate("attributes") // populate attributes here
-    .lean();
-
-  return buildGroupTreeWithValues(groups);
 }

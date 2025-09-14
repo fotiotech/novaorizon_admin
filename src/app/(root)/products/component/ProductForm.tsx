@@ -6,9 +6,15 @@ import { persistor, RootState } from "@/app/store/store";
 import { addProduct, clearProduct } from "@/app/store/slices/productSlice";
 import { find_category_attribute_groups } from "@/app/actions/category";
 import { updateProduct, createProduct } from "@/app/actions/products";
-import router from "next/router";
-import { v4 as uuidv4, validate, version } from "uuid";
-import { Box, CircularProgress, Alert } from "@mui/material";
+import { useRouter } from "next/navigation";
+import {
+  Box,
+  CircularProgress,
+  Alert,
+  Stepper,
+  Step,
+  StepLabel,
+} from "@mui/material";
 import CollabsibleSection from "@/components/products/CollabsibleSection";
 import { AttributeField } from "@/components/products/AttributeFields";
 import ManageRelatedProduct from "../../../../components/products/ManageRelatedProduct";
@@ -34,10 +40,12 @@ export type GroupNode = {
 
 const ProductForm = () => {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const productState = useAppSelector((state: RootState) => state.product);
   const productId = productState.allIds[0];
   const product = productState.byId[productId] || {};
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingAttributes, setIsFetchingAttributes] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
@@ -47,7 +55,6 @@ const ProductForm = () => {
   const clearStoreAndRedirect = async () => {
     try {
       setRedirecting(true);
-      await persistor.purge();
       dispatch(clearProduct());
       router.push("/products");
     } catch (err) {
@@ -57,29 +64,43 @@ const ProductForm = () => {
     }
   };
 
+  // In your ProductForm component
   useEffect(() => {
     const fetchAttributes = async () => {
+      if (!product.category_id) {
+        setTopLevelGroups([]);
+        return;
+      }
+
       try {
-        setIsLoading(true);
+        setIsFetchingAttributes(true);
         setError(null);
         const resp = await find_category_attribute_groups(product.category_id);
         const allGroups = resp as unknown as GroupNode[];
 
+        // Additional filtering to ensure only groups with attributes are shown
+        const groupsWithAttributes = allGroups.filter(
+          (group) => group.attributes && group.attributes.length > 0
+        );
+
         // Filter top-level groups (no parent_id)
-        const topGroups = allGroups.filter((group) => !group.parent_id);
+        const topGroups = groupsWithAttributes.filter(
+          (group) => !group.parent_id
+        );
+        console.log("All groups:", allGroups);
+        console.log("Groups with attributes:", groupsWithAttributes);
+        console.log("Top groups:", topGroups);
         setTopLevelGroups(topGroups);
       } catch (err) {
         console.error("Error fetching attributes:", err);
         setError("Failed to load product attributes. Please try again.");
       } finally {
-        setIsLoading(false);
+        setIsFetchingAttributes(false);
       }
     };
 
-    if (product.category_id) {
-      fetchAttributes();
-    }
-  }, [product.category_id, productId, dispatch]);
+    fetchAttributes();
+  }, [product.category_id]);
 
   const handleNext = () => {
     if (currentStep < topLevelGroups.length - 1) {
@@ -106,14 +127,16 @@ const ProductForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const isLocalId = validate(productId) && version(productId) === 4;
+    // Check if we have a valid product ID (not a temporary UUID)
+    const isNewProduct = !productId || productId.startsWith("temp-");
+
     try {
       setIsLoading(true);
       setError(null);
       setSuccess(null);
 
       let res;
-      if (!isLocalId) {
+      if (!isNewProduct) {
         res = await updateProduct(productId, product);
       } else {
         res = await createProduct({
@@ -124,8 +147,8 @@ const ProductForm = () => {
 
       if (res.success) {
         setSuccess(
-          isLocalId
-            ? "Product submitted successfully!"
+          isNewProduct
+            ? "Product created successfully!"
             : "Product updated successfully!"
         );
         // Small delay to show success message before redirect
@@ -156,37 +179,33 @@ const ProductForm = () => {
     );
   }
 
-  function renderGroup(group: any, isChild = false) {
+  function renderGroup(group: GroupNode, isChild = false) {
     const { _id, code, name, attributes, children } = group;
 
     const renderGroupContent = () => {
       switch (code) {
         case "variants_options":
           return (
-            <>
-              <VariantsManager
-                productId={productId}
-                product={product}
-                attributes={attributes}
-              />
-            </>
+            <VariantsManager
+              productId={productId}
+              product={product}
+              attributes={attributes}
+            />
           );
 
-        case "related_products":
+        case "product_relationships":
           return (
-            <>
-              <ManageRelatedProduct
-                id={productId}
-                product={product}
-                attribute={attributes}
-              />
-            </>
+            <ManageRelatedProduct
+              id={productId}
+              product={product}
+              attribute={attributes}
+            />
           );
 
         default:
           return (
             <>
-              {attributes.map((a: any) => (
+              {attributes.map((a) => (
                 <div key={a?._id} className="">
                   <AttributeField
                     productId={productId}
@@ -202,31 +221,67 @@ const ProductForm = () => {
     };
 
     return (
-      <section key={_id} className="mb-3">
-        {/* <CollabsibleSection name={name}> */}
+      <section key={_id} className="mb-2">
         <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
         <div className="flex flex-col gap-4">
           {renderGroupContent()}
-
           {children?.length > 0 &&
-            children.map((child: any) => renderGroup(child))}
+            children.map((child) => renderGroup(child, true))}
         </div>
-        {/* </CollabsibleSection> */}
       </section>
+    );
+  }
+
+  if (!product.category_id) {
+    return (
+      <div className="flex flex-col max-w-3xl bg-white mx-auto p-4 rounded-lg">
+        <Alert severity="warning">
+          Please select a category first to load product attributes.
+        </Alert>
+      </div>
     );
   }
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col max-w-3xl bg-white mx-auto  p-2 lg:p-4 rounded-lg"
+      className="flex flex-col max-w-4xl bg-white mx-auto p-4 rounded-lg"
     >
       <div className="flex-1">
         {error && !success && <Alert severity="error">{error}</Alert>}
         {success && !error && <Alert severity="success">{success}</Alert>}
 
-        {/* Render only current step's group */}
-        {topLevelGroups.length > 0 && renderGroup(topLevelGroups[currentStep])}
+        {isFetchingAttributes ? (
+          <Box
+            display="flex"
+            justifyContent="center"
+            alignItems="center"
+            minHeight="200px"
+          >
+            <CircularProgress />
+          </Box>
+        ) : topLevelGroups.length > 0 ? (
+          <>
+            {/* Stepper */}
+            <Stepper
+              activeStep={currentStep}
+              className="mb-6 w-full overflow-auto"
+            >
+              {topLevelGroups.map((group, index) => (
+                <Step key={group._id}>
+                  <StepLabel>{group.name}</StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+
+            {/* Render only current step's group */}
+            {renderGroup(topLevelGroups[currentStep])}
+          </>
+        ) : (
+          <Alert severity="info">
+            No attribute groups found for this category.
+          </Alert>
+        )}
       </div>
       <button type="submit" style={{ display: "none" }} aria-hidden="true" />
       {/* Step Navigation */}
@@ -261,7 +316,7 @@ const ProductForm = () => {
             </button>
           ) : (
             <button
-              type="button" // Changed from "submit" to "button"
+              type="button"
               onClick={handleSubmit}
               disabled={isLoading || redirecting}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
