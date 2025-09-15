@@ -7,6 +7,7 @@ import {
   Assignment,
   BarChart,
   Category,
+  Chat,
   CheckCircle,
   CollectionsBookmark,
   Dashboard,
@@ -85,6 +86,7 @@ const menuConfig: MenuSection[] = [
     title: "Orders",
     links: [
       { name: "Orders", href: "/orders", icon: <ShoppingBag /> },
+      { name: "Chat", href: "/chat", icon: <Chat /> },
       { name: "Reviews", href: "/reviews", icon: <CheckCircle /> },
       { name: "Returns", href: "/returns", icon: <Replay /> },
     ],
