@@ -15,6 +15,8 @@ interface FieldProps {
   option?: any[];
   handleAttributeChange: (code: string, value: any) => void;
   productId?: string;
+  unit?: string; // Add unit prop
+  isRequired?: boolean; // Add isRequired prop
 }
 
 const Fields: React.FC<FieldProps> = ({
@@ -25,6 +27,8 @@ const Fields: React.FC<FieldProps> = ({
   option = [],
   handleAttributeChange,
   productId,
+  unit, // Destructure unit
+  isRequired, // Destructure isRequired
 }) => {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +91,20 @@ const Fields: React.FC<FieldProps> = ({
     }),
   };
 
+  // Helper function to render input with unit
+  const renderInputWithUnit = (input: JSX.Element) => {
+    if (!unit) return input;
+
+    return (
+      <div className="relative">
+        {input}
+        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400">
+          {unit}
+        </span>
+      </div>
+    );
+  };
+
   const renderField = () => {
     switch (type) {
       case "file":
@@ -110,15 +128,17 @@ const Fields: React.FC<FieldProps> = ({
         return null;
 
       case "text":
-        return (
+        const textInput = (
           <input
             type="text"
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
             value={field || ""}
             placeholder={`Enter ${name}`}
             onChange={(e) => handleAttributeChange(code, e.target.value)}
+            required={isRequired}
           />
         );
+        return renderInputWithUnit(textInput);
 
       case "textarea":
         return (
@@ -127,11 +147,12 @@ const Fields: React.FC<FieldProps> = ({
             value={field || ""}
             placeholder={`Enter ${name}`}
             onChange={(e) => handleAttributeChange(code, e.target.value)}
+            required={isRequired}
           />
         );
 
       case "number":
-        return (
+        const numberInput = (
           <input
             type="number"
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
@@ -140,8 +161,10 @@ const Fields: React.FC<FieldProps> = ({
             onChange={(e) =>
               handleAttributeChange(code, Number(e.target.value))
             }
+            required={isRequired}
           />
         );
+        return renderInputWithUnit(numberInput);
 
       case "select":
         if (code === "brand") {
@@ -161,6 +184,7 @@ const Fields: React.FC<FieldProps> = ({
               styles={customSelectStyles}
               className="react-select-container"
               classNamePrefix="react-select"
+              required={isRequired}
             />
           );
         }
@@ -185,6 +209,7 @@ const Fields: React.FC<FieldProps> = ({
             styles={customSelectStyles}
             className="react-select-container"
             classNamePrefix="react-select"
+            required={isRequired}
           />
         );
 
@@ -211,6 +236,11 @@ const Fields: React.FC<FieldProps> = ({
                         : [];
                       handleAttributeChange(code, newVals);
                     }}
+                    required={
+                      isRequired && option.length > 0
+                        ? field?.length === 0
+                        : false
+                    }
                   />
                   <div
                     className={`w-5 h-5 border rounded-md mr-3 flex-shrink-0 flex items-center justify-center ${
@@ -252,6 +282,7 @@ const Fields: React.FC<FieldProps> = ({
                 className="sr-only"
                 checked={!!field}
                 onChange={(e) => handleAttributeChange(code, e.target.checked)}
+                required={isRequired}
               />
               <div
                 className={`w-11 h-6 rounded-full ${
@@ -285,6 +316,7 @@ const Fields: React.FC<FieldProps> = ({
                     value={opt}
                     checked={field === opt}
                     onChange={() => handleAttributeChange(code, opt)}
+                    required={isRequired}
                   />
                   <div
                     className={`w-5 h-5 border rounded-full mr-3 flex-shrink-0 flex items-center justify-center ${
@@ -305,15 +337,17 @@ const Fields: React.FC<FieldProps> = ({
         );
 
       case "date":
-        return (
+        const dateInput = (
           <input
             title="date"
             type="date"
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
             value={field || ""}
             onChange={(e) => handleAttributeChange(code, e.target.value)}
+            required={isRequired}
           />
         );
+        return renderInputWithUnit(dateInput);
 
       case "color":
         return (
@@ -324,23 +358,29 @@ const Fields: React.FC<FieldProps> = ({
               className="h-10 w-10 p-0 border rounded-lg cursor-pointer"
               value={field || "#000000"}
               onChange={(e) => handleAttributeChange(code, e.target.value)}
+              required={isRequired}
             />
             <span className="text-gray-700 dark:text-gray-300 font-mono">
               {field || "#000000"}
             </span>
+            {unit && (
+              <span className="text-gray-500 dark:text-gray-400">{unit}</span>
+            )}
           </div>
         );
 
       case "url":
-        return (
+        const urlInput = (
           <input
             title="url"
             type="url"
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
             value={field || ""}
             onChange={(e) => handleAttributeChange(code, e.target.value)}
+            required={isRequired}
           />
         );
+        return renderInputWithUnit(urlInput);
 
       case "multi-select":
         return (
@@ -361,19 +401,22 @@ const Fields: React.FC<FieldProps> = ({
             styles={customSelectStyles}
             className="react-select-container"
             classNamePrefix="react-select"
+            required={isRequired}
           />
         );
 
       default:
-        return (
+        const defaultInput = (
           <input
             type="text"
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
             value={field || ""}
             placeholder={`Enter ${name}`}
             onChange={(e) => handleAttributeChange(code, e.target.value)}
+            required={isRequired}
           />
         );
+        return renderInputWithUnit(defaultInput);
     }
   };
 
@@ -381,6 +424,13 @@ const Fields: React.FC<FieldProps> = ({
     <div className="mb-5">
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {name}
+
+        {unit && (
+          <span className="text-gray-500 dark:text-gray-400 ml-2">
+            ({unit})
+          </span>
+        )}
+        {isRequired && <span className="text-red-500 ml-1">*</span>}
       </label>
       <div>{renderField()}</div>
       {error && (

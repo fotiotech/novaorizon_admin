@@ -2,14 +2,15 @@
 
 import { connection } from "@/utils/connection";
 import Attribute from "@/models/Attribute";
-import AttributeGroup from "@/models/AttributesGroup";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 
 // Add TypeScript interfaces
 interface AttributeFormData {
   codes: string[];
+  units: string[];
   names: string[];
+  isRequired: boolean[];
   sort_orders: number[];
   option?: string[][];
   type: string[];
@@ -17,30 +18,32 @@ interface AttributeFormData {
 
 interface AttributeUpdateParams {
   code: string;
+  unit: string;
   name: string;
+  isRequired: boolean;
   sort_order: number;
-  option?: string | string[]; // ← allow both
-  type: string | string[];
+  option?: string[];
+  type: string;
 }
 
 // Function to fetch category attributes and values
 export async function findAttributesAndValues(id?: string) {
   try {
-    connection();
-    // Build the base query—either find() or findOne({_id: id})
-    let query = id ? Attribute.findOne({ _id: id }) : Attribute.find();
+    await connection();
 
-    // Populate only `groupId` and select specific fields, then return plain objects
+    let query = id ? Attribute.findOne({ _id: id }) : Attribute.find();
     const response = await query.lean();
 
     return response;
   } catch (error) {
     console.error("Error in findAttributesAndValues:", error);
+    throw new Error("Failed to fetch attributes");
   }
 }
 
 export async function createAttribute(formData: AttributeFormData) {
-  const { codes, names, sort_orders, option, type } = formData;
+  const { codes, units, names, isRequired, sort_orders, option, type } =
+    formData;
 
   if (!Array.isArray(names) || names.length === 0) {
     throw new Error("Missing required fields");
@@ -55,6 +58,7 @@ export async function createAttribute(formData: AttributeFormData) {
     for (let i = 0; i < len; i++) {
       const rawCode = (codes[i] || "").trim();
       const rawName = (names[i] || "").trim();
+      const rawUnit = (units[i] || "").trim();
 
       if (!rawCode) throw new Error(`Invalid attribute code at idx ${i}`);
       if (!rawName) throw new Error(`Invalid attribute name at idx ${i}`);
@@ -63,12 +67,15 @@ export async function createAttribute(formData: AttributeFormData) {
         .map((o: string) => o.trim())
         .filter(Boolean);
       const attrType = (type[i] || "text").trim();
+      const attrIsRequired = Boolean(isRequired[i]);
       const attrSortOrder = sort_orders[i] || 0;
 
       const filter = { code: rawCode };
       const update = {
         $set: {
           name: rawName,
+          unit: rawUnit,
+          isRequired: attrIsRequired,
           option: optionsArr,
           type: attrType,
           sort_order: attrSortOrder,
@@ -83,7 +90,7 @@ export async function createAttribute(formData: AttributeFormData) {
     }
 
     revalidatePath("/admin/attributes");
-    return attributes;
+    return { success: true, attributes };
   } catch (error) {
     console.error("Error in createAttribute:", error);
     throw new Error("Failed to create attributes: " + (error as Error).message);
@@ -101,29 +108,16 @@ export async function updateAttribute(
 
     // Handle option normalization
     if (params.option !== undefined) {
-      if (Array.isArray(params.option)) {
-        optionsArr = params.option.map((o) => o.trim()).filter(Boolean);
-      } else if (typeof params.option === "string") {
-        optionsArr = params.option
-          .split(",")
-          .map((o) => o.trim())
-          .filter(Boolean);
-      }
-    }
-
-    // Normalize type to string
-    let typeStr: string;
-    if (Array.isArray(params.type)) {
-      typeStr = params.type.join(",").trim();
-    } else {
-      typeStr = params.type.trim();
+      optionsArr = params.option.map((o) => o.trim()).filter(Boolean);
     }
 
     const updateData = {
       code: params.code.trim(),
+      unit: params.unit.trim(),
       name: params.name.trim(),
+      isRequired: params.isRequired,
       option: optionsArr,
-      type: typeStr,
+      type: params.type.trim(),
       sort_order: params.sort_order,
     };
 
@@ -138,7 +132,7 @@ export async function updateAttribute(
     }
 
     revalidatePath("/admin/attributes");
-    return updated;
+    return { success: true, attribute: updated };
   } catch (err) {
     console.error("Error in updateAttribute:", err);
     throw err;
@@ -159,7 +153,13 @@ export async function deleteAttribute(code: string) {
 
       await Attribute.findByIdAndDelete(attribute._id).session(session);
     });
+
+    revalidatePath("/admin/attributes");
+    return { success: true };
+  } catch (error) {
+    console.error("Error in deleteAttribute:", error);
+    throw new Error("Failed to delete attribute");
   } finally {
-    session.endSession();
+    await session.endSession();
   }
 }

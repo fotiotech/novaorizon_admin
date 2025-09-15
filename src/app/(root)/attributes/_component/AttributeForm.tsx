@@ -12,18 +12,31 @@ export type AttributeType = {
   _id?: string;
   id?: string;
   code: string;
+  unit: string;
   name: string;
   option?: string | string[];
+  isRequired?: boolean;
   type: string;
   sort_order: number;
 };
 
 interface AttributeFormProps {
-  attributeId?: string; // Only receive ID for updates
+  attributeId?: string;
   onSuccess: () => void;
   onCancel?: () => void;
-  mode?: "create" | "edit"; // Explicit mode control
+  mode?: "create" | "edit";
 }
+
+// Define a form data type for better type safety
+type AttributeFormData = {
+  code: string;
+  unit: string;
+  name: string;
+  type: string;
+  option: string;
+  isRequired: boolean;
+  sort_order: number;
+};
 
 const AttributeForm: React.FC<AttributeFormProps> = ({
   attributeId,
@@ -31,22 +44,30 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
   onCancel,
   mode = "create",
 }) => {
-  const [formData, setFormData] = useState<any[]>([
-    { code: "", name: "", type: "text", option: "", sort_order: 0 },
+  const [formData, setFormData] = useState<AttributeFormData[]>([
+    {
+      code: "",
+      unit: "",
+      name: "",
+      type: "text",
+      option: "",
+      isRequired: false,
+      sort_order: 0,
+    },
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(mode === "edit");
+  const isEditing = mode === "edit";
 
   // Fetch attribute data if in edit mode
   useEffect(() => {
     const fetchAttributeData = async () => {
-      if (mode === "edit" && attributeId) {
+      if (isEditing && attributeId) {
         try {
           setIsLoading(true);
           const attributes = await findAttributesAndValues();
           const attribute = (attributes as unknown as AttributeType[]).find(
-            (attr) => attr._id === attributeId
+            (attr) => attr._id === attributeId || attr.id === attributeId
           );
 
           if (attribute) {
@@ -58,9 +79,11 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
             setFormData([
               {
                 code: attribute.code || "",
+                unit: attribute.unit || "",
                 name: attribute.name || "",
                 type: attribute.type || "text",
                 option: optionString,
+                isRequired: attribute.isRequired || false,
                 sort_order: attribute.sort_order || 0,
               },
             ]);
@@ -77,24 +100,19 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
     };
 
     fetchAttributeData();
-  }, [attributeId, mode]);
+  }, [attributeId, isEditing]);
 
   const handleInputChange = (
     index: number,
-    field: keyof AttributeType,
-    value: string | number
+    field: keyof AttributeFormData,
+    value: string | number | boolean
   ) => {
     setFormData((prev) =>
       prev.map((attr, i) =>
         i === index
           ? {
               ...attr,
-              code: field === "code" ? (value as string) : attr.code,
-              name: field === "name" ? (value as string) : attr.name,
-              option: field === "option" ? (value as string) : attr.option,
-              type: field === "type" ? (value as string) : attr.type,
-              sort_order:
-                field === "sort_order" ? Number(value) : attr.sort_order,
+              [field]: value,
             }
           : attr
       )
@@ -102,16 +120,24 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
   };
 
   const addAttributeField = () => {
-    if (isEditing) return; // Don't add fields in edit mode
+    if (isEditing) return;
 
     setFormData((prev) => [
       ...prev,
-      { code: "", name: "", option: "", type: "text", sort_order: 0 },
+      {
+        code: "",
+        unit: "",
+        name: "",
+        type: "text",
+        option: "",
+        isRequired: false,
+        sort_order: 0,
+      },
     ]);
   };
 
   const removeAttributeField = (index: number) => {
-    if (isEditing) return; // Don't remove fields in edit mode
+    if (isEditing) return;
 
     if (formData.length > 1) {
       setFormData((prev) => prev.filter((_, i) => i !== index));
@@ -126,11 +152,11 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
     try {
       // Validate form data
       const invalidAttributes = formData.filter(
-        (attr) => !attr.name.trim() || !attr.type.trim()
+        (attr) => !attr.name.trim() || !attr.type.trim() || !attr.code.trim()
       );
 
       if (invalidAttributes.length > 0) {
-        setError("Name and type are required for all attributes");
+        setError("Name, code, and type are required for all attributes");
         setIsLoading(false);
         return;
       }
@@ -140,9 +166,15 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
         const attributeData = {
           code: formData[0].code.trim(),
           name: formData[0].name.trim(),
+          unit: formData[0].unit.trim(),
           sort_order: formData[0].sort_order,
-          option: formData[0].option?.split(",") || [],
-          type: formData[0].type.trim() || "text",
+          option:
+            formData[0].option
+              ?.split(",")
+              .map((opt) => opt.trim())
+              .filter((opt) => opt) || [],
+          isRequired: formData[0].isRequired,
+          type: formData[0].type.trim(),
         };
 
         await updateAttribute(attributeId, attributeData);
@@ -150,14 +182,16 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
         // Create new attributes
         const attributeData = {
           codes: formData.map((attr) => attr.code.trim()),
+          units: formData.map((attr) => attr.unit.trim()),
           names: formData.map((attr) => attr.name.trim()),
+          isRequired: formData.map((attr) => attr.isRequired),
           sort_orders: formData.map((attr) => attr.sort_order),
           option: formData.map(
-            (attr: any) =>
+            (attr) =>
               attr.option
                 ?.split(",")
-                .map((opt: any) => opt.trim())
-                .filter((opt: any) => opt) || []
+                .map((opt) => opt.trim())
+                .filter((opt) => opt) || []
           ),
           type: formData.map((attr) => (attr.type.trim() ? attr.type : "text")),
         };
@@ -179,7 +213,15 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       onCancel();
     } else {
       setFormData([
-        { code: "", name: "", type: "text", option: "", sort_order: 0 },
+        {
+          code: "",
+          unit: "",
+          name: "",
+          type: "text",
+          option: "",
+          isRequired: false,
+          sort_order: 0,
+        },
       ]);
       setError(null);
     }
@@ -250,6 +292,20 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
                   required
                 />
               </div>
+              <div>
+                <label htmlFor={`unit-${index}`} className="block mb-1 text-sm">
+                  Unit:
+                </label>
+                <input
+                  id={`unit-${index}`}
+                  type="text"
+                  value={attr.unit}
+                  onChange={(e) =>
+                    handleInputChange(index, "unit", e.target.value)
+                  }
+                  className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+                />
+              </div>
 
               <div>
                 <label
@@ -263,7 +319,11 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
                   type="number"
                   value={attr.sort_order}
                   onChange={(e) =>
-                    handleInputChange(index, "sort_order", e.target.value)
+                    handleInputChange(
+                      index,
+                      "sort_order",
+                      Number(e.target.value)
+                    )
                   }
                   className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
                   min="0"
@@ -283,6 +343,24 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
                   }
                   className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
                   required
+                />
+              </div>
+
+              <div className="flex items-center">
+                <label
+                  htmlFor={`isRequired-${index}`}
+                  className="block mb-1 text-sm mr-2"
+                >
+                  Is required:
+                </label>
+                <input
+                  id={`isRequired-${index}`}
+                  type="checkbox"
+                  checked={attr.isRequired}
+                  onChange={(e) =>
+                    handleInputChange(index, "isRequired", e.target.checked)
+                  }
+                  className="w-4 h-4 rounded-lg bg-[#eee] dark:bg-sec-dark"
                 />
               </div>
 
@@ -325,7 +403,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
                   <input
                     id={`option-${index}`}
                     type="text"
-                    value={attr.option as string}
+                    value={attr.option}
                     onChange={(e) =>
                       handleInputChange(index, "option", e.target.value)
                     }

@@ -14,6 +14,7 @@ import {
   Stepper,
   Step,
   StepLabel,
+  Snackbar,
 } from "@mui/material";
 import CollabsibleSection from "@/components/products/CollabsibleSection";
 import { AttributeField } from "@/components/products/AttributeFields";
@@ -26,6 +27,8 @@ export type AttributeDetail = {
   name: string;
   option?: string[];
   type: string;
+  isRequired?: boolean;
+  unit?: string;
 };
 
 export type GroupNode = {
@@ -51,6 +54,10 @@ const ProductForm = () => {
   const [redirecting, setRedirecting] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [topLevelGroups, setTopLevelGroups] = useState<GroupNode[]>([]);
+  const [validationErrors, setValidationErrors] = useState<{
+    [key: string]: string[];
+  }>({});
+  const [showValidationAlert, setShowValidationAlert] = useState(false);
 
   const clearStoreAndRedirect = async () => {
     try {
@@ -64,7 +71,77 @@ const ProductForm = () => {
     }
   };
 
-  // In your ProductForm component
+  // Validate required fields in a group
+  const validateGroup = (group: GroupNode): string[] => {
+    const errors: string[] = [];
+
+    group.attributes.forEach((attr) => {
+      if (attr.isRequired) {
+        const value = product[attr.code];
+
+        // Check if value is empty based on type
+        if (
+          value === undefined ||
+          value === null ||
+          value === "" ||
+          (Array.isArray(value) && value.length === 0)
+        ) {
+          errors.push(`${attr.name} is required`);
+        }
+      }
+    });
+
+    // Recursively validate child groups
+    if (group.children && group.children.length > 0) {
+      group.children.forEach((child) => {
+        errors.push(...validateGroup(child));
+      });
+    }
+
+    return errors;
+  };
+
+  // Validate all groups before submission
+  const validateAllGroups = (): boolean => {
+    const allErrors: { [key: string]: string[] } = {};
+    let hasErrors = false;
+
+    topLevelGroups.forEach((group) => {
+      const groupErrors = validateGroup(group);
+      if (groupErrors.length > 0) {
+        allErrors[group._id] = groupErrors;
+        hasErrors = true;
+      }
+    });
+
+    setValidationErrors(allErrors);
+    return !hasErrors;
+  };
+
+  // Validate current step before navigation
+  const validateCurrentStep = (): boolean => {
+    if (currentStep >= topLevelGroups.length) return true;
+
+    const currentGroup = topLevelGroups[currentStep];
+    const errors = validateGroup(currentGroup);
+
+    if (errors.length > 0) {
+      setValidationErrors({
+        ...validationErrors,
+        [currentGroup._id]: errors,
+      });
+      setShowValidationAlert(true);
+      return false;
+    }
+
+    // Clear errors for this group if validation passes
+    const newErrors = { ...validationErrors };
+    delete newErrors[currentGroup._id];
+    setValidationErrors(newErrors);
+
+    return true;
+  };
+
   useEffect(() => {
     const fetchAttributes = async () => {
       if (!product.category_id) {
@@ -87,9 +164,6 @@ const ProductForm = () => {
         const topGroups = groupsWithAttributes.filter(
           (group) => !group.parent_id
         );
-        console.log("All groups:", allGroups);
-        console.log("Groups with attributes:", groupsWithAttributes);
-        console.log("Top groups:", topGroups);
         setTopLevelGroups(topGroups);
       } catch (err) {
         console.error("Error fetching attributes:", err);
@@ -103,7 +177,7 @@ const ProductForm = () => {
   }, [product.category_id]);
 
   const handleNext = () => {
-    if (currentStep < topLevelGroups.length - 1) {
+    if (validateCurrentStep() && currentStep < topLevelGroups.length - 1) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -122,10 +196,46 @@ const ProductForm = () => {
         value,
       })
     );
+
+    // Clear validation error for this field if it exists
+    const currentGroup = topLevelGroups[currentStep];
+    if (currentGroup && validationErrors[currentGroup._id]) {
+      const attr = currentGroup.attributes.find((a) => a.code === field);
+      if (attr && attr.isRequired) {
+        const newErrors = { ...validationErrors };
+        const groupErrors = newErrors[currentGroup._id].filter(
+          (error) => !error.startsWith(attr.name)
+        );
+
+        if (groupErrors.length === 0) {
+          delete newErrors[currentGroup._id];
+        } else {
+          newErrors[currentGroup._id] = groupErrors;
+        }
+
+        setValidationErrors(newErrors);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate all required fields before submission
+    if (!validateAllGroups()) {
+      // Find the first step with errors and navigate to it
+      const firstErrorStep = topLevelGroups.findIndex(
+        (group) =>
+          validationErrors[group._id] && validationErrors[group._id].length > 0
+      );
+
+      if (firstErrorStep !== -1) {
+        setCurrentStep(firstErrorStep);
+        setShowValidationAlert(true);
+      }
+
+      return;
+    }
 
     // Check if we have a valid product ID (not a temporary UUID)
     const isNewProduct = !productId || productId.startsWith("temp-");
@@ -181,6 +291,7 @@ const ProductForm = () => {
 
   function renderGroup(group: GroupNode, isChild = false) {
     const { _id, code, name, attributes, children } = group;
+    const groupErrors = validationErrors[_id] || [];
 
     const renderGroupContent = () => {
       switch (code) {
@@ -215,6 +326,16 @@ const ProductForm = () => {
                   />
                 </div>
               ))}
+              {/* Show validation errors for this group */}
+              {groupErrors.length > 0 && (
+                <Alert severity="error" className="mt-4">
+                  <ul className="list-disc pl-4">
+                    {groupErrors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              )}
             </>
           );
       }
@@ -243,95 +364,113 @@ const ProductForm = () => {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex flex-col max-w-4xl bg-white mx-auto p-4 rounded-lg"
-    >
-      <div className="flex-1">
-        {error && !success && <Alert severity="error">{error}</Alert>}
-        {success && !error && <Alert severity="success">{success}</Alert>}
+    <>
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col max-w-4xl bg-white mx-auto p-4 rounded-lg"
+      >
+        <div className="flex-1">
+          {error && !success && <Alert severity="error">{error}</Alert>}
+          {success && !error && <Alert severity="success">{success}</Alert>}
 
-        {isFetchingAttributes ? (
-          <Box
-            display="flex"
-            justifyContent="center"
-            alignItems="center"
-            minHeight="200px"
-          >
-            <CircularProgress />
-          </Box>
-        ) : topLevelGroups.length > 0 ? (
-          <>
-            {/* Stepper */}
-            <Stepper
-              activeStep={currentStep}
-              className="mb-6 w-full overflow-auto"
+          {isFetchingAttributes ? (
+            <Box
+              display="flex"
+              justifyContent="center"
+              alignItems="center"
+              minHeight="200px"
             >
-              {topLevelGroups.map((group, index) => (
-                <Step key={group._id}>
-                  <StepLabel>{group.name}</StepLabel>
-                </Step>
-              ))}
-            </Stepper>
+              <CircularProgress />
+            </Box>
+          ) : topLevelGroups.length > 0 ? (
+            <>
+              {/* Stepper */}
+              <Stepper
+                activeStep={currentStep}
+                className="mb-6 w-full overflow-auto"
+              >
+                {topLevelGroups.map((group, index) => (
+                  <Step key={group._id}>
+                    <StepLabel
+                      error={
+                        validationErrors[group._id] &&
+                        validationErrors[group._id].length > 0
+                      }
+                    >
+                      {group.name}
+                    </StepLabel>
+                  </Step>
+                ))}
+              </Stepper>
 
-            {/* Render only current step's group */}
-            {renderGroup(topLevelGroups[currentStep])}
-          </>
-        ) : (
-          <Alert severity="info">
-            No attribute groups found for this category.
-          </Alert>
-        )}
-      </div>
-      <button type="submit" style={{ display: "none" }} aria-hidden="true" />
-      {/* Step Navigation */}
-      <div className="flex justify-between mt-6 items-center">
-        <div>
-          <button
-            type="button"
-            onClick={clearStoreAndRedirect}
-            className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded transition mr-4"
-          >
-            Cancel
-          </button>
-          {currentStep > 0 && (
-            <button
-              type="button"
-              onClick={handlePrev}
-              className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded transition"
-            >
-              Previous
-            </button>
-          )}
-        </div>
-
-        <div>
-          {currentStep < topLevelGroups.length - 1 ? (
-            <button
-              type="button"
-              onClick={handleNext}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition"
-            >
-              Next
-            </button>
+              {/* Render only current step's group */}
+              {renderGroup(topLevelGroups[currentStep])}
+            </>
           ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isLoading || redirecting}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
-            >
-              {isLoading ? "Saving..." : "Save Product"}
-            </button>
+            <Alert severity="info">
+              No attribute groups found for this category.
+            </Alert>
           )}
         </div>
-      </div>
+        <button type="submit" style={{ display: "none" }} aria-hidden="true" />
+        {/* Step Navigation */}
+        <div className="flex justify-between mt-6 items-center">
+          <div>
+            <button
+              type="button"
+              onClick={clearStoreAndRedirect}
+              className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded transition mr-4"
+            >
+              Cancel
+            </button>
+            {currentStep > 0 && (
+              <button
+                type="button"
+                onClick={handlePrev}
+                className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded transition"
+              >
+                Previous
+              </button>
+            )}
+          </div>
 
-      {/* Step Indicator */}
-      <div className="mt-4 text-center text-sm text-gray-500">
-        Step {currentStep + 1} of {topLevelGroups.length}
-      </div>
-    </form>
+          <div>
+            {currentStep < topLevelGroups.length - 1 ? (
+              <button
+                type="button"
+                onClick={handleNext}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition"
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={isLoading || redirecting}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
+              >
+                {isLoading ? "Saving..." : "Save Product"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Step Indicator */}
+        <div className="mt-4 text-center text-sm text-gray-500">
+          Step {currentStep + 1} of {topLevelGroups.length}
+        </div>
+      </form>
+
+      {/* Validation Alert */}
+      <Snackbar
+        open={showValidationAlert}
+        autoHideDuration={6000}
+        onClose={() => setShowValidationAlert(false)}
+        message="Please fill in all required fields before proceeding"
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
+    </>
   );
 };
 

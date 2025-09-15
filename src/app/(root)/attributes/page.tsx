@@ -14,6 +14,7 @@ type AttributeType = {
   _id?: string;
   id?: string;
   code: string;
+  unit: string;
   name: string;
   option?: string | string[];
   type: string;
@@ -143,7 +144,6 @@ const Attributes = () => {
       {/* Attributes List */}
       {!showForm && !editingAttributeId && (
         <div>
-          <h3 className="font-bold text-lg mb-4">Attributes List</h3>
           <div className="my-3 flex md:flex-row gap-2 items-center">
             <input
               type="text"
@@ -188,6 +188,9 @@ const Attributes = () => {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="font-medium">Code:</span> {attr.code}
+                  </div>
+                  <div>
+                    <span className="font-medium">unit:</span> {attr.unit}
                   </div>
                   <div>
                     <span className="font-medium">Type:</span> {attr.type}
