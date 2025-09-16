@@ -369,6 +369,10 @@ export async function find_category_attribute_groups(
       .populate({
         path: "attributes",
         match: { _id: { $in: attributeIds } }, // This ensures only mapped attributes are populated
+        populate: {
+          path: "unitFamily", // This will populate the unitFamily field
+          model: "UnitFamily", // Specify the model to populate from
+        },
       })
       .lean();
 

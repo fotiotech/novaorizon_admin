@@ -3,7 +3,7 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 // Attribute Interface
 interface IAttribute extends Document {
   code: string;
-  unit: string;
+  unitFamily?: mongoose.Types.ObjectId;
   isRequired: boolean;
   name: string;
   sort_order: number;
@@ -30,8 +30,9 @@ const AttributeSchema = new Schema<IAttribute>({
     unique: true,
     required: [true, "Attribute code is required"],
   },
-  unit: {
-    type: String,
+  unitFamily: {
+    type: Schema.Types.ObjectId,
+    ref: "unitFamily",
   },
   isRequired: {
     type: Boolean,

@@ -264,10 +264,11 @@ export default function AdminOverview() {
                   {overviewData?.orders.total || 0}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  ${overviewData?.orders.revenue?.toFixed(2) || "0.00"} revenue
+                  cfa {overviewData?.orders.revenue?.toFixed(2) || "0.00"}{" "}
+                  revenue
                 </p>
                 <p className="text-sm text-green-600 mt-1">
-                  $
+                  cfa{" "}
                   {overviewData?.orders.averageOrderValue?.toFixed(2) || "0.00"}{" "}
                   avg. order
                 </p>

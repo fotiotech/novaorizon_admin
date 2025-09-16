@@ -84,11 +84,11 @@ export default function Order() {
         </div>
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-2">Total Revenue</h2>
-          <p className="text-3xl">${analytics.totalRevenue.toFixed(2)}</p>
+          <p className="text-3xl">cfa {analytics.totalRevenue.toFixed(2)}</p>
         </div>
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-2">Average Order Value</h2>
-          <p className="text-3xl">${analytics.averageOrderValue.toFixed(2)}</p>
+          <p className="text-3xl">cfa {analytics.averageOrderValue.toFixed(2)}</p>
         </div>
       </div>
 
@@ -133,7 +133,7 @@ export default function Order() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">{order.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    ${order.total.toFixed(2)}
+                    cfa {order.total.toFixed(2)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span

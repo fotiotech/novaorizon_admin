@@ -2,13 +2,14 @@
 
 import { connection } from "@/utils/connection";
 import Attribute from "@/models/Attribute";
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { revalidatePath } from "next/cache";
+import { ObjectId } from "mongodb";
 
 // Add TypeScript interfaces
 interface AttributeFormData {
   codes: string[];
-  units: string[];
+  unitFamilies: string[];
   names: string[];
   isRequired: boolean[];
   sort_orders: number[];
@@ -18,7 +19,7 @@ interface AttributeFormData {
 
 interface AttributeUpdateParams {
   code: string;
-  unit: string;
+  unitFamily: string;
   name: string;
   isRequired: boolean;
   sort_order: number;
@@ -42,7 +43,7 @@ export async function findAttributesAndValues(id?: string) {
 }
 
 export async function createAttribute(formData: AttributeFormData) {
-  const { codes, units, names, isRequired, sort_orders, option, type } =
+  const { codes, unitFamilies, names, isRequired, sort_orders, option, type } =
     formData;
 
   if (!Array.isArray(names) || names.length === 0) {
@@ -58,7 +59,7 @@ export async function createAttribute(formData: AttributeFormData) {
     for (let i = 0; i < len; i++) {
       const rawCode = (codes[i] || "").trim();
       const rawName = (names[i] || "").trim();
-      const rawUnit = (units[i] || "").trim();
+      const rawUnitFamily = new Types.ObjectId(unitFamilies[i] || "");
 
       if (!rawCode) throw new Error(`Invalid attribute code at idx ${i}`);
       if (!rawName) throw new Error(`Invalid attribute name at idx ${i}`);
@@ -74,7 +75,7 @@ export async function createAttribute(formData: AttributeFormData) {
       const update = {
         $set: {
           name: rawName,
-          unit: rawUnit,
+          unitFamily: rawUnitFamily,
           isRequired: attrIsRequired,
           option: optionsArr,
           type: attrType,
@@ -113,7 +114,7 @@ export async function updateAttribute(
 
     const updateData = {
       code: params.code.trim(),
-      unit: params.unit.trim(),
+      unitFamily: new Types.ObjectId(params.unitFamily),
       name: params.name.trim(),
       isRequired: params.isRequired,
       option: optionsArr,

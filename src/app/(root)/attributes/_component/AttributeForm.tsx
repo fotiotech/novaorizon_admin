@@ -6,14 +6,14 @@ import {
   updateAttribute,
   findAttributesAndValues,
 } from "@/app/actions/attributes";
-import { getUnits } from "@/app/actions/unit"; // Import your unit actions
+import { getUnitFamilies } from "@/app/actions/unitFamilyActions"; // Import unit family actions
 import { Delete, Edit, Save, Cancel, Add } from "@mui/icons-material";
 
 export type AttributeType = {
   _id?: string;
   id?: string;
   code: string;
-  unit: string;
+  unitFamily: string; // Changed from unit to unitFamily
   name: string;
   option?: string | string[];
   isRequired?: boolean;
@@ -30,7 +30,7 @@ interface AttributeFormProps {
 
 type AttributeFormData = {
   code: string;
-  unit: string;
+  unitFamily: string; // Changed from unit to unitFamily
   name: string;
   type: string;
   option: string;
@@ -38,13 +38,11 @@ type AttributeFormData = {
   sort_order: number;
 };
 
-interface Unit {
+interface UnitFamily {
   _id: string;
   name: string;
-  symbol: string;
-  unitFamily: string | { name: string };
-  conversionFactor: number;
-  isBaseUnit: boolean;
+  description?: string;
+  baseUnit: string;
 }
 
 const AttributeForm: React.FC<AttributeFormProps> = ({
@@ -56,7 +54,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
   const [formData, setFormData] = useState<AttributeFormData[]>([
     {
       code: "",
-      unit: "",
+      unitFamily: "", // Changed from unit to unitFamily
       name: "",
       type: "text",
       option: "",
@@ -64,28 +62,28 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       sort_order: 0,
     },
   ]);
-  const [units, setUnits] = useState<Unit[]>([]); // State for units
+  const [unitFamilies, setUnitFamilies] = useState<UnitFamily[]>([]); // State for unit families
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingUnits, setIsLoadingUnits] = useState(true); // Loading state for units
+  const [isLoadingFamilies, setIsLoadingFamilies] = useState(true); // Loading state for unit families
   const [error, setError] = useState<string | null>(null);
   const isEditing = mode === "edit";
 
-  // Fetch units from your Unit Management system
+  // Fetch unit families from your Unit Management system
   useEffect(() => {
-    const fetchUnits = async () => {
+    const fetchUnitFamilies = async () => {
       try {
-        setIsLoadingUnits(true);
-        const unitsData = await getUnits();
-        setUnits(unitsData);
+        setIsLoadingFamilies(true);
+        const familiesData = await getUnitFamilies();
+        setUnitFamilies(familiesData);
       } catch (err) {
-        console.error("Error fetching units:", err);
-        setError("Failed to load units");
+        console.error("Error fetching unit families:", err);
+        setError("Failed to load unit families");
       } finally {
-        setIsLoadingUnits(false);
+        setIsLoadingFamilies(false);
       }
     };
 
-    fetchUnits();
+    fetchUnitFamilies();
   }, []);
 
   // Fetch attribute data if in edit mode
@@ -107,7 +105,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
             setFormData([
               {
                 code: attribute.code || "",
-                unit: attribute.unit || "",
+                unitFamily: attribute.unitFamily || "", // Changed from unit to unitFamily
                 name: attribute.name || "",
                 type: attribute.type || "text",
                 option: optionString,
@@ -154,7 +152,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       ...prev,
       {
         code: "",
-        unit: "",
+        unitFamily: "", // Changed from unit to unitFamily
         name: "",
         type: "text",
         option: "",
@@ -192,7 +190,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
         const attributeData = {
           code: formData[0].code.trim(),
           name: formData[0].name.trim(),
-          unit: formData[0].unit.trim(),
+          unitFamily: formData[0].unitFamily.trim(), // Changed from unit to unitFamily
           sort_order: formData[0].sort_order,
           option:
             formData[0].option
@@ -207,7 +205,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       } else {
         const attributeData = {
           codes: formData.map((attr) => attr.code.trim()),
-          units: formData.map((attr) => attr.unit.trim()),
+          unitFamilies: formData.map((attr) => attr.unitFamily.trim()), // Changed from units to unitFamilies
           names: formData.map((attr) => attr.name.trim()),
           isRequired: formData.map((attr) => attr.isRequired),
           sort_orders: formData.map((attr) => attr.sort_order),
@@ -240,7 +238,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       setFormData([
         {
           code: "",
-          unit: "",
+          unitFamily: "", // Changed from unit to unitFamily
           name: "",
           type: "text",
           option: "",
@@ -319,26 +317,29 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
               </div>
 
               <div>
-                <label htmlFor={`unit-${index}`} className="block mb-1 text-sm">
-                  Unit:
+                <label
+                  htmlFor={`unitFamily-${index}`}
+                  className="block mb-1 text-sm"
+                >
+                  Unit Family:
                 </label>
-                {isLoadingUnits ? (
+                {isLoadingFamilies ? (
                   <div className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark">
-                    Loading units...
+                    Loading unit families...
                   </div>
                 ) : (
                   <select
-                    id={`unit-${index}`}
-                    value={attr.unit}
+                    id={`unitFamily-${index}`}
+                    value={attr.unitFamily}
                     onChange={(e) =>
-                      handleInputChange(index, "unit", e.target.value)
+                      handleInputChange(index, "unitFamily", e.target.value)
                     }
                     className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
                   >
-                    <option value="">Select a unit</option>
-                    {units.map((unit) => (
-                      <option key={unit._id} value={unit.symbol}>
-                        {unit.name} ({unit.symbol})
+                    <option value="">Select a unit family</option>
+                    {unitFamilies.map((family) => (
+                      <option key={family._id} value={family._id}>
+                        {family.name} (Base: {family.baseUnit})
                       </option>
                     ))}
                   </select>
