@@ -4,6 +4,7 @@ import {
   deleteAttribute,
   findAttributesAndValues,
 } from "@/app/actions/attributes";
+import { getUnits } from "@/app/actions/unit"; // Import your unit actions
 import { Delete, Edit } from "@mui/icons-material";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
@@ -26,8 +27,18 @@ interface Option {
   label: string;
 }
 
+interface Unit {
+  _id: string;
+  name: string;
+  symbol: string;
+  unitFamily: string | { name: string };
+  conversionFactor: number;
+  isBaseUnit: boolean;
+}
+
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]); // State for units
   const [editingAttributeId, setEditingAttributeId] = useState<string | null>(
     null
   );
@@ -38,9 +49,11 @@ const Attributes = () => {
     label: "A → Z",
   });
   const [showForm, setShowForm] = useState(false);
+  const [isLoadingUnits, setIsLoadingUnits] = useState(true); // Loading state for units
 
   useEffect(() => {
     fetchAttributes();
+    fetchUnits(); // Fetch units when component mounts
   }, []);
 
   const fetchAttributes = async () => {
@@ -55,6 +68,20 @@ const Attributes = () => {
       setError(
         err instanceof Error ? err.message : "Failed to load attributes"
       );
+    }
+  };
+
+  // Fetch units from your Unit Management system
+  const fetchUnits = async () => {
+    try {
+      setIsLoadingUnits(true);
+      const unitsData = await getUnits();
+      setUnits(unitsData);
+    } catch (err) {
+      console.error("Error fetching units:", err);
+      setError("Failed to load units");
+    } finally {
+      setIsLoadingUnits(false);
     }
   };
 
@@ -110,17 +137,27 @@ const Attributes = () => {
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
 
+  // Function to get unit details by symbol
+  const getUnitDetails = (symbol: string) => {
+    const unit = units.find((u) => u.symbol === symbol);
+    return unit ? `${unit.name} (${unit.symbol})` : symbol;
+  };
+
   return (
     <div className="max-w-7xl mx-auto lg:px-8 w-full text-text">
       <div className="flex justify-between items-center">
         <h2 className="font-bold text-xl my-2">Attributes</h2>
         <div className="flex gap-2">
-          <Link href={"/attributes/group"} className="p-2 font-semibold">
-            + Group
-          </Link>
           <button onClick={handleNewAttribute} className="p-2 font-semibold">
             + Attribute
           </button>
+          <Link href={"/attributes/group"} className="p-2 font-semibold">
+            + Group
+          </Link>
+          {/* Update the unit link to point to your Unit Management page */}
+          <Link href={"/attributes/unit"} className="p-2 font-semibold">
+            + Unit
+          </Link>
         </div>
       </div>
 
@@ -160,6 +197,10 @@ const Attributes = () => {
             />
           </div>
 
+          {isLoadingUnits && (
+            <div className="text-center py-4">Loading units...</div>
+          )}
+
           <ul className="grid gap-4 max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600">
             {visibleAttributes.map((attr) => (
               <li
@@ -190,7 +231,8 @@ const Attributes = () => {
                     <span className="font-medium">Code:</span> {attr.code}
                   </div>
                   <div>
-                    <span className="font-medium">unit:</span> {attr.unit}
+                    <span className="font-medium">Unit:</span>{" "}
+                    {getUnitDetails(attr.unit)}
                   </div>
                   <div>
                     <span className="font-medium">Type:</span> {attr.type}

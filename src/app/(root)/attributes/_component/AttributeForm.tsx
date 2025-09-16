@@ -6,6 +6,7 @@ import {
   updateAttribute,
   findAttributesAndValues,
 } from "@/app/actions/attributes";
+import { getUnits } from "@/app/actions/unit"; // Import your unit actions
 import { Delete, Edit, Save, Cancel, Add } from "@mui/icons-material";
 
 export type AttributeType = {
@@ -27,7 +28,6 @@ interface AttributeFormProps {
   mode?: "create" | "edit";
 }
 
-// Define a form data type for better type safety
 type AttributeFormData = {
   code: string;
   unit: string;
@@ -37,6 +37,15 @@ type AttributeFormData = {
   isRequired: boolean;
   sort_order: number;
 };
+
+interface Unit {
+  _id: string;
+  name: string;
+  symbol: string;
+  unitFamily: string | { name: string };
+  conversionFactor: number;
+  isBaseUnit: boolean;
+}
 
 const AttributeForm: React.FC<AttributeFormProps> = ({
   attributeId,
@@ -55,9 +64,29 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       sort_order: 0,
     },
   ]);
+  const [units, setUnits] = useState<Unit[]>([]); // State for units
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingUnits, setIsLoadingUnits] = useState(true); // Loading state for units
   const [error, setError] = useState<string | null>(null);
   const isEditing = mode === "edit";
+
+  // Fetch units from your Unit Management system
+  useEffect(() => {
+    const fetchUnits = async () => {
+      try {
+        setIsLoadingUnits(true);
+        const unitsData = await getUnits();
+        setUnits(unitsData);
+      } catch (err) {
+        console.error("Error fetching units:", err);
+        setError("Failed to load units");
+      } finally {
+        setIsLoadingUnits(false);
+      }
+    };
+
+    fetchUnits();
+  }, []);
 
   // Fetch attribute data if in edit mode
   useEffect(() => {
@@ -71,7 +100,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
           );
 
           if (attribute) {
-            // Convert options array to comma-separated string if needed
             const optionString = Array.isArray(attribute.option)
               ? attribute.option.join(",")
               : attribute.option || "";
@@ -150,7 +178,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
     setError(null);
 
     try {
-      // Validate form data
       const invalidAttributes = formData.filter(
         (attr) => !attr.name.trim() || !attr.type.trim() || !attr.code.trim()
       );
@@ -162,7 +189,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       }
 
       if (isEditing && attributeId) {
-        // Update existing attribute
         const attributeData = {
           code: formData[0].code.trim(),
           name: formData[0].name.trim(),
@@ -179,7 +205,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
 
         await updateAttribute(attributeId, attributeData);
       } else {
-        // Create new attributes
         const attributeData = {
           codes: formData.map((attr) => attr.code.trim()),
           units: formData.map((attr) => attr.unit.trim()),
@@ -292,19 +317,32 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
                   required
                 />
               </div>
+
               <div>
                 <label htmlFor={`unit-${index}`} className="block mb-1 text-sm">
                   Unit:
                 </label>
-                <input
-                  id={`unit-${index}`}
-                  type="text"
-                  value={attr.unit}
-                  onChange={(e) =>
-                    handleInputChange(index, "unit", e.target.value)
-                  }
-                  className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
-                />
+                {isLoadingUnits ? (
+                  <div className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark">
+                    Loading units...
+                  </div>
+                ) : (
+                  <select
+                    id={`unit-${index}`}
+                    value={attr.unit}
+                    onChange={(e) =>
+                      handleInputChange(index, "unit", e.target.value)
+                    }
+                    className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+                  >
+                    <option value="">Select a unit</option>
+                    {units.map((unit) => (
+                      <option key={unit._id} value={unit.symbol}>
+                        {unit.name} ({unit.symbol})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
