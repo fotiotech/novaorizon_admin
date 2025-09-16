@@ -58,6 +58,7 @@ const ProductForm = () => {
     [key: string]: string[];
   }>({});
   const [showValidationAlert, setShowValidationAlert] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const clearStoreAndRedirect = async () => {
     try {
@@ -221,6 +222,14 @@ const ProductForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Only submit if we're on the last step
+    if (currentStep !== topLevelGroups.length - 1) {
+      handleNext();
+      return;
+    }
+
+    setIsSubmitting(true);
+
     // Validate all required fields before submission
     if (!validateAllGroups()) {
       // Find the first step with errors and navigate to it
@@ -234,6 +243,7 @@ const ProductForm = () => {
         setShowValidationAlert(true);
       }
 
+      setIsSubmitting(false);
       return;
     }
 
@@ -273,6 +283,7 @@ const ProductForm = () => {
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -366,7 +377,7 @@ const ProductForm = () => {
   return (
     <>
       <form
-        onSubmit={handleSubmit}
+        // onSubmit={handleSubmit}
         className="flex flex-col max-w-4xl bg-white mx-auto p-4 rounded-lg"
       >
         <div className="flex-1">
@@ -412,7 +423,7 @@ const ProductForm = () => {
             </Alert>
           )}
         </div>
-        <button type="submit" style={{ display: "none" }} aria-hidden="true" />
+
         {/* Step Navigation */}
         <div className="flex justify-between mt-6 items-center">
           <div>
@@ -446,11 +457,11 @@ const ProductForm = () => {
             ) : (
               <button
                 type="button"
-                onClick={handleNext}
-                disabled={isLoading || redirecting}
+                onClick={handleSubmit}
+                disabled={isLoading || redirecting || isSubmitting}
                 className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
               >
-                {isLoading ? "Saving..." : "Save Product"}
+                {isLoading || isSubmitting ? "Saving..." : "Save Product"}
               </button>
             )}
           </div>
