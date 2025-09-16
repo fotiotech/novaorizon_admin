@@ -137,6 +137,8 @@ const Attributes = () => {
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
 
+  console.log({ visibleAttributes });
+
   // Function to get unit details by symbol
   const getUnitDetails = (symbol: string) => {
     const unit = units.find((u) => u.symbol === symbol);
@@ -148,14 +150,20 @@ const Attributes = () => {
       <div className="flex justify-between items-center">
         <h2 className="font-bold text-xl my-2">Attributes</h2>
         <div className="flex gap-2">
-          <button onClick={handleNewAttribute} className="p-2 font-semibold">
+          <button
+            onClick={handleNewAttribute}
+            className="p-2 font-semibold text-sm"
+          >
             + Attribute
           </button>
-          <Link href={"/attributes/group"} className="p-2 font-semibold">
+          <Link
+            href={"/attributes/group"}
+            className="p-2 font-semibold text-sm"
+          >
             + Group
           </Link>
           {/* Update the unit link to point to your Unit Management page */}
-          <Link href={"/attributes/unit"} className="p-2 font-semibold">
+          <Link href={"/attributes/unit"} className="p-2 font-semibold text-sm">
             + Unit
           </Link>
         </div>

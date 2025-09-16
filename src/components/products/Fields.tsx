@@ -98,7 +98,7 @@ const Fields: React.FC<FieldProps> = ({
     return (
       <div className="relative">
         {input}
-        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400">
+        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600 dark:text-gray-400">
           {unit}
         </span>
       </div>
@@ -426,7 +426,7 @@ const Fields: React.FC<FieldProps> = ({
         {name}
 
         {unit && (
-          <span className="text-gray-500 dark:text-gray-400 ml-2">
+          <span className="text-gray-600 dark:text-gray-600 ml-2">
             ({unit})
           </span>
         )}
