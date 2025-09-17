@@ -163,6 +163,7 @@ export const useFileUploader = (
     files,
     loading,
     addFiles,
+    setFiles,
     removeFile,
     clearFiles,
     progressByName,

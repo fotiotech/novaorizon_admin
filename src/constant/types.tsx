@@ -86,8 +86,6 @@ export type Product = {
   updated_at?: string; // Timestamp when the product was last updated
 };
 
-
-
 export type Shipping = {
   ShippingCost: number;
   orderId: number;
@@ -190,15 +188,17 @@ export type ProductsFiles = {
   size: string;
 };
 
-export type HeroSection = {
+// types/hero.ts
+export interface HeroSection {
   _id?: string;
   title: string;
-  description?: string;
-  imageUrl?: string[];
-  cta_text?: string;
+  description: string;
+  imageUrl?: string;
+  cta_text: string;
   cta_link: string;
   created_at?: string;
-};
+  updated_at?: string;
+}
 
 export type Customer = {
   _id: string;

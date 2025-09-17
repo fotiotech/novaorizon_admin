@@ -15,7 +15,6 @@ const Category = () => {
     _id ? products.byId[_id]?.category_id || "" : ""
   );
 
-  // Fetch categories based on selected parent
   useEffect(() => {
     dispatch(fetchCategory(null, category_id || null, null));
   }, [category_id, dispatch]);
@@ -30,9 +29,8 @@ const Category = () => {
         value: category_id,
       })
     );
-  }, [dispatch, category_id]);
+  }, [dispatch, category_id, _id]);
 
-  // Memoize filtered categories for performance
   const filteredCategories = useMemo(() => {
     return category.allIds.filter((idx) => {
       const categoryData = category.byId[idx];

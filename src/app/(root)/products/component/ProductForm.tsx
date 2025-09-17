@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { persistor, RootState } from "@/app/store/store";
+import { RootState } from "@/app/store/store";
 import { addProduct, clearProduct } from "@/app/store/slices/productSlice";
 import { find_category_attribute_groups } from "@/app/actions/category";
 import { updateProduct, createProduct } from "@/app/actions/products";
@@ -16,7 +16,6 @@ import {
   StepLabel,
   Snackbar,
 } from "@mui/material";
-import CollabsibleSection from "@/components/products/CollabsibleSection";
 import { AttributeField } from "@/components/products/AttributeFields";
 import ManageRelatedProduct from "../../../../components/products/ManageRelatedProduct";
 import VariantsManager from "@/components/products/variants/VariantOption";
@@ -72,7 +71,6 @@ const ProductForm = () => {
     }
   };
 
-  // Validate required fields in a group
   const validateGroup = (group: GroupNode): string[] => {
     const errors: string[] = [];
 
@@ -80,7 +78,6 @@ const ProductForm = () => {
       if (attr.isRequired) {
         const value = product[attr.code];
 
-        // Check if value is empty based on type
         if (
           value === undefined ||
           value === null ||
@@ -92,7 +89,6 @@ const ProductForm = () => {
       }
     });
 
-    // Recursively validate child groups
     if (group.children && group.children.length > 0) {
       group.children.forEach((child) => {
         errors.push(...validateGroup(child));
@@ -102,7 +98,6 @@ const ProductForm = () => {
     return errors;
   };
 
-  // Validate all groups before submission
   const validateAllGroups = (): boolean => {
     const allErrors: { [key: string]: string[] } = {};
     let hasErrors = false;
@@ -119,7 +114,6 @@ const ProductForm = () => {
     return !hasErrors;
   };
 
-  // Validate current step before navigation
   const validateCurrentStep = (): boolean => {
     if (currentStep >= topLevelGroups.length) return true;
 
@@ -135,7 +129,6 @@ const ProductForm = () => {
       return false;
     }
 
-    // Clear errors for this group if validation passes
     const newErrors = { ...validationErrors };
     delete newErrors[currentGroup._id];
     setValidationErrors(newErrors);
@@ -156,12 +149,10 @@ const ProductForm = () => {
         const resp = await find_category_attribute_groups(product.category_id);
         const allGroups = resp as unknown as GroupNode[];
 
-        // Additional filtering to ensure only groups with attributes are shown
         const groupsWithAttributes = allGroups.filter(
           (group) => group.attributes && group.attributes.length > 0
         );
 
-        // Filter top-level groups (no parent_id)
         const topGroups = groupsWithAttributes.filter(
           (group) => !group.parent_id
         );
@@ -198,7 +189,6 @@ const ProductForm = () => {
       })
     );
 
-    // Clear validation error for this field if it exists
     const currentGroup = topLevelGroups[currentStep];
     if (currentGroup && validationErrors[currentGroup._id]) {
       const attr = currentGroup.attributes.find((a) => a.code === field);
@@ -222,7 +212,6 @@ const ProductForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Only submit if we're on the last step
     if (currentStep !== topLevelGroups.length - 1) {
       handleNext();
       return;
@@ -230,9 +219,7 @@ const ProductForm = () => {
 
     setIsSubmitting(true);
 
-    // Validate all required fields before submission
     if (!validateAllGroups()) {
-      // Find the first step with errors and navigate to it
       const firstErrorStep = topLevelGroups.findIndex(
         (group) =>
           validationErrors[group._id] && validationErrors[group._id].length > 0
@@ -247,7 +234,6 @@ const ProductForm = () => {
       return;
     }
 
-    // Check if we have a valid product ID (not a temporary UUID)
     const isNewProduct = !productId || productId.startsWith("temp-");
 
     try {
@@ -259,10 +245,7 @@ const ProductForm = () => {
       if (!isNewProduct) {
         res = await updateProduct(productId, product);
       } else {
-        res = await createProduct({
-          category_id: product.category_id,
-          ...product,
-        } as any);
+        res = await createProduct(product as any);
       }
 
       if (res.success) {
@@ -271,7 +254,6 @@ const ProductForm = () => {
             ? "Product created successfully!"
             : "Product updated successfully!"
         );
-        // Small delay to show success message before redirect
         setTimeout(() => {
           clearStoreAndRedirect();
         }, 1000);
@@ -337,7 +319,6 @@ const ProductForm = () => {
                   />
                 </div>
               ))}
-              {/* Show validation errors for this group */}
               {groupErrors.length > 0 && (
                 <Alert severity="error" className="mt-4">
                   <ul className="list-disc pl-4">
@@ -376,10 +357,7 @@ const ProductForm = () => {
 
   return (
     <>
-      <form
-        // onSubmit={handleSubmit}
-        className="flex flex-col max-w-4xl bg-white mx-auto p-4 rounded-lg"
-      >
+      <form className="flex flex-col max-w-4xl bg-white mx-auto p-4 rounded-lg">
         <div className="flex-1">
           {error && !success && <Alert severity="error">{error}</Alert>}
           {success && !error && <Alert severity="success">{success}</Alert>}
@@ -395,7 +373,6 @@ const ProductForm = () => {
             </Box>
           ) : topLevelGroups.length > 0 ? (
             <>
-              {/* Stepper */}
               <Stepper
                 activeStep={currentStep}
                 className="mb-6 w-full overflow-auto"
@@ -414,7 +391,6 @@ const ProductForm = () => {
                 ))}
               </Stepper>
 
-              {/* Render only current step's group */}
               {renderGroup(topLevelGroups[currentStep])}
             </>
           ) : (
@@ -424,7 +400,6 @@ const ProductForm = () => {
           )}
         </div>
 
-        {/* Step Navigation */}
         <div className="flex justify-between mt-6 items-center">
           <div>
             <button
@@ -467,13 +442,11 @@ const ProductForm = () => {
           </div>
         </div>
 
-        {/* Step Indicator */}
         <div className="mt-4 text-center text-sm text-gray-500">
           Step {currentStep + 1} of {topLevelGroups.length}
         </div>
       </form>
 
-      {/* Validation Alert */}
       <Snackbar
         open={showValidationAlert}
         autoHideDuration={6000}

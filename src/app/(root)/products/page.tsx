@@ -71,11 +71,11 @@ export default function ProductDashboard() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const clearStoreAndRedirect = async () => {
+  const clearStore = async () => {
     try {
       await persistor.purge();
       dispatch(clearProduct());
-      dispatch(resetProduct(uuidv4()));
+      dispatch(resetProduct(`temp-${uuidv4()}`));
     } catch (err) {
       console.error("Error during cleanup and redirect:", err);
       setError("Failed to redirect. Please try again.");
@@ -228,7 +228,7 @@ export default function ProductDashboard() {
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4">
           <h1 className="text-3xl font-bold text-gray-800">Products</h1>
-          <div onClick={clearStoreAndRedirect}>
+          <div onClick={clearStore}>
             <Link
               href="/products/new"
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"

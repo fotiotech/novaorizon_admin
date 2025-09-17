@@ -1,6 +1,6 @@
 "use client";
 
-import { updateShipping } from "@/app/actions/shipping";
+import { deleteShipping, updateShipping } from "@/app/actions/shipping";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { updateShippingLocal } from "@/app/store/slices/shippingSlice";
 import { RootState } from "@/app/store/store";
@@ -31,6 +31,12 @@ const STATUS_TRANSITIONS = {
   returned: [],
   completed: [],
   cancelled: [],
+};
+
+const confirmDelete = async (id: string) => {
+  if (window.confirm("Are you sure you want to delete this shipping?")) {
+    await deleteShipping(id).catch(console.error);
+  }
 };
 
 const Shipping = () => {
@@ -283,13 +289,22 @@ const ShippingListItem = React.memo(
             {shipping?.status}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onSelect}
-          className="btn-secondary text-sm py-1 px-3"
-        >
-          {isSelected ? "Selected" : "Select"}
-        </button>
+        <div>
+          <button
+            type="button"
+            onClick={onSelect}
+            className="btn-secondary text-sm py-1 px-3"
+          >
+            {isSelected ? "Selected" : "Select"}
+          </button>
+          <button
+            type="button"
+            onClick={() => confirmDelete(shipping?._id)}
+            className="btn-secondary text-sm py-1 px-3"
+          >
+            Delete
+          </button>
+        </div>
       </div>
     </li>
   )
