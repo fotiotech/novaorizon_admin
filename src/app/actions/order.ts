@@ -3,6 +3,9 @@ import { connection } from "@/utils/connection";
 import Order from "@/models/Order";
 import { revalidatePath } from "next/cache";
 import Shipping from "@/models/Shipping";
+import "@/models/User";
+import Transaction from "@/models/Transaction";
+import { Order as OrderT } from "@/constant/types/finance";
 
 export async function findOrders(orderNumber?: string, userId?: string | null) {
   await connection();
@@ -45,109 +48,188 @@ export async function findOrders(orderNumber?: string, userId?: string | null) {
   }
 }
 
-export async function createOrder(orderNumber: string, data: any) {
+export async function createOrUpdateOrder(
+  payment_ref: string,
+  data: OrderT
+): Promise<{ success: boolean; order?: any; error?: string }> {
   await connection();
 
-  if (!orderNumber || !data) {
-    console.error("Missing order number or data");
-    return null;
+  if (!payment_ref || !data) {
+    console.error("[createOrUpdateOrder] Missing payment_ref or data");
+    return { success: false, error: "Missing payment_ref or data" };
   }
 
+  console.log(
+    `[createOrUpdateOrder] Creating/updating order with orderNumber: ${payment_ref}`
+  );
+
+  // Destructure with defaults
   const {
-    userId,
-    email,
-    firstName,
-    lastName,
-    products,
-    subtotal,
     tax = 0,
     shippingCost = 0,
-    total,
     paymentStatus = "pending",
-    transactionId,
-    paymentMethod,
-    shippingAddress,
     shippingStatus = "pending",
-    shippingDate,
-    deliveryDate,
     orderStatus = "processing",
-    notes,
-    couponCode,
     discount = 0,
+    userId,
+    shippingAddress = {
+      street: "",
+      city: "",
+      region: "",
+      address: "",
+      country: "",
+      carrier: "Novaorizon",
+    },
+    ...rest
   } = data;
 
+  const payload: any = {
+    ...rest,
+    orderNumber: payment_ref,
+    tax,
+    shippingCost,
+    paymentStatus,
+    shippingStatus,
+    orderStatus,
+    discount,
+    userId,
+    shippingAddress: {
+      street: shippingAddress.street || "",
+      region: shippingAddress.region || "",
+      city: shippingAddress.city || "",
+      address: shippingAddress.address || "",
+      carrier: shippingAddress.carrier || "Novaorizon",
+      country: shippingAddress.country || "",
+    },
+  };
+
   try {
-    // Check if an order with the same orderNumber exists
-    const existingOrder = await Order.findOne({ orderNumber });
+    const savedOrder = await Order.findOneAndUpdate(
+      { orderNumber: payment_ref },
+      payload,
+      {
+        upsert: true,
+        new: true,
+        runValidators: true,
+        setDefaultsOnInsert: true,
+      }
+    );
 
-    if (existingOrder) {
-      // Update the existing order
-      const updatedOrder = await Order.findByIdAndUpdate(
-        existingOrder._id,
-        {
-          orderNumber,
-          userId,
-          email,
-          firstName,
-          lastName,
-          products,
-          subtotal,
-          tax,
-          shippingCost,
-          total,
-          paymentStatus,
-          transactionId,
-          paymentMethod,
-          shippingAddress,
-          shippingStatus,
-          shippingDate,
-          deliveryDate,
-          orderStatus,
-          notes,
-          couponCode,
-          discount,
-        },
-        {
-          new: true, // Return the updated document
-          runValidators: true, // Validate fields based on schema
+    console.log(
+      `[createOrUpdateOrder] Order ${savedOrder._id} saved/updated successfully`
+    );
+
+    // Create shipping record for PAID orders
+    if (savedOrder && savedOrder.paymentStatus === "cancelled") {
+      try {
+        const createShipping = new Shipping({
+          orderId: savedOrder._id,
+          userId: savedOrder.userId,
+          address: {
+            street: savedOrder.shippingAddress.street,
+            city: savedOrder.shippingAddress.city,
+            region: savedOrder.shippingAddress.region,
+            address: savedOrder.shippingAddress.address,
+            country: savedOrder.shippingAddress.country,
+            carrier: savedOrder.shippingAddress.carrier || "Novaorizon",
+          },
+          trackingNumber: await generateTrackingNumber(payment_ref),
+          shippingCost: savedOrder.shippingCost || 0,
+          status: "processing",
+        });
+
+        const shippingRes = await createShipping.save();
+        console.log(
+          `Shipping created for order ${savedOrder.orderNumber}:`,
+          shippingRes
+        );
+
+        // Update order with shipping reference
+        await Order.findByIdAndUpdate(savedOrder._id, {
+          shippingId: shippingRes._id,
+        });
+      } catch (shippingError) {
+        console.error(
+          "[createOrUpdateOrder] Error creating shipping:",
+          shippingError
+        );
+        // Don't fail the whole operation if shipping creation fails
+      }
+
+      // Create transaction record for paid orders
+      try {
+        // Check if transaction already exists for this order
+        const existingTransaction = await Transaction.findOne({
+          orderId: savedOrder._id,
+        });
+
+        if (!existingTransaction) {
+          const createTransaction = new Transaction({
+            orderId: savedOrder._id,
+            userId: savedOrder.userId,
+            amount: savedOrder.total,
+            type: "income",
+            description: `Payment for order #${savedOrder.orderNumber}`,
+            status: "completed",
+            paymentMethod: savedOrder.paymentMethod,
+            date: new Date(),
+          });
+
+          const transactionRes = await createTransaction.save();
+          console.log(
+            `Transaction created for order ${savedOrder.orderNumber}:`,
+            transactionRes
+          );
+        } else {
+          // Update existing transaction if needed
+          await Transaction.findByIdAndUpdate(existingTransaction._id, {
+            status: "completed",
+            amount: savedOrder.total,
+          });
+          console.log(
+            `Transaction updated for order ${savedOrder.orderNumber}`
+          );
         }
-      );
-      
-      if (updatedOrder) return true;
-      return null;
-    } else {
-      // Create a new order
-      const newOrder = new Order({
-        orderNumber,
-        userId,
-        email,
-        firstName,
-        lastName,
-        products,
-        subtotal,
-        tax,
-        shippingCost,
-        total,
-        paymentStatus,
-        transactionId,
-        paymentMethod,
-        shippingAddress,
-        shippingStatus,
-        shippingDate,
-        deliveryDate,
-        orderStatus,
-        notes,
-        couponCode,
-        discount,
-      });
-      const savedOrder = await newOrder.save();
-
-      
-      if (savedOrder) return true;
-      return null;
+      } catch (transactionError) {
+        console.error(
+          "[createOrUpdateOrder] Error creating transaction:",
+          transactionError
+        );
+        // Don't fail the whole operation if transaction creation fails
+      }
     }
-  } catch (error: any) {
-    console.error;
+
+    // Handle refunds
+    if (savedOrder && savedOrder.paymentStatus === "refunded") {
+      try {
+        // Create refund transaction
+        const refundTransaction = new Transaction({
+          orderId: savedOrder._id,
+          userId: savedOrder.userId,
+          amount: savedOrder.total,
+          type: "refund",
+          description: `Refund for order #${savedOrder.orderNumber}`,
+          status: "completed",
+          paymentMethod: savedOrder.paymentMethod,
+          date: new Date(),
+        });
+
+        await refundTransaction.save();
+        console.log(
+          `Refund transaction created for order ${savedOrder.orderNumber}`
+        );
+      } catch (refundError) {
+        console.error(
+          "[createOrUpdateOrder] Error creating refund transaction:",
+          refundError
+        );
+      }
+    }
+
+    return { success: true, order: savedOrder };
+  } catch (err: any) {
+    console.error("[createOrUpdateOrder] Error saving order:", err);
+    return { success: false, error: err.message };
   }
 }
 
@@ -174,4 +256,21 @@ export async function deleteOrder(orderNumber: string) {
     console.error("Error deleting order:", error.message);
     return null;
   }
+}
+
+async function generateTrackingNumber(trackingNumber: string): Promise<string> {
+  // Check if this tracking number already exists
+  const existing = await Shipping.findOne({ trackingNumber });
+  if (existing) {
+    // If it exists, generate a new one recursively
+    return trackingNumber;
+  }
+  // Generate a random tracking number (you can customize this as needed)
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+  for (let i = 0; i < 10; i++) {
+    trackingNumber += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  return trackingNumber;
 }

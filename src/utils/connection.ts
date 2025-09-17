@@ -28,10 +28,7 @@ export async function connection() {
     const collections = await mongoose.connection.db
       ?.listCollections()
       .toArray();
-    console.log(
-      "[MongoDB] Available collections:",
-      collections?.map((c) => c.name)
-    );
+    
   } catch (error) {
     console.error("[MongoDB] Connection error:", error);
     // Reset the connection flag since the connection failed

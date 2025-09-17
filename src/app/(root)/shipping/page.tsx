@@ -13,7 +13,7 @@ import "react-toastify/dist/ReactToastify.css";
 // Status options for consistent reference
 const STATUS_OPTIONS = [
   { value: "", label: "All" },
-  { value: "pending", label: "Pending" },
+  { value: "processing", label: "processing" },
   { value: "assigned", label: "Assigned" },
   { value: "in-transit", label: "In Transit" },
   { value: "delivered", label: "Delivered" },
@@ -333,7 +333,7 @@ const ShippingForm = React.memo(
     onReturnClick: () => void;
     isLoading: boolean;
   }) => {
-    const isAssignable = shipping.status === "pending";
+    const isAssignable = shipping.status === "processing";
 
     return (
       <form onSubmit={onSubmit} className="flex flex-col gap-4">

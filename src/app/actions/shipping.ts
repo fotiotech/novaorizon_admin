@@ -3,6 +3,7 @@
 import { connection } from "@/utils/connection";
 import Shipping from "@/models/Shipping";
 import Order from "@/models/Order";
+import "@/models/User";
 
 // Define status transition rules
 const statusTransitions: Record<string, string[]> = {
@@ -36,12 +37,12 @@ export async function getAllShippings() {
 // Update a Shipping entry by ID
 export async function updateShipping(id: string, data: any) {
   await connection();
-  
+
   const shipping = await Shipping.findById(id).exec();
   if (!shipping) {
     return {
       success: false,
-      error: `Shipping entry with ID ${id} not found`
+      error: `Shipping entry with ID ${id} not found`,
     };
   }
 
@@ -51,14 +52,14 @@ export async function updateShipping(id: string, data: any) {
     if (!statusTransitions[shipping.status]?.includes(data.status)) {
       return {
         success: false,
-        error: `Invalid status transition from ${shipping.status} to ${data.status}`
+        error: `Invalid status transition from ${shipping.status} to ${data.status}`,
       };
     }
   }
 
   // Prepare update data
   const updateData: any = { ...data };
-  
+
   // Only add returnReason if status is being changed to returned
   if (data.status === "returned") {
     updateData.returnReason = data.returnReason;
@@ -69,11 +70,10 @@ export async function updateShipping(id: string, data: any) {
 
   try {
     // Update shipping
-    const updatedShipping = await Shipping.findByIdAndUpdate(
-      id, 
-      updateData, 
-      { new: true, runValidators: true }
-    ).exec();
+    const updatedShipping = await Shipping.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    }).exec();
 
     // Update order if status changed
     if (data.status && data.status !== shipping.status) {
@@ -81,7 +81,7 @@ export async function updateShipping(id: string, data: any) {
         shipping.orderId,
         {
           shippingStatus: data.status,
-          ...(data.status === "completed" && { orderStatus: "completed" })
+          ...(data.status === "completed" && { orderStatus: "completed" }),
         },
         { new: true }
       ).exec();
@@ -89,9 +89,9 @@ export async function updateShipping(id: string, data: any) {
 
     return { success: true, data: updatedShipping };
   } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Unknown error occurred" 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
     };
   }
 }

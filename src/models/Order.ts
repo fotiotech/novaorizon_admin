@@ -19,15 +19,23 @@ export interface OrderDocument extends Document {
   tax: number;
   shippingCost: number;
   total: number;
-  paymentStatus: "pending" | "paid" | "failed" | "cancelled";
+  paymentStatus: "pending" | "paid" | "failed" | "cancelled" | "refunded";
   paymentMethod: string;
-  transactionId?: string;
+  transaction_id?: string;
+  billingAddress: {
+    street: string;
+    city: string;
+    region: string;
+    address: string;
+    country: string;
+  };
   shippingAddress: {
     street: string;
     city: string;
-    state: string;
-    postalCode: string;
+    region: string;
+    address: string;
     country: string;
+    carrier?: string;
   };
   shippingStatus: "pending" | "shipped" | "delivered";
   shippingDate?: Date;
@@ -43,6 +51,7 @@ export interface OrderDocument extends Document {
 const OrderSchema = new mongoose.Schema<OrderDocument>(
   {
     orderNumber: { type: String, required: true, unique: true },
+    transaction_id: { type: String },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -69,15 +78,23 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
     total: { type: Number, required: true },
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid", "failed", "cancelled"],
+      enum: ["pending", "paid", "failed", "cancelled", "refunded"],
       default: "pending",
     },
     paymentMethod: { type: String, required: true },
-    shippingAddress: {
+    billingAddress: {
       street: { type: String, required: true },
       city: { type: String, required: true },
-      state: { type: String, required: true },
-      postalCode: { type: String, required: true },
+      region: { type: String, required: true },
+      address: { type: String, required: true },
+      country: { type: String, required: true },
+    },
+    shippingAddress: {
+      street: { type: String, required: true },
+      region: { type: String, required: true },
+      city: { type: String, required: true },
+      address: { type: String, required: true },
+      carrier: { type: String },
       country: { type: String, required: true },
     },
     shippingStatus: {

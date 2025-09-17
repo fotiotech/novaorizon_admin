@@ -94,7 +94,7 @@ const menuConfig: MenuSection[] = [
   {
     title: "Accounting",
     links: [
-      { name: "Payments", href: "/payment", icon: <ShoppingBag /> },
+      { name: "Finance", href: "/finance", icon: <ShoppingBag /> },
       { name: "Invoices", href: "/invoices", icon: <CheckCircle /> },
       { name: "Refunds", href: "/refunds", icon: <Replay /> },
     ],
