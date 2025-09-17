@@ -10,14 +10,55 @@ import React, { useEffect, useState } from "react";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 
+// Define menu types and their properties
+const MENU_TYPES = {
+  NAVIGATION: "navigation",
+  HEADER: "header",
+  SECTION: "section",
+  FOOTER: "footer",
+  CATEGORY: "category",
+  PROMOTIONAL: "promotional",
+} as const;
+
+type MenuType = keyof typeof MENU_TYPES;
+
+interface MenuProperties {
+  // Common properties
+  name: string;
+  description: string;
+  collections: string[];
+  ctaUrl?: string;
+  ctaText?: string;
+
+  // Type-specific properties
+  position?: string; // For header/footer menus
+  columns?: number; // For footer menus
+  maxDepth?: number; // For navigation menus
+  showImages?: boolean; // For category menus
+  backgroundColor?: string; // For promotional menus
+  backgroundImage?: string; // For promotional menus
+  isSticky?: boolean; // For header menus
+  sectionTitle?: string; // For menu sections
+}
+
 const MenuForm = ({ id }: { id?: string }) => {
-  const [menu, setMenu] = useState<MenuData>({
+  const [menu, setMenu] = useState<MenuProperties>({
     name: "",
     description: "",
     collections: [],
     ctaUrl: "",
     ctaText: "",
+    // Default properties based on type
+    position: "top",
+    columns: 4,
+    maxDepth: 2,
+    showImages: false,
+    backgroundColor: "#ffffff",
+    isSticky: false,
+    sectionTitle: "",
   });
+
+  const [menuType, setMenuType] = useState<MenuType>("NAVIGATION");
   const [collections, setCollections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -42,7 +83,28 @@ const MenuForm = ({ id }: { id?: string }) => {
         if (id) {
           const menuResult = await getMenuById(id);
           if (menuResult.success) {
-            setMenu(menuResult.data);
+            const menuData = menuResult.data;
+            setMenu((prev) => ({
+              ...prev,
+              ...menuData,
+              // Ensure all properties exist to avoid undefined errors
+              position: menuData.position || "top",
+              columns: menuData.columns || 4,
+              maxDepth: menuData.maxDepth || 2,
+              showImages: menuData.showImages || false,
+              backgroundColor: menuData.backgroundColor || "#ffffff",
+              backgroundImage: menuData.backgroundImage || "",
+              isSticky: menuData.isSticky || false,
+              sectionTitle: menuData.sectionTitle || "",
+            }));
+
+            // Set menu type if available
+            if (menuData.type) {
+              const typeKey = Object.keys(MENU_TYPES).find(
+                (key) => MENU_TYPES[key as MenuType] === menuData.type
+              ) as MenuType;
+              if (typeKey) setMenuType(typeKey);
+            }
           } else {
             setError(menuResult.error || "Failed to fetch menu");
           }
@@ -59,10 +121,35 @@ const MenuForm = ({ id }: { id?: string }) => {
 
   // Handle form input changes
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
   ) => {
-    const { name, value } = e.target;
-    setMenu((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const val =
+      type === "checkbox" ? (e.target as HTMLInputElement).checked : value;
+
+    setMenu((prev) => ({ ...prev, [name]: val }));
+  };
+
+  // Handle menu type changes
+  const handleMenuTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newType = e.target.value as MenuType;
+    setMenuType(newType);
+
+    // Reset type-specific properties when changing menu type
+    setMenu((prev) => ({
+      ...prev,
+      position:
+        newType === "HEADER" || newType === "FOOTER" ? prev.position : "top",
+      columns: newType === "FOOTER" ? prev.columns : 4,
+      maxDepth: newType === "NAVIGATION" ? prev.maxDepth : 2,
+      showImages: newType === "CATEGORY" ? prev.showImages : false,
+      backgroundColor:
+        newType === "PROMOTIONAL" ? prev.backgroundColor : "#ffffff",
+      isSticky: newType === "HEADER" ? prev.isSticky : false,
+      sectionTitle: newType === "SECTION" ? prev.sectionTitle : "",
+    }));
   };
 
   // Handle collection selection changes
@@ -87,14 +174,20 @@ const MenuForm = ({ id }: { id?: string }) => {
     setSuccess(null);
 
     try {
+      // Prepare menu data with type
+      const menuData: MenuData & Record<string, any> = {
+        ...menu,
+        type: MENU_TYPES[menuType],
+      };
+
       let result;
 
       if (id) {
         // Update existing menu
-        result = await updateMenu(id, menu);
+        result = await updateMenu(id, menuData);
       } else {
         // Create new menu
-        result = await createMenu(menu);
+        result = await createMenu(menuData);
       }
 
       if (result.success) {
@@ -111,7 +204,16 @@ const MenuForm = ({ id }: { id?: string }) => {
             collections: [],
             ctaUrl: "",
             ctaText: "",
+            position: "top",
+            columns: 4,
+            maxDepth: 2,
+            showImages: false,
+            backgroundColor: "#ffffff",
+            backgroundImage: "",
+            isSticky: false,
+            sectionTitle: "",
           });
+          setMenuType("NAVIGATION");
         }
       } else {
         setError(
@@ -156,6 +258,31 @@ const MenuForm = ({ id }: { id?: string }) => {
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Menu Type Selection */}
+        <div>
+          <label
+            htmlFor="menuType"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Menu Type *
+          </label>
+          <select
+            id="menuType"
+            value={menuType}
+            onChange={handleMenuTypeChange}
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="NAVIGATION">Navigation Menu</option>
+            <option value="HEADER">Header Menu</option>
+            <option value="SECTION">Menu Section</option>
+            <option value="FOOTER">Footer Menu</option>
+            <option value="CATEGORY">Category Menu</option>
+            <option value="PROMOTIONAL">Promotional Menu</option>
+          </select>
+        </div>
+
+        {/* Common Properties */}
         <div>
           <label
             htmlFor="name"
@@ -193,6 +320,204 @@ const MenuForm = ({ id }: { id?: string }) => {
           />
         </div>
 
+        {/* Type-Specific Properties */}
+        {menuType === "HEADER" && (
+          <>
+            <div>
+              <label
+                htmlFor="position"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Position
+              </label>
+              <select
+                id="position"
+                name="position"
+                value={menu.position}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="top">Top</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+              </select>
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="isSticky"
+                name="isSticky"
+                checked={menu.isSticky || false}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label
+                htmlFor="isSticky"
+                className="ml-2 block text-sm text-gray-700"
+              >
+                Sticky Menu (remains visible when scrolling)
+              </label>
+            </div>
+          </>
+        )}
+
+        {menuType === "FOOTER" && (
+          <>
+            <div>
+              <label
+                htmlFor="position"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Position
+              </label>
+              <select
+                id="position"
+                name="position"
+                value={menu.position}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="top">Top Section</option>
+                <option value="middle">Middle Section</option>
+                <option value="bottom">Bottom Section</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="columns"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Number of Columns
+              </label>
+              <select
+                id="columns"
+                name="columns"
+                value={menu.columns}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={1}>1 Column</option>
+                <option value={2}>2 Columns</option>
+                <option value={3}>3 Columns</option>
+                <option value={4}>4 Columns</option>
+              </select>
+            </div>
+          </>
+        )}
+
+        {menuType === "NAVIGATION" && (
+          <div>
+            <label
+              htmlFor="maxDepth"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Maximum Menu Depth
+            </label>
+            <select
+              id="maxDepth"
+              name="maxDepth"
+              value={menu.maxDepth}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value={1}>1 Level</option>
+              <option value={2}>2 Levels</option>
+              <option value={3}>3 Levels</option>
+            </select>
+          </div>
+        )}
+
+        {menuType === "CATEGORY" && (
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="showImages"
+              name="showImages"
+              checked={menu.showImages || false}
+              onChange={handleInputChange}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label
+              htmlFor="showImages"
+              className="ml-2 block text-sm text-gray-700"
+            >
+              Show Category Images
+            </label>
+          </div>
+        )}
+
+        {menuType === "PROMOTIONAL" && (
+          <>
+            <div>
+              <label
+                htmlFor="backgroundColor"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Background Color
+              </label>
+              <div className="flex items-center">
+                <input
+                  type="color"
+                  id="backgroundColor"
+                  name="backgroundColor"
+                  value={menu.backgroundColor}
+                  onChange={handleInputChange}
+                  className="h-10 w-10 rounded border border-gray-300"
+                />
+                <input
+                  title="background color"
+                  type="text"
+                  value={menu.backgroundColor}
+                  onChange={handleInputChange}
+                  name="backgroundColor"
+                  className="ml-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="backgroundImage"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Background Image URL
+              </label>
+              <input
+                type="url"
+                id="backgroundImage"
+                name="backgroundImage"
+                value={menu.backgroundImage || ""}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter background image URL"
+              />
+            </div>
+          </>
+        )}
+
+        {menuType === "SECTION" && (
+          <div>
+            <label
+              htmlFor="sectionTitle"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Section Title
+            </label>
+            <input
+              type="text"
+              id="sectionTitle"
+              name="sectionTitle"
+              value={menu.sectionTitle || ""}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter section title"
+            />
+          </div>
+        )}
+
+        {/* Common Properties Continued */}
         <div>
           <label
             htmlFor="collections"
@@ -231,7 +556,7 @@ const MenuForm = ({ id }: { id?: string }) => {
             type="text"
             id="ctaText"
             name="ctaText"
-            value={menu.ctaText}
+            value={menu.ctaText || ""}
             onChange={handleInputChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Enter call-to-action text"
@@ -249,7 +574,7 @@ const MenuForm = ({ id }: { id?: string }) => {
             type="url"
             id="ctaUrl"
             name="ctaUrl"
-            value={menu.ctaUrl}
+            value={menu.ctaUrl || ""}
             onChange={handleInputChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Enter call-to-action URL"

@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
@@ -13,9 +13,31 @@ interface Menu {
   collections: any[];
   ctaUrl: string;
   ctaText: string;
+  type: string;
+  position?: string;
+  columns?: number;
+  maxDepth?: number;
+  showImages?: boolean;
+  backgroundColor?: string;
+  backgroundImage?: string;
+  isSticky?: boolean;
+  sectionTitle?: string;
   createdAt: string;
   updatedAt: string;
 }
+
+// Helper function to format menu type for display
+const formatMenuType = (type: string) => {
+  const typeMap: Record<string, string> = {
+    navigation: "Navigation",
+    header: "Header",
+    section: "Section",
+    footer: "Footer",
+    category: "Category",
+    promotional: "Promotional",
+  };
+  return typeMap[type] || type;
+};
 
 const MenuPage = () => {
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -182,6 +204,12 @@ const MenuPage = () => {
                     scope="col"
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
+                    Type
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Description
                   </th>
                   <th
@@ -189,6 +217,12 @@ const MenuPage = () => {
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
                     Collections
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Properties
                   </th>
                   <th
                     scope="col"
@@ -217,6 +251,11 @@ const MenuPage = () => {
                         </div>
                       )}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {formatMenuType(menu.type)}
+                      </div>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900 max-w-xs truncate">
                         {menu.description || "No description"}
@@ -225,6 +264,40 @@ const MenuPage = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
                         {menu.collections?.length || 0} collections
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-500">
+                        {menu.type === "header" && menu.position && (
+                          <div>Position: {menu.position}</div>
+                        )}
+                        {menu.type === "header" && menu.isSticky && (
+                          <div>Sticky: Yes</div>
+                        )}
+                        {menu.type === "footer" && menu.columns && (
+                          <div>Columns: {menu.columns}</div>
+                        )}
+                        {menu.type === "navigation" && menu.maxDepth && (
+                          <div>Max Depth: {menu.maxDepth}</div>
+                        )}
+                        {menu.type === "category" && menu.showImages && (
+                          <div>Show Images: Yes</div>
+                        )}
+                        {menu.type === "promotional" &&
+                          menu.backgroundColor && (
+                            <div className="flex items-center">
+                              Color:
+                              <span
+                                className="inline-block w-4 h-4 ml-1 rounded-full border border-gray-300"
+                                style={{
+                                  backgroundColor: menu.backgroundColor,
+                                }}
+                              ></span>
+                            </div>
+                          )}
+                        {menu.type === "section" && menu.sectionTitle && (
+                          <div>Title: {menu.sectionTitle}</div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

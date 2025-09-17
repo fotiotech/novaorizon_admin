@@ -33,6 +33,7 @@ const AttributeSchema = new Schema<IAttribute>({
   unitFamily: {
     type: Schema.Types.ObjectId,
     ref: "unitFamily",
+    default: null,
   },
   isRequired: {
     type: Boolean,

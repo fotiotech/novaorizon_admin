@@ -99,7 +99,7 @@ export async function createAttribute(formData: AttributeFormData) {
 }
 
 export async function updateAttribute(
-  id: string,
+  _id: string,
   params: AttributeUpdateParams
 ) {
   await connection();
@@ -112,9 +112,15 @@ export async function updateAttribute(
       optionsArr = params.option.map((o) => o.trim()).filter(Boolean);
     }
 
+    // Handle unitFamily conversion only if it's a non-empty string
+    let unitFamilyId = null;
+    if (params.unitFamily && params.unitFamily.trim().length > 0) {
+      unitFamilyId = new Types.ObjectId(params.unitFamily.trim());
+    }
+
     const updateData = {
       code: params.code.trim(),
-      unitFamily: new Types.ObjectId(params.unitFamily),
+      unitFamily: unitFamilyId, // Use the conditionally set value
       name: params.name.trim(),
       isRequired: params.isRequired,
       option: optionsArr,
@@ -123,7 +129,7 @@ export async function updateAttribute(
     };
 
     const updated = await Attribute.findByIdAndUpdate(
-      id,
+      _id,
       { $set: updateData },
       { new: true }
     );

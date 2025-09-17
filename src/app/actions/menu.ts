@@ -6,13 +6,22 @@ import { Menu } from "@/models/Menu";
 import "@/models/Collection";
 import { revalidatePath } from "next/cache";
 
-// Define the Menu interface
+// Define the Menu interface with all possible properties
 export interface MenuData {
   name: string;
   description?: string;
   collections: string[];
   ctaUrl?: string;
   ctaText?: string;
+  type?: string;
+  position?: string;
+  columns?: number;
+  maxDepth?: number;
+  showImages?: boolean;
+  backgroundColor?: string;
+  backgroundImage?: string;
+  isSticky?: boolean;
+  sectionTitle?: string;
 }
 
 // Get menu by ID
@@ -39,6 +48,23 @@ export async function getAllMenus() {
   try {
     await connection();
     const menus = await Menu.find()
+      .populate("collections")
+      .sort({ createdAt: -1 });
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(menus)),
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Get menus by type
+export async function getMenusByType(type: string) {
+  try {
+    await connection();
+    const menus = await Menu.find({ type })
       .populate("collections")
       .sort({ createdAt: -1 });
 
@@ -83,8 +109,8 @@ export async function updateMenu(id: string, menuData: Partial<MenuData>) {
       return { success: false, error: "Menu not found" };
     }
 
-    revalidatePath("content_merchandising/menus");
-    revalidatePath(`/content_merchandising/menus?id=${id}`);
+    revalidatePath("/content_merchandising/menus");
+    revalidatePath(`/content_merchandising/menus/edit/${id}`);
 
     return {
       success: true,
