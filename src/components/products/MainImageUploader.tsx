@@ -18,9 +18,14 @@ const MainImageUploader: React.FC<MainImageUploaderProps> = ({
   const dispatch = useAppDispatch();
 
   // pass productId as instanceId so uploads are namespaced by product
-  const { files, loading, addFiles, removeFile } = useFileUploader();
+  const { files, loading, addFiles, removeFile, setFiles } = useFileUploader(
+    field || ""
+  );
   // Update Redux when the main image changes
   useEffect(() => {
+    if (field) {
+      setFiles([field]);
+    }
     if (files.length > 0) {
       dispatch(
         addProduct({
@@ -32,7 +37,7 @@ const MainImageUploader: React.FC<MainImageUploaderProps> = ({
     }
     // Note: if you want to clear the product field when url becomes empty,
     // add an else branch to dispatch a blank value.
-  }, [files, field, dispatch, productId, code]);
+  }, [field, setFiles, files, dispatch, productId, code]);
 
   return (
     <FilesUploader

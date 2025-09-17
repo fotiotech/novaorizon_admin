@@ -7,20 +7,23 @@ import { RootState } from "@/app/store/store";
 
 interface MainImageUploaderProps {
   productId: string;
-  field: string;
+  field: string[];
   code: string;
 }
 
 const GalleryUploader: React.FC<MainImageUploaderProps> = ({
   productId,
-  field,
+  field = [],
   code,
 }) => {
   const dispatch = useAppDispatch();
-  const { files, loading, addFiles, removeFile } = useFileUploader();
+  const { files, loading, addFiles, removeFile, setFiles } = useFileUploader();
 
   // Update Redux when files change
   React.useEffect(() => {
+    if (field) {
+      setFiles(field);
+    }
     if (files.length > 0) {
       dispatch(
         addProduct({
@@ -30,7 +33,7 @@ const GalleryUploader: React.FC<MainImageUploaderProps> = ({
         })
       );
     }
-  }, [files, dispatch, productId, field, code]);
+  }, [setFiles, files, dispatch, productId, field, code]);
 
   return (
     <FilesUploader

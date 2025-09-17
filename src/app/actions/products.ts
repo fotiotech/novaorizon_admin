@@ -307,12 +307,18 @@ export async function deleteProduct(id: string): Promise<ProductResponse> {
   }
 }
 
+interface ProductResponse {
+  success: boolean;
+  data?: any;
+  error?: string;
+}
+
 export async function deleteProductImages(
   productId: string,
   imageUrl?: string
 ): Promise<ProductResponse> {
   try {
-    await connection();
+    await connection(); // Ensure database connection
 
     if (!productId && !imageUrl) {
       return { success: false, error: "ProductId or imageUrl is required" };
@@ -330,7 +336,7 @@ export async function deleteProductImages(
       }
     };
 
-    if (mongoose.isValidObjectId(productId)) {
+    if (productId && mongoose.isValidObjectId(productId)) {
       const product = await Product.findById(productId);
       if (!product) {
         return { success: false, error: "Product not found" };
@@ -346,12 +352,14 @@ export async function deleteProductImages(
           (url: string) => url !== imageUrl
         );
         await product.save();
+        return { success: true, data: product };
       }
     } else if (imageUrl) {
       await deleteFromStorage(imageUrl);
+      return { success: true, data: "Image deleted successfully" };
     }
 
-    return { success: true, data: "Images deleted successfully" };
+    return { success: false, error: "Invalid parameters" };
   } catch (error) {
     console.error("Error deleting product images:", error);
     return { success: false, error: "Failed to delete product images" };

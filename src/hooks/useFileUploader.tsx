@@ -12,14 +12,14 @@ export const useFileUploader = (
   instanceId?: string,
   initialFiles: string[] = []
 ) => {
-  const [imgFiles, setImgFiles] = useState<File[]>([]);
   const [files, setFiles] = useState<string[]>(initialFiles);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [progressByName, setProgressByName] = useState<Record<string, number>>(
     {}
   );
-
   const mountedRef = useRef(true);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -27,135 +27,121 @@ export const useFileUploader = (
     };
   }, []);
 
-  const makeFilename = (f: File) =>
-    `${Date.now()}-${Math.floor(Math.random() * 1e6)}-${f.name.replace(
+  const makeFilename = (file: File) =>
+    `${Date.now()}-${Math.floor(Math.random() * 1e6)}-${file.name.replace(
       /\s+/g,
       "_"
     )}`;
 
   const uploadFiles = useCallback(
     async (toUpload: File[]) => {
-      if (!toUpload || toUpload.length === 0) return;
+      if (!toUpload.length) return;
       setLoading(true);
-      const uploaded: string[] = [];
+      const uploadedUrls: string[] = [];
 
       for (const file of toUpload) {
         if (!mountedRef.current) break;
+
         const filename = makeFilename(file);
         const path = instanceId
           ? `uploads/${instanceId}/${filename}`
           : `uploads/${filename}`;
-
         const storageRef = ref(storage, path);
 
         try {
-          const metadata = {
+          const task = uploadBytesResumable(storageRef, file, {
             contentType: file.type || "application/octet-stream",
-          };
-          const task = uploadBytesResumable(storageRef, file, metadata);
+          });
 
           await new Promise<void>((resolve, reject) => {
             task.on(
               "state_changed",
-              (snap) => {
+              (snapshot) => {
                 const pct = Math.round(
-                  (snap.bytesTransferred / snap.totalBytes) * 100
+                  (snapshot.bytesTransferred / snapshot.totalBytes) * 100
                 );
                 if (mountedRef.current) {
-                  setProgressByName((p) => ({ ...p, [filename]: pct }));
+                  setProgressByName((prev) => ({ ...prev, [filename]: pct }));
                 }
               },
-              (err) => {
-                console.error("Upload failed", err);
-                reject(err);
-              },
+              reject,
               async () => {
                 try {
                   const downloadURL = await getDownloadURL(task.snapshot.ref);
-                  uploaded.push(downloadURL);
+                  uploadedUrls.push(downloadURL);
                   resolve();
-                } catch (err) {
-                  reject(err);
+                } catch (error) {
+                  reject(error);
                 }
               }
             );
           });
-        } catch (err) {
-          console.error("Upload error for file", file.name, err);
+        } catch (error) {
+          console.error("Upload error:", error);
         } finally {
           if (mountedRef.current) {
-            setProgressByName((p) => {
-              const copy = { ...p };
-              delete copy[filename];
-              return copy;
+            setProgressByName((prev) => {
+              const updated = { ...prev };
+              delete updated[filename];
+              return updated;
             });
           }
         }
       }
 
-      if (!mountedRef.current) return;
-      setFiles((prev) => [...prev, ...uploaded]);
-      setImgFiles([]);
-      setLoading(false);
+      if (mountedRef.current) {
+        setFiles((prev) => [...prev, ...uploadedUrls]);
+        setPendingFiles([]);
+        setLoading(false);
+      }
     },
     [instanceId]
   );
 
   useEffect(() => {
-    if (imgFiles.length > 0) {
-      uploadFiles(imgFiles);
+    if (pendingFiles.length > 0) {
+      uploadFiles(pendingFiles);
     }
-  }, [imgFiles, uploadFiles]);
+  }, [pendingFiles, uploadFiles]);
 
-  const addFiles = (newFiles: File[] | null) => {
-    if (!newFiles || newFiles.length === 0) return;
-    setImgFiles((prev) => [...prev, ...newFiles]);
-  };
+  const addFiles = useCallback((newFiles: File[]) => {
+    if (!newFiles.length) return;
+    setPendingFiles((prev) => [...prev, ...newFiles]);
+  }, []);
 
-  const clearFiles = () => {
+  const clearFiles = useCallback(() => {
     setFiles([]);
-    setImgFiles([]);
-  };
-
-  const handleRemoveFile = async (
-    productId: string,
-    index: number,
-    filesContent?: string[]
-  ) => {
-    const list = filesContent ?? files;
-    if (index < 0 || index >= list.length) {
-      console.error("Index out of bounds");
-      return { success: false, message: "index out of bounds" };
-    }
-
-    const fileUrl = list[index];
-    if (!fileUrl) {
-      console.error("No file URL found");
-      return { success: false, message: "no file URL" };
-    }
-
-    try {
-      // Create a reference directly from the URL
-      const storageRef = ref(storage, fileUrl);
-      await deleteObject(storageRef);
-
-      const res = await deleteProductImages(productId, fileUrl);
-      if (res?.success) {
-        setFiles((prev) => prev.filter((_, i) => i !== index));
-        return { success: true };
-      } else {
-        console.warn("Backend deletion failed", res);
-        return { success: false, message: "backend failed" };
-      }
-    } catch (error) {
-      console.error("Error deleting file:", error);
-      return { success: false, message: String(error) };
-    }
-  };
+    setPendingFiles([]);
+  }, []);
 
   const removeFile = useCallback(
-    (productId: string, index: number, filesContent?: string[]) =>
-      handleRemoveFile(productId, index, filesContent),
+    async (productId: string, index: number) => {
+      if (index < 0 || index >= files.length) {
+        console.error("Index out of bounds");
+        return { success: false, message: "Index out of bounds" };
+      }
+
+      const fileUrl = files[index];
+      try {
+        // Delete from Firebase Storage
+        const storageRef = ref(storage, fileUrl);
+        await deleteObject(storageRef);
+
+        // Delete from backend
+        const response: any = await deleteProductImages;
+
+        if (response.success) {
+          setFiles((prev) => prev.filter((_, i) => i !== index));
+          return { success: true };
+        } else {
+          console.error("Backend deletion failed");
+          return { success: false, message: "Backend deletion failed" };
+        }
+      } catch (error) {
+        console.error("Deletion error:", error);
+        return { success: false, message: (error as Error).message };
+      }
+    },
     [files]
   );
 
@@ -169,3 +155,5 @@ export const useFileUploader = (
     progressByName,
   };
 };
+
+export default useFileUploader;
