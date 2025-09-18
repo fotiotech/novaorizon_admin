@@ -8,6 +8,7 @@ import CategoryAttribute from "@/models/CategoryAttribute";
 import { revalidatePath } from "next/cache";
 import AttributeGroup from "@/models/AttributesGroup";
 import "@/models/Attribute";
+import "@/models/UnitFamily";
 
 function generateSlug(name: string) {
   return slugify(name, { lower: true });
