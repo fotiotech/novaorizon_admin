@@ -90,7 +90,7 @@ const menuConfig: MenuSection[] = [
     title: "Sales",
     links: [
       { name: "Orders", href: "/orders", icon: <ShoppingBag /> },
-      { name: "Order Status", href: "/status", icon: <CheckCircle /> },
+      { name: "Order Status", href: "/order_status", icon: <CheckCircle /> },
       { name: "Shipments", href: "/shipments", icon: <LocalShipping /> },
       {
         name: "Refunds & Returns",

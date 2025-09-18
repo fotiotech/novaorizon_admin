@@ -13,6 +13,7 @@ import {
 } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 ChartJS.register(
   CategoryScale,
@@ -88,7 +89,9 @@ export default function Order() {
         </div>
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-2">Average Order Value</h2>
-          <p className="text-3xl">cfa {analytics.averageOrderValue.toFixed(2)}</p>
+          <p className="text-3xl">
+            cfa {analytics.averageOrderValue.toFixed(2)}
+          </p>
         </div>
       </div>
 
@@ -121,6 +124,9 @@ export default function Order() {
                   Total
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Payment Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
               </tr>
@@ -129,11 +135,19 @@ export default function Order() {
               {analytics.recentOrders.map((order: any) => (
                 <tr key={order._id.toString()}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {order.orderNumber}
+                    <Link
+                      href={`/orders/order_details?orderNumber=${order.orderNumber}`}
+                      className="text-blue-600"
+                    >
+                      {order.orderNumber}
+                    </Link>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">{order.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     cfa {order.total.toFixed(2)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {order.paymentStatus}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
