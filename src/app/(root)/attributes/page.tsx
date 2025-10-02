@@ -4,7 +4,7 @@ import {
   deleteAttribute,
   findAttributesAndValues,
 } from "@/app/actions/attributes";
-import { getUnits } from "@/app/actions/unit"; // Import your unit actions
+import { getUnits } from "@/app/actions/unit";
 import { Delete, Edit } from "@mui/icons-material";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
@@ -38,7 +38,7 @@ interface Unit {
 
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]); // State for units
+  const [units, setUnits] = useState<Unit[]>([]);
   const [editingAttributeId, setEditingAttributeId] = useState<string | null>(
     null
   );
@@ -49,11 +49,11 @@ const Attributes = () => {
     label: "A → Z",
   });
   const [showForm, setShowForm] = useState(false);
-  const [isLoadingUnits, setIsLoadingUnits] = useState(true); // Loading state for units
+  const [isLoadingUnits, setIsLoadingUnits] = useState(true);
 
   useEffect(() => {
     fetchAttributes();
-    fetchUnits(); // Fetch units when component mounts
+    fetchUnits();
   }, []);
 
   const fetchAttributes = async () => {
@@ -71,7 +71,6 @@ const Attributes = () => {
     }
   };
 
-  // Fetch units from your Unit Management system
   const fetchUnits = async () => {
     try {
       setIsLoadingUnits(true);
@@ -137,12 +136,16 @@ const Attributes = () => {
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
 
-  console.log({ visibleAttributes });
-
   // Function to get unit details by symbol
   const getUnitDetails = (symbol: string) => {
     const unit = units.find((u) => u.symbol === symbol);
     return unit ? `${unit.name} (${unit.symbol})` : symbol;
+  };
+
+  // Function to format options for display
+  const formatOptions = (option: string | string[] | undefined) => {
+    if (!option) return "-";
+    return Array.isArray(option) ? option.join(", ") : option;
   };
 
   return (
@@ -152,18 +155,20 @@ const Attributes = () => {
         <div className="flex gap-2">
           <button
             onClick={handleNewAttribute}
-            className="p-2 font-semibold text-sm"
+            className="p-2 font-semibold text-sm bg-primary text-white rounded hover:bg-primary-dark transition-colors"
           >
             + Attribute
           </button>
           <Link
             href={"/attributes/group"}
-            className="p-2 font-semibold text-sm"
+            className="p-2 font-semibold text-sm bg-secondary text-white rounded hover:bg-secondary-dark transition-colors"
           >
             + Group
           </Link>
-          {/* Update the unit link to point to your Unit Management page */}
-          <Link href={"/attributes/unit"} className="p-2 font-semibold text-sm">
+          <Link
+            href={"/attributes/unit"}
+            className="p-2 font-semibold text-sm bg-accent text-white rounded hover:bg-accent-dark transition-colors"
+          >
             + Unit
           </Link>
         </div>
@@ -186,7 +191,7 @@ const Attributes = () => {
         />
       )}
 
-      {/* Attributes List */}
+      {/* Attributes Table */}
       {!showForm && !editingAttributeId && (
         <div>
           <div className="my-3 flex md:flex-row gap-2 items-center">
@@ -195,13 +200,14 @@ const Attributes = () => {
               placeholder="Filter attributes..."
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              className="w-full md:w-1/2 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
+              className="w-full md:w-1/2 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark border border-gray-300 dark:border-gray-600"
             />
             <Select
               options={sortOptions}
               value={sortAttrOrder}
               onChange={(opt) => setSortAttrOrder(opt as Option)}
-              className="w-1/3 md:w-1/4 dark:bg-sec-dark"
+              className="w-1/3 md:w-1/4"
+              classNamePrefix="react-select"
             />
           </div>
 
@@ -209,66 +215,126 @@ const Attributes = () => {
             <div className="text-center py-4">Loading units...</div>
           )}
 
-          <ul className="grid gap-4 max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600">
-            {visibleAttributes.map((attr) => (
-              <li
-                key={`${attr.name}-${attr._id || "nogroup"}`}
-                className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-4"
-              >
-                <div className="flex justify-between items-center">
-                  <div className="flex gap-2 items-center">
-                    <span className="text-sm text-text">{attr.name}</span>
-                    <span
-                      onClick={() => handleEditClick(attr._id!)}
-                      className="cursor-pointer"
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
                     >
-                      <Edit fontSize="small" />
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteAttribute(attr._id!)}
-                    className="text-red-500 hover:text-red-700"
-                    aria-label={`Delete attribute ${attr.name}`}
-                  >
-                    <Delete />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="font-medium">Code:</span> {attr.code}
-                  </div>
-                  <div>
-                    <span className="font-medium">Unit:</span>{" "}
-                    {getUnitDetails(attr.unit)}
-                  </div>
-                  <div>
-                    <span className="font-medium">Type:</span> {attr.type}
-                  </div>
-                  <div>
-                    <span className="font-medium">Sort Order:</span>{" "}
-                    {attr.sort_order}
-                  </div>
-                  {attr.option && (
-                    <div className="col-span-2">
-                      <span className="font-medium">Options:</span>{" "}
-                      {Array.isArray(attr.option)
-                        ? attr.option.join(", ")
-                        : attr.option}
-                    </div>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          {visibleAttributes.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              {filterText
-                ? "No attributes match your search"
-                : "No attributes found"}
+                      Name
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                    >
+                      Code
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                    >
+                      Unit
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                    >
+                      Type
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                    >
+                      Sort Order
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                    >
+                      Options
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {visibleAttributes.map((attr) => (
+                    <tr
+                      key={attr._id}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {attr.name}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500 dark:text-gray-300">
+                          {attr.code}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500 dark:text-gray-300">
+                          {getUnitDetails(attr.unit)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500 dark:text-gray-300">
+                          {attr.type}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500 dark:text-gray-300">
+                          {attr.sort_order}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div
+                          className="text-sm text-gray-500 dark:text-gray-300 max-w-xs truncate"
+                          title={formatOptions(attr.option)}
+                        >
+                          {formatOptions(attr.option)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleEditClick(attr._id!)}
+                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                            aria-label={`Edit attribute ${attr.name}`}
+                          >
+                            <Edit fontSize="small" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAttribute(attr._id!)}
+                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                            aria-label={`Delete attribute ${attr.name}`}
+                          >
+                            <Delete fontSize="small" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+
+            {visibleAttributes.length === 0 && (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                {filterText
+                  ? "No attributes match your search"
+                  : "No attributes found"}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
