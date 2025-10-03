@@ -28,7 +28,7 @@ export const useFileUploader = (
   }, []);
 
   const makeFilename = (file: File) =>
-    `${Date.now()}-${Math.floor(Math.random() * 1e6)}-${file.name.replace(
+    `${Date.now()}-${Math.floor(Math.random() * 1e6)}-${file?.name.replace(
       /\s+/g,
       "_"
     )}`;
