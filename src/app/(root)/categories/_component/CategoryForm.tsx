@@ -86,18 +86,18 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     setCategoryData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // In your CategoryForm component, fix the handleSubmit function:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
     try {
-      // Prepare form data
-      const images = files?.length! > 1 ? files : files?.[0];
+      // Prepare form data - ensure arrays are never undefined
       const formData = {
         ...categoryData,
-        imageUrl: images as any[],
-        attributes: attributes || [],
+        imageUrl: files || [], // Use empty array if no files
+        attributes: attributes || [], // Use empty array if no attributes
       };
 
       // Create or update category
@@ -106,10 +106,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         mode === "edit" ? categoryData._id : undefined
       );
 
-      if (result) {
+      if (result && !result.error) {
         onSuccess();
       } else {
-        setError("Error while processing category");
+        setError(result?.error || "Error while processing category");
       }
     } catch (err) {
       console.error("Error saving category:", err);

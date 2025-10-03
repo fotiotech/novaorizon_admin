@@ -112,38 +112,41 @@ export async function createCategory(
     const existingCategory = id ? await Category.findById(id) : null;
 
     if (existingCategory) {
-      // Merge existing and new attributes (avoid duplicates)
-      const existingAttrs = existingCategory.attributes || [];
-      const updatedAttrs = attributes
-        ? Array.from(new Set([...existingAttrs, ...attributes.map(String)]))
-        : existingAttrs;
+      // For update - use $set for simple fields but handle attributes properly
+      const updateData: any = {
+        url_slug,
+        name,
+        parent_id: parent_id || null, // Use null instead of undefined for empty parent
+        description,
+        imageUrl: imageUrl || [],
+      };
+
+      // Only update attributes if new ones are provided
+      if (attributes && attributes.length > 0) {
+        // Use $addToSet to add new attributes without duplicates
+        // Or $set to replace entirely based on your needs
+        updateData.attributes = attributes.map(String);
+      }
 
       await Category.findOneAndUpdate(
         { _id: existingCategory._id },
-        {
-          $set: {
-            url_slug,
-            name,
-            parent_id: parent_id || undefined,
-            description,
-            imageUrl: imageUrl || undefined,
-            attributes: updatedAttrs,
-          },
-        }
+        { $set: updateData }
       );
     } else {
+      // For create - set all fields including empty arrays
       const newCategory = new Category({
         url_slug,
         name,
-        parent_id,
+        parent_id: parent_id || null,
         description,
-        imageUrl: imageUrl || undefined,
+        imageUrl: imageUrl || [],
         attributes: attributes?.map(String) || [],
       });
       await newCategory.save();
     }
 
     revalidatePath("/categories");
+    return { success: true };
   } catch (error: any) {
     console.error(
       "Error while processing the request:\n",

@@ -19,21 +19,25 @@ const GalleryUploader: React.FC<MainImageUploaderProps> = ({
   const dispatch = useAppDispatch();
   const { files, loading, addFiles, removeFile, setFiles } = useFileUploader();
 
-  // Update Redux when files change
+  // Initialize files from field prop only once
   React.useEffect(() => {
-    if (field) {
+    if (field && field.length > 0) {
       setFiles(field);
     }
-    if (files.length > 0) {
+  }, []); // Empty dependency array - run only on mount
+
+  // Update Redux when files change, but only if files are different from current field
+  React.useEffect(() => {
+    if (files.length > 0 && JSON.stringify(files) !== JSON.stringify(field)) {
       dispatch(
         addProduct({
           _id: productId,
           field: code,
-          value: files ?? field,
+          value: files,
         })
       );
     }
-  }, [setFiles, files, dispatch, productId, field, code]);
+  }, [files, dispatch, productId, code]); // Removed field from dependencies
 
   return (
     <FilesUploader
