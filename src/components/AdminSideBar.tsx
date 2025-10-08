@@ -178,11 +178,7 @@ const menuConfig: MenuSection[] = [
   {
     title: "SEO",
     links: [
-      {
-        name: "Sitemaps",
-        href: "/sitemaps_generation",
-        icon: <Public />,
-      },
+      
       {
         name: "Metadata",
         href: "/meta_tags_url",
