@@ -99,9 +99,9 @@ const MetaTagForm: React.FC<MetaTagFormProps> = ({ mode, metaTagId }) => {
       let result;
 
       if (mode === "edit" && metaTagId) {
-        result = await updateMetaTag(metaTagId, formData, userId);
+        result = await updateMetaTag(metaTagId, formData);
       } else {
-        result = await createMetaTag(formData, userId);
+        result = await createMetaTag(formData);
       }
 
       if (result.success) {

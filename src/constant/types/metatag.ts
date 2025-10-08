@@ -59,3 +59,9 @@ export interface MetaTagListResponse {
   page: number;
   limit: number;
 }
+
+export interface BulkUpdateResponse {
+  success: boolean;
+  updatedCount?: number;
+  error?: string;
+}
