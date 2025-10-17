@@ -18,6 +18,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 interface Message {
   id: string;
@@ -33,7 +34,8 @@ interface ChatPageProps {
 }
 
 export default function ChatPage({ params }: ChatPageProps) {
-  const { user } = useUser();
+  const { data: session } = useSession();
+    const user = session?.user as any;
   const { roomId } = params;
   const router = useRouter();
 
@@ -46,7 +48,7 @@ export default function ChatPage({ params }: ChatPageProps) {
   const sendMessage = async () => {
     if (!draft.trim() || !user) return;
     const newMsg = {
-      from: user.name || "user",
+      from: user.name || "clickitcome",
       text: draft.trim(),
       sentAt: serverTimestamp(),
     };
@@ -92,6 +94,26 @@ export default function ChatPage({ params }: ChatPageProps) {
       console.error("Failed to delete message:", err);
     }
   };
+
+
+  // Add this useEffect to mark messages as read when component mounts
+  useEffect(() => {
+    if (!user || !roomId || !db) return;
+
+    // Mark messages as read when entering the chat
+    const markMessagesAsRead = async () => {
+      try {
+        const roomRef = doc(db, "chatRooms", roomId);
+        await updateDoc(roomRef, {
+          lastRead: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error("Error marking messages as read:", err);
+      }
+    };
+
+    markMessagesAsRead();
+  }, [user, roomId]);
 
   useEffect(() => {
     async function fetchRoom() {

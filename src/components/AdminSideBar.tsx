@@ -40,11 +40,13 @@ import {
   Language,
   Room,
 } from "@mui/icons-material";
+import { useUnreadMessages } from "@/app/(root)/chat/_component/useUnreadMessages";
 
 interface MenuLink {
   name: string;
   href: string;
   icon?: React.ReactNode;
+  showUnreadCount?: boolean; // Add this flag to control which links show unread count
 }
 
 interface MenuSection {
@@ -69,7 +71,12 @@ const menuConfig: MenuSection[] = [
         href: "/notifications",
         icon: <Notifications />,
       },
-      { name: "Chat", href: "/chat", icon: <Chat /> },
+      {
+        name: "Chat",
+        href: "/chat",
+        icon: <Chat />,
+        showUnreadCount: true,
+      },
     ],
   },
   {
@@ -178,7 +185,6 @@ const menuConfig: MenuSection[] = [
   {
     title: "SEO",
     links: [
-      
       {
         name: "Metadata",
         href: "/meta_tags_url",
@@ -214,7 +220,14 @@ const menuConfig: MenuSection[] = [
   },
   {
     title: "Support",
-    links: [{ name: "Customer Chat", href: "/chat", icon: <Chat /> }],
+    links: [
+      {
+        name: "Customer Chat",
+        href: "/chat",
+        icon: <Chat />,
+        showUnreadCount: true,
+      },
+    ],
   },
 ];
 
@@ -227,6 +240,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   setSideBarToggle,
 }) => {
   const pathname = usePathname();
+  const unreadCount = useUnreadMessages();
   const open = "fixed lg:relative inset-y-0 left-0 z-50 translate-x-0";
   const hide = "fixed lg:relative inset-y-0 -left-full lg:translate-x-0";
 
@@ -294,17 +308,26 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                       <Link
                         href={link.href}
                         onClick={handleClose}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors duration-200 ${
+                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 ${
                           pathname === link.href ||
                           pathname.startsWith(link.href)
                             ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
                             : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                         }`}
                       >
-                        <span className="text-gray-500 dark:text-gray-400">
-                          {link.icon}
-                        </span>
-                        <span className="font-medium">{link.name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-gray-500 dark:text-gray-400">
+                            {link.icon}
+                          </span>
+                          <span className="font-medium">{link.name}</span>
+                        </div>
+
+                        {/* Unread Count Badge */}
+                        {link.showUnreadCount && unreadCount > 0 && (
+                          <span className="bg-red-500 text-white rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </span>
+                        )}
                       </Link>
                     </li>
                   ))}

@@ -6,9 +6,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 import { useSession } from "next-auth/react";
 import { SignIn } from "./auth/SignInButton";
+import { useUnreadMessages } from "@/app/(root)/chat/_component/useUnreadMessages";
+import axios from "axios";
 
 interface AdminTopBarProps {
   sideBarToggle: boolean;
@@ -29,32 +30,21 @@ const AdminTopBar = ({
   setSideBarToggle,
 }: AdminTopBarProps) => {
   const session = useSession();
+  const unreadCount = useUnreadMessages();
   const user = session?.data?.user as any;
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
 
-  useEffect(() => {
-    // Simulated notifications fetch
-    const fetchNotifications = async () => {
-      // In a real app, you would fetch from your API
-      const mockNotifications = [
-        {
-          _id: "1",
-          message: "New order received",
-          isRead: false,
-          timestamp: new Date().toISOString(),
-        },
-        {
-          _id: "2",
-          message: "User signed up",
-          isRead: false,
-          timestamp: new Date().toISOString(),
-        },
-      ];
-      setNotifications(mockNotifications);
-    };
-
-    fetchNotifications();
-  }, []);
+   useEffect(() => {
+      const fetchNotifications = async () => {
+        const res = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/notify`,
+          { timeout: 10000 }
+        );
+        setNotifications(res.data);
+      };
+  
+      fetchNotifications();
+    }, []);
 
   return (
     <div className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow-md">
@@ -104,7 +94,12 @@ const AdminTopBar = ({
               <p className="font-medium text-gray-700 dark:text-gray-300 hidden sm:block">
                 {user?.email?.slice(0, 7)}...
               </p>
-              <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-200 font-medium">
+              <div className="relative h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-200 font-medium">
+                {unreadCount > 0 && (
+        <p className="absolute right-0 -top-2 bg-red-500 text-xs rounded-full px-1 min-w-[18px] text-center">
+          {unreadCount}
+        </p>
+      )}
                 {user?.email?.charAt(0).toUpperCase() || "U"}
               </div>
             </div>
