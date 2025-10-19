@@ -77,56 +77,58 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     <div className="w-full my-4">
       <div
         ref={containerRef}
-        className="flex flex-wrap gap-4 w-full overflow-x-auto scrollbar-none"
+        className="whitespace-nowrap w-full overflow-x-auto scrollbar-none"
       >
-        {files?.map((fileUrl, index) => {
-          const fileName = fileUrl.split("/").pop() || "";
-          const uploadProgress = progressByName[fileName];
-          const isUploading =
-            uploadProgress !== undefined && uploadProgress < 100;
+        <div className="whitespace-nowrap inline-block">
+          {files?.map((fileUrl, index) => {
+            const fileName = fileUrl.split("/").pop() || "";
+            const uploadProgress = progressByName[fileName];
+            const isUploading =
+              uploadProgress !== undefined && uploadProgress < 100;
 
-          return (
-            <div
-              key={index}
-              className="relative inline-block border-2 border-gray-300 w-44 h-56 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow"
-            >
-              {isUploading ? (
-                <div className="flex flex-col items-center justify-center w-full h-full p-4 bg-gray-100">
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
-                    <div
-                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                      style={{ width: `${uploadProgress}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-sm text-gray-600">
-                    {uploadProgress}%
-                  </span>
-                </div>
-              ) : (
-                <Image
-                  src={fileUrl}
-                  alt={`Uploaded image ${index + 1}`}
-                  width={500}
-                  height={500}
-                  className="w-full h-full object-cover"
-                />
-              )}
-              <button
-                type="button"
-                onClick={(e) => handleRemove(e, index)}
-                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors"
-                aria-label="Remove image"
-                disabled={isUploading}
+            return (
+              <div
+                key={index}
+                className="relative inline-block mr-2 border-2 border-gray-300 w-44 h-56 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow"
               >
-                ×
-              </button>
-            </div>
-          );
-        })}
+                {isUploading ? (
+                  <div className="flex flex-col items-center justify-center w-full h-full p-4 bg-gray-100">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                      <div
+                        className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm text-gray-600">
+                      {uploadProgress}%
+                    </span>
+                  </div>
+                ) : (
+                  <Image
+                    src={fileUrl}
+                    alt={`Uploaded image ${index + 1}`}
+                    width={500}
+                    height={500}
+                    className="w-full h-full object-cover"
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => handleRemove(e, index)}
+                  className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors"
+                  aria-label="Remove image"
+                  disabled={isUploading}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
 
         <div
           {...getRootProps()}
-          className={`relative inline-flex items-center justify-center border-2 border-dashed
+          className={`relative inline-block border-2 border-dashed
             ${
               isDragActive
                 ? "border-blue-500 bg-blue-50"
@@ -135,16 +137,18 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
             w-44 h-56 rounded-md cursor-pointer transition-colors bg-white`}
           onClick={open} // Manually trigger file selection
         >
-          <input {...getInputProps()} />
-          <div className="text-center px-2 flex flex-col items-center">
-            <div className="p-3 rounded-full bg-blue-100 text-blue-600 mb-3">
-              <Add className="text-2xl" />
+          <div className="flex items-center justify-center ">
+            <input {...getInputProps()} />
+            <div className="text-center px-2 flex flex-col items-center">
+              <div className="p-3 rounded-full bg-blue-100 text-blue-600 mb-3">
+                <Add className="text-2xl" />
+              </div>
+              <p className="text-sm text-gray-600 font-medium">
+                {isDragActive ? "Drop images here" : "Click to select images"}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">or drag and drop</p>
+              <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF</p>
             </div>
-            <p className="text-sm text-gray-600 font-medium">
-              {isDragActive ? "Drop images here" : "Click to select images"}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">or drag and drop</p>
-            <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF</p>
           </div>
         </div>
       </div>

@@ -375,10 +375,10 @@ const ProductForm = () => {
             <>
               <Stepper
                 activeStep={currentStep}
-                className="mb-6 w-full overflow-auto"
+                className="whitespace-nowrap mb-6 w-full overflow-auto"
               >
                 {topLevelGroups.map((group, index) => (
-                  <Step key={group._id}>
+                  <Step key={group._id} className="inline-block">
                     <StepLabel
                       error={
                         validationErrors[group._id] &&
