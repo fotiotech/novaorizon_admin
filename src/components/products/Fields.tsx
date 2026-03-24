@@ -6,6 +6,8 @@ import MainImageUploader from "./MainImageUploader";
 import GalleryUploader from "./GalleryUploader";
 import { getBrands } from "@/app/actions/brand";
 import { Brand } from "@/constant/types";
+import RichTextEditorWrapper from "@/components/RichTextEditorWrapper"; // adjust path
+
 
 interface FieldProps {
   type?: string;
@@ -140,16 +142,26 @@ const Fields: React.FC<FieldProps> = ({
         );
         return renderInputWithUnit(textInput);
 
-      case "textarea":
-        return (
-          <textarea
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors min-h-[100px]"
-            value={field || ""}
-            placeholder={`Enter ${name}`}
-            onChange={(e) => handleAttributeChange(code, e.target.value)}
-            required={isRequired}
-          />
-        );
+
+case "textarea":
+if (code === "long_desc") {
+  return (
+    <RichTextEditorWrapper
+      value={field || ""}
+      onChange={(html) => handleAttributeChange(code, html)}
+      placeholder={`Enter ${name}`}
+    />
+  );
+}  // fallback for other textarea fields
+  return (
+    <textarea
+      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors min-h-[100px]"
+      value={field || ""}
+      placeholder={`Enter ${name}`}
+      onChange={(e) => handleAttributeChange(code, e.target.value)}
+      required={isRequired}
+    />
+  );
 
       case "number":
         const numberInput = (

@@ -17,7 +17,7 @@ const GalleryUploader: React.FC<MainImageUploaderProps> = ({
   code,
 }) => {
   const dispatch = useAppDispatch();
-  const { files, loading, addFiles, removeFile, setFiles } = useFileUploader();
+  const { files, loading, addFiles, removeFile, setFiles, progressByName } = useFileUploader();
 
   // Initialize files from field prop only once
   React.useEffect(() => {
@@ -40,12 +40,16 @@ const GalleryUploader: React.FC<MainImageUploaderProps> = ({
   }, [files, dispatch, productId, code]); // Removed field from dependencies
 
   return (
-    <FilesUploader
-      files={files}
-      loading={loading}
-      addFiles={addFiles}
-      removeFile={removeFile}
-    />
+    <div className="w-full"> {/* Removed overflow-clip, allow normal flow */}
+      <FilesUploader
+        productId={productId}          // Pass productId for remove functionality
+        files={files}
+        loading={loading}
+        addFiles={addFiles}
+        removeFile={removeFile}
+        progressByName={progressByName} // Pass upload progress (if needed)
+      />
+    </div>
   );
 };
 

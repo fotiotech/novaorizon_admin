@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { AttachFile, Add } from "@mui/icons-material";
+import { Add } from "@mui/icons-material";
 import { useDropzone } from "react-dropzone";
 import Image from "next/image";
 
@@ -36,7 +36,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
       "image/*": [".jpeg", ".jpg", ".png", ".gif"],
     },
     multiple: true,
-    noClick: true, // We'll handle clicks manually
+    noClick: true,
   });
 
   useEffect(() => {
@@ -74,81 +74,77 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   };
 
   return (
-    <div className="w-full my-4">
+    <div className="w-full max-w-full overflow-x-hidden my-4">
       <div
         ref={containerRef}
-        className="whitespace-nowrap w-full overflow-x-auto scrollbar-none"
+        className="flex overflow-x-auto overflow-y-hidden gap-4 pb-2 scroll-smooth"
+        style={{
+          scrollbarWidth: "thin",
+          scrollSnapType: "x mandatory",
+        }}
       >
-        <div className="whitespace-nowrap inline-block">
-          {files?.map((fileUrl, index) => {
-            const fileName = fileUrl.split("/").pop() || "";
-            const uploadProgress = progressByName[fileName];
-            const isUploading =
-              uploadProgress !== undefined && uploadProgress < 100;
+        {files?.map((fileUrl, index) => {
+          const fileName = fileUrl.split("/").pop() || "";
+          const uploadProgress = progressByName[fileName];
+          const isUploading =
+            uploadProgress !== undefined && uploadProgress < 100;
 
-            return (
-              <div
-                key={index}
-                className="relative inline-block mr-2 border-2 border-gray-300 w-44 h-56 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow"
-              >
-                {isUploading ? (
-                  <div className="flex flex-col items-center justify-center w-full h-full p-4 bg-gray-100">
-                    <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
-                      <div
-                        className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-sm text-gray-600">
-                      {uploadProgress}%
-                    </span>
+          return (
+            <div
+              key={index}
+              className="relative flex-shrink-0 w-44 h-44 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-200"
+              style={{ scrollSnapAlign: "start" }}
+            >
+              {isUploading ? (
+                <div className="flex flex-col items-center justify-center w-full h-full p-4 bg-gray-100">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                    <div
+                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
                   </div>
-                ) : (
-                  <Image
-                    src={fileUrl}
-                    alt={`Uploaded image ${index + 1}`}
-                    width={500}
-                    height={500}
-                    className="w-full h-full object-cover"
-                  />
-                )}
-                <button
-                  type="button"
-                  onClick={(e) => handleRemove(e, index)}
-                  className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors"
-                  aria-label="Remove image"
-                  disabled={isUploading}
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                  <span className="text-sm text-gray-600">
+                    {uploadProgress}%
+                  </span>
+                </div>
+              ) : (
+                <Image
+                  src={fileUrl}
+                  alt={`Uploaded image ${index + 1}`}
+                  width={176}
+                  height={176}
+                  className="w-full h-full object-cover"
+                />
+              )}
+              <button
+                type="button"
+                onClick={(e) => handleRemove(e, index)}
+                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors"
+                aria-label="Remove image"
+                disabled={isUploading}
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
 
         <div
           {...getRootProps()}
-          className={`relative inline-block border-2 border-dashed
-            ${
-              isDragActive
-                ? "border-blue-500 bg-blue-50"
-                : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"
-            }
-            w-44 h-56 rounded-md cursor-pointer transition-colors bg-white`}
-          onClick={open} // Manually trigger file selection
+          className={`flex-shrink-0 w-44 h-44 border-2 border-dashed rounded-md cursor-pointer transition-colors bg-white flex items-center justify-center
+            ${isDragActive ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"}`}
+          onClick={open}
         >
-          <div className="flex items-center justify-center ">
-            <input {...getInputProps()} />
-            <div className="text-center px-2 flex flex-col items-center">
-              <div className="p-3 rounded-full bg-blue-100 text-blue-600 mb-3">
-                <Add className="text-2xl" />
-              </div>
-              <p className="text-sm text-gray-600 font-medium">
-                {isDragActive ? "Drop images here" : "Click to select images"}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">or drag and drop</p>
-              <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF</p>
+          <input {...getInputProps()} />
+          <div className="text-center px-2">
+            <div className="p-3 rounded-full bg-blue-100 text-blue-600 mb-3 inline-flex">
+              <Add className="text-2xl" />
             </div>
+            <p className="text-sm text-gray-600 font-medium">
+              {isDragActive ? "Drop images here" : "Click to select images"}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">or drag and drop</p>
+            <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF</p>
           </div>
         </div>
       </div>
