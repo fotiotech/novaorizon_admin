@@ -55,7 +55,7 @@ const UnitManagement = () => {
   const loadUnits = async (familyId?: string) => {
     try {
       const unitsData = await getUnits(familyId);
-      setUnits(unitsData);
+      setUnits(unitsData as any[]);
     } catch (error) {
       console.error('Failed to load units:', error);
     }
