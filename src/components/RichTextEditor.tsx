@@ -11,7 +11,7 @@ import ListItem from "@tiptap/extension-list-item";
 import BulletList from "@tiptap/extension-bullet-list";
 import OrderedList from "@tiptap/extension-ordered-list";
 import Heading from "@tiptap/extension-heading";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 export interface RichTextEditorProps {
   value: string;
@@ -26,6 +26,23 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
   const [showImageAltDialog, setShowImageAltDialog] = useState(false);
   const [pendingImageUrl, setPendingImageUrl] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+
+  // Prevent zoom on double-tap (iOS)
+  useEffect(() => {
+    const container = editorContainerRef.current;
+    if (!container) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // If it's a double-tap, prevent default zoom behavior
+      if (e.touches.length === 1 && e.touches[0].target === container) {
+        // No need to prevent default – we just want to avoid zoom.
+        // We'll rely on touch-action: manipulation to prevent double-tap zoom.
+      }
+    };
+    container.addEventListener("touchstart", handleTouchStart);
+    return () => container.removeEventListener("touchstart", handleTouchStart);
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -46,7 +63,8 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
     editorProps: {
       attributes: {
         class:
-          "prose max-w-none focus:outline-none min-h-[200px] p-4 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
+          "prose max-w-none focus:outline-none min-h-[200px] p-4 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
+        style: "font-size: 16px; touch-action: manipulation;", // Prevent iOS zoom
       },
     },
   });
@@ -54,7 +72,7 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
   const handleImageUpload = useCallback(async (file: File) => {
     setUploading(true);
     try {
-      const { uploadImage } = await import("@/utils/uploadImage.ts" as any); // dynamic import
+      const { uploadImage } = await import("@/utils/uploadImage" as any);
       const url = await uploadImage(file);
       setPendingImageUrl(url);
       setShowImageAltDialog(true);
@@ -106,13 +124,14 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
       className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 ${
         active ? "bg-gray-300 dark:bg-gray-600" : ""
       }`}
+      style={{ touchAction: "manipulation" }} // Prevent zoom on button tap
     >
       {children}
     </button>
   );
 
   return (
-    <div className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+    <div ref={editorContainerRef} className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800">
       <div className="border-b p-2 flex flex-wrap gap-2 bg-gray-50 dark:bg-gray-700">
         {/* Headings */}
         <select
@@ -128,6 +147,7 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
             if (editor.isActive("heading", { level: 3 })) return "3";
             return "0";
           })()}
+          style={{ touchAction: "manipulation" }}
         >
           <option value="0">Paragraph</option>
           <option value="1">Heading 1</option>
@@ -245,17 +265,20 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
               placeholder="https://example.com"
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
+              style={{ fontSize: "16px" }} // Prevent zoom on input focus
             />
             <div className="flex justify-end gap-2">
               <button
                 className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
                 onClick={() => setShowLinkDialog(false)}
+                style={{ touchAction: "manipulation" }}
               >
                 Cancel
               </button>
               <button
                 className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
                 onClick={addLink}
+                style={{ touchAction: "manipulation" }}
               >
                 Save
               </button>
@@ -270,10 +293,12 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
           <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
             <h3 className="text-lg font-semibold mb-2">Image Alt Text</h3>
             <input
+              id="alt-input"
               type="text"
               className="border rounded p-2 w-80 mb-2"
               placeholder="Describe the image (optional)"
               autoFocus
+              style={{ fontSize: "16px" }} // Prevent zoom on input focus
             />
             <div className="flex justify-end gap-2">
               <button
@@ -282,6 +307,7 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
                   insertImageWithAlt("");
                   setShowImageAltDialog(false);
                 }}
+                style={{ touchAction: "manipulation" }}
               >
                 Skip
               </button>
@@ -291,6 +317,7 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
                   const alt = (document.querySelector("#alt-input") as HTMLInputElement)?.value;
                   insertImageWithAlt(alt);
                 }}
+                style={{ touchAction: "manipulation" }}
               >
                 Insert
               </button>
