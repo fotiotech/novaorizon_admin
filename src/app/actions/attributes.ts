@@ -4,7 +4,7 @@ import { connection } from "@/utils/connection";
 import Attribute from "@/models/Attribute";
 import mongoose, { Types } from "mongoose";
 import { revalidatePath } from "next/cache";
-import { ObjectId } from "mongodb";
+import "@/models/UnitFamily";
 
 // Add TypeScript interfaces
 interface AttributeFormData {
@@ -27,13 +27,24 @@ interface AttributeUpdateParams {
   type: string;
 }
 
-// Function to fetch category attributes and values
+
 export async function findAttributesAndValues(id?: string) {
   try {
     await connection();
 
-    let query = id ? Attribute.findOne({ _id: id }) : Attribute.find();
+    let query;
+    if (id) {
+      // Fetch a single attribute (for editing)
+      query = Attribute.findById(id).populate("unitFamily");
+    } else {
+      // Fetch all attributes
+      query = Attribute.find().populate("unitFamily").sort({ sort_order: 1, name: 1 });
+    }
+
     const response = await query.lean();
+
+    // If id is provided and no attribute found, return null
+    if (id && !response) return null;
 
     return response;
   } catch (error) {
@@ -41,7 +52,6 @@ export async function findAttributesAndValues(id?: string) {
     throw new Error("Failed to fetch attributes");
   }
 }
-
 export async function createAttribute(formData: AttributeFormData) {
   const { codes, unitFamilies, names, isRequired, sort_orders, option, type } =
     formData;

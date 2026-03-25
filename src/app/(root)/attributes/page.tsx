@@ -4,7 +4,6 @@ import {
   deleteAttribute,
   findAttributesAndValues,
 } from "@/app/actions/attributes";
-import { getUnits } from "@/app/actions/unit";
 import { Delete, Edit } from "@mui/icons-material";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
@@ -13,9 +12,8 @@ import AttributeForm from "./_component/AttributeForm";
 
 type AttributeType = {
   _id?: string;
-  id?: string;
   code: string;
-  unit: string;
+  unitFamily?: { name: string; symbol: string; _id: string } | null;
   name: string;
   option?: string | string[];
   type: string;
@@ -27,18 +25,8 @@ interface Option {
   label: string;
 }
 
-interface Unit {
-  _id: string;
-  name: string;
-  symbol: string;
-  unitFamily: string | { name: string };
-  conversionFactor: number;
-  isBaseUnit: boolean;
-}
-
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
   const [editingAttributeId, setEditingAttributeId] = useState<string | null>(
     null
   );
@@ -49,11 +37,9 @@ const Attributes = () => {
     label: "A → Z",
   });
   const [showForm, setShowForm] = useState(false);
-  const [isLoadingUnits, setIsLoadingUnits] = useState(true);
 
   useEffect(() => {
     fetchAttributes();
-    fetchUnits();
   }, []);
 
   const fetchAttributes = async () => {
@@ -68,19 +54,6 @@ const Attributes = () => {
       setError(
         err instanceof Error ? err.message : "Failed to load attributes"
       );
-    }
-  };
-
-  const fetchUnits = async () => {
-    try {
-      setIsLoadingUnits(true);
-      const unitsData = await getUnits();
-      setUnits(unitsData);
-    } catch (err) {
-      console.error("Error fetching units:", err);
-      setError("Failed to load units");
-    } finally {
-      setIsLoadingUnits(false);
     }
   };
 
@@ -136,13 +109,7 @@ const Attributes = () => {
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
 
-  // Function to get unit details by symbol
-  const getUnitDetails = (symbol: string) => {
-    const unit = units.find((u) => u.symbol === symbol);
-    return unit ? `${unit.name} (${unit.symbol})` : symbol;
-  };
-
-  // Function to format options for display
+  // Helper to format options for display
   const formatOptions = (option: string | string[] | undefined) => {
     if (!option) return "-";
     return Array.isArray(option) ? option.join(", ") : option;
@@ -211,10 +178,6 @@ const Attributes = () => {
             />
           </div>
 
-          {isLoadingUnits && (
-            <div className="text-center py-4">Loading units...</div>
-          )}
-
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -236,7 +199,7 @@ const Attributes = () => {
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
                     >
-                      Unit
+                      Unit Family
                     </th>
                     <th
                       scope="col"
@@ -282,7 +245,7 @@ const Attributes = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-500 dark:text-gray-300">
-                          {getUnitDetails(attr.unit)}
+                          {attr.unitFamily?.name || "—"}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

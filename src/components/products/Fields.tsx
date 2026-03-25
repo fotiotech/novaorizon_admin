@@ -6,8 +6,7 @@ import MainImageUploader from "./MainImageUploader";
 import GalleryUploader from "./GalleryUploader";
 import { getBrands } from "@/app/actions/brand";
 import { Brand } from "@/constant/types";
-import RichTextEditorWrapper from "@/components/RichTextEditorWrapper"; // adjust path
-
+import RichTextEditorWrapper from "@/components/RichTextEditorWrapper";
 
 interface FieldProps {
   type?: string;
@@ -17,8 +16,9 @@ interface FieldProps {
   option?: any[];
   handleAttributeChange: (code: string, value: any) => void;
   productId?: string;
-  unit?: string; // Add unit prop
-  isRequired?: boolean; // Add isRequired prop
+  unitFamily?: { _id: string; name: string } | null;
+  units?: any[]; // all units from the server
+  isRequired?: boolean;
 }
 
 const Fields: React.FC<FieldProps> = ({
@@ -29,8 +29,9 @@ const Fields: React.FC<FieldProps> = ({
   option = [],
   handleAttributeChange,
   productId,
-  unit, // Destructure unit
-  isRequired, // Destructure isRequired
+  unitFamily,
+  units,
+  isRequired,
 }) => {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -93,20 +94,6 @@ const Fields: React.FC<FieldProps> = ({
     }),
   };
 
-  // Helper function to render input with unit
-  const renderInputWithUnit = (input: JSX.Element) => {
-    if (!unit) return input;
-
-    return (
-      <div className="relative">
-        {input}
-        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600 dark:text-gray-400">
-          {unit}
-        </span>
-      </div>
-    );
-  };
-
   const renderField = () => {
     switch (type) {
       case "file":
@@ -130,7 +117,7 @@ const Fields: React.FC<FieldProps> = ({
         return null;
 
       case "text":
-        const textInput = (
+        return (
           <input
             type="text"
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
@@ -140,43 +127,96 @@ const Fields: React.FC<FieldProps> = ({
             required={isRequired}
           />
         );
-        return renderInputWithUnit(textInput);
 
+      case "textarea":
+        if (code === "long_desc") {
+          return (
+            <RichTextEditorWrapper
+              value={field || ""}
+              onChange={(html) => handleAttributeChange(code, html)}
+              placeholder={`Enter ${name}`}
+            />
+          );
+        }
+        return (
+          <textarea
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors min-h-[100px]"
+            value={field || ""}
+            placeholder={`Enter ${name}`}
+            onChange={(e) => handleAttributeChange(code, e.target.value)}
+            required={isRequired}
+          />
+        );
 
-case "textarea":
-if (code === "long_desc") {
-  return (
-    <RichTextEditorWrapper
-      value={field || ""}
-      onChange={(html) => handleAttributeChange(code, html)}
-      placeholder={`Enter ${name}`}
-    />
-  );
-}  // fallback for other textarea fields
-  return (
-    <textarea
-      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors min-h-[100px]"
-      value={field || ""}
-      placeholder={`Enter ${name}`}
-      onChange={(e) => handleAttributeChange(code, e.target.value)}
-      required={isRequired}
-    />
-  );
+      case "number": {
+        const familyId = unitFamily?._id;
+        // Filter units belonging to this unit family
+        const familyUnits = familyId
+          ? (units || []).filter((u) => {
+              const uFamilyId = u.unitFamily?._id || u.unitFamily;
+              return uFamilyId === familyId;
+            })
+          : [];
 
-      case "number":
+          console.log("Family Units for attribute", code, familyUnits);
+
+        const currentValue = field?.value !== undefined ? field.value : field;
+        const currentUnit = field?.unit;
+
         const numberInput = (
           <input
             type="number"
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
-            value={field || 0}
-            placeholder={`Enter ${name}`}
-            onChange={(e) =>
-              handleAttributeChange(code, Number(e.target.value))
-            }
+            value={currentValue ?? ""}
+            onChange={(e) => {
+              const newValue = e.target.value === "" ? "" : Number(e.target.value);
+              if (familyUnits.length > 0 && currentUnit) {
+                handleAttributeChange(code, { value: newValue, unit: currentUnit });
+              } else if (familyUnits.length > 0) {
+                handleAttributeChange(code, newValue);
+              } else {
+                handleAttributeChange(code, newValue);
+              }
+            }}
             required={isRequired}
           />
         );
-        return renderInputWithUnit(numberInput);
+
+        // If this attribute has a unit family with available units, show dropdown
+        if (familyUnits.length > 0) {
+          const unitOptions = familyUnits.map((u) => ({
+            value: u.symbol,
+            label: u.symbol,
+          }));
+
+          return (
+            <div className="flex gap-2">
+              <div className="flex-1">{numberInput}</div>
+              <Select
+                options={unitOptions}
+                value={unitOptions.find((opt) => opt.value === currentUnit) || null}
+                onChange={(opt) => {
+                  const newUnit = opt?.value;
+                  const newVal =
+                    currentValue !== undefined && newUnit
+                      ? { value: currentValue, unit: newUnit }
+                      : currentValue !== undefined && !newUnit
+                      ? currentValue
+                      : "";
+                  handleAttributeChange(code, newVal);
+                }}
+                className="w-32"
+                classNamePrefix="react-select"
+                placeholder="Unit"
+                isClearable={!isRequired}
+              />
+            </div>
+          );
+        }
+
+        // No unit family – just the number input
+        return numberInput;
+      }
 
       case "select":
         if (code === "brand") {
@@ -349,7 +389,7 @@ if (code === "long_desc") {
         );
 
       case "date":
-        const dateInput = (
+        return (
           <input
             title="date"
             type="date"
@@ -359,7 +399,6 @@ if (code === "long_desc") {
             required={isRequired}
           />
         );
-        return renderInputWithUnit(dateInput);
 
       case "color":
         return (
@@ -375,14 +414,11 @@ if (code === "long_desc") {
             <span className="text-gray-700 dark:text-gray-300 font-mono">
               {field || "#000000"}
             </span>
-            {unit && (
-              <span className="text-gray-500 dark:text-gray-400">{unit}</span>
-            )}
           </div>
         );
 
       case "url":
-        const urlInput = (
+        return (
           <input
             title="url"
             type="url"
@@ -392,7 +428,6 @@ if (code === "long_desc") {
             required={isRequired}
           />
         );
-        return renderInputWithUnit(urlInput);
 
       case "multi-select":
         return (
@@ -418,7 +453,7 @@ if (code === "long_desc") {
         );
 
       default:
-        const defaultInput = (
+        return (
           <input
             type="text"
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
@@ -428,7 +463,6 @@ if (code === "long_desc") {
             required={isRequired}
           />
         );
-        return renderInputWithUnit(defaultInput);
     }
   };
 
@@ -436,12 +470,6 @@ if (code === "long_desc") {
     <div className="mb-5">
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {name}
-
-        {unit && (
-          <span className="text-gray-600 dark:text-gray-600 ml-2">
-            ({unit})
-          </span>
-        )}
         {isRequired && <span className="text-red-500 ml-1">*</span>}
       </label>
       <div>{renderField()}</div>

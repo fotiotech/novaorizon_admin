@@ -7,13 +7,13 @@ export const AttributeField: React.FC<{
   attribute: AttributeDetail;
   field: any;
   handleAttributeChange: (field: string, value: any) => void;
-}> = ({ productId, attribute, field, handleAttributeChange }) => {
+  units: any[];
+}> = ({ productId, attribute, field, handleAttributeChange, units }) => {
   if (!attribute || !attribute.code) return null;
-  const { code, name, type, option, isRequired, unit } = attribute;
+  const { code, name, type, option, isRequired, unitFamily } = attribute;
 
   return (
     <Fields
-      unit={unit}
       isRequired={isRequired}
       type={type}
       code={code}
@@ -22,6 +22,8 @@ export const AttributeField: React.FC<{
       option={option}
       handleAttributeChange={handleAttributeChange}
       productId={productId}
+      unitFamily={unitFamily}
+      units={units}
     />
   );
 };

@@ -60,14 +60,16 @@ export async function deleteUnit(id: string) {
   }
 }
 
+
 export async function getUnits(unitFamilyId?: string) {
   try {
     await connection();
     const query = unitFamilyId ? { unitFamily: unitFamilyId } : {};
     const units = await Unit.find(query)
       .populate("unitFamily")
-      .sort({ createdAt: -1 });
-    return JSON.parse(JSON.stringify(units));
+      .sort({ createdAt: -1 })
+      .lean(); // returns plain objects directly
+    return units;
   } catch (error: any) {
     throw new Error(`Failed to fetch units: ${error.message}`);
   }

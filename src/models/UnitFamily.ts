@@ -17,4 +17,5 @@ const UnitFamilySchema: Schema = new Schema({
   timestamps: true
 });
 
-export default mongoose.models.UnitFamily || mongoose.model<IUnitFamily>('UnitFamily', UnitFamilySchema);
+const UnitFamily = mongoose.models.UnitFamily || mongoose.model<IUnitFamily>('UnitFamily', UnitFamilySchema);
+export default UnitFamily;

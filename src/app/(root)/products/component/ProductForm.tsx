@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { RootState } from "@/app/store/store";
 import { addProduct, clearProduct } from "@/app/store/slices/productSlice";
 import { find_category_attribute_groups } from "@/app/actions/category";
+import { getUnits } from "@/app/actions/unit";
 import { updateProduct, createProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import {
@@ -27,7 +28,12 @@ export type AttributeDetail = {
   option?: string[];
   type: string;
   isRequired?: boolean;
-  unit?: string;
+  unit?: string; // optional unit symbol (if static)
+  unitFamily?: {
+    _id: string;
+    name: string;
+    baseUnit: string;
+  } | null;
 };
 
 export type GroupNode = {
@@ -58,6 +64,7 @@ const ProductForm = () => {
   }>({});
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [units, setUnits] = useState<any[]>([]);
 
   const clearStoreAndRedirect = async () => {
     try {
@@ -167,6 +174,19 @@ const ProductForm = () => {
 
     fetchAttributes();
   }, [product.category_id]);
+
+  // After fetching groups, also fetch units
+useEffect(() => {
+  const fetchUnits = async () => {
+    try {
+      const allUnits = await getUnits();
+      setUnits(allUnits);
+    } catch (err) {
+      console.error("Failed to fetch units", err);
+    }
+  };
+  fetchUnits();
+}, []); // Only once on mount
 
   const handleNext = () => {
     if (validateCurrentStep() && currentStep < topLevelGroups.length - 1) {
@@ -316,6 +336,7 @@ const ProductForm = () => {
                     attribute={a}
                     field={product[a?.code]}
                     handleAttributeChange={handleChange}
+                    units={units}
                   />
                 </div>
               ))}
