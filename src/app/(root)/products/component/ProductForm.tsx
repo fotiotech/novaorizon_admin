@@ -78,27 +78,32 @@ const ProductForm = () => {
     }
   };
 
-  const validateGroup = (group: GroupNode): string[] => {
+  // Validate a group and its children. skipOwnAttributes determines whether to validate the group's own attributes.
+  const validateGroup = (group: GroupNode, skipOwnAttributes = false): string[] => {
     const errors: string[] = [];
 
-    group.attributes.forEach((attr) => {
-      if (attr.isRequired) {
-        const value = product[attr.code];
+    // Validate own attributes if not skipped
+    if (!skipOwnAttributes) {
+      group.attributes.forEach((attr) => {
+        if (attr.isRequired) {
+          const value = product[attr.code];
 
-        if (
-          value === undefined ||
-          value === null ||
-          value === "" ||
-          (Array.isArray(value) && value.length === 0)
-        ) {
-          errors.push(`${attr.name} is required`);
+          if (
+            value === undefined ||
+            value === null ||
+            value === "" ||
+            (Array.isArray(value) && value.length === 0)
+          ) {
+            errors.push(`${attr.name} is required`);
+          }
         }
-      }
-    });
+      });
+    }
 
+    // Always validate children (they are always rendered)
     if (group.children && group.children.length > 0) {
       group.children.forEach((child) => {
-        errors.push(...validateGroup(child));
+        errors.push(...validateGroup(child, false));
       });
     }
 
@@ -110,7 +115,8 @@ const ProductForm = () => {
     let hasErrors = false;
 
     topLevelGroups.forEach((group) => {
-      const groupErrors = validateGroup(group);
+      // Skip own attributes for top-level groups
+      const groupErrors = validateGroup(group, true);
       if (groupErrors.length > 0) {
         allErrors[group._id] = groupErrors;
         hasErrors = true;
@@ -125,7 +131,8 @@ const ProductForm = () => {
     if (currentStep >= topLevelGroups.length) return true;
 
     const currentGroup = topLevelGroups[currentStep];
-    const errors = validateGroup(currentGroup);
+    // Skip own attributes for top-level groups
+    const errors = validateGroup(currentGroup, true);
 
     if (errors.length > 0) {
       setValidationErrors({
@@ -176,17 +183,17 @@ const ProductForm = () => {
   }, [product.category_id]);
 
   // After fetching groups, also fetch units
-useEffect(() => {
-  const fetchUnits = async () => {
-    try {
-      const allUnits = await getUnits();
-      setUnits(allUnits);
-    } catch (err) {
-      console.error("Failed to fetch units", err);
-    }
-  };
-  fetchUnits();
-}, []); // Only once on mount
+  useEffect(() => {
+    const fetchUnits = async () => {
+      try {
+        const allUnits = await getUnits();
+        setUnits(allUnits);
+      } catch (err) {
+        console.error("Failed to fetch units", err);
+      }
+    };
+    fetchUnits();
+  }, []); // Only once on mount
 
   const handleNext = () => {
     if (validateCurrentStep() && currentStep < topLevelGroups.length - 1) {
@@ -306,59 +313,73 @@ useEffect(() => {
     const { _id, code, name, attributes, children } = group;
     const groupErrors = validationErrors[_id] || [];
 
-    const renderGroupContent = () => {
-      switch (code) {
-        case "variants_options":
-          return (
+    // Determine if this is a top-level group (not a child) and not a special group
+    const isTopLevel = !isChild;
+    const isSpecialGroup = code === "variants_options" || code === "product_relationships";
+
+    // For top-level groups that are not special, we skip rendering their own heading and attributes.
+    const skipOwnRendering = isTopLevel && !isSpecialGroup;
+
+    // Special groups: render their own content (heading and manager) and then children
+    if (isSpecialGroup) {
+      return (
+        <section key={_id} className="mb-2">
+          <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
+          {code === "variants_options" && (
             <VariantsManager
               productId={productId}
               product={product}
               attributes={attributes}
             />
-          );
-
-        case "product_relationships":
-          return (
+          )}
+          {code === "product_relationships" && (
             <ManageRelatedProduct
               id={productId}
               product={product}
               attribute={attributes}
             />
-          );
+          )}
+          {children?.length > 0 &&
+            children.map((child) => renderGroup(child, true))}
+        </section>
+      );
+    }
 
-        default:
-          return (
-            <>
-              {attributes.map((a) => (
-                <div key={a?._id} className="">
-                  <AttributeField
-                    productId={productId}
-                    attribute={a}
-                    field={product[a?.code]}
-                    handleAttributeChange={handleChange}
-                    units={units}
-                  />
-                </div>
-              ))}
-              {groupErrors.length > 0 && (
-                <Alert severity="error" className="mt-4">
-                  <ul className="list-disc pl-4">
-                    {groupErrors.map((error, index) => (
-                      <li key={index}>{error}</li>
-                    ))}
-                  </ul>
-                </Alert>
-              )}
-            </>
-          );
-      }
-    };
+    // For top-level groups that are not special, only render children
+    if (skipOwnRendering) {
+      return (
+        <div key={_id}>
+          {children?.length > 0 &&
+            children.map((child) => renderGroup(child, true))}
+        </div>
+      );
+    }
 
+    // For child groups (or any other group that should be rendered with heading and attributes)
     return (
       <section key={_id} className="mb-2">
         <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
         <div className="flex flex-col gap-4">
-          {renderGroupContent()}
+          {attributes.map((a) => (
+            <div key={a?._id} className="">
+              <AttributeField
+                productId={productId}
+                attribute={a}
+                field={product[a?.code]}
+                handleAttributeChange={handleChange}
+                units={units}
+              />
+            </div>
+          ))}
+          {groupErrors.length > 0 && (
+            <Alert severity="error" className="mt-4">
+              <ul className="list-disc pl-4">
+                {groupErrors.map((error, index) => (
+                  <li key={index}>{error}</li>
+                ))}
+              </ul>
+            </Alert>
+          )}
           {children?.length > 0 &&
             children.map((child) => renderGroup(child, true))}
         </div>
@@ -412,7 +433,7 @@ useEffect(() => {
                 ))}
               </Stepper>
 
-              {renderGroup(topLevelGroups[currentStep])}
+              {renderGroup(topLevelGroups[currentStep], false)}
             </>
           ) : (
             <Alert severity="info">
