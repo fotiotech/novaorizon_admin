@@ -1,188 +1,124 @@
-// CategoryMapping.tsx
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
 import Select from "react-select";
 import {
-  find_mapped_attributes_ids,
-  updateCategoryAttributes,
+  updateCategoryAttributeSets,
+  getCategory,
 } from "@/app/actions/category";
 
-interface Group {
+interface AttributeSet {
   _id: string;
-  name: string;
-  parent_id?: string;
-  attributes: string[] | { name: string; _id?: string }[];
-}
-
-interface AttributeType {
-  _id?: string;
-  id?: string;
-  code: string;
-  name: string;
-  option?: string | string[];
-  type: string;
-  sort_order: number;
+  title: string;
+  description?: string;
 }
 
 interface CategoryMappingProps {
-  categoryData: any[];
-  groups: Group[];
-  allAttributes: AttributeType[];
+  categoryData: any[]; // categories for dropdown
+  allAttributeSets: AttributeSet[]; // all attribute sets from DB
   isLoading: boolean;
 }
 
 const CategoryMapping: React.FC<CategoryMappingProps> = ({
   categoryData,
-  groups,
-  allAttributes,
+  allAttributeSets,
   isLoading: parentLoading,
 }) => {
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
-  const [mappedAttributes, setMappedAttributes] = useState<any>([]);
-  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
+  const [mappedSetIds, setMappedSetIds] = useState<string[]>([]);
+  const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch mapped attributes when category changes
+  // Fetch the category's current attribute_sets_ids when category changes
   useEffect(() => {
-    async function fetchMappedAttributes() {
+    async function fetchCategorySets() {
       if (!selectedCategoryId) return;
-
       try {
         setIsLoading(true);
-        const res = await find_mapped_attributes_ids(selectedCategoryId);
-        if (res) setMappedAttributes(res);
+        const category = await getCategory(selectedCategoryId);
+        if (category && category.attribute_sets_ids) {
+          setMappedSetIds(
+            category.attribute_sets_ids.map((id: any) => id.toString()),
+          );
+        } else {
+          setMappedSetIds([]);
+        }
       } catch (err) {
-        console.error("Error fetching mapped attributes:", err);
+        console.error("Error fetching category sets:", err);
       } finally {
         setIsLoading(false);
       }
     }
-
-    fetchMappedAttributes();
+    fetchCategorySets();
   }, [selectedCategoryId]);
 
-  // Handle mapping attributes to category
-  const handleMapAttributesToCategory = async (attributeIds: string[]) => {
-    if (!selectedCategoryId) return;
+  // Available sets = all sets minus those already mapped
+  const availableSets = useMemo(() => {
+    return allAttributeSets?.filter((set) => !mappedSetIds.includes(set._id));
+  }, [allAttributeSets, mappedSetIds]);
 
+  const toggleSetSelection = (setId: string) => {
+    setSelectedSetIds((prev) =>
+      prev.includes(setId)
+        ? prev.filter((id) => id !== setId)
+        : [...prev, setId],
+    );
+  };
+
+  const handleMapSets = async () => {
+    if (!selectedCategoryId || selectedSetIds.length === 0) return;
     try {
       setIsLoading(true);
-
-      // Get current mapped attribute IDs to prevent overriding
-      const currentMappedIds = mappedAttributes.flatMap((group: any) =>
-        group.attributes.map((attr: any) => attr._id)
+      const newSetIds = [...mappedSetIds, ...selectedSetIds];
+      const result = await updateCategoryAttributeSets(
+        selectedCategoryId,
+        newSetIds,
       );
-
-      // Combine with new attributes, avoiding duplicates
-      const allAttributeIds = [
-        ...new Set([...currentMappedIds, ...attributeIds]),
-      ];
-
-      await updateCategoryAttributes(selectedCategoryId, allAttributeIds);
-
-      // Refresh mapped attributes
-      const res = await find_mapped_attributes_ids(selectedCategoryId);
-      if (res) setMappedAttributes(res);
-
-      alert("Attributes mapped to category successfully!");
+      if (result.success) {
+        setMappedSetIds(newSetIds);
+        setSelectedSetIds([]);
+        alert("Attribute sets mapped successfully!");
+      } else {
+        alert(result.error || "Failed to map sets.");
+      }
     } catch (err) {
-      console.error("Error mapping attributes to category:", err);
-      alert("Failed to map attributes to category");
+      console.error(err);
+      alert("Error mapping attribute sets.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle removing attributes from category
-  const handleUnmapAttributesFromCategory = async (attributeIds: string[]) => {
+  const handleUnmapSet = async (setId: string) => {
     if (!selectedCategoryId) return;
-
     try {
       setIsLoading(true);
-
-      // Get current mapped attribute IDs
-      const currentMappedIds = mappedAttributes.flatMap((group: any) =>
-        group.attributes.map((attr: any) => attr._id)
+      const updatedSets = mappedSetIds.filter((id) => id !== setId);
+      const result = await updateCategoryAttributeSets(
+        selectedCategoryId,
+        updatedSets,
       );
-
-      // Remove the specified attributes
-      const updatedAttributeIds = currentMappedIds.filter(
-        (id: any) => !attributeIds.includes(id)
-      );
-
-      await updateCategoryAttributes(selectedCategoryId, updatedAttributeIds);
-
-      // Refresh mapped attributes
-      const res = await find_mapped_attributes_ids(selectedCategoryId);
-      if (res) setMappedAttributes(res);
-
-      alert("Attributes removed from category successfully!");
+      if (result.success) {
+        setMappedSetIds(updatedSets);
+        alert("Attribute set removed.");
+      } else {
+        alert(result.error || "Failed to remove set.");
+      }
     } catch (err) {
-      console.error("Error removing attributes from category:", err);
-      alert("Failed to remove attributes from category");
+      console.error(err);
+      alert("Error removing attribute set.");
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Get all attributes that are in any group
-  const allGroupAttributes = useMemo(() => {
-    const groupAttributeIds = new Set();
-
-    groups.forEach((group) => {
-      group.attributes.forEach((attr) => {
-        if (typeof attr === "string") {
-          groupAttributeIds.add(attr);
-        } else if (attr._id) {
-          groupAttributeIds.add(attr._id);
-        }
-      });
-    });
-
-    return allAttributes.filter((attr) => groupAttributeIds.has(attr._id));
-  }, [groups, allAttributes]);
-
-  // Get IDs of already mapped attributes
-  const mappedAttributeIds = useMemo(() => {
-    return mappedAttributes.flatMap((group: any) =>
-      group.attributes.map((attr: any) => attr._id)
-    );
-  }, [mappedAttributes]);
-
-  // Filter out already mapped attributes from available ones
-  const availableGroupAttributes = useMemo(() => {
-    return allGroupAttributes.filter(
-      (attr) => !mappedAttributeIds.includes(attr._id || "")
-    );
-  }, [allGroupAttributes, mappedAttributeIds]);
-
-  const toggleAttributeSelection = (attrId: string) => {
-    if (selectedAttributes.includes(attrId)) {
-      setSelectedAttributes(selectedAttributes.filter((id) => id !== attrId));
-    } else {
-      setSelectedAttributes([...selectedAttributes, attrId]);
-    }
-  };
-
-  const handleMapAttributes = () => {
-    if (selectedAttributes.length > 0) {
-      handleMapAttributesToCategory(selectedAttributes);
-      setSelectedAttributes([]);
-    }
-  };
-
-  const handleUnmapAttribute = (attributeId: string) => {
-    handleUnmapAttributesFromCategory([attributeId]);
   };
 
   return (
-    <div className=" p-2 lg:p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+    <div className="p-2 lg:p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
       <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
-        Category Mapping
+        Category Attribute Set Mapping
       </h2>
 
-      {/* Select Category */}
+      {/* Category selector */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Select Category:
@@ -197,14 +133,14 @@ const CategoryMapping: React.FC<CategoryMappingProps> = ({
               ? {
                   value: selectedCategoryId,
                   label: categoryData.find(
-                    (cat) => cat._id === selectedCategoryId
+                    (cat) => cat._id === selectedCategoryId,
                   )?.name,
                 }
               : null
           }
           onChange={(selected) => {
             setSelectedCategoryId(selected?.value || "");
-            setSelectedAttributes([]);
+            setSelectedSetIds([]);
           }}
           className="w-full"
           styles={{
@@ -221,121 +157,34 @@ const CategoryMapping: React.FC<CategoryMappingProps> = ({
       {selectedCategoryId && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Available Group Attributes */}
+            {/* Available Attribute Sets */}
             <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">
-                Available Group Attributes
+                Available Attribute Sets
               </h3>
               <div className="border border-gray-200 dark:border-gray-600 rounded-md p-3 h-80 overflow-auto bg-white dark:bg-gray-800">
-                {groups.map((group) => (
-                  <div key={group._id} className="mb-4">
-                    <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2 text-sm uppercase tracking-wide border-b pb-1">
-                      {group.name}
-                    </h4>
-                    {availableGroupAttributes
-                      .filter((attr) => {
-                        const groupAttrIds = group.attributes
-                          .map((a) => (typeof a === "string" ? a : a._id))
-                          .filter((id): id is string => id !== undefined);
-                        return groupAttrIds.includes(attr._id || "");
-                      })
-                      .map((attr) => (
-                        <div
-                          key={attr._id}
-                          className={`p-2 mb-1 rounded cursor-pointer transition-colors ${
-                            selectedAttributes.includes(attr._id || "")
-                              ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
-                              : "hover:bg-gray-100 dark:hover:bg-gray-700"
+                {availableSets?.length > 0 ? (
+                  availableSets.map((set) => (
+                    <div
+                      key={set._id}
+                      className={`p-2 mb-1 rounded cursor-pointer transition-colors ${
+                        selectedSetIds.includes(set._id)
+                          ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
+                          : "hover:bg-gray-100 dark:hover:bg-gray-700"
+                      }`}
+                      onClick={() => toggleSetSelection(set._id)}
+                    >
+                      <div className="flex items-center">
+                        <span
+                          className={`w-4 h-4 rounded-full border mr-2 flex items-center justify-center ${
+                            selectedSetIds.includes(set._id)
+                              ? "bg-green-500 border-green-500"
+                              : "border-gray-300"
                           }`}
-                          onClick={() =>
-                            toggleAttributeSelection(attr._id || "")
-                          }
                         >
-                          <div className="flex items-center">
-                            <span
-                              className={`w-4 h-4 rounded-full border mr-2 flex items-center justify-center ${
-                                selectedAttributes.includes(attr._id || "")
-                                  ? "bg-green-500 border-green-500"
-                                  : "border-gray-300"
-                              }`}
-                            >
-                              {selectedAttributes.includes(attr._id || "") && (
-                                <svg
-                                  className="w-3 h-3 text-white"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    d="M5 13l4 4L19 7"
-                                  ></path>
-                                </svg>
-                              )}
-                            </span>
-                            <span>{attr.name}</span>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                ))}
-                {availableGroupAttributes.length === 0 && (
-                  <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-                    All group attributes are already mapped
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => {
-                    const allIds = availableGroupAttributes.map(
-                      (attr) => attr._id || ""
-                    );
-                    setSelectedAttributes(allIds);
-                  }}
-                  disabled={isLoading || availableGroupAttributes.length === 0}
-                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  Select All
-                </button>
-                <button
-                  onClick={() => setSelectedAttributes([])}
-                  disabled={isLoading || selectedAttributes.length === 0}
-                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-
-            {/* Mapped Attributes */}
-            <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">
-                Mapped to Category
-              </h3>
-              <div className="border border-gray-200 dark:border-gray-600 rounded-md p-3 h-80 overflow-auto bg-white dark:bg-gray-800">
-                {mappedAttributes.length > 0 ? (
-                  mappedAttributes.map((group: any) => (
-                    <div key={group._id} className="mb-4">
-                      <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2 text-sm uppercase tracking-wide border-b pb-1">
-                        {group.name}
-                      </h4>
-                      {group.attributes?.map((attr: any) => (
-                        <div
-                          key={attr._id}
-                          className="p-2 mb-1 rounded bg-gray-50 dark:bg-gray-700 flex justify-between items-center"
-                        >
-                          <span>{attr.name}</span>
-                          <button
-                            title="name"
-                            onClick={() => handleUnmapAttribute(attr._id)}
-                            disabled={isLoading}
-                            className="text-red-500 hover:text-red-700 disabled:text-gray-400"
-                          >
+                          {selectedSetIds.includes(set._id) && (
                             <svg
-                              className="w-4 h-4"
+                              className="w-3 h-3 text-white"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -344,17 +193,84 @@ const CategoryMapping: React.FC<CategoryMappingProps> = ({
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                                 strokeWidth="2"
-                                d="M6 18L18 6M6 6l12 12"
+                                d="M5 13l4 4L19 7"
                               ></path>
                             </svg>
-                          </button>
-                        </div>
-                      ))}
+                          )}
+                        </span>
+                        <span>{set.title}</span>
+                      </div>
                     </div>
                   ))
                 ) : (
                   <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-                    No attributes mapped to this category
+                    All sets are already mapped to this category.
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() =>
+                    setSelectedSetIds(
+                      availableSets?.map((set) => set._id) || [],
+                    )
+                  }
+                  disabled={isLoading || availableSets?.length === 0}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => setSelectedSetIds([])}
+                  disabled={isLoading || selectedSetIds.length === 0}
+                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {/* Mapped Attribute Sets */}
+            <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">
+                Mapped to Category
+              </h3>
+              <div className="border border-gray-200 dark:border-gray-600 rounded-md p-3 h-80 overflow-auto bg-white dark:bg-gray-800">
+                {mappedSetIds.length > 0 ? (
+                  mappedSetIds.map((setId) => {
+                    const set = allAttributeSets.find((s) => s._id === setId);
+                    if (!set) return null;
+                    return (
+                      <div
+                        key={setId}
+                        className="p-2 mb-1 rounded bg-gray-50 dark:bg-gray-700 flex justify-between items-center"
+                      >
+                        <span>{set.title}</span>
+                        <button
+                          onClick={() => handleUnmapSet(setId)}
+                          disabled={isLoading}
+                          className="text-red-500 hover:text-red-700 disabled:text-gray-400"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M6 18L18 6M6 6l12 12"
+                            ></path>
+                          </svg>
+                        </button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400 text-center py-4">
+                    No Attribute Sets mapped to this category.
                   </p>
                 )}
               </div>
@@ -364,9 +280,9 @@ const CategoryMapping: React.FC<CategoryMappingProps> = ({
           {/* Map Button */}
           <div className="mt-6 flex justify-end">
             <button
-              onClick={handleMapAttributes}
-              disabled={isLoading || selectedAttributes.length === 0}
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              onClick={handleMapSets}
+              disabled={isLoading || selectedSetIds.length === 0}
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <>
@@ -407,7 +323,7 @@ const CategoryMapping: React.FC<CategoryMappingProps> = ({
                       d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
                     ></path>
                   </svg>
-                  Map Selected Attributes
+                  Map Selected Sets
                 </>
               )}
             </button>

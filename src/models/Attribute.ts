@@ -1,7 +1,7 @@
 import mongoose, { Schema, model, models, Document } from "mongoose";
 
 // Attribute Interface
-interface IAttribute extends Document {
+export interface IAttribute extends Document {
   code: string;
   unitFamily?: mongoose.Types.ObjectId | null; // Reference to UnitFamily, can be null
   isRequired: boolean;
@@ -68,9 +68,6 @@ const AttributeSchema = new Schema<IAttribute>({
     required: true,
   },
 });
-
-AttributeSchema.index({ code: 1 });
-AttributeSchema.index({ name: 1 });
 
 // Attribute Model
 const Attribute =

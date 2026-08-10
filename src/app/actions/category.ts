@@ -3,10 +3,11 @@
 import slugify from "slugify";
 import { connection } from "@/utils/connection";
 import Category from "@/models/Category";
+import AttributeSet from "@/models/AttributeSet";
 import mongoose, { Types } from "mongoose";
 import CategoryAttribute from "@/models/CategoryAttribute";
 import { revalidatePath } from "next/cache";
-import AttributeGroup from "@/models/AttributesGroup";
+import AttributeGroup from "@/models/AttributeGroup";
 import "@/models/Attribute";
 import "@/models/UnitFamily";
 
@@ -16,30 +17,57 @@ function generateSlug(name: string) {
 
 const buildGroupTreeWithValues = (
   groups: any[],
-  parentId: string | null = null
+  allGroupIds: Set<string>, // all group IDs present
+  parentId: string | null = null,
 ): any[] => {
-  return groups
-    .filter(
-      (group) =>
-        (!parentId && !group.parent_id) ||
-        (parentId && group.parent_id?.toString() === parentId)
-    )
+  // Filter: either parent matches OR parent is not in the set (orphan) and we're at root level
+  const filtered = groups.filter((group) => {
+    const groupParent = group.parent_id?.toString();
+    if (parentId === null) {
+      // Root level: include if no parent OR parent not in the set (orphan)
+      return !groupParent || !allGroupIds.has(groupParent);
+    } else {
+      // Child level: must have a parent that matches
+      return groupParent === parentId;
+    }
+  });
+
+  return filtered
     .sort((a, b) => a.group_order - b.group_order)
     .map((group) => ({
-      _id: group._id?.toString(),
+      _id: group._id.toString(),
       code: group.code,
       name: group.name,
-      parent_id: group.parent_id?.toString(),
+      parent_id: group.parent_id?.toString() || null,
       group_order: group.group_order,
-      attributes: group.attributes,
-      children: buildGroupTreeWithValues(groups, group._id?.toString()),
+      attributes: group.attributes.map((attr: any) => ({
+        _id: attr._id.toString(),
+        code: attr.code,
+        name: attr.name,
+        option: attr.option || [],
+        type: attr.type,
+        isRequired: attr.isRequired || false,
+        unit: attr.unit,
+        unitFamily: attr.unitFamily
+          ? {
+              _id: attr.unitFamily._id.toString(),
+              name: attr.unitFamily.name,
+              baseUnit: attr.unitFamily.baseUnit,
+            }
+          : null,
+      })),
+      children: buildGroupTreeWithValues(
+        groups,
+        allGroupIds,
+        group._id.toString(),
+      ),
     }));
 };
 
 export async function getCategory(
   id?: string | null,
   parentId?: string | null,
-  name?: string | null
+  name?: string | null,
 ) {
   await connection();
   if (name) {
@@ -99,12 +127,13 @@ export async function createCategory(
     parent_id?: string;
     description?: string;
     imageUrl?: string[];
-    attributes?: string[];
+    attributeSetsIds?: string[];
   },
-  id?: string | null
+  id?: string | null,
 ) {
   try {
-    const { name, parent_id, description, imageUrl, attributes } = formData;
+    const { name, parent_id, description, imageUrl, attributeSetsIds } =
+      formData;
 
     const url_slug = generateSlug(name + (description || ""));
     await connection();
@@ -121,16 +150,14 @@ export async function createCategory(
         imageUrl: imageUrl || [],
       };
 
-      // Only update attributes if new ones are provided
-      if (attributes && attributes.length > 0) {
-        // Use $addToSet to add new attributes without duplicates
-        // Or $set to replace entirely based on your needs
-        updateData.attributes = attributes.map(String);
+      // Only update attribute sets if new ones are provided
+      if (attributeSetsIds && attributeSetsIds.length > 0) {
+        updateData.attribute_sets_ids = attributeSetsIds.map(String);
       }
 
       await Category.findOneAndUpdate(
         { _id: existingCategory._id },
-        { $set: updateData }
+        { $set: updateData },
       );
     } else {
       // For create - set all fields including empty arrays
@@ -140,7 +167,7 @@ export async function createCategory(
         parent_id: parent_id || null,
         description,
         imageUrl: imageUrl || [],
-        attributes: attributes?.map(String) || [],
+        attribute_sets_ids: attributeSetsIds?.map(String) || [],
       });
       await newCategory.save();
     }
@@ -151,7 +178,7 @@ export async function createCategory(
     console.error(
       "Error while processing the request:\n",
       error.message,
-      error.stack
+      error.stack,
     );
     return { error: "Something went wrong." };
   }
@@ -159,7 +186,7 @@ export async function createCategory(
 
 export async function updateCategoryAttributes(
   categoryId: string,
-  newAttributes: string[] = []
+  newAttributes: string[] = [],
 ): Promise<{ success?: boolean; attributes?: string[]; error?: string }> {
   try {
     if (!categoryId) return { error: "Category ID is required." };
@@ -175,7 +202,7 @@ export async function updateCategoryAttributes(
 
     const r = await Category.updateOne(
       { _id: new mongoose.Types.ObjectId(categoryId) },
-      { $set: { attributes: updatedAttributes } }
+      { $set: { attributes: updatedAttributes } },
     );
     console.log({ r, updatedAttributes });
 
@@ -201,7 +228,7 @@ export async function deleteCategory(id: string) {
 export async function create_update_mapped_attributes_ids(
   id?: string | null,
   categoryId?: string | null,
-  attributes?: any[]
+  attributes?: any[],
 ) {
   await connection();
 
@@ -210,7 +237,7 @@ export async function create_update_mapped_attributes_ids(
     await CategoryAttribute.findOneAndUpdate(
       { _id: id },
       { $set: { attributes } },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).exec();
 
     revalidatePath("/admin/categories");
@@ -229,13 +256,13 @@ export async function create_update_mapped_attributes_ids(
   if (existingCategoryAttribute) {
     // Update existing CategoryAttribute doc by adding new attributes to existing ones
     const updatedAttributes = Array.from(
-      new Set([...existingCategoryAttribute.attributes, ...(attributes || [])])
+      new Set([...existingCategoryAttribute.attributes, ...(attributes || [])]),
     );
 
     await CategoryAttribute.findOneAndUpdate(
       { category_id: categoryId },
       { $set: { attributes: updatedAttributes } },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).exec();
 
     revalidatePath("/admin/categories");
@@ -253,7 +280,7 @@ export async function create_update_mapped_attributes_ids(
 }
 
 export async function find_mapped_attributes_ids(
-  categoryId: string | null = null
+  categoryId: string | null = null,
 ) {
   if (!categoryId) return [];
 
@@ -300,7 +327,7 @@ export async function find_mapped_attributes_ids(
   // Filter each group to only include attributes that are in attributeIds
   const filteredGroups = groups.map((group) => {
     const filteredAttributes = group.attributes.filter((attr: any) =>
-      attributeIds.some((id: any) => id.toString() === attr._id.toString())
+      attributeIds.some((id: any) => id.toString() === attr._id.toString()),
     );
 
     return {
@@ -312,84 +339,111 @@ export async function find_mapped_attributes_ids(
   return filteredGroups;
 }
 
-// In your category.ts server actions
-export async function find_category_attribute_groups(
-  categoryId: string,
-  groupId?: string | null
-) {
+export async function getMappedAttributeGroups(categoryId: string) {
   if (!categoryId) return [];
   await connection();
 
-  try {
-    const catObjectId = new Types.ObjectId(categoryId);
-
-    // Get category and its ancestors with their attributes
-    const categories = await Category.aggregate([
-      { $match: { _id: catObjectId } },
-      {
-        $graphLookup: {
-          from: "categories",
-          startWith: "$parent_id",
-          connectFromField: "parent_id",
-          connectToField: "_id",
-          as: "ancestors",
-          depthField: "depth",
-        },
-      },
-      {
-        $project: {
-          allAttributes: {
-            $setUnion: [
-              { $ifNull: ["$attributes", []] },
-              {
-                $reduce: {
-                  input: {
-                    $map: {
-                      input: { $ifNull: ["$ancestors", []] },
-                      as: "a",
-                      in: { $ifNull: ["$$a.attributes", []] },
-                    },
-                  },
-                  initialValue: [],
-                  in: { $setUnion: ["$$value", "$$this"] },
-                },
-              },
-            ],
-          },
-        },
-      },
-    ]);
-
-    const attributeIds = Array.isArray(categories?.[0]?.allAttributes)
-      ? categories[0].allAttributes
-      : [];
-
-    if (attributeIds.length === 0) return [];
-
-    // Find groups and populate only the attributes that are in attributeIds
-    const groups = await AttributeGroup.find({
-      attributes: { $in: attributeIds },
-    })
-      .populate({
-        path: "attributes",
-        match: { _id: { $in: attributeIds } }, // This ensures only mapped attributes are populated
+  const category = (await Category.findById(categoryId)
+    .populate({
+      path: "attribute_sets_ids",
+      populate: {
+        path: "attributeGroup",
         populate: {
-          path: "unitFamily", // This will populate the unitFamily field
-          model: "UnitFamily", // Specify the model to populate from
+          path: "attributes",
+          model: "Attribute",
         },
-      })
-      .lean();
+      },
+    })
+    .lean()
+    .exec()) as { attribute_sets_ids?: any[] } | null;
 
-    // Filter out groups with no matching attributes after population
-    const filteredGroups = groups.filter((group) =>
-      group.attributes.some((attr: any) =>
-        attributeIds.some((id: any) => id.equals(attr._id))
-      )
+  if (!category) return [];
+
+  // Flatten all groups from all mapped sets
+  const allGroups = category.attribute_sets_ids?.flatMap(
+    (set: any) => set.attributeGroup || [],
+  );
+
+  // Deduplicate groups by _id
+  const uniqueGroups = Array.from(
+    new Map(allGroups?.map((g: any) => [g._id.toString(), g])).values(),
+  );
+
+  // Build a set of all group IDs for orphan detection
+  const allGroupIds = new Set(uniqueGroups.map((g) => g._id.toString()));
+
+  // Build tree; pass the set so orphans become roots
+  const tree = buildGroupTreeWithValues(uniqueGroups, allGroupIds);
+
+  // Additional: convert each group's attributes to plain objects already done inside buildGroupTreeWithValues
+  return tree;
+}
+
+export async function updateCategoryAttributeSets(
+  categoryId: string,
+  attributeSetIds: string[], // new array of set IDs
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    if (!categoryId) return { error: "Category ID is required." };
+    await connection();
+
+    const existingCategory = await Category.findById(categoryId);
+    if (!existingCategory) return { error: "Category not found." };
+
+    // Replace the entire attribute_sets_ids array
+    await Category.updateOne(
+      { _id: categoryId },
+      { $set: { attribute_sets_ids: attributeSetIds } },
     );
 
-    return buildGroupTreeWithValues(filteredGroups);
-  } catch (error) {
-    console.error("Error finding category attribute groups:", error);
-    return [];
+    revalidatePath("/categories");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error updating attribute sets:\n", error.message);
+    return { error: "Something went wrong." };
   }
+}
+
+// In category.ts
+
+/**
+ * Fetch attribute sets mapped to a category, with their groups and attributes fully populated.
+ * Returns an array of sets, each with a `groups` tree (built from the set's attribute groups).
+ */
+export async function getCategoryAttributeSets(categoryId: string) {
+  if (!categoryId) return [];
+  await connection();
+
+  const category = await Category.findById(categoryId)
+    .populate({
+      path: "attribute_sets_ids",
+      populate: {
+        path: "attributeGroup",
+        populate: {
+          path: "attributes",
+          model: "Attribute",
+        },
+      },
+    })
+    .lean()
+    .exec();
+
+  if (!category || Array.isArray(category)) return [];
+
+  const sets = category.attribute_sets_ids || [];
+  return sets.map((set: any) => {
+    const groups = set.attributeGroup || [];
+    // Deduplicate groups (if same group appears in multiple sets, but we keep per set)
+    const uniqueGroups = Array.from(
+      new Map(groups.map((g: any) => [g._id.toString(), g])).values(),
+    );
+    const allGroupIds = new Set(uniqueGroups.map((g: any) => g._id.toString()));
+    const tree = buildGroupTreeWithValues(uniqueGroups, allGroupIds);
+    return {
+      _id: set._id.toString(),
+      title: set.title,
+      code: set.code,
+      groups: tree, // tree of GroupNode
+    };
+  });
 }

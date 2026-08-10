@@ -1,40 +1,40 @@
-// CategoryAttribute.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
 import { findAttributesAndValues } from "@/app/actions/attributes";
-import {
-  find_mapped_attributes_ids,
-  getCategory,
-} from "@/app/actions/category";
+import { getCategory } from "@/app/actions/category";
 import { findAttributeForGroups } from "@/app/actions/attributegroup";
+import { getAttributeSets } from "@/app/actions/attribute_sets";
 import CategoryMapping from "../_component/CategoryMapping";
 import GroupManagement from "../_component/GroupManagement";
 
-const CategoryAttribute = ({}) => {
+const CategoryAttribute = () => {
   const [categoryData, setCategoryData] = useState<any[]>([]);
   const [allAttributes, setAllAttributes] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
+  const [allAttributeSets, setAllAttributeSets] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load initial data
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         setIsLoading(true);
+        setError(null);
 
-        // Fetch categories
-        const categories = await getCategory();
-        if (categories) setCategoryData(categories);
+        // Fetch all required data in parallel
+        const [categoriesResult, attributesResult, groupsResult, setsResult] =
+          await Promise.all([
+            getCategory(), // returns array of categories
+            findAttributesAndValues(),
+            findAttributeForGroups(),
+            getAttributeSets(),
+          ]);
 
-        // Fetch attributes
-        const attributes = await findAttributesAndValues();
-        if (attributes?.length > 0) setAllAttributes(attributes as any);
-
-        // Fetch groups
-        const attributeGroups = await findAttributeForGroups();
-        if (Array.isArray(attributeGroups)) setGroups(attributeGroups);
+        if (categoriesResult) setCategoryData(categoriesResult);
+        if (attributesResult) setAllAttributes(attributesResult as any[]);
+        if (Array.isArray(groupsResult)) setGroups(groupsResult);
+        if (setsResult.success) setAllAttributeSets(setsResult.data as any[]);
       } catch (err) {
         console.error("Error fetching data:", err);
         setError("Failed to load data");
@@ -59,13 +59,6 @@ const CategoryAttribute = ({}) => {
       )}
 
       <GroupManagement
-        groups={groups}
-        allAttributes={allAttributes}
-        isLoading={isLoading}
-      />
-
-      <CategoryMapping
-        categoryData={categoryData}
         groups={groups}
         allAttributes={allAttributes}
         isLoading={isLoading}

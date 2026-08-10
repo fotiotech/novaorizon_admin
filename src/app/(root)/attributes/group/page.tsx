@@ -29,7 +29,6 @@ type AttributesGroup = {
   name: string;
   parent_id: string;
   attributes?: string[];
-  group_order: number;
   sort_order: number;
   children?: AttributesGroup[];
 };
@@ -45,7 +44,7 @@ const Group = () => {
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
   const [name, setName] = useState<string>("");
   const [code, setCode] = useState<string>("");
-  const [groupOrder, setGroupOrder] = useState<number | null>(null);
+  const [sortOrder, setSortOrder] = useState<number | null>(null);
   const [groupId, setGroupId] = useState<string>("");
   const [action, setAction] = useState<string>("");
   const [editGroupId, setEditGroupId] = useState<string>("");
@@ -103,8 +102,8 @@ const Group = () => {
         if (groupResponse) {
           setCode(groupResponse.code || "");
           setName(groupResponse.name || "");
-          setGroupOrder(groupResponse.group_order || null);
           setParentGroupId(groupResponse.parent_id || "");
+          setSortOrder(groupResponse.sort_order || null);
 
           const currentAttributeIds =
             groupResponse.attributes?.map((attr: any) => attr._id || attr.id) ||
@@ -137,7 +136,7 @@ const Group = () => {
           code,
           parent_id: parentGroupId,
           attributes: selectedAttributes,
-          group_order: groupOrder as number,
+          sort_order: sortOrder as number,
         };
         response = await updateAttributeGroup(editGroupId, data);
       } else {
@@ -148,7 +147,7 @@ const Group = () => {
           code,
           parentGroupId,
           selectedAttributes,
-          groupOrder as number
+          sortOrder as number,
         );
       }
 
@@ -156,7 +155,7 @@ const Group = () => {
         setSuccess(
           editGroupId
             ? "Group updated successfully!"
-            : "Group created successfully!"
+            : "Group created successfully!",
         );
 
         // Refresh groups list
@@ -209,7 +208,7 @@ const Group = () => {
     setSelectedAttributes((prev) =>
       prev.includes(attributeId)
         ? prev.filter((id) => id !== attributeId)
-        : [...prev, attributeId]
+        : [...prev, attributeId],
     );
   };
 
@@ -217,7 +216,7 @@ const Group = () => {
   const resetForm = () => {
     setName("");
     setCode("");
-    setGroupOrder(null);
+    setSortOrder(null);
     setParentGroupId("");
     setSelectedAttributes([]);
   };
@@ -246,12 +245,12 @@ const Group = () => {
     const filtered = attributes?.filter(
       (a) =>
         a?.name?.toLowerCase().includes(filterText?.toLowerCase()) ||
-        a?.code?.toLowerCase().includes(filterText?.toLowerCase())
+        a?.code?.toLowerCase().includes(filterText?.toLowerCase()),
     );
     const sorted = filtered.sort((a, b) =>
       sortAttrOrder.value === "asc"
         ? a?.name?.localeCompare(b.name)
-        : b?.name?.localeCompare(a.name)
+        : b?.name?.localeCompare(a.name),
     );
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
@@ -283,24 +282,24 @@ const Group = () => {
   const flattenedGroups = useMemo(() => {
     const flatten = (groupList: AttributesGroup[], level = 0): any[] => {
       let result: any[] = [];
-      
-      groupList.forEach(group => {
+
+      groupList.forEach((group) => {
         result.push({
           ...group,
           level,
           hasChildren: group.children && group.children.length > 0,
-          isExpanded: expandedGroups.has(group._id)
+          isExpanded: expandedGroups.has(group._id),
         });
-        
+
         if (expandedGroups.has(group._id) && group.children) {
           result = result.concat(flatten(group.children, level + 1));
         }
       });
-      
+
       return result;
     };
 
-    const rootGroups = groups.filter(group => !group.parent_id);
+    const rootGroups = groups.filter((group) => !group.parent_id);
     return flatten(rootGroups);
   }, [groups, expandedGroups]);
 
@@ -392,14 +391,14 @@ const Group = () => {
 
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Group Order
+                    Sort Order
                   </label>
                   <input
                     type="number"
-                    value={groupOrder === null ? "" : groupOrder}
+                    value={sortOrder === null ? "" : sortOrder}
                     onChange={(e) =>
-                      setGroupOrder(
-                        e.target.value === "" ? null : Number(e.target.value)
+                      setSortOrder(
+                        e.target.value === "" ? null : Number(e.target.value),
                       )
                     }
                     placeholder="Order number"
@@ -540,7 +539,7 @@ const Group = () => {
               <h3 className="font-medium">All Groups</h3>
               <div className="flex items-center gap-2">
                 <Link
-                  href={"/attributes/group_attribute_category"}
+                  href={"/attributes/groups"}
                   className="p-2 font-semibold bg-blue-600 text-white rounded text-sm"
                 >
                   + Attributes
@@ -567,32 +566,52 @@ const Group = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
                         Name
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
                         Code
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
                         Parent
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
                         Order
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
                         Attributes
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {flattenedGroups.map((group) => (
-                      <tr 
-                        key={group._id} 
+                      <tr
+                        key={group._id}
                         className={`hover:bg-gray-50 ${
-                          group._id === (editGroupId || groupId) ? 'bg-blue-50' : ''
+                          group._id === (editGroupId || groupId)
+                            ? "bg-blue-50"
+                            : ""
                         }`}
                         style={{ paddingLeft: `${group.level * 20}px` }}
                       >

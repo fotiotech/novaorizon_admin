@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { RootState } from "@/app/store/store";
 import { addProduct, clearProduct } from "@/app/store/slices/productSlice";
-import { find_category_attribute_groups } from "@/app/actions/category";
+import { getCategoryAttributeSets } from "@/app/actions/category"; // new action
 import { getUnits } from "@/app/actions/unit";
 import { updateProduct, createProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
@@ -28,7 +28,7 @@ export type AttributeDetail = {
   option?: string[];
   type: string;
   isRequired?: boolean;
-  unit?: string; // optional unit symbol (if static)
+  unit?: string;
   unitFamily?: {
     _id: string;
     name: string;
@@ -40,10 +40,17 @@ export type GroupNode = {
   _id: string;
   code: string;
   name: string;
-  parent_id: string;
+  parent_id: string | null;
   attributes: AttributeDetail[];
   children: GroupNode[];
   group_order: number;
+};
+
+type AttributeSetStep = {
+  _id: string;
+  title: string;
+  code: string;
+  groups: GroupNode[];
 };
 
 const ProductForm = () => {
@@ -58,9 +65,9 @@ const ProductForm = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
-  const [topLevelGroups, setTopLevelGroups] = useState<GroupNode[]>([]);
+  const [steps, setSteps] = useState<AttributeSetStep[]>([]); // now steps are attribute sets
   const [validationErrors, setValidationErrors] = useState<{
-    [key: string]: string[];
+    [groupId: string]: string[];
   }>({});
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,15 +86,16 @@ const ProductForm = () => {
   };
 
   // Validate a group and its children. skipOwnAttributes determines whether to validate the group's own attributes.
-  const validateGroup = (group: GroupNode, skipOwnAttributes = false): string[] => {
+  const validateGroup = (
+    group: GroupNode,
+    skipOwnAttributes = false,
+  ): string[] => {
     const errors: string[] = [];
 
-    // Validate own attributes if not skipped
     if (!skipOwnAttributes) {
       group.attributes.forEach((attr) => {
         if (attr.isRequired) {
           const value = product[attr.code];
-
           if (
             value === undefined ||
             value === null ||
@@ -100,7 +108,6 @@ const ProductForm = () => {
       });
     }
 
-    // Always validate children (they are always rendered)
     if (group.children && group.children.length > 0) {
       group.children.forEach((child) => {
         errors.push(...validateGroup(child, false));
@@ -110,79 +117,79 @@ const ProductForm = () => {
     return errors;
   };
 
-  const validateAllGroups = (): boolean => {
+  // Validate all groups in all steps
+  const validateAllSteps = (): boolean => {
     const allErrors: { [key: string]: string[] } = {};
     let hasErrors = false;
 
-    topLevelGroups.forEach((group) => {
-      // Skip own attributes for top-level groups
-      const groupErrors = validateGroup(group, true);
-      if (groupErrors.length > 0) {
-        allErrors[group._id] = groupErrors;
-        hasErrors = true;
-      }
+    steps.forEach((step) => {
+      step.groups.forEach((group) => {
+        // For top-level groups, skip own attributes (they are just containers)
+        const errors = validateGroup(group, true);
+        if (errors.length > 0) {
+          allErrors[group._id] = errors;
+          hasErrors = true;
+        }
+      });
     });
 
     setValidationErrors(allErrors);
     return !hasErrors;
   };
 
+  // Validate only the current step's groups
   const validateCurrentStep = (): boolean => {
-    if (currentStep >= topLevelGroups.length) return true;
+    if (currentStep >= steps.length) return true;
+    const currentStepData = steps[currentStep];
+    const newErrors = { ...validationErrors };
+    let hasErrors = false;
 
-    const currentGroup = topLevelGroups[currentStep];
-    // Skip own attributes for top-level groups
-    const errors = validateGroup(currentGroup, true);
+    currentStepData.groups.forEach((group) => {
+      const errors = validateGroup(group, true);
+      if (errors.length > 0) {
+        newErrors[group._id] = errors;
+        hasErrors = true;
+      } else {
+        delete newErrors[group._id];
+      }
+    });
 
-    if (errors.length > 0) {
-      setValidationErrors({
-        ...validationErrors,
-        [currentGroup._id]: errors,
-      });
+    setValidationErrors(newErrors);
+
+    if (hasErrors) {
       setShowValidationAlert(true);
       return false;
     }
-
-    const newErrors = { ...validationErrors };
-    delete newErrors[currentGroup._id];
-    setValidationErrors(newErrors);
-
     return true;
   };
 
+  // Fetch attribute sets when category changes
   useEffect(() => {
-    const fetchAttributes = async () => {
+    const fetchAttributeSets = async () => {
       if (!product.category_id) {
-        setTopLevelGroups([]);
+        setSteps([]);
         return;
       }
 
       try {
         setIsFetchingAttributes(true);
         setError(null);
-        const resp = await find_category_attribute_groups(product.category_id);
-        const allGroups = resp as unknown as GroupNode[];
-
-        const groupsWithAttributes = allGroups.filter(
-          (group) => group.attributes && group.attributes.length > 0
-        );
-
-        const topGroups = groupsWithAttributes.filter(
-          (group) => !group.parent_id
-        );
-        setTopLevelGroups(topGroups);
+        const sets = await getCategoryAttributeSets(product.category_id);
+        setSteps(sets);
+        setCurrentStep(0);
+        setValidationErrors({});
       } catch (err) {
-        console.error("Error fetching attributes:", err);
+        console.error("Error fetching attribute sets:", err);
         setError("Failed to load product attributes. Please try again.");
       } finally {
         setIsFetchingAttributes(false);
       }
     };
 
-    fetchAttributes();
+    fetchAttributeSets();
   }, [product.category_id]);
 
-  // After fetching groups, also fetch units
+  // Fetch units once
   useEffect(() => {
     const fetchUnits = async () => {
       try {
@@ -193,10 +200,10 @@ const ProductForm = () => {
       }
     };
     fetchUnits();
-  }, []); // Only once on mount
+  }, []);
 
   const handleNext = () => {
-    if (validateCurrentStep() && currentStep < topLevelGroups.length - 1) {
+    if (validateCurrentStep() && currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -213,25 +220,29 @@ const ProductForm = () => {
         _id: productId,
         field,
         value,
-      })
+      }),
     );
 
-    const currentGroup = topLevelGroups[currentStep];
-    if (currentGroup && validationErrors[currentGroup._id]) {
-      const attr = currentGroup.attributes.find((a) => a.code === field);
-      if (attr && attr.isRequired) {
-        const newErrors = { ...validationErrors };
-        const groupErrors = newErrors[currentGroup._id].filter(
-          (error) => !error.startsWith(attr.name)
-        );
-
-        if (groupErrors.length === 0) {
-          delete newErrors[currentGroup._id];
-        } else {
-          newErrors[currentGroup._id] = groupErrors;
+    // Clear validation error for this field if it exists
+    const currentStepData = steps[currentStep];
+    if (currentStepData) {
+      const group = currentStepData.groups.find((g) =>
+        g.attributes.some((a) => a.code === field),
+      );
+      if (group && validationErrors[group._id]) {
+        const attr = group.attributes.find((a) => a.code === field);
+        if (attr && attr.isRequired) {
+          const newErrors = { ...validationErrors };
+          const groupErrors = newErrors[group._id].filter(
+            (error) => !error.startsWith(attr.name),
+          );
+          if (groupErrors.length === 0) {
+            delete newErrors[group._id];
+          } else {
+            newErrors[group._id] = groupErrors;
+          }
+          setValidationErrors(newErrors);
         }
-
-        setValidationErrors(newErrors);
       }
     }
   };
@@ -239,24 +250,27 @@ const ProductForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (currentStep !== topLevelGroups.length - 1) {
+    if (currentStep !== steps.length - 1) {
       handleNext();
       return;
     }
 
     setIsSubmitting(true);
 
-    if (!validateAllGroups()) {
-      const firstErrorStep = topLevelGroups.findIndex(
-        (group) =>
-          validationErrors[group._id] && validationErrors[group._id].length > 0
-      );
-
-      if (firstErrorStep !== -1) {
-        setCurrentStep(firstErrorStep);
-        setShowValidationAlert(true);
+    if (!validateAllSteps()) {
+      // Find first step with errors
+      let firstErrorStep = 0;
+      for (let i = 0; i < steps.length; i++) {
+        const hasError = steps[i].groups.some(
+          (g) => validationErrors[g._id] && validationErrors[g._id].length > 0,
+        );
+        if (hasError) {
+          firstErrorStep = i;
+          break;
+        }
       }
-
+      setCurrentStep(firstErrorStep);
+      setShowValidationAlert(true);
       setIsSubmitting(false);
       return;
     }
@@ -279,7 +293,7 @@ const ProductForm = () => {
         setSuccess(
           isNewProduct
             ? "Product created successfully!"
-            : "Product updated successfully!"
+            : "Product updated successfully!",
         );
         setTimeout(() => {
           clearStoreAndRedirect();
@@ -309,18 +323,15 @@ const ProductForm = () => {
     );
   }
 
+  // Render a group (recursive) – used inside each step
   function renderGroup(group: GroupNode, isChild = false) {
     const { _id, code, name, attributes, children } = group;
     const groupErrors = validationErrors[_id] || [];
 
-    // Determine if this is a top-level group (not a child) and not a special group
-    const isTopLevel = !isChild;
-    const isSpecialGroup = code === "variants_options" || code === "product_relationships";
+    const isSpecialGroup =
+      code === "variants_options" || code === "product_relationships";
 
-    // For top-level groups that are not special, we skip rendering their own heading and attributes.
-    const skipOwnRendering = isTopLevel && !isSpecialGroup;
-
-    // Special groups: render their own content (heading and manager) and then children
+    // Special groups: render their own content and then children
     if (isSpecialGroup) {
       return (
         <section key={_id} className="mb-2">
@@ -345,23 +356,13 @@ const ProductForm = () => {
       );
     }
 
-    // For top-level groups that are not special, only render children
-    if (skipOwnRendering) {
-      return (
-        <div key={_id}>
-          {children?.length > 0 &&
-            children.map((child) => renderGroup(child, true))}
-        </div>
-      );
-    }
-
-    // For child groups (or any other group that should be rendered with heading and attributes)
+    // For non-special groups, render heading and attributes
     return (
       <section key={_id} className="mb-2">
         <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
         <div className="flex flex-col gap-4">
           {attributes.map((a) => (
-            <div key={a?._id} className="">
+            <div key={a._id}>
               <AttributeField
                 productId={productId}
                 attribute={a}
@@ -413,31 +414,37 @@ const ProductForm = () => {
             >
               <CircularProgress />
             </Box>
-          ) : topLevelGroups.length > 0 ? (
+          ) : steps.length > 0 ? (
             <>
               <Stepper
                 activeStep={currentStep}
                 className="whitespace-nowrap mb-6 w-full overflow-auto"
               >
-                {topLevelGroups.map((group, index) => (
-                  <Step key={group._id} className="inline-block">
-                    <StepLabel
-                      error={
-                        validationErrors[group._id] &&
-                        validationErrors[group._id].length > 0
-                      }
-                    >
-                      {group.name}
-                    </StepLabel>
-                  </Step>
-                ))}
+                {steps.map((step, index) => {
+                  // Check if any group in this step has errors
+                  const hasError = step.groups.some(
+                    (g) =>
+                      validationErrors[g._id] &&
+                      validationErrors[g._id].length > 0,
+                  );
+                  return (
+                    <Step key={step._id} className="inline-block">
+                      <StepLabel error={hasError}>{step.title}</StepLabel>
+                    </Step>
+                  );
+                })}
               </Stepper>
 
-              {renderGroup(topLevelGroups[currentStep], false)}
+              {/* Render all groups in the current step */}
+              <div>
+                {steps[currentStep].groups.map((group) =>
+                  renderGroup(group, false),
+                )}
+              </div>
             </>
           ) : (
             <Alert severity="info">
-              No attribute groups found for this category.
+              No attribute sets mapped to this category.
             </Alert>
           )}
         </div>
@@ -463,7 +470,7 @@ const ProductForm = () => {
           </div>
 
           <div>
-            {currentStep < topLevelGroups.length - 1 ? (
+            {currentStep < steps.length - 1 ? (
               <button
                 type="button"
                 onClick={handleNext}
@@ -485,7 +492,7 @@ const ProductForm = () => {
         </div>
 
         <div className="mt-4 text-center text-sm text-gray-500">
-          Step {currentStep + 1} of {topLevelGroups.length}
+          Step {currentStep + 1} of {steps.length}
         </div>
       </form>
 

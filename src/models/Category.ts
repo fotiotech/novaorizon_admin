@@ -7,7 +7,7 @@ interface ICategory extends Document {
   parent_id?: mongoose.Types.ObjectId;
   description?: string;
   imageUrl?: string[];
-  attributes?: mongoose.Types.ObjectId[];
+  attribute_sets_ids?: mongoose.Types.ObjectId[];
   seo_title?: string;
   seo_desc?: string;
   keywords?: string;
@@ -46,7 +46,7 @@ const CategorySchema = new Schema<ICategory>({
       },
     },
   ],
-  attributes: [{ type: Schema.Types.ObjectId, ref: "Attribute", unique: true }],
+  attribute_sets_ids: [{ type: Schema.Types.ObjectId, ref: "AttributeSet" }],
   seo_title: { type: String, maxLength: 60 },
   seo_desc: { type: String, maxLength: 160 },
   keywords: { type: String },

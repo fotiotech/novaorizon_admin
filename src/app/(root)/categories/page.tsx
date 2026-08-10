@@ -35,7 +35,7 @@ const Categories = () => {
   const handleDelete = async (id: string) => {
     if (
       confirm(
-        "Are you sure you want to delete this category? This action cannot be undone."
+        "Are you sure you want to delete this category? This action cannot be undone.",
       )
     ) {
       try {
@@ -98,7 +98,7 @@ const Categories = () => {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href={"/attributes/group_attribute_category"}
+            href={"/categories/groupsets"}
             className="px-4 py-2 font-semibold bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
           >
             Manage Attributes

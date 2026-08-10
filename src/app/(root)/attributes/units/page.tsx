@@ -14,8 +14,8 @@ import {
   deleteUnitFamily,
 } from "@/app/actions/unitFamilyActions";
 import React, { useState, useEffect } from "react";
-import FamilyForm from "./_component/FamilyForm";
-import UnitForm from "./_component/UnitForm";
+import FamilyForm from "../../settings/local/unit/_component/FamilyForm";
+import UnitForm from "../../settings/local/unit/_component/UnitForm";
 
 // Add these interfaces at the top of the file
 interface UnitFamily {
