@@ -43,7 +43,7 @@ export type GroupNode = {
   parent_id: string | null;
   attributes: AttributeDetail[];
   children: GroupNode[];
-  group_order: number;
+  sort_order: number; // ⬅️ was group_order
 };
 
 type AttributeSetStep = {

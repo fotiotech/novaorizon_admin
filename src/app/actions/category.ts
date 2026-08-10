@@ -15,55 +15,6 @@ function generateSlug(name: string) {
   return slugify(name, { lower: true });
 }
 
-const buildGroupTreeWithValues = (
-  groups: any[],
-  allGroupIds: Set<string>, // all group IDs present
-  parentId: string | null = null,
-): any[] => {
-  // Filter: either parent matches OR parent is not in the set (orphan) and we're at root level
-  const filtered = groups.filter((group) => {
-    const groupParent = group.parent_id?.toString();
-    if (parentId === null) {
-      // Root level: include if no parent OR parent not in the set (orphan)
-      return !groupParent || !allGroupIds.has(groupParent);
-    } else {
-      // Child level: must have a parent that matches
-      return groupParent === parentId;
-    }
-  });
-
-  return filtered
-    .sort((a, b) => a.group_order - b.group_order)
-    .map((group) => ({
-      _id: group._id.toString(),
-      code: group.code,
-      name: group.name,
-      parent_id: group.parent_id?.toString() || null,
-      group_order: group.group_order,
-      attributes: group.attributes.map((attr: any) => ({
-        _id: attr._id.toString(),
-        code: attr.code,
-        name: attr.name,
-        option: attr.option || [],
-        type: attr.type,
-        isRequired: attr.isRequired || false,
-        unit: attr.unit,
-        unitFamily: attr.unitFamily
-          ? {
-              _id: attr.unitFamily._id.toString(),
-              name: attr.unitFamily.name,
-              baseUnit: attr.unitFamily.baseUnit,
-            }
-          : null,
-      })),
-      children: buildGroupTreeWithValues(
-        groups,
-        allGroupIds,
-        group._id.toString(),
-      ),
-    }));
-};
-
 export async function getCategory(
   id?: string | null,
   parentId?: string | null,
@@ -404,12 +355,52 @@ export async function updateCategoryAttributeSets(
   }
 }
 
-// In category.ts
+const buildGroupTreeWithValues = (
+  groups: any[],
+  allGroupIds: Set<string>,
+  parentId: string | null = null,
+): any[] => {
+  const filtered = groups.filter((group) => {
+    const groupParent = group.parent_id?.toString();
+    if (parentId === null) {
+      return !groupParent || !allGroupIds.has(groupParent);
+    } else {
+      return groupParent === parentId;
+    }
+  });
 
-/**
- * Fetch attribute sets mapped to a category, with their groups and attributes fully populated.
- * Returns an array of sets, each with a `groups` tree (built from the set's attribute groups).
- */
+  return filtered
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)) // ⬅️ sort by sort_order
+    .map((group) => ({
+      _id: group._id.toString(),
+      code: group.code,
+      name: group.name,
+      parent_id: group.parent_id?.toString() || null,
+      sort_order: group.sort_order, // ⬅️ use sort_order (was group_order)
+      attributes: group.attributes.map((attr: any) => ({
+        _id: attr._id.toString(),
+        code: attr.code,
+        name: attr.name,
+        option: attr.option || [],
+        type: attr.type,
+        isRequired: attr.isRequired || false,
+        unit: attr.unit,
+        unitFamily: attr.unitFamily
+          ? {
+              _id: attr.unitFamily._id.toString(),
+              name: attr.unitFamily.name,
+              baseUnit: attr.unitFamily.baseUnit,
+            }
+          : null,
+      })),
+      children: buildGroupTreeWithValues(
+        groups,
+        allGroupIds,
+        group._id.toString(),
+      ),
+    }));
+};
+
 export async function getCategoryAttributeSets(categoryId: string) {
   if (!categoryId) return [];
   await connection();
@@ -431,9 +422,12 @@ export async function getCategoryAttributeSets(categoryId: string) {
   if (!category || Array.isArray(category)) return [];
 
   const sets = category.attribute_sets_ids || [];
+
+  // ⬇️ Sort attribute sets by sort_order
+  sets.sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+
   return sets.map((set: any) => {
     const groups = set.attributeGroup || [];
-    // Deduplicate groups (if same group appears in multiple sets, but we keep per set)
     const uniqueGroups = Array.from(
       new Map(groups.map((g: any) => [g._id.toString(), g])).values(),
     );
@@ -443,7 +437,7 @@ export async function getCategoryAttributeSets(categoryId: string) {
       _id: set._id.toString(),
       title: set.title,
       code: set.code,
-      groups: tree, // tree of GroupNode
+      groups: tree,
     };
   });
 }
