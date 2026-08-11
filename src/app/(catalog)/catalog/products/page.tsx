@@ -32,7 +32,7 @@ ChartJS.register(
   Tooltip,
   Legend,
   PointElement,
-  LineElement
+  LineElement,
 );
 
 // Types
@@ -230,7 +230,7 @@ export default function ProductDashboard() {
           <h1 className="text-3xl font-bold text-gray-800">Products</h1>
           <div onClick={clearStore}>
             <Link
-              href="/products/new"
+              href="/catalog/products/new"
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
               + New Product
@@ -408,7 +408,7 @@ export default function ProductDashboard() {
                         <option key={category} value={category}>
                           {category}
                         </option>
-                      )
+                      ),
                     )}
                 </select>
 
@@ -500,8 +500,8 @@ export default function ProductDashboard() {
                             product.stock_status?.includes("In Stock")
                               ? "bg-green-100 text-green-800"
                               : product.stock_status?.includes("Low Stock")
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-red-100 text-red-800"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
                           }`}
                         >
                           {product.stock_status?.join(", ") || "N/A"}

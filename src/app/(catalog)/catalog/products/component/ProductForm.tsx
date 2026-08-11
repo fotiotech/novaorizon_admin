@@ -77,7 +77,7 @@ const ProductForm = () => {
     try {
       setRedirecting(true);
       dispatch(clearProduct());
-      router.push("/products");
+      router.push("/catalog/products");
     } catch (err) {
       console.error("Error during cleanup and redirect:", err);
       setError("Failed to redirect. Please try again.");
