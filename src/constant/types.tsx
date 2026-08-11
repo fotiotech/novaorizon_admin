@@ -134,50 +134,60 @@ export type Inventory = {
   lastCheckDate: string;
 };
 
-export type Orders = {
-  _id?: string;
+// types.ts or constant/types.ts
+
+interface ProductInOrder {
+  productId: string; // ObjectId as string
+  name: string;
+  quantity: number;
+  price: number;
+  main_image?: string; // or imageUrl – pick one and stick to it
+}
+
+export interface BillingAddress {
+  street: string;
+  city: string;
+  region: string; // state/province
+  address: string; // apartment/suite, etc.
+  country: string;
+}
+
+export interface ShippingAddress {
+  street: string;
+  city: string;
+  region: string; // state/province
+  postalCode: string; // replaced 'address' with 'postalCode' for clarity
+  country: string;
+  carrier?: string;
+}
+
+export interface Orders {
+  _id: string;
   orderNumber: string;
   userId: string;
   email: string;
   firstName: string;
   lastName: string;
-  products: CartItem[];
+  products: ProductInOrder[];
   subtotal: number;
   tax: number;
   shippingCost: number;
   total: number;
-  paymentStatus: string;
+  paymentStatus: "pending" | "paid" | "failed" | "cancelled" | "refunded";
   paymentMethod: string;
-  transactionId: string;
-  customerDetails: {
-    billingAddress: {
-      firstName: string;
-      lastName: string;
-      email: string;
-      phone?: string;
-      address?: string;
-      city?: string;
-      country?: string;
-      postalCode?: string;
-      preferences?: string[]; // Array to store customer preferences
-    };
-  };
-  shippingAddress: {
-    street: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-  };
-  shippingStatus: Date;
-  shippingDate: Date;
-  deliveryDate: string;
-  orderStatus: string;
-  notes: string;
-  couponCode: string;
+  transactionId?: string; // rename to match camelCase (model can store as transaction_id)
+  billingAddress: BillingAddress; // top-level, not nested
+  shippingAddress: ShippingAddress;
+  shippingStatus: "pending" | "shipped" | "delivered";
+  shippingDate?: Date | string;
+  deliveryDate?: Date | string;
+  orderStatus: "processing" | "completed" | "cancelled";
+  notes?: string;
+  couponCode?: string;
   discount: number;
-  createdAt: string;
-};
+  createdAt: string; // or Date
+  updatedAt?: string;
+}
 
 export type ProductsFiles = {
   files_id: number;

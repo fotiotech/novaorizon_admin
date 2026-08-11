@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+// @ts-ignore: side-effect import for global CSS
 import "./globals.css";
 import Providers from "./providers";
 import Script from "next/script";
 import { Inter } from "next/font/google";
+import { AdminLayout } from "@/components";
 
 const inter = Inter({
   subsets: ["latin"], // Choose the subsets you need
@@ -47,7 +49,9 @@ export default function RootLayout({
           ></iframe>
         </noscript>
         <div className={`${inter.className}  `}>
-          <Providers>{children}</Providers>
+          <Providers>
+            <AdminLayout>{children}</AdminLayout>
+          </Providers>
         </div>
       </body>
     </html>

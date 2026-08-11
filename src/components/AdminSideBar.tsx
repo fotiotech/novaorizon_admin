@@ -1,5 +1,5 @@
 // components/AdminSideBar.tsx
-import React, { LegacyRef } from "react";
+import React, { LegacyRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -40,17 +40,18 @@ import {
   Language,
   Room,
 } from "@mui/icons-material";
-import { useUnreadMessages } from "@/app/(root)/chat/_component/useUnreadMessages";
+import { useUnreadMessages } from "@/app/(customers)/customers/chat/_component/useUnreadMessages";
 
-interface MenuLink {
+export interface MenuLink {
   name: string;
   href: string;
   icon?: React.ReactNode;
-  showUnreadCount?: boolean; // Add this flag to control which links show unread count
+  showUnreadCount?: boolean;
 }
 
-interface MenuSection {
+export interface MenuSection {
   title: string;
+  slug: string;
   links: MenuLink[];
 }
 
@@ -61,7 +62,15 @@ interface AdminSideBarProps {
   setSideBarToggle: (open: boolean) => void;
 }
 
-const menuConfig: MenuSection[] = [
+// Helper to slugify a section title
+const slugify = (title: string) =>
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-") // replace non-alphanumeric with hyphens
+    .replace(/^-|-$/g, ""); // trim leading/trailing hyphens
+
+// Original menu configuration (without href prefixes)
+export const rawMenuConfig = [
   {
     title: "Dashboard",
     links: [
@@ -71,26 +80,6 @@ const menuConfig: MenuSection[] = [
         href: "/notifications",
         icon: <Notifications />,
       },
-      {
-        name: "Chat",
-        href: "/chat",
-        icon: <Chat />,
-        showUnreadCount: true,
-      },
-    ],
-  },
-  {
-    title: "Catalog",
-    links: [
-      { name: "Products", href: "/products", icon: <Inventory2 /> },
-      { name: "Categories", href: "/categories", icon: <Category /> },
-      { name: "Brands", href: "/brands", icon: <Tag /> },
-      {
-        name: "Attributes",
-        href: "/attributes",
-        icon: <Assignment />,
-      },
-      { name: "Inventory", href: "/inventory", icon: <Inventory /> },
     ],
   },
   {
@@ -99,12 +88,22 @@ const menuConfig: MenuSection[] = [
       { name: "Orders", href: "/orders", icon: <ShoppingBag /> },
       { name: "Order Status", href: "/order_status", icon: <CheckCircle /> },
       { name: "Shipments", href: "/shipments", icon: <LocalShipping /> },
-      {
-        name: "Refunds & Returns",
-        href: "/refunds_returns",
-        icon: <Replay />,
-      },
+      { name: "Refunds & Returns", href: "/refunds_returns", icon: <Replay /> },
     ],
+  },
+  {
+    title: "Catalog",
+    links: [
+      { name: "Products", href: "/products", icon: <Inventory2 /> },
+      { name: "Categories", href: "/categories", icon: <Category /> },
+      { name: "Brands", href: "/brands", icon: <Tag /> },
+      { name: "Attributes", href: "/attributes", icon: <Assignment /> },
+      { name: "Inventory", href: "/inventory", icon: <Inventory /> },
+    ],
+  },
+  {
+    title: "POS",
+    links: [{ name: "Point of sales", href: "/pos", icon: <GetAppRounded /> }],
   },
   {
     title: "Customers",
@@ -117,55 +116,34 @@ const menuConfig: MenuSection[] = [
         icon: <History />,
       },
       { name: "Reviews", href: "/reviews", icon: <Assignment /> },
+      { name: "Chat", href: "/chat", icon: <Chat />, showUnreadCount: true },
     ],
   },
   {
     title: "Marketing",
     links: [
+      { name: "Promotions", href: "/discounts_coupons", icon: <Discount /> },
+      { name: "Email Campaigns", href: "/email_marketing", icon: <Email /> },
       {
-        name: "Promotions",
-        href: "/discounts_coupons",
-        icon: <Discount />,
-      },
-      {
-        name: "Email Campaigns",
-        href: "/email_marketing",
-        icon: <Email />,
-      },
-      {
-        name: "Content Management",
+        name: "Content Merchandising",
         href: "/content_merchandising",
         icon: <CollectionsBookmark />,
       },
-      {
-        name: "Hero Sections",
-        href: "/hero_section",
-        icon: <Store />,
-      },
-      {
-        name: "Navigation Menus",
-        href: "/content_merchandising/menus",
-        icon: <CollectionsBookmark />,
-      },
+      { name: "SEO", href: "/seo", icon: <Public /> },
+      { name: "Affiliate Marketing", href: "/affiliate", icon: <Code /> },
     ],
   },
   {
-    title: "Financial",
+    title: "Content Management",
     links: [
-      {
-        name: "Financial Overview",
-        href: "/finance",
-        icon: <AttachMoney />,
-      },
-      { name: "Invoices", href: "/invoices", icon: <Receipt /> },
-      { name: "Refunds", href: "/refunds", icon: <Replay /> },
-      {
-        name: "Tax Reports",
-        href: "/tax_shipping_reports",
-        icon: <ReceiptLong />,
-      },
+      { name: "Hero Sections", href: "/hero_section", icon: <Store /> },
+      { name: "Banners", href: "/banners", icon: <Campaign /> },
+      { name: "Landing Pages", href: "/landing_pages", icon: <Language /> },
+      { name: "Blog", href: "/blog", icon: <Campaign /> },
+      { name: "FAQs", href: "/faqs", icon: <Assignment /> },
     ],
   },
+
   {
     title: "Analytics",
     links: [
@@ -182,16 +160,7 @@ const menuConfig: MenuSection[] = [
       },
     ],
   },
-  {
-    title: "SEO",
-    links: [
-      {
-        name: "Metadata",
-        href: "/meta_tags_url",
-        icon: <Code />,
-      },
-    ],
-  },
+
   {
     title: "User Management",
     links: [
@@ -205,7 +174,7 @@ const menuConfig: MenuSection[] = [
     ],
   },
   {
-    title: "Settings",
+    title: "Settings & Integrations",
     links: [
       {
         name: "General Settings",
@@ -213,23 +182,38 @@ const menuConfig: MenuSection[] = [
         icon: <Settings />,
       },
       { name: "Payment Methods", href: "/settings/payment", icon: <Payment /> },
-      { name: "Shipping Options", href: "/settings/shipping", icon: <LocalShipping /> },
+      {
+        name: "Shipping Options",
+        href: "/settings/shipping",
+        icon: <LocalShipping />,
+      },
       { name: "Tax Configuration", href: "/settings/tax", icon: <Receipt /> },
       { name: "Localization", href: "/settings/local", icon: <Room /> },
-    ],
-  },
-  {
-    title: "Support",
-    links: [
+      { name: "Financial Overview", href: "/finance", icon: <AttachMoney /> },
+      { name: "Invoices", href: "/invoices", icon: <Receipt /> },
+      { name: "Refunds", href: "/refunds", icon: <Replay /> },
       {
-        name: "Customer Chat",
-        href: "/chat",
-        icon: <Chat />,
-        showUnreadCount: true,
+        name: "Tax Reports",
+        href: "/tax_shipping_reports",
+        icon: <ReceiptLong />,
       },
     ],
   },
 ];
+
+// Build the final menu with section‑prefixed hrefs and slugs
+const menuConfig: MenuSection[] = rawMenuConfig.map((section) => {
+  const slug = slugify(section.title);
+  const links = section.links.map((link) => {
+    let newHref = link.href;
+    const prefix = `/${slug}`;
+    if (!newHref.startsWith(prefix)) {
+      newHref = `${prefix}${newHref}`;
+    }
+    return { ...link, href: newHref };
+  });
+  return { ...section, slug, links };
+});
 
 const signOutLink: MenuLink = { name: "Sign Out", href: "/auth/signout" };
 
@@ -241,6 +225,25 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 }) => {
   const pathname = usePathname();
   const unreadCount = useUnreadMessages();
+
+  // State for collapsible sections: keyed by section title, true = expanded
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >(() => {
+    const initial: Record<string, boolean> = {};
+    menuConfig.forEach((section) => {
+      initial[section.title] = false; // all collapsed by default
+    });
+    return initial;
+  });
+
+  const toggleSection = (title: string) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [title]: !prev[title],
+    }));
+  };
+
   const open = "fixed lg:relative inset-y-0 left-0 z-50 translate-x-0";
   const hide = "fixed lg:relative inset-y-0 -left-full lg:translate-x-0";
 
@@ -297,43 +300,61 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
             )}
           </div>
           <nav className="p-4 space-y-6 overflow-y-auto">
-            {menuConfig.map((section) => (
-              <div key={section.title} className="mb-6">
-                <h3 className="text-xs uppercase font-semibold mb-3 text-gray-500 dark:text-gray-400 tracking-wide">
-                  {section.title}
-                </h3>
-                <ul className="space-y-1">
-                  {section.links.map((link) => (
-                    <li key={link.href}>
-                      <Link
-                        href={link.href}
-                        onClick={handleClose}
-                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 ${
-                          pathname === link.href ||
-                          pathname.startsWith(link.href)
-                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                            : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-gray-500 dark:text-gray-400">
-                            {link.icon}
-                          </span>
-                          <span className="font-medium">{link.name}</span>
-                        </div>
+            {menuConfig.map((section) => {
+              const isExpanded = expandedSections[section.title] ?? true;
+              return (
+                <div key={section.title} className="mb-6">
+                  <div className="flex items-center justify-between mb-1">
+                    <Link
+                      href={`/${section.slug}`}
+                      onClick={handleClose}
+                      className="text-xs uppercase font-semibold text-gray-500 dark:text-gray-400 tracking-wide hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                    >
+                      {section.title}
+                    </Link>
+                    <button
+                      onClick={() => toggleSection(section.title)}
+                      className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 p-1 transition-colors"
+                      aria-label={isExpanded ? "Collapse" : "Expand"}
+                    >
+                      {isExpanded ? "▾" : "▸"}
+                    </button>
+                  </div>
+                  {isExpanded && (
+                    <ul className="space-y-1 mt-1">
+                      {section.links.map((link) => (
+                        <li key={link.href}>
+                          <Link
+                            href={link.href}
+                            onClick={handleClose}
+                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 ${
+                              pathname === link.href ||
+                              pathname.startsWith(link.href)
+                                ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                                : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-gray-500 dark:text-gray-400">
+                                {link.icon}
+                              </span>
+                              <span className="font-medium">{link.name}</span>
+                            </div>
 
-                        {/* Unread Count Badge */}
-                        {link.showUnreadCount && unreadCount > 0 && (
-                          <span className="bg-red-500 text-white rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
-                            {unreadCount > 99 ? "99+" : unreadCount}
-                          </span>
-                        )}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+                            {/* Unread Count Badge */}
+                            {link.showUnreadCount && unreadCount > 0 && (
+                              <span className="bg-red-500 text-white rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                              </span>
+                            )}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
           </nav>
         </div>
         <div className="p-4 border-t border-gray-200 dark:border-gray-700">

@@ -5,6 +5,7 @@ interface Product {
   name: string;
   quantity: number;
   price: number;
+  main_image?: string; // add if you store image in order
 }
 
 export interface OrderDocument extends Document {
@@ -46,6 +47,7 @@ export interface OrderDocument extends Document {
   notes?: string;
   couponCode?: string;
   discount: number;
+  shippingId?: mongoose.Types.ObjectId; // if you reference Shipping
 }
 
 const OrderSchema = new mongoose.Schema<OrderDocument>(
@@ -70,6 +72,7 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
         name: { type: String, required: true },
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
+        main_image: { type: String }, // optional: store image URL
       },
     ],
     subtotal: { type: Number, required: true },
@@ -112,16 +115,21 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
     notes: { type: String },
     couponCode: { type: String },
     discount: { type: Number, default: 0 },
+    shippingId: { type: mongoose.Schema.Types.ObjectId, ref: "Shipping" },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-// To catch findByIdAndDelete, findOneAndDelete, etc.
+// Add indexes for performance
+OrderSchema.index({ orderNumber: 1 });
+OrderSchema.index({ userId: 1 });
+
+// Pre-hook for deletion (cascade to Shipping if needed)
 OrderSchema.pre("findOneAndDelete", async function (next) {
   try {
     const doc = await this.model.findOne(this.getFilter());
     if (doc) {
-      await mongoose.model("Shipping").deleteMany({ author: doc._id });
+      await mongoose.model("Shipping").deleteMany({ orderId: doc._id });
     }
     next();
   } catch (err: any) {

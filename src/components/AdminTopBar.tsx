@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import { useSession } from "next-auth/react";
 import { SignIn } from "./auth/SignInButton";
-import { useUnreadMessages } from "@/app/(root)/chat/_component/useUnreadMessages";
+import { useUnreadMessages } from "@/app/(customers)/customers/chat/_component/useUnreadMessages";
 import axios from "axios";
 
 interface AdminTopBarProps {
@@ -34,17 +34,17 @@ const AdminTopBar = ({
   const user = session?.data?.user as any;
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
 
-   useEffect(() => {
-      const fetchNotifications = async () => {
-        const res = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/notify`,
-          { timeout: 10000 }
-        );
-        setNotifications(res.data);
-      };
-  
-      fetchNotifications();
-    }, []);
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      const res = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/notify`,
+        { timeout: 10000 },
+      );
+      setNotifications(res.data);
+    };
+
+    fetchNotifications();
+  }, []);
 
   return (
     <div className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow-md">
@@ -96,10 +96,10 @@ const AdminTopBar = ({
               </p>
               <div className="relative h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-200 font-medium">
                 {unreadCount > 0 && (
-        <p className="absolute right-0 -top-2 bg-red-500 text-xs rounded-full px-1 min-w-[18px] text-center">
-          {unreadCount}
-        </p>
-      )}
+                  <p className="absolute right-0 -top-2 bg-red-500 text-xs rounded-full px-1 min-w-[18px] text-center">
+                    {unreadCount}
+                  </p>
+                )}
                 {user?.email?.charAt(0).toUpperCase() || "U"}
               </div>
             </div>

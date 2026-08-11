@@ -1,60 +1,93 @@
-import { findProducts } from "@/app/actions/products";
+// fetch/fetchProducts.ts
+
+import { findProducts, updateProduct } from "@/app/actions/products";
 import { normalizeProducts } from "@/app/store/slices/normalizedData";
 import { setProducts } from "@/app/store/slices/productSlice";
 import { AppDispatch } from "@/app/store/store";
 
-// Utility to recursively convert Maps to plain objects
+// Utility to recursively convert Maps to plain objects (keep if needed)
 const convertMapToObject = (data: any): any => {
   if (data instanceof Map) {
-    return Object.fromEntries(data); // Convert Map to plain object
+    return Object.fromEntries(data);
   } else if (Array.isArray(data)) {
-    return data.map((item) => convertMapToObject(item)); // Recursively handle arrays
+    return data.map((item) => convertMapToObject(item));
   } else if (typeof data === "object" && data !== null) {
-    return Object.keys(data).reduce((acc, key) => {
-      acc[key] = convertMapToObject(data[key]); // Recursively handle nested objects
-      return acc;
-    }, {} as Record<string, any>);
+    return Object.keys(data).reduce(
+      (acc, key) => {
+        acc[key] = convertMapToObject(data[key]);
+        return acc;
+      },
+      {} as Record<string, any>,
+    );
   }
-  return data; // Return primitive values as-is
+  return data;
 };
 
+// Fetch products (single or all)
 export const fetchProducts = (id?: string) => async (dispatch: AppDispatch) => {
   try {
-    // Fetch product(s) using the provided `findProducts` function
     const data = id ? await findProducts(id) : await findProducts();
 
-    // Check if data is empty or undefined
-    if (!data || (Array.isArray(data) && data.length === 0)) {
-      console.error("No products found");
+    // Check for server error response
+    if (
+      data &&
+      typeof data === "object" &&
+      "success" in data &&
+      data.success === false
+    ) {
+      console.error("Server error:", data.error);
       return;
     }
 
-    // Convert any Map in the data to plain objects
+    // If data is empty array or null/undefined
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+      console.warn("No products found");
+      dispatch(setProducts({ byId: {}, allIds: [] }));
+      return;
+    }
+
+    // Convert any Map to plain objects (optional)
     const sanitizedData = Array.isArray(data)
       ? data.map((item) => convertMapToObject(item))
       : convertMapToObject(data);
 
-    // Normalize the data
     const normalizedData = normalizeProducts(
-      Array.isArray(sanitizedData) ? sanitizedData : [sanitizedData]
+      Array.isArray(sanitizedData) ? sanitizedData : [sanitizedData],
     );
 
-    // Validate normalized data
     if (!normalizedData.result || normalizedData.result.includes(undefined)) {
-      console.error("Normalization failed. Check the schema or data structure.");
+      console.error(
+        "Normalization failed. Check the schema or data structure.",
+      );
       return;
     }
 
-    // Dispatch normalized data to the store
     dispatch(
       setProducts({
         byId: normalizedData.entities.products || {},
         allIds: normalizedData.result || [],
-      })
+      }),
     );
-
-    console.log("Products successfully dispatched to Redux store.");
   } catch (error) {
     console.error("Error fetching products:", error);
+    // Optionally dispatch an error action
   }
 };
+
+// New thunk: update a product's stock and threshold, then refetch
+export const updateProductStock =
+  (id: string, quantity: number, lowStockThreshold: number) =>
+  async (dispatch: AppDispatch) => {
+    try {
+      const response = await updateProduct(id, { quantity, lowStockThreshold });
+      if (!response.success) {
+        throw new Error(response.error || "Failed to update product");
+      }
+      // Re-fetch all products to keep the store in sync
+      await dispatch(fetchProducts());
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating product:", error);
+      return { success: false, error: (error as Error).message };
+    }
+  };

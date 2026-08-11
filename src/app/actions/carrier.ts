@@ -38,10 +38,10 @@ export async function getCarriers() {
   const carriers = await Carrier.find();
   return carriers.map((data) => ({
     ...data.toObject(),
-    _id: data._id.toString(),
+    _id: data?._id.toString(),
     regionsServed: data.regionsServed.map((region: any) => ({
       ...region.toObject(),
-      _id: region._id.toString(),
+      _id: region?._id.toString(),
     })),
   }));
 }
@@ -51,10 +51,10 @@ export async function getCarriersById(_id: string) {
   const data = await Carrier.findOne({ _id });
   return {
     ...data.toObject(),
-    _id: data._id.toString(),
+    _id: data?._id.toString(),
     regionsServed: data.regionsServed.map((region: any) => ({
       ...region.toObject(),
-      _id: region._id.toString(),
+      _id: region?._id.toString(),
     })),
   };
 }
@@ -73,7 +73,7 @@ export async function updateCarrier(
     }[];
     costWeight: number;
     status: string;
-  }>
+  }>,
 ) {
   await connection();
 
@@ -88,11 +88,11 @@ export async function updateCarrier(
       if (
         !updates.regionsServed.every(
           (region) =>
-            region.region && region.basePrice && region.averageDeliveryTime
+            region.region && region.basePrice && region.averageDeliveryTime,
         )
       ) {
         throw new Error(
-          "All regions must have a region, basePrice, and averageDeliveryTime"
+          "All regions must have a region, basePrice, and averageDeliveryTime",
         );
       }
 
@@ -130,7 +130,7 @@ export async function calculateShippingPrice(
   carrierId: string,
   region: string,
   weight?: number,
-  distance?: number
+  distance?: number,
 ) {
   try {
     // Connect to MongoDB (if not already connected)
@@ -144,7 +144,7 @@ export async function calculateShippingPrice(
 
     // Find the region details within the carrier's regionsServed
     const regionDetails = carrier.regionsServed.find(
-      (r: any) => r.region.toLowerCase() === region.toLowerCase()
+      (r: any) => r.region.toLowerCase() === region.toLowerCase(),
     );
     if (!regionDetails) {
       throw new Error(`Region ${region} is not served by this carrier`);
@@ -161,7 +161,7 @@ export async function calculateShippingPrice(
 
     return {
       ...regionDetails.toObject(),
-      _id: regionDetails._id.toString(),
+      _id: regionDetails?._id.toString(),
       shippingPrice: shippingPrice,
     };
   } catch (error) {
