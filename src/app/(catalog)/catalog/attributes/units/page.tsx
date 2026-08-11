@@ -1,8 +1,8 @@
 // components/UnitManagement.tsx (partial update)
 "use client";
 
-import FamilyForm from "@/app/(settings)/settings/local/unit/_component/FamilyForm";
-import UnitForm from "@/app/(settings)/settings/local/unit/_component/UnitForm";
+import FamilyForm from "@/app/(settings)/settings-integrations/local/unit/_component/FamilyForm";
+import UnitForm from "@/app/(settings)/settings-integrations/local/unit/_component/UnitForm";
 import {
   getUnits,
   updateUnit,

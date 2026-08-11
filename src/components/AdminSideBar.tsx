@@ -162,7 +162,7 @@ export const rawMenuConfig = [
   },
 
   {
-    title: "User Management",
+    title: "Users",
     links: [
       { name: "Users", href: "/users", icon: <ManageAccounts /> },
       {
