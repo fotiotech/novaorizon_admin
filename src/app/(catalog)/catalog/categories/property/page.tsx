@@ -1,4 +1,5 @@
-// app/admin/category-properties/page.tsx
+export const dynamic = "force-dynamic";
+
 import { connection } from "@/utils/connection";
 import CategoryProperty from "@/models/CategoryProperty";
 import AttributeSet from "@/models/AttributeSet";
