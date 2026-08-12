@@ -98,10 +98,10 @@ const Categories = () => {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href={"/categories/groupsets"}
-            className="px-4 py-2 font-semibold bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+            href="/catalog/categories/property"
+            className="px-4 py-2 font-semibold bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors"
           >
-            Manage Attributes
+            + New Property
           </Link>
           <button
             onClick={handleNewCategory}
@@ -150,7 +150,7 @@ const Categories = () => {
       {!showForm && !editId && (
         <div className="space-y-6">
           <CategoryList
-            categories={categoriesWithSubcategories}
+            categories={categoriesWithSubcategories as any[]}
             title="All Categories"
             emptyMessage="No categories found. Create your first category!"
             onEditCategory={handleEditClick}

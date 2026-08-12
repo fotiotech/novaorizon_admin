@@ -17,7 +17,6 @@ export default function AttributesLayout({
     { name: "Sets", href: "/catalog/attributes/sets" },
     { name: "Groups", href: "/catalog/attributes/group" },
     { name: "Units", href: "/catalog/attributes/units" },
-    { name: "Category Mapping", href: "/catalog/attributes/category-mapping" },
   ];
 
   return (

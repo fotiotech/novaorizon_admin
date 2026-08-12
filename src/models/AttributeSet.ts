@@ -6,7 +6,7 @@ export interface IAttributeSet extends Document {
   title: string;
   code: string;
   description?: string;
-  attributeGroup: IAttributeGroup[];
+  groups: IAttributeGroup[];
   sort_order?: number;
   isActive: boolean;
   createdAt?: Date;
@@ -23,7 +23,7 @@ const AttributeSetSchema = new Schema<IAttributeSet>(
       trim: true,
     },
     description: { type: String, required: false },
-    attributeGroup: [
+    groups: [
       { type: Schema.Types.ObjectId, ref: "AttributeGroup", default: [] },
     ],
     sort_order: { type: Number, default: 0 },

@@ -3,8 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { getAttributeSets } from "@/app/actions/attribute_sets";
 import AttributeSetForm from "../_component/AttributeSetForm";
-import CategoryMapping from "../_component/CategoryMapping";
-import CategoryAttribute from "../../categories/groupsets/page";
 
 export default function SetsPage() {
   const [sets, setSets] = useState<any[]>([]);
@@ -51,8 +49,6 @@ export default function SetsPage() {
           }}
         />
       )}
-
-      <CategoryAttribute />
 
       <div className="bg-white p-4 rounded shadow">
         {sets.length === 0 ? (

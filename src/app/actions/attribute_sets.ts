@@ -1,7 +1,7 @@
 "use server";
 
-import AttributeGroup from "@/models/AttributeGroup";
 import AttributeSet from "@/models/AttributeSet";
+import "@/models/AttributeGroup";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
@@ -17,22 +17,17 @@ export async function createAttributeSet(data: {
 
   const { title, code, description, groupIds, sort_order } = data;
 
-  if (!title.trim()) {
-    throw new Error("Title is required");
-  }
-  if (!code.trim()) {
-    throw new Error("Code is required");
-  }
-  if (!groupIds || groupIds.length === 0) {
+  if (!title.trim()) throw new Error("Title is required");
+  if (!code.trim()) throw new Error("Code is required");
+  if (!groupIds || groupIds.length === 0)
     throw new Error("Select at least one attribute group");
-  }
 
   const attributeSet = new AttributeSet({
     title: title.trim(),
     code: code.trim(),
     description: description?.trim(),
     sort_order: sort_order,
-    attributeGroup: groupIds, // directly store the group IDs
+    groups: groupIds, // ✅ fixed: was 'attributeGroup'
   });
   await attributeSet.save();
 
@@ -44,7 +39,7 @@ export async function getAttributeSets() {
   await connection();
   try {
     const attributeSets = await AttributeSet.find()
-      .populate("attributeGroup")
+      .populate("groups") // ✅ fixed: was 'attributeGroup'
       .lean();
     return { success: true, data: attributeSets };
   } catch (error) {
@@ -54,12 +49,12 @@ export async function getAttributeSets() {
 
 export async function getAttributeSet(id: string) {
   await connection();
-  const set = await AttributeSet.findById(id).populate("attributeGroup").lean();
+  const set = await AttributeSet.findById(id).populate("groups").lean(); // ✅ fixed
   if (!set) throw new Error("Attribute set not found");
   return {
     ...set,
     _id: set._id.toString(),
-    attributeGroup: set.attributeGroup.map((g: any) => g._id.toString()),
+    groups: set.groups?.map((g: any) => g._id.toString()), // ✅ fixed: was 'attributeGroup'
   };
 }
 
@@ -74,7 +69,6 @@ export async function updateAttributeSet(
   },
 ) {
   await connection();
-  console.log("data to update:", data);
 
   const { title, code, description, groupIds, sort_order } = data;
 
@@ -91,7 +85,7 @@ export async function updateAttributeSet(
       code,
       description,
       sort_order,
-      attributeGroup: groupIds.map((id) => new mongoose.Types.ObjectId(id)),
+      groups: groupIds.map((id) => new mongoose.Types.ObjectId(id)), // ✅ fixed
     },
     { new: true },
   );

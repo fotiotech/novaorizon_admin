@@ -93,9 +93,26 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
         try {
           setIsLoading(true);
           const attributes = await findAttributesAndValues();
-          const attribute = (attributes as unknown as AttributeType[]).find(
-            (attr) => attr._id === attributeId || attr.id === attributeId
-          );
+          // Inside the edit fetch block:
+          const attribute: any = (
+            attributes as unknown as AttributeType[]
+          ).find((attr) => attr._id === attributeId || attr.id === attributeId);
+          if (attribute) {
+            const optionString = Array.isArray(attribute.option)
+              ? attribute.option.join(",")
+              : attribute.option || "";
+            setFormData([
+              {
+                code: attribute.code || "",
+                unitFamily: attribute.unitFamily?._id || "", // ← extract ID
+                name: attribute.name || "",
+                type: attribute.type || "text",
+                option: optionString,
+                isRequired: attribute.isRequired || false,
+                sort_order: attribute.sort_order || 0,
+              },
+            ]);
+          }
 
           if (attribute) {
             const optionString = Array.isArray(attribute.option)
@@ -131,7 +148,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
   const handleInputChange = (
     index: number,
     field: keyof AttributeFormData,
-    value: string | number | boolean
+    value: string | number | boolean,
   ) => {
     setFormData((prev) =>
       prev.map((attr, i) =>
@@ -140,8 +157,8 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
               ...attr,
               [field]: value,
             }
-          : attr
-      )
+          : attr,
+      ),
     );
   };
 
@@ -177,7 +194,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
 
     try {
       const invalidAttributes = formData.filter(
-        (attr) => !attr.name.trim() || !attr.type.trim() || !attr.code.trim()
+        (attr) => !attr.name.trim() || !attr.type.trim() || !attr.code.trim(),
       );
 
       if (invalidAttributes.length > 0) {
@@ -214,7 +231,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
               attr.option
                 ?.split(",")
                 .map((opt) => opt.trim())
-                .filter((opt) => opt) || []
+                .filter((opt) => opt) || [],
           ),
           type: formData.map((attr) => (attr.type.trim() ? attr.type : "text")),
         };
@@ -361,7 +378,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
                     handleInputChange(
                       index,
                       "sort_order",
-                      Number(e.target.value)
+                      Number(e.target.value),
                     )
                   }
                   className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"

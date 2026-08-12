@@ -224,7 +224,7 @@ export default function ProductDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 lg:p-6">
+    <div className="min-h-screen lg:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4">
           <h1 className="text-3xl font-bold text-gray-800">Products</h1>

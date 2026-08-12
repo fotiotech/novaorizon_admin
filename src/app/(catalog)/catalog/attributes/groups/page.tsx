@@ -5,7 +5,6 @@ import { findAttributesAndValues } from "@/app/actions/attributes";
 import { getCategory } from "@/app/actions/category";
 import { findAttributeForGroups } from "@/app/actions/attributegroup";
 import { getAttributeSets } from "@/app/actions/attribute_sets";
-import CategoryMapping from "../_component/CategoryMapping";
 import GroupManagement from "../_component/GroupManagement";
 
 const CategoryAttribute = () => {

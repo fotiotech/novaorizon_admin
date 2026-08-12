@@ -65,6 +65,7 @@ export default function Pos() {
       setError(null);
       try {
         const result = await findProducts(); // no id => returns array
+        console.log("Fetched products:", result);
         if (Array.isArray(result)) {
           setProducts(result);
         } else {
@@ -170,7 +171,7 @@ export default function Pos() {
               className="flex justify-between items-center bg-white p-2 rounded shadow"
             >
               <div className="flex-1">
-                <p className="font-medium">{item.title || item.productId}</p>
+                <p className="font-medium">{item.name || item.productId}</p>
                 <p className="text-sm text-gray-600">
                   ${item.price.toFixed(2)} × {item.quantity}
                 </p>

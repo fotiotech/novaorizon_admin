@@ -27,7 +27,6 @@ interface AttributeUpdateParams {
   type: string;
 }
 
-
 export async function findAttributesAndValues(id?: string) {
   try {
     await connection();
@@ -38,7 +37,9 @@ export async function findAttributesAndValues(id?: string) {
       query = Attribute.findById(id).populate("unitFamily");
     } else {
       // Fetch all attributes
-      query = Attribute.find().populate("unitFamily").sort({ sort_order: 1, name: 1 });
+      query = Attribute.find()
+        .populate("unitFamily")
+        .sort({ sort_order: 1, name: 1 });
     }
 
     const response = await query.lean();
@@ -52,54 +53,50 @@ export async function findAttributesAndValues(id?: string) {
     throw new Error("Failed to fetch attributes");
   }
 }
+
+// createAttribute – handle empty unitFamily safely
 export async function createAttribute(formData: AttributeFormData) {
   const { codes, unitFamilies, names, isRequired, sort_orders, option, type } =
     formData;
-
   if (!Array.isArray(names) || names.length === 0) {
     throw new Error("Missing required fields");
   }
-
   await connection();
-
   try {
     const attributes = [];
     const len = Math.max(codes.length, names.length);
-
     for (let i = 0; i < len; i++) {
       const rawCode = (codes[i] || "").trim();
       const rawName = (names[i] || "").trim();
-      const rawUnitFamily = new Types.ObjectId(unitFamilies[i] || "");
-
+      let unitFamilyId = null;
+      if (unitFamilies[i] && unitFamilies[i].trim().length > 0) {
+        unitFamilyId = new Types.ObjectId(unitFamilies[i].trim());
+      }
       if (!rawCode) throw new Error(`Invalid attribute code at idx ${i}`);
       if (!rawName) throw new Error(`Invalid attribute name at idx ${i}`);
-
       const optionsArr = (option?.[i] || [])
         .map((o: string) => o.trim())
         .filter(Boolean);
       const attrType = (type[i] || "text").trim();
       const attrIsRequired = Boolean(isRequired[i]);
       const attrSortOrder = sort_orders[i] || 0;
-
       const filter = { code: rawCode };
       const update = {
         $set: {
           name: rawName,
-          unitFamily: rawUnitFamily,
+          unitFamily: unitFamilyId,
           isRequired: attrIsRequired,
           option: optionsArr,
           type: attrType,
           sort_order: attrSortOrder,
         },
       };
-
       const attribute = await Attribute.findOneAndUpdate(filter, update, {
         upsert: true,
         new: true,
       });
       attributes.push(attribute);
     }
-
     revalidatePath("/admin/attributes");
     return { success: true, attributes };
   } catch (error) {
@@ -110,7 +107,7 @@ export async function createAttribute(formData: AttributeFormData) {
 
 export async function updateAttribute(
   _id: string,
-  params: AttributeUpdateParams
+  params: AttributeUpdateParams,
 ) {
   await connection();
 
@@ -141,7 +138,7 @@ export async function updateAttribute(
     const updated = await Attribute.findByIdAndUpdate(
       _id,
       { $set: updateData },
-      { new: true }
+      { new: true },
     );
 
     if (!updated) {
@@ -156,21 +153,16 @@ export async function updateAttribute(
   }
 }
 
-// Function to delete attribute
-export async function deleteAttribute(code: string) {
+// deleteAttribute – now accepts _id
+export async function deleteAttribute(id: string) {
   await connection();
   const session = await mongoose.startSession();
-
   try {
     await session.withTransaction(async () => {
-      const attribute = await Attribute.findOne({ code }).session(session);
-      if (!attribute) {
-        throw new Error("Attribute not found");
-      }
-
-      await Attribute.findByIdAndDelete(attribute._id).session(session);
+      const attribute = await Attribute.findById(id).session(session);
+      if (!attribute) throw new Error("Attribute not found");
+      await Attribute.findByIdAndDelete(id).session(session);
     });
-
     revalidatePath("/admin/attributes");
     return { success: true };
   } catch (error) {

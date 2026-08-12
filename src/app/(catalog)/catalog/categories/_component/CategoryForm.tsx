@@ -2,17 +2,20 @@
 
 import React, { ChangeEvent, useEffect, useState } from "react";
 import FilesUploader from "@/components/FilesUploader";
-import { getCategory, createCategory } from "@/app/actions/category";
+import {
+  getCategory,
+  createCategory,
+  getCategoryProperty,
+} from "@/app/actions/category";
 import { Category as Cat } from "@/constant/types";
 import { useFileUploader } from "@/hooks/useFileUploader";
-import { v4 as uuidv4 } from "uuid";
 
 interface CategoryFormProps {
-  categoryId?: string; // Only receive ID for updates
-  categories: Cat[]; // List of all categories for parent selection
+  categoryId?: string;
+  categories: Cat[];
   onSuccess: () => void;
   onCancel?: () => void;
-  mode?: "create" | "edit"; // Explicit mode control
+  mode?: "create" | "edit";
 }
 
 const CategoryForm: React.FC<CategoryFormProps> = ({
@@ -28,7 +31,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     parent_id: "",
     description: "",
     imageUrl: [],
-    attributes: [],
+    property: "", // store property ID
   });
   const { files, loading, addFiles, removeFile } = useFileUploader();
   const [attributes, setAttributes] = useState<any | null>(null);
@@ -36,6 +39,21 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [properties, setProperties] = useState<any[]>([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+
+  // Fetch available category properties
+  useEffect(() => {
+    const fetchProperties = async () => {
+      try {
+        const props = await getCategoryProperty();
+        setProperties(props || []);
+      } catch (err) {
+        console.error("Failed to fetch category properties:", err);
+      }
+    };
+    fetchProperties();
+  }, []);
 
   // Fetch category data if in edit mode
   useEffect(() => {
@@ -44,7 +62,6 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         try {
           setIsLoading(true);
           const category = await getCategory(categoryId);
-
           if (category) {
             setCategoryData({
               _id: category._id || "",
@@ -52,15 +69,12 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               parent_id: category.parent_id || "",
               description: category.description || "",
               imageUrl: category.imageUrl || [],
-              attributes: category.attributes || [],
+              property: category.property?._id || category.property || "",
             });
-
-            // Set attributes if they exist
-            if (category.attributes) {
-              setAttributes(category.attributes);
-            }
-
-            // Load existing images if any
+            setSelectedPropertyId(
+              category.property?._id || category.property || "",
+            );
+            if (category.attributes) setAttributes(category.attributes);
             if (category.imageUrl && category.imageUrl.length > 0) {
               addFiles(category.imageUrl);
             }
@@ -75,35 +89,32 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         }
       }
     };
-
     fetchCategoryData();
   }, [categoryId, mode, addFiles]);
 
   const handleInputChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
     setCategoryData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // In your CategoryForm component, fix the handleSubmit function:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
     try {
-      // Prepare form data - ensure arrays are never undefined
       const formData = {
         ...categoryData,
-        imageUrl: files || [], // Use empty array if no files
-        attributes: attributes || [], // Use empty array if no attributes
+        imageUrl: files || [],
+        attributes: attributes || [],
+        propertyId: selectedPropertyId || undefined, // pass property ID
       };
 
-      // Create or update category
       const result = await createCategory(
         formData,
-        mode === "edit" ? categoryData._id : undefined
+        mode === "edit" ? categoryData._id : undefined,
       );
 
       if (result && !result.error) {
@@ -123,15 +134,15 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     if (onCancel) {
       onCancel();
     } else {
-      // Reset form
       setCategoryData({
         _id: "",
         name: "",
         parent_id: "",
         description: "",
         imageUrl: [],
-        attributes: [],
+        property: "",
       });
+      setSelectedPropertyId("");
       setAttributes(null);
       setToggleCreateAttribute(false);
       setError(null);
@@ -166,7 +177,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               Parent Category
             </label>
             <select
-              title="parentCategory"
+              id="parent_id"
               name="parent_id"
               value={categoryData.parent_id}
               onChange={handleInputChange}
@@ -195,6 +206,30 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               required
             />
           </div>
+        </div>
+
+        {/* Category Property Selection */}
+        <div>
+          <label htmlFor="property" className="block mb-1 font-medium">
+            Category Property
+          </label>
+          <select
+            id="property"
+            name="property"
+            value={selectedPropertyId}
+            onChange={(e) => setSelectedPropertyId(e.target.value)}
+            className="w-full p-2 rounded-lg border bg-gray-100 dark:bg-gray-700 dark:text-white"
+          >
+            <option value="">None</option>
+            {properties.map((prop) => (
+              <option key={prop._id} value={prop._id}>
+                {prop.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Select a property to associate attribute sets with this category.
+          </p>
         </div>
 
         <div>

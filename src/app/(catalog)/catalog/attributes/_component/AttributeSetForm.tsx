@@ -70,12 +70,12 @@ const AttributeSetForm: React.FC<AttributeSetFormProps> = ({
       const fetchSet = async () => {
         setIsFetching(true);
         try {
-          const data = await getAttributeSet(attributeSetId);
+          const data: any = await getAttributeSet(attributeSetId);
           setTitle(data.title);
           setCode(data.code);
           setDescription(data.description || "");
           setSortOrder(data.sort_order || 0);
-          setSelectedGroupIds(data.attributeGroup); // array of group IDs
+          setSelectedGroupIds(data?.attributeGroup); // array of group IDs
         } catch (err: any) {
           console.error("Failed to fetch attribute set:", err);
           setError(err.message || "Could not load attribute set");

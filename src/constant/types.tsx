@@ -19,7 +19,7 @@ export type Category = {
   name?: string;
   description?: string;
   imageUrl?: string[];
-  attributes?: any[];
+  property?: string | { _id: string; name: string };
   seo_title?: string;
   seo_desc?: string;
   keywords?: string;

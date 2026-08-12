@@ -2,9 +2,10 @@
 import React, { useState, useMemo } from "react";
 import { Category as Cat } from "@/constant/types";
 
-// Extended interface to include subcategories
+// Extended interface to include subcategories and property
 interface CategoryWithSubcategories extends Cat {
   subcategories?: Cat[];
+  property?: "" | { _id: string; name: string };
 }
 
 interface CategoryListProps {
@@ -32,44 +33,35 @@ const CategoryList: React.FC<CategoryListProps> = ({
 }) => {
   const [filter, setFilter] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
 
-  // Filter categories based on search input
   const filteredCategories = useMemo(() => {
     if (!filter.trim()) return categories;
-
     const searchTerm = filter.toLowerCase();
     return categories.filter(
       (cat) =>
         cat.name?.toLowerCase().includes(searchTerm) ||
         cat.description?.toLowerCase().includes(searchTerm) ||
         cat.seo_title?.toLowerCase().includes(searchTerm) ||
-        cat.keywords?.toLowerCase().includes(searchTerm)
+        cat.keywords?.toLowerCase().includes(searchTerm),
     );
   }, [categories, filter]);
 
-  const handleClearFilter = () => {
-    setFilter("");
-  };
+  const handleClearFilter = () => setFilter("");
 
   const toggleExpandCategory = (categoryId: string) => {
     const newExpanded = new Set(expandedCategories);
-    if (newExpanded.has(categoryId)) {
-      newExpanded.delete(categoryId);
-    } else {
-      newExpanded.add(categoryId);
-    }
+    if (newExpanded.has(categoryId)) newExpanded.delete(categoryId);
+    else newExpanded.add(categoryId);
     setExpandedCategories(newExpanded);
   };
 
-  // Format date for display
   const formatDate = (date: Date | string | undefined) => {
     if (!date) return "-";
     return new Date(date).toLocaleDateString();
   };
 
-  // Get status badge color
   const getStatusBadge = (status: string) => {
     const baseClasses = "px-2 py-1 rounded-full text-xs font-medium";
     if (status === "active") {
@@ -80,20 +72,16 @@ const CategoryList: React.FC<CategoryListProps> = ({
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-4">
-      {/* Header */}
       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-4">
         <h3 className="font-semibold text-lg text-gray-800 dark:text-gray-100 mb-2 lg:mb-0">
           {title}
         </h3>
-
         <div className="flex items-center gap-4">
           {filteredCategories.length > 0 && (
             <span className="text-sm text-gray-500 dark:text-gray-400">
               Showing {filteredCategories.length} of {categories.length}
             </span>
           )}
-
-          {/* Filter Input */}
           {showFilter && categories.length > 0 && (
             <div className="relative w-full lg:w-64">
               <input
@@ -116,7 +104,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
         </div>
       </div>
 
-      {/* Table */}
       {filteredCategories.length === 0 ? (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
           {filter.trim() ? "No categories match your search" : emptyMessage}
@@ -136,6 +123,9 @@ const CategoryList: React.FC<CategoryListProps> = ({
               <tr className="border-b border-gray-200 dark:border-gray-700">
                 <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
                   Name & Description
+                </th>
+                <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
+                  Property
                 </th>
                 <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
                   Subcategories
@@ -165,7 +155,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
 
                 return (
                   <React.Fragment key={cat._id}>
-                    {/* Main Category Row */}
                     <tr
                       className={`border-b border-gray-100 dark:border-gray-800 transition ${
                         selectedCategoryId === cat._id
@@ -173,7 +162,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                           : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                       }`}
                     >
-                      {/* Name & Description Column */}
                       <td className="py-3 px-2">
                         <div className="group">
                           <div
@@ -190,7 +178,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                           <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                             Slug: {cat.url_slug}
                           </div>
-                          {/* Mobile-only status badge */}
                           <div className="md:hidden mt-2">
                             <span className={getStatusBadge(cat.status || "")}>
                               {cat.status}
@@ -199,29 +186,31 @@ const CategoryList: React.FC<CategoryListProps> = ({
                         </div>
                       </td>
 
-                      {/* Subcategories Column */}
+                      {/* Property Column */}
+                      <td className="py-3 px-2">
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                          {cat.property ? cat.property?.name : "—"}
+                        </span>
+                      </td>
+
                       <td className="py-3 px-2">
                         <div className="flex items-center gap-2">
                           {hasSubcategories ? (
-                            <>
-                              <button
-                                onClick={() =>
-                                  toggleExpandCategory(cat?._id as string)
-                                }
-                                className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                            <button
+                              onClick={() =>
+                                toggleExpandCategory(cat._id as string)
+                              }
+                              className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                            >
+                              <span
+                                className={`transform transition-transform ${isExpanded ? "rotate-90" : ""}`}
                               >
-                                <span
-                                  className={`transform transition-transform ${
-                                    isExpanded ? "rotate-90" : ""
-                                  }`}
-                                >
-                                  ▶
-                                </span>
-                                <span>
-                                  {cat.subcategories!.length} subcategories
-                                </span>
-                              </button>
-                            </>
+                                ▶
+                              </span>
+                              <span>
+                                {cat.subcategories!.length} subcategories
+                              </span>
+                            </button>
                           ) : (
                             <span className="text-sm text-gray-500 dark:text-gray-400">
                               -
@@ -230,21 +219,16 @@ const CategoryList: React.FC<CategoryListProps> = ({
                         </div>
                       </td>
 
-                      {/* Status Column */}
                       <td className="py-3 px-2 hidden md:table-cell">
                         <span className={getStatusBadge(cat.status || "")}>
                           {cat.status}
                         </span>
                       </td>
-
-                      {/* Sort Order Column */}
                       <td className="py-3 px-2 hidden lg:table-cell">
                         <span className="text-gray-700 dark:text-gray-300 font-mono">
                           {cat.sort_order || 0}
                         </span>
                       </td>
-
-                      {/* SEO Column */}
                       <td className="py-3 px-2 hidden xl:table-cell">
                         <div className="space-y-1">
                           {cat.seo_title && (
@@ -264,8 +248,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                           )}
                         </div>
                       </td>
-
-                      {/* Created Date Column */}
                       <td className="py-3 px-2 hidden 2xl:table-cell">
                         <div className="text-sm text-gray-600 dark:text-gray-400">
                           {formatDate(cat.created_at)}
@@ -274,15 +256,12 @@ const CategoryList: React.FC<CategoryListProps> = ({
                           Updated: {formatDate(cat.updated_at)}
                         </div>
                       </td>
-
-                      {/* Actions Column */}
                       <td className="py-3 px-2">
                         <div className="flex gap-2">
                           {onEditCategory && (
                             <button
-                              onClick={() => onEditCategory(cat)}
+                              onClick={() => onEditCategory(cat as Cat)}
                               className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                              title="Edit category"
                             >
                               Edit
                             </button>
@@ -293,7 +272,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                                 onDeleteCategory(cat._id as string)
                               }
                               className="px-3 py-1 text-sm border border-red-300 dark:border-red-700 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                              title="Delete category"
                             >
                               Delete
                             </button>
@@ -302,7 +280,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
                       </td>
                     </tr>
 
-                    {/* Expanded Subcategories Rows */}
+                    {/* Subcategories rows (unchanged) */}
                     {isExpanded && hasSubcategories && (
                       <>
                         {cat.subcategories!.map((subcat) => (
@@ -325,13 +303,16 @@ const CategoryList: React.FC<CategoryListProps> = ({
                                 </div>
                               </div>
                             </td>
+                            <td className="py-2 px-2">—</td>
                             <td className="py-2 px-2">
                               <span className="text-sm text-gray-400">
                                 Subcategory
                               </span>
                             </td>
                             <td className="py-2 px-2 hidden md:table-cell">
-                              <span className={getStatusBadge(subcat.status || "")}>
+                              <span
+                                className={getStatusBadge(subcat.status || "")}
+                              >
                                 {subcat.status}
                               </span>
                             </td>

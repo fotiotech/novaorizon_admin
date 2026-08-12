@@ -3,6 +3,7 @@ import { connection } from "@/utils/connection";
 import AttributeGroup from "@/models/AttributeGroup";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
+import Attribute from "@/models/Attribute";
 
 export interface Group {
   _id: string;
@@ -56,16 +57,75 @@ function buildTree(flatGroups: Group[]): Group[] {
   return roots;
 }
 
+// attributegroup.ts
+
 export async function findAttributeForGroups(
   id?: string,
 ): Promise<Group[] | null> {
   await connection();
   try {
     const filter = id ? { _id: new mongoose.Types.ObjectId(id) } : {};
-    const attributeGroups = await AttributeGroup.find(filter)
-      .populate("attributes", "_id code name")
-      .lean();
-    return attributeGroups.map(serializeGroup);
+    // Fetch groups
+    const attributeGroups = await AttributeGroup.find(filter).lean<any>();
+
+    // Collect all attribute subdocument IDs
+    const allSubdocs: { id: any; groupId: string }[] = [];
+    for (const group of attributeGroups) {
+      for (const sub of group.attributes || []) {
+        if (sub.id) {
+          allSubdocs.push({ id: sub.id, groupId: group?._id.toString() });
+        }
+      }
+    }
+
+    // Get valid attribute IDs
+    const attrIds: string[] = [];
+    for (const sub of allSubdocs) {
+      const idStr = sub.id?.toString();
+      if (idStr && mongoose.Types.ObjectId.isValid(idStr)) {
+        attrIds.push(idStr);
+      }
+    }
+
+    // Fetch all attributes once
+    const attributes = await Attribute.find({ _id: { $in: attrIds } })
+      .select("_id code name")
+      .lean<{ _id: mongoose.Types.ObjectId; code: string; name: string }[]>();
+    const attrMap: Record<
+      string,
+      { _id: mongoose.Types.ObjectId; code: string; name: string }
+    > = {};
+    for (const attr of attributes) {
+      const attrId = attr._id.toString();
+      attrMap[attrId] = attr;
+    }
+
+    // Build the result with populated attributes
+    const result = attributeGroups.map((group: any) => {
+      const groupAttrs = (group.attributes || [])
+        .map((sub: any) => {
+          const attrDoc = attrMap[sub.id?.toString()];
+          if (!attrDoc) return null;
+          return {
+            _id: attrDoc._id,
+            code: attrDoc.code,
+            name: attrDoc.name,
+          };
+        })
+        .filter(Boolean);
+
+      return {
+        _id: group._id.toString(),
+        code: group.code,
+        name: group.name,
+        parent_id: group.parent_id ? group.parent_id.toString() : "",
+        attributes: groupAttrs,
+        createdAt: group.createdAt,
+        sort_order: group.sort_order,
+      };
+    });
+
+    return result;
   } catch (error) {
     console.error("[AttributeGroup] Error in findAttributeForGroups:", error);
     return null;
@@ -211,7 +271,7 @@ export async function updateAttributeGroup(
     name: string;
     code: string;
     parent_id: string | null;
-    attributes: string[];
+    attributes: string[]; // array of attribute IDs
     sort_order: number;
   }>,
 ) {
@@ -219,21 +279,22 @@ export async function updateAttributeGroup(
   try {
     const updateData: any = { ...updates };
 
-    // Safely convert parent_id
-    if (
-      updates.parent_id &&
-      mongoose.Types.ObjectId.isValid(updates.parent_id)
-    ) {
-      updateData.parent_id = new mongoose.Types.ObjectId(updates.parent_id);
-    } else if (updates.parent_id === "" || updates.parent_id === null) {
-      updateData.parent_id = null;
+    // Handle parent_id
+    if (updates.parent_id !== undefined) {
+      updateData.parent_id = updates.parent_id
+        ? new mongoose.Types.ObjectId(updates.parent_id)
+        : null;
     }
 
-    // Replace existing attributes with the new selection (allows both adding and removing)
-    if (updates.attributes) {
-      updateData.attributes = updates.attributes
+    // Handle attributes: convert to subdocuments with isRequired: false
+    if (updates.attributes !== undefined) {
+      const attrSubdocs = updates.attributes
         .filter((attr) => mongoose.Types.ObjectId.isValid(attr))
-        .map((attr) => new mongoose.Types.ObjectId(attr));
+        .map((attr) => ({
+          id: new mongoose.Types.ObjectId(attr),
+          isRequired: false, // default
+        }));
+      updateData.attributes = attrSubdocs;
     }
 
     const updated = await AttributeGroup.findByIdAndUpdate(id, updateData, {
