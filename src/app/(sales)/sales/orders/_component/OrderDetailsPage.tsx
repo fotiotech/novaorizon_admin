@@ -1,13 +1,19 @@
+// components/sales/OrderDetails.tsx
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import { Orders } from "@/constant/types";
 import { findOrders } from "@/app/actions/order";
-import { useSearchParams } from "next/navigation";
 import { Prices } from "@/components/Prices";
-import { SkeletonLoader } from "../_component/SkeletonLoader";
-import { CollapsibleSection } from "../_component/CollapsibleSection"; // shared component
+import { CollapsibleSection } from "./CollapsibleSection";
+import { SkeletonLoader } from "./SkeletonLoader";
+
+// ... (all sub‑components: OrderInfo, CustomerInfo, ShippingInfo, ProductList, OrderSummary remain the same)
+
+interface OrderDetailsProps {
+  orderNumber: string;
+}
 
 // OrderInfo component
 const OrderInfo = ({ order }: { order: Orders }) => (
@@ -129,9 +135,7 @@ const OrderSummary = ({ order }: { order: Orders }) => (
   </div>
 );
 
-const OrderDetailsPage = () => {
-  const searchParams = useSearchParams();
-  const orderNumber = searchParams?.get("orderNumber");
+const OrderDetails = ({ orderNumber }: OrderDetailsProps) => {
   const [order, setOrder] = useState<Orders | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +149,6 @@ const OrderDetailsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      // findOrders with orderNumber returns a single order object
       const response = await findOrders({ orderNumber });
       if (
         response &&
@@ -168,32 +171,25 @@ const OrderDetailsPage = () => {
     fetchOrder();
   }, [fetchOrder]);
 
-  // Memoize order sections
   const orderSections = useMemo(() => {
     if (!order) return null;
-
     return (
       <>
         <CollapsibleSection title="Order Info" defaultOpen>
           <OrderInfo order={order} />
         </CollapsibleSection>
-
         <CollapsibleSection title="Customer">
           <CustomerInfo order={order} />
         </CollapsibleSection>
-
         <CollapsibleSection title="Shipping">
           <ShippingInfo order={order} />
         </CollapsibleSection>
-
         <CollapsibleSection title="Products">
           <ProductList products={order.products} />
         </CollapsibleSection>
-
         <CollapsibleSection title="Summary" defaultOpen>
           <OrderSummary order={order} />
         </CollapsibleSection>
-
         {order.notes && (
           <CollapsibleSection title="Notes">
             <p className="text-muted-foreground text-sm sm:text-base">
@@ -205,10 +201,7 @@ const OrderDetailsPage = () => {
     );
   }, [order]);
 
-  if (loading) {
-    return <SkeletonLoader />;
-  }
-
+  if (loading) return <SkeletonLoader />;
   if (error) {
     return (
       <div className="max-w-5xl mx-auto p-4 sm:p-6">
@@ -226,7 +219,6 @@ const OrderDetailsPage = () => {
       </div>
     );
   }
-
   if (!order) {
     return (
       <div className="max-w-5xl mx-auto p-4 sm:p-6">
@@ -249,4 +241,4 @@ const OrderDetailsPage = () => {
   );
 };
 
-export default OrderDetailsPage;
+export default OrderDetails;

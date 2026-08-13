@@ -260,7 +260,7 @@ export async function deleteOrder(orderNumber: string) {
     }
 
     console.log(`Order with order number ${orderNumber} deleted successfully`);
-    revalidatePath("/orders"); // adjust path to match your routes
+    revalidatePath("/sales/orders"); // adjust path to match your routes
     return true;
   } catch (error: any) {
     console.error("Error deleting order:", error.message);

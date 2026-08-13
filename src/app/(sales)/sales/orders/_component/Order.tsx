@@ -7,7 +7,7 @@ import { Delete } from "@mui/icons-material";
 import Image from "next/image";
 import Link from "next/link";
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { SkeletonLoader } from "../_component/SkeletonLoader"; // adjust path if needed
+import { SkeletonLoader } from "./SkeletonLoader"; // adjust path if needed
 
 const AllOrderPage = () => {
   const [allOrders, setAllOrders] = useState<Orders[]>([]);
@@ -174,10 +174,7 @@ const AllOrderPage = () => {
                 </p>
               </div>
 
-              <Link
-                href={`/orders/order_details?orderNumber=${order.orderNumber}`}
-                className="inline-block mt-4 text-sm text-blue-500 hover:underline"
-              >
+              <Link href={`/sales/orders/${order.orderNumber}`}>
                 View Details
               </Link>
             </div>

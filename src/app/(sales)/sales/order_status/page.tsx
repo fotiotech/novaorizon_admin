@@ -1,7 +1,7 @@
 import React from "react";
 
 const OrderStatus = () => {
-  return <div>OrderStatus</div>;
+  return <div>Order Status</div>;
 };
 
 export default OrderStatus;

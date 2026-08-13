@@ -22,7 +22,7 @@ ChartJS.register(
   ArcElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
 );
 
 interface OrderAnalytics {
@@ -135,11 +135,8 @@ export default function Order() {
               {analytics.recentOrders.map((order: any) => (
                 <tr key={order._id.toString()}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Link
-                      href={`/orders/order_details?orderNumber=${order.orderNumber}`}
-                      className="text-blue-600"
-                    >
-                      {order.orderNumber}
+                    <Link href={`/sales/orders/${order.orderNumber}`}>
+                      View Details
                     </Link>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">{order.email}</td>

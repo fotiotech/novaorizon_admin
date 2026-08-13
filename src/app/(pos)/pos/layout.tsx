@@ -5,9 +5,9 @@ import SectionLayout from "@/components/SectionLayout";
 
 const posLinks = [
   { name: "Dashboard", href: "/pos" },
-  { name: "Sales", href: "/pos/sales" },
-  { name: "Products", href: "/pos/products" },
-  { name: "Customers", href: "/pos/customers" },
+  { name: "Sales", href: "/sales" },
+  { name: "Products", href: "/catalog/products" },
+  { name: "Customers", href: "/customers/customers" },
   { name: "Reports", href: "/pos/reports" },
 ];
 
