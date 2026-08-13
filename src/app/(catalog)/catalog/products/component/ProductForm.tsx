@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { RootState } from "@/app/store/store";
 import { addProduct, clearProduct } from "@/app/store/slices/productSlice";
@@ -311,6 +311,16 @@ const ProductForm = () => {
     }
   };
 
+  // Inside ProductForm component
+  const allVariantFields = useMemo(() => {
+    // Search through all steps for the first group with code "variant_fields"
+    for (const step of steps) {
+      const group = step.groups.find((g) => g.code === "variant_fields");
+      if (group) return group.attributes || [];
+    }
+    return [];
+  }, [steps]);
+
   if (isLoading || redirecting) {
     return (
       <Box
@@ -330,30 +340,30 @@ const ProductForm = () => {
     const groupErrors = validationErrors[id] || [];
 
     const isSpecialGroup =
-      code === "variants_options" || code === "product_relationships";
+      code === "variant_themes" ||
+      code === "product_relationships" ||
+      code === "variant_fields" ||
+      code === "variants";
 
     if (isSpecialGroup) {
-      return (
-        <section key={id} className="mb-2">
-          <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
-          {code === "variants_options" && (
+      if (code === "variant_themes") {
+        return (
+          <section key={id} className="mb-2">
+            <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
             <VariantsManager
               productId={productId}
               product={product}
               attributes={attributes}
+              variantFields={allVariantFields} // ✅ from all steps
             />
-          )}
-          {code === "product_relationships" && (
-            <ManageRelatedProduct
-              id={productId}
-              product={product}
-              attribute={attributes}
-            />
-          )}
-          {children?.length > 0 &&
-            children.map((child) => renderGroup(child, true))}
-        </section>
-      );
+            {children?.length > 0 &&
+              children.map((child) => renderGroup(child, true))}
+          </section>
+        );
+      }
+      if (code === "variants" || code === "variant_fields") {
+        return null;
+      }
     }
 
     return (

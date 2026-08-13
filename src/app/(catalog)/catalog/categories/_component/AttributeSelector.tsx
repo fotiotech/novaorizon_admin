@@ -37,27 +37,23 @@ export default function AttributeSelector({
   }, [groupId]);
 
   const toggleAttribute = (attrId: string) => {
-    const exists = selectedAttributes.find((a) => a.attribute === attrId);
-    if (exists) {
-      onUpdate(selectedAttributes.filter((a) => a.attribute !== attrId));
-    } else {
-      onUpdate([
-        ...selectedAttributes,
-        { attribute: attrId, isRequired: false },
-      ]);
-    }
+    const exists = selectedAttributes.some((a) => a.attribute === attrId);
+    const updated = exists
+      ? selectedAttributes.filter((a) => a.attribute !== attrId)
+      : [...selectedAttributes, { attribute: attrId, isRequired: false }];
+    onUpdate(updated);
   };
 
   const toggleRequired = (attrId: string) => {
-    onUpdate(
-      selectedAttributes.map((a) =>
-        a.attribute === attrId ? { ...a, isRequired: !a.isRequired } : a,
-      ),
+    const updated = selectedAttributes.map((a) =>
+      a.attribute === attrId ? { ...a, isRequired: !a.isRequired } : a,
     );
+    onUpdate(updated);
   };
 
-  if (loading)
+  if (loading) {
     return <div className="text-sm text-gray-500">Loading attributes…</div>;
+  }
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-1">
@@ -77,7 +73,6 @@ export default function AttributeSelector({
             }`}
           >
             <div className="flex items-center space-x-3">
-              {/* Custom checkbox for attribute selection */}
               <label className="relative flex items-center cursor-pointer">
                 <input
                   type="checkbox"
@@ -108,7 +103,6 @@ export default function AttributeSelector({
               </label>
             </div>
 
-            {/* Required toggle – only visible when attribute is selected */}
             {isChecked && (
               <label className="flex items-center space-x-1.5 text-xs cursor-pointer">
                 <input

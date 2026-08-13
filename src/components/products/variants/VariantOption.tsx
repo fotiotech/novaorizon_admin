@@ -1,13 +1,27 @@
 "use client";
 
-import { addProduct } from "@/app/store/slices/productSlice";
-import React, { useState, useEffect } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import { useDispatch } from "react-redux";
+import { addProduct } from "@/app/store/slices/productSlice";
 import VariantImageUploader from "../VariantImageUpload";
 import Select from "react-select";
 
+interface Attribute {
+  id: string;
+  code: string;
+  name: string;
+  options?: string[];
+  type: string;
+}
+
 interface Variant {
-  [key: string]: string | number | string[];
+  [key: string]: string | number | string[] | null;
   sku: string;
   price: number;
 }
@@ -15,81 +29,70 @@ interface Variant {
 interface VariantsManagerProps {
   productId: string;
   product?: any;
-  attributes?: any;
+  attributes?: Attribute[];
+  variantFields?: Attribute[];
 }
 
-const cartesian = (arrays: string[][]): string[][] => {
-  return arrays.reduce<string[][]>(
+const cartesian = (arrays: string[][]): string[][] =>
+  arrays.reduce<string[][]>(
     (acc, curr) => acc.flatMap((a) => curr.map((c) => [...a, c])),
-    [[]]
+    [[]],
   );
-};
 
 const VariantsManager: React.FC<VariantsManagerProps> = ({
   productId,
   product,
-  attributes,
+  attributes = [],
+  variantFields = [],
 }) => {
   const dispatch = useDispatch();
-  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [selectedThemeCodes, setSelectedThemeCodes] = useState<string[]>([]);
   const [themeValues, setThemeValues] = useState<Record<string, string[]>>({});
   const [variants, setVariants] = useState<Variant[]>([]);
 
-  const updateProductField = (field: string, value: any) => {
-    dispatch(addProduct({ _id: productId, field, value }));
-  };
+  const isInitializing = useRef(true);
+  const updateProductField = useCallback(
+    (field: string, value: any) => {
+      dispatch(addProduct({ _id: productId, field, value }));
+    },
+    [dispatch, productId],
+  );
+
+  // ----- 1. INITIALIZATION -----
+  useEffect(() => {
+    const savedThemes = product?.variant_themes || [];
+    const validThemes = savedThemes.filter((code: string) =>
+      attributes.some((a) => a.code === code),
+    );
+    setSelectedThemeCodes(validThemes);
+
+    const savedValues = product?.variant_values || {};
+    const initialValues: Record<string, string[]> = {};
+    attributes.forEach((attr) => {
+      initialValues[attr.code] = savedValues[attr.code] || [];
+    });
+    setThemeValues(initialValues);
+
+    setVariants(product?.variants || []);
+    isInitializing.current = false;
+  }, [productId, attributes]);
+
+  // ----- 2. GENERATE VARIANTS -----
+  const fieldKey = useMemo(
+    () => variantFields.map((f) => f.code).join(","),
+    [variantFields],
+  );
 
   useEffect(() => {
-    if (product?.variant_themes) {
-      setSelectedThemes(product.variant_themes);
-      setThemeValues(product.variant_values || {});
-      setVariants(product.variants || []);
-    }
-  }, [product]);
+    if (isInitializing.current) return;
 
-  const handleThemeChange = (selected: any) => {
-    if (!selected?.length) {
-      setSelectedThemes([]);
-      setThemeValues({});
-      setVariants([]);
-      updateProductField("variant_themes", []);
-      updateProductField("variant_values", {});
-      updateProductField("variants", []);
-      return;
-    }
+    const themeCodes = selectedThemeCodes;
+    const valueArrays = themeCodes.map((code) => themeValues[code] || []);
 
-    const lastSelected = selected[selected.length - 1].value;
-    const themes = lastSelected.split("-").filter(Boolean);
-
-    const newThemeValues = Object.fromEntries(
-      themes.map((theme: string) => [theme, themeValues[theme] || []])
-    );
-
-    setSelectedThemes(themes);
-    setThemeValues(newThemeValues);
-    setVariants([]);
-
-    updateProductField("variant_themes", themes);
-    updateProductField("variant_values", newThemeValues);
-    updateProductField("variants", []);
-  };
-
-  const handleThemeValuesChange = (theme: string, valuesString: string) => {
-    const values = valuesString
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean);
-    const updatedThemeValues = { ...themeValues, [theme]: values };
-
-    setThemeValues(updatedThemeValues);
-    updateProductField("variant_values", updatedThemeValues);
-    generateVariants(updatedThemeValues);
-  };
-
-  const generateVariants = (values: Record<string, string[]>) => {
-    const valueArrays = selectedThemes.map((theme) => values[theme] || []);
-
-    if (valueArrays.some((arr) => arr.length === 0)) {
+    if (
+      themeCodes.length === 0 ||
+      valueArrays.some((arr) => arr.length === 0)
+    ) {
       setVariants([]);
       updateProductField("variants", []);
       return;
@@ -97,169 +100,255 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
 
     const combinations = cartesian(valueArrays);
     const newVariants = combinations.map((combo) => {
-      const variant: Variant = { sku: "", price: 0 };
-      selectedThemes.forEach((theme, i) => {
-        variant[theme] = combo[i];
+      const variant: any = { sku: "", price: 0 };
+      themeCodes.forEach((code, i) => {
+        variant[code] = combo[i];
+      });
+      // Initialize each variant field with a default
+      variantFields.forEach((field) => {
+        if (field.type === "number") variant[field.code] = 0;
+        else if (field.type === "file")
+          variant[field.code] = []; // for images
+        else variant[field.code] = "";
       });
       return variant;
     });
 
     setVariants(newVariants);
     updateProductField("variants", newVariants);
+  }, [selectedThemeCodes, themeValues, fieldKey, updateProductField]);
+
+  // ----- 3. HANDLERS -----
+  const handleThemeSelect = (selectedOptions: any) => {
+    const selectedCodes = selectedOptions
+      ? selectedOptions.map((opt: any) => opt.value)
+      : [];
+    setSelectedThemeCodes(selectedCodes);
+    updateProductField("variant_themes", selectedCodes);
+  };
+
+  const handleThemeValuesChange = (themeCode: string, valuesString: string) => {
+    const values = valuesString
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+    const newThemeValues = { ...themeValues, [themeCode]: values };
+    setThemeValues(newThemeValues);
+    updateProductField("variant_values", newThemeValues);
   };
 
   const handleVariantChange = (
     index: number,
     field: string,
-    value: string | number | string[]
+    value: string | number | string[] | null,
   ) => {
     const updatedVariants = variants.map((variant, i) =>
-      i === index ? { ...variant, [field]: value } : variant
+      i === index ? { ...variant, [field]: value } : variant,
     );
-
     setVariants(updatedVariants);
     updateProductField("variants", updatedVariants);
   };
 
-  const renderAttributeContent = (attribute: any) => {
-    const { code, name, option } = attribute;
+  // ----- 4. RENDER FIELD INPUT (based on attribute type) -----
+  const renderFieldInput = (
+    field: Attribute,
+    variant: Variant,
+    index: number,
+  ) => {
+    const value = variant[field.code] ?? "";
+    const commonProps = {
+      className: "w-full p-1 border rounded",
+      value,
+    };
 
-    switch (code) {
-      case "variation_themes":
+    switch (field.type) {
+      case "number":
         return (
-          <div>
-            <Select
-              isMulti
-              options={option.map((opt: any) => ({
-                value: opt,
-                label: opt
-                  .split("-")
-                  .map(
-                    (word: any) => word.charAt(0).toUpperCase() + word.slice(1)
-                  )
-                  .join(" "),
-              }))}
-              value={option
-                .filter((opt: any) => selectedThemes.join("-") === opt)
-                .map((opt: any) => ({
-                  value: opt,
-                  label: opt
-                    .split("-")
-                    .map(
-                      (word: any) =>
-                        word.charAt(0).toUpperCase() + word.slice(1)
-                    )
-                    .join(" "),
-                }))}
-              onChange={handleThemeChange}
-              className="basic-multi-select"
-              classNamePrefix="select"
-            />
-
-            {selectedThemes.map((theme) => (
-              <div key={theme} className="flex flex-col mt-2">
-                <label className="mb-1 font-medium capitalize">
-                  {theme} Options
-                </label>
-                <input
-                  type="text"
-                  className="border p-2 rounded"
-                  placeholder="Enter values separated by commas"
-                  value={themeValues[theme]?.join(", ") || ""}
-                  onChange={(e) =>
-                    handleThemeValuesChange(theme, e.target.value)
-                  }
-                />
-              </div>
+          <input
+            type="number"
+            {...commonProps}
+            onChange={(e) =>
+              handleVariantChange(index, field.code, Number(e.target.value))
+            }
+          />
+        );
+      case "select":
+        return (
+          <select
+            {...commonProps}
+            onChange={(e) =>
+              handleVariantChange(index, field.code, e.target.value)
+            }
+          >
+            <option value="">Select...</option>
+            {(field.options || []).map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
             ))}
-          </div>
+          </select>
         );
-
-      case "variants":
+      case "file":
+        // Use the existing VariantImageUploader for file fields (e.g., main_image, gallery)
         return (
-          <div>
-            {variants.length > 0 && (
-              <div className="overflow-x-auto mt-4">
-                <table className="min-w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      {selectedThemes.map((theme) => (
-                        <th
-                          key={theme}
-                          className="border p-2 text-left capitalize"
-                        >
-                          {theme}
-                        </th>
-                      ))}
-                      <th className="border p-2 text-left">SKU</th>
-                      <th className="border p-2 text-left">Price</th>
-                      <th className="border p-2 text-left">Image</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {variants.map((variant, index) => (
-                      <tr key={index}>
-                        {selectedThemes.map((theme) => (
-                          <td key={theme} className="border p-2">
-                            {variant[theme] as string}
-                          </td>
-                        ))}
-                        <td className="border p-2">
-                          <input
-                            title="sku"
-                            type="text"
-                            className="w-full p-1 border rounded"
-                            value={variant.sku as string}
-                            onChange={(e) =>
-                              handleVariantChange(index, "sku", e.target.value)
-                            }
-                          />
-                        </td>
-                        <td className="border p-2">
-                          <input
-                            title="price"
-                            type="number"
-                            className="w-full p-1 border rounded"
-                            value={variant.price as number}
-                            onChange={(e) =>
-                              handleVariantChange(
-                                index,
-                                "price",
-                                Number(e.target.value)
-                              )
-                            }
-                          />
-                        </td>
-                        <td className="border p-2">
-                          <div className="w-full h-20 overflow-auto">
-                            <VariantImageUploader
-                              index={index}
-                              handleVariantChange={handleVariantChange}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          <div className="w-full h-20 overflow-auto">
+            <VariantImageUploader
+              index={index}
+              handleVariantChange={handleVariantChange}
+              // If you need to pass additional props like the field code, you can adapt the uploader
+              // For now, it uses its internal logic to manage images.
+            />
           </div>
         );
-
       default:
-        return null;
+        return (
+          <input
+            type="text"
+            {...commonProps}
+            onChange={(e) =>
+              handleVariantChange(index, field.code, e.target.value)
+            }
+          />
+        );
     }
   };
 
+  const themeOptions = attributes.map((attr) => ({
+    value: attr.code,
+    label: attr.name || attr.code,
+  }));
+
+  const selectedOptions = themeOptions.filter((opt) =>
+    selectedThemeCodes.includes(opt.value),
+  );
+
+  if (attributes.length === 0) {
+    return (
+      <div className="text-sm text-gray-500">
+        No variant themes defined for this group.
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-2 w-full whitespace-nowrap overflow-auto">
-      {attributes.map((attribute: any) => (
-        <div key={attribute.code}>
-          <h4 className="text-md font-semibold mb-3">{attribute.name}</h4>
-          {renderAttributeContent(attribute)}
+    <div className="flex flex-col gap-4 w-full overflow-auto">
+      {/* Theme selection */}
+      <div>
+        <label className="block text-sm font-medium mb-1">
+          Select themes to use for variants
+        </label>
+        <Select
+          isMulti
+          options={themeOptions}
+          value={selectedOptions}
+          onChange={handleThemeSelect}
+          placeholder="Choose themes..."
+          className="basic-multi-select"
+          classNamePrefix="select"
+        />
+      </div>
+
+      {/* Theme values inputs */}
+      {selectedThemeCodes.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {selectedThemeCodes.map((code) => {
+            const attr = attributes.find((a) => a.code === code);
+            if (!attr) return null;
+            return (
+              <div key={code}>
+                <label className="block text-sm font-medium capitalize mb-1">
+                  {attr.name || code} values
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded p-2"
+                  placeholder={`Enter ${attr.name || code} values, comma‑separated`}
+                  value={themeValues[code]?.join(", ") || ""}
+                  onChange={(e) =>
+                    handleThemeValuesChange(code, e.target.value)
+                  }
+                />
+                {attr.options && attr.options.length > 0 && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    Suggested: {attr.options.join(", ")}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-      ))}
+      )}
+
+      {/* Variant table */}
+      {variants.length > 0 && (
+        <>
+          <div className="overflow-x-auto mt-4">
+            <table className="min-w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-100">
+                  {/* Dimension columns */}
+                  {selectedThemeCodes.map((code) => (
+                    <th key={code} className="border p-2 text-left capitalize">
+                      {attributes.find((a) => a.code === code)?.name || code}
+                    </th>
+                  ))}
+                  {/* Variant field columns (including file types) */}
+                  {variantFields.map((field) => (
+                    <th
+                      key={field.code}
+                      className="border p-2 text-left capitalize"
+                    >
+                      {field.name || field.code}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {variants.map((variant, index) => (
+                  <tr key={index}>
+                    {selectedThemeCodes.map((code) => (
+                      <td key={code} className="border p-2">
+                        {variant[code] as string}
+                      </td>
+                    ))}
+                    {variantFields.map((field) => (
+                      <td key={field.code} className="border p-2">
+                        {renderFieldInput(field, variant, index)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Variant summary */}
+          <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-200">
+            <div className="text-sm font-medium text-gray-700">
+              Variant Summary
+            </div>
+            <div className="text-xs text-gray-600 mt-1">
+              Total variants:{" "}
+              <span className="font-semibold">{variants.length}</span>
+            </div>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {variants.map((v, idx) => {
+                const label = selectedThemeCodes
+                  .map((code) => v[code] as string)
+                  .join(" - ");
+                return (
+                  <span
+                    key={idx}
+                    className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded text-xs"
+                  >
+                    {label}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

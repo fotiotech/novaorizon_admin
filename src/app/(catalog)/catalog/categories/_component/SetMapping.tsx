@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Select from "react-select";
 import { getGroupsBySet } from "@/app/actions/category";
 import GroupSelector from "./GroupSelector";
@@ -46,12 +46,17 @@ export default function SetMapping({
   const [availableGroups, setAvailableGroups] = useState<GroupOption[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // When set changes, fetch its groups
   useEffect(() => {
     if (mapping.set) {
       setLoading(true);
       getGroupsBySet(mapping.set)
-        .then((groups) => setAvailableGroups(groups))
+        .then((groups) => {
+          setAvailableGroups(groups);
+          console.log(
+            `[SetMapping] Loaded groups for set ${mapping.set}:`,
+            groups,
+          );
+        })
         .catch(console.error)
         .finally(() => setLoading(false));
     } else {
@@ -67,9 +72,13 @@ export default function SetMapping({
     });
   };
 
-  const handleGroupsUpdate = (groups: Mapping["groups"]) => {
-    onUpdate({ ...mapping, groups });
-  };
+  const handleGroupsUpdate = useCallback(
+    (groups: Mapping["groups"]) => {
+      console.log(`[SetMapping] Groups updated for mapping ${index}:`, groups);
+      onUpdate({ ...mapping, groups });
+    },
+    [mapping, onUpdate, index],
+  );
 
   const setOptions = allSets.map((s) => ({
     value: s._id,

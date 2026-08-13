@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { getAttributesByGroup } from "@/app/actions/category";
+import React, { useCallback, useState } from "react";
 import AttributeSelector from "./AttributeSelector";
 
 interface GroupOption {
@@ -31,45 +30,44 @@ export default function GroupSelector({
   onUpdate,
   isLoading,
 }: Props) {
-  const [groupAttributes, setGroupAttributes] = useState<Record<string, any[]>>(
-    {},
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = useCallback(
+    (groupId: string) => {
+      const exists = selectedGroups.some((g) => g.group === groupId);
+      const updated = exists
+        ? selectedGroups.filter((g) => g.group !== groupId)
+        : [...selectedGroups, { group: groupId, attributes: [] }];
+      console.log(`[GroupSelector] toggleGroup: ${groupId}, updated:`, updated);
+      onUpdate(updated);
+    },
+    [selectedGroups, onUpdate],
   );
 
-  // Load attributes for each selected group
-  useEffect(() => {
-    const fetchAll = async () => {
-      const map: Record<string, any[]> = {};
-      for (const sg of selectedGroups) {
-        if (!map[sg.group]) {
-          const attrs = await getAttributesByGroup(sg.group);
-          map[sg.group] = attrs;
-        }
-      }
-      setGroupAttributes(map);
-    };
-    fetchAll();
-  }, [selectedGroups]);
+  const updateGroupAttributes = useCallback(
+    (groupId: string, attributes: SelectedGroup["attributes"]) => {
+      const updated = selectedGroups.map((g) =>
+        g.group === groupId ? { ...g, attributes } : g,
+      );
+      console.log(
+        `[GroupSelector] updateGroupAttributes for ${groupId}:`,
+        updated,
+      );
+      onUpdate(updated);
+    },
+    [selectedGroups, onUpdate],
+  );
 
-  const toggleGroup = (groupId: string) => {
-    const exists = selectedGroups.find((g) => g.group === groupId);
-    if (exists) {
-      onUpdate(selectedGroups.filter((g) => g.group !== groupId));
-    } else {
-      onUpdate([...selectedGroups, { group: groupId, attributes: [] }]);
-    }
+  const toggleExpand = (groupId: string) => {
+    setExpandedGroups((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupId)) newSet.delete(groupId);
+      else newSet.add(groupId);
+      return newSet;
+    });
   };
 
-  const updateGroupAttributes = (
-    groupId: string,
-    attributes: { attribute: string; isRequired: boolean }[],
-  ) => {
-    const updated = selectedGroups.map((g) =>
-      g.group === groupId ? { ...g, attributes } : g,
-    );
-    onUpdate(updated);
-  };
-
-  if (isLoading) return <div>Loading groups...</div>;
+  if (isLoading) return <div>Loading groups…</div>;
 
   return (
     <div className="space-y-3">
@@ -81,7 +79,7 @@ export default function GroupSelector({
               key={g._id}
               type="button"
               onClick={() => toggleGroup(g._id)}
-              className={`px-3 py-1 rounded-full border ${
+              className={`px-3 py-1 rounded-full border transition-colors ${
                 isSelected
                   ? "bg-blue-500 text-white border-blue-500"
                   : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
@@ -93,18 +91,53 @@ export default function GroupSelector({
         })}
       </div>
 
-      {selectedGroups.map((sg) => (
-        <div key={sg.group} className="ml-4 p-2 border-l-2 border-blue-300">
-          <div className="font-medium text-sm">
-            {setGroups.find((g) => g._id === sg.group)?.name}:
+      {selectedGroups.map((sg) => {
+        const groupName =
+          setGroups.find((g) => g._id === sg.group)?.name || sg.group;
+        const attrCount = sg.attributes.length;
+        const hasAttributes = attrCount > 0;
+
+        return (
+          <div
+            key={sg.group}
+            className="ml-4 p-3 border-l-2 border-blue-300 bg-gray-50 rounded-r"
+          >
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => toggleExpand(sg.group)}
+                className="font-medium text-sm flex items-center gap-2 hover:text-blue-600"
+              >
+                {groupName}
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full ${
+                    hasAttributes
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {attrCount} {attrCount === 1 ? "attribute" : "attributes"}
+                </span>
+              </button>
+              {!hasAttributes && (
+                <span className="text-xs text-red-500 font-medium">
+                  ⚠️ Select at least one
+                </span>
+              )}
+            </div>
+
+            {expandedGroups.has(sg.group) && (
+              <div className="mt-2">
+                <AttributeSelector
+                  groupId={sg.group}
+                  selectedAttributes={sg.attributes}
+                  onUpdate={(attrs) => updateGroupAttributes(sg.group, attrs)}
+                />
+              </div>
+            )}
           </div>
-          <AttributeSelector
-            groupId={sg.group}
-            selectedAttributes={sg.attributes}
-            onUpdate={(attrs) => updateGroupAttributes(sg.group, attrs)}
-          />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
