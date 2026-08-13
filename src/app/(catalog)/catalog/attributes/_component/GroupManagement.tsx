@@ -51,87 +51,88 @@ const GroupManagement: React.FC<GroupManagementProps> = ({
   const [attributesToRemove, setAttributesToRemove] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Handle adding attributes to a group
+  // --- Helper: refresh selected group after update ---
+  const refreshSelectedGroup = async () => {
+    if (!selectedGroup) return;
+    const updatedGroups = await findAttributeForGroups();
+    if (Array.isArray(updatedGroups)) {
+      const updatedGroup = updatedGroups.find(
+        (g) => g._id === selectedGroup._id,
+      );
+      if (updatedGroup) setSelectedGroup(updatedGroup as Group);
+    }
+  };
+
+  // --- Add attributes (no internal loading) ---
   const handleAddAttributesToGroup = async (attributeIds: string[]) => {
     if (!selectedGroup) return;
 
-    try {
-      setIsLoading(true);
+    // Get current attribute IDs
+    const currentAttrIds = selectedGroup.attributes
+      .map((attr) => (typeof attr === "string" ? attr : attr._id))
+      .filter((id): id is string => id !== undefined);
 
-      // Get current attribute IDs
-      const currentAttrIds = selectedGroup.attributes
-        .map((attr) => (typeof attr === "string" ? attr : attr._id))
-        .filter((id): id is string => id !== undefined);
+    const updatedAttrIds = [...currentAttrIds, ...attributeIds];
 
-      // Combine with new attributes
-      const updatedAttrIds = [...currentAttrIds, ...attributeIds];
+    await updateAttributeGroup(selectedGroup._id, {
+      attributes: updatedAttrIds,
+    });
 
-      // Update group
-      await updateAttributeGroup(selectedGroup._id, {
-        attributes: updatedAttrIds,
-      });
-
-      // Refresh groups
-      const updatedGroups = await findAttributeForGroups();
-      if (Array.isArray(updatedGroups)) {
-        // Update selected group
-        const updatedGroup = updatedGroups.find(
-          (g) => g._id === selectedGroup._id
-        );
-        if (updatedGroup) setSelectedGroup(updatedGroup as Group);
-      }
-
-      alert("Attributes added to group successfully!");
-    } catch (err) {
-      console.error("Error adding attributes to group:", err);
-      alert("Failed to add attributes to group");
-    } finally {
-      setIsLoading(false);
-    }
+    await refreshSelectedGroup();
   };
 
-  // Handle removing attributes from a group
+  // --- Remove attributes (no internal loading) ---
   const handleRemoveAttributesFromGroup = async (attributeIds: string[]) => {
+    if (!selectedGroup) return;
+
+    const currentAttrIds = selectedGroup.attributes
+      .map((attr) => (typeof attr === "string" ? attr : attr._id))
+      .filter((id): id is string => id !== undefined);
+
+    const updatedAttrIds = currentAttrIds.filter(
+      (id) => !attributeIds.includes(id),
+    );
+
+    await updateAttributeGroup(selectedGroup._id, {
+      attributes: updatedAttrIds,
+    });
+
+    await refreshSelectedGroup();
+  };
+
+  // --- Save changes (now async and properly sequenced) ---
+  const handleSaveChanges = async () => {
     if (!selectedGroup) return;
 
     try {
       setIsLoading(true);
 
-      // Get current attribute IDs
-      const currentAttrIds = selectedGroup.attributes
-        .map((attr) => (typeof attr === "string" ? attr : attr._id))
-        .filter((id): id is string => id !== undefined);
+      // Run both operations in parallel, but wait for both to finish
+      const addPromise =
+        selectedAttributes.length > 0
+          ? handleAddAttributesToGroup(selectedAttributes)
+          : Promise.resolve();
+      const removePromise =
+        attributesToRemove.length > 0
+          ? handleRemoveAttributesFromGroup(attributesToRemove)
+          : Promise.resolve();
 
-      // Remove specified attributes
-      const updatedAttrIds = currentAttrIds.filter(
-        (id) => !attributeIds.includes(id)
-      );
+      await Promise.all([addPromise, removePromise]);
 
-      // Update group
-      await updateAttributeGroup(selectedGroup._id, {
-        attributes: updatedAttrIds,
-      });
+      // Clear selections only after both succeed
+      setSelectedAttributes([]);
+      setAttributesToRemove([]);
 
-      // Refresh groups
-      const updatedGroups = await findAttributeForGroups();
-      if (Array.isArray(updatedGroups)) {
-        // Update selected group
-        const updatedGroup = updatedGroups.find(
-          (g) => g._id === selectedGroup._id
-        );
-        if (updatedGroup) setSelectedGroup(updatedGroup as Group);
-      }
-
-      alert("Attributes removed from group successfully!");
+      alert("Changes saved successfully!");
     } catch (err) {
-      console.error("Error removing attributes from group:", err);
-      alert("Failed to remove attributes from group");
+      console.error("Error saving changes:", err);
+      alert("Failed to save changes. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Get attributes that are not in the selected group
+  // --- Computed lists (unchanged) ---
   const availableAttributes = useMemo(() => {
     if (!selectedGroup) return allAttributes;
 
@@ -147,16 +148,15 @@ const GroupManagement: React.FC<GroupManagementProps> = ({
     return allAttributes
       .filter((attr) => !groupAttributeIds.has(attr._id))
       .filter((attr) =>
-        attr.name?.toLowerCase().includes(filterText.toLowerCase())
+        attr.name?.toLowerCase().includes(filterText.toLowerCase()),
       )
       .sort((a, b) =>
         sortOrder.value === "asc"
           ? a.name.localeCompare(b.name)
-          : b.name.localeCompare(a.name)
+          : b.name.localeCompare(a.name),
       );
   }, [selectedGroup, allAttributes, filterText, sortOrder]);
 
-  // Get attributes for the selected group
   const groupAttributes = useMemo(() => {
     if (!selectedGroup) return [];
 
@@ -167,25 +167,23 @@ const GroupManagement: React.FC<GroupManagementProps> = ({
     return allAttributes
       .filter((attr) => attributeIds.includes(attr._id || ""))
       .filter((attr) =>
-        attr.name?.toLowerCase().includes(filterText.toLowerCase())
+        attr.name?.toLowerCase().includes(filterText.toLowerCase()),
       )
       .sort((a, b) =>
         sortOrder.value === "asc"
           ? a.name.localeCompare(b.name)
-          : b.name.localeCompare(a.name)
+          : b.name.localeCompare(a.name),
       );
   }, [selectedGroup, allAttributes, filterText, sortOrder]);
 
   const toggleAttributeSelection = (attrId: string, isAvailable: boolean) => {
     if (isAvailable) {
-      // Toggle selection in available attributes
       if (selectedAttributes.includes(attrId)) {
         setSelectedAttributes(selectedAttributes.filter((id) => id !== attrId));
       } else {
         setSelectedAttributes([...selectedAttributes, attrId]);
       }
     } else {
-      // Toggle selection in group attributes (for removal)
       if (attributesToRemove.includes(attrId)) {
         setAttributesToRemove(attributesToRemove.filter((id) => id !== attrId));
       } else {
@@ -194,18 +192,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({
     }
   };
 
-  const handleSaveChanges = () => {
-    if (selectedAttributes.length > 0) {
-      handleAddAttributesToGroup(selectedAttributes);
-      setSelectedAttributes([]);
-    }
-
-    if (attributesToRemove.length > 0) {
-      handleRemoveAttributesFromGroup(attributesToRemove);
-      setAttributesToRemove([]);
-    }
-  };
-
+  // --- Render (unchanged except button disabled state uses isLoading and parentLoading) ---
   return (
     <div className="mb-8 p-2 lg:p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
       <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
@@ -284,7 +271,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({
             </div>
           </div>
 
-          {/* Group Attributes */}
+          {/* Attribute Lists */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Available Attributes */}
             <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
@@ -342,7 +329,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({
                 <button
                   onClick={() => {
                     const allIds = availableAttributes.map(
-                      (attr) => attr._id || ""
+                      (attr) => attr._id || "",
                     );
                     setSelectedAttributes(allIds);
                   }}
@@ -417,7 +404,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({
                 <button
                   onClick={() => {
                     const allIds = groupAttributes.map(
-                      (attr) => attr._id || ""
+                      (attr) => attr._id || "",
                     );
                     setAttributesToRemove(allIds);
                   }}
@@ -443,6 +430,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({
               onClick={handleSaveChanges}
               disabled={
                 isLoading ||
+                parentLoading ||
                 (selectedAttributes.length === 0 &&
                   attributesToRemove.length === 0)
               }

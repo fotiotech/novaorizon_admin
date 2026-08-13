@@ -361,6 +361,21 @@ const ProductForm = () => {
           </section>
         );
       }
+      // Inside renderGroup, after checking for variant_themes and variants
+      if (code === "product_relationships") {
+        return (
+          <section key={id} className="mb-2">
+            <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
+            <ManageRelatedProduct
+              id={productId}
+              product={product}
+              attribute={attributes} // array containing relation_type and related_products
+            />
+            {children?.length > 0 &&
+              children.map((child) => renderGroup(child, true))}
+          </section>
+        );
+      }
       if (code === "variants" || code === "variant_fields") {
         return null;
       }

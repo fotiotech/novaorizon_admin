@@ -351,18 +351,21 @@ export async function getCategoryAttributeSets(
         .lean();
       if (!set) continue;
 
-      // ---- 1. Build a map: groupId -> Map<attributeId, isRequired> ----
+      // ---- 1. Build maps and collect selected group IDs ----
       const groupAttrMap = new Map<string, Map<string, boolean>>();
+      const selectedGroupIds = new Set<string>(); // track which groups are selected
+
       for (const gm of mapping.groups) {
+        const groupId = gm.group.toString();
+        selectedGroupIds.add(groupId);
         const attrMap = new Map<string, boolean>();
         for (const am of gm.attributes) {
           attrMap.set(am.attribute.toString(), am.isRequired);
         }
-        groupAttrMap.set(gm.group.toString(), attrMap);
+        groupAttrMap.set(groupId, attrMap);
       }
 
       // ---- 2. Collect all attribute subdocuments from this set ----
-      // Normalize: group.attributes may be array of ObjectIds or subdocs { id, isRequired }
       const allSubdocs: { id: string; isRequired: boolean; groupId: string }[] =
         [];
       for (const group of set.groups || []) {
@@ -382,7 +385,7 @@ export async function getCategoryAttributeSets(
         }
       }
 
-      // ---- 3. Fetch all attributes (with unitFamily) for this set ----
+      // ---- 3. Fetch all attributes (with unitFamily) ----
       const allAttrIds = allSubdocs.map((s) => s.id);
       const uniqueAttrIds = [...new Set(allAttrIds)].filter((id) =>
         Types.ObjectId.isValid(id),
@@ -398,7 +401,7 @@ export async function getCategoryAttributeSets(
         attrDocMap[(doc as any)._id.toString()] = doc;
       }
 
-      // ---- 4. Build the group tree ----
+      // ---- 4. Build the group tree (only selected groups) ----
       const buildTree = (
         groups: any[],
         parentId: string | null = null,
@@ -406,15 +409,23 @@ export async function getCategoryAttributeSets(
         const groupIds = new Set(groups.map((g) => g._id.toString()));
         return groups
           .filter((g) => {
+            const gId = g._id.toString();
+            // Only include groups that are selected in the mapping
+            if (!selectedGroupIds.has(gId)) return false;
             const gParent = g.parent_id?.toString();
-            return parentId === null
-              ? !gParent || !groupIds.has(gParent)
-              : gParent === parentId;
+            if (parentId === null) {
+              // Root: either no parent, or parent not selected (so it becomes root)
+              if (!gParent) return true;
+              return !selectedGroupIds.has(gParent);
+            } else {
+              // Child: parent must match
+              return gParent === parentId;
+            }
           })
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
           .map((g) => {
             const groupId = g._id.toString();
-            // Get the selected attribute map for this group (from the property mapping)
+            // Get the selected attribute map for this group
             const selectedAttrMap = groupAttrMap.get(groupId) || new Map();
 
             // Get all subdocs for this group, then filter to only those in selectedAttrMap
@@ -461,6 +472,7 @@ export async function getCategoryAttributeSets(
           });
       };
 
+      // Build result for this set
       result.push({
         id: set._id.toString(),
         title: set.title,
@@ -472,7 +484,7 @@ export async function getCategoryAttributeSets(
     return result;
   }
 
-  // ---- FALLBACK: old 'sets' array ----
+  // ---- FALLBACK: old 'sets' array (unchanged) ----
   const oldSets = (property as any).sets;
   if (oldSets && Array.isArray(oldSets) && oldSets.length > 0) {
     const setIds = oldSets.map((s: any) => s._id?.toString() || s.toString());
@@ -480,7 +492,6 @@ export async function getCategoryAttributeSets(
       .populate<{ groups: any[] }>("groups")
       .lean();
 
-    // Build full tree (include all groups and attributes)
     const buildTreeFull = (
       groups: any[],
       parentId: string | null = null,
@@ -495,15 +506,10 @@ export async function getCategoryAttributeSets(
         })
         .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
         .map((g) => {
-          // Normalize attributes: plain ObjectId or subdoc
           const attrs: MappedAttribute[] = (g.attributes || [])
             .map((item: any) => {
               let attrDoc = item.id ? item.id : item;
-              if (typeof attrDoc === "string") {
-                // If it's a plain ID, we didn't populate – fallback to fetching?
-                // But we already populated, so this shouldn't happen.
-                return null;
-              }
+              if (typeof attrDoc === "string") return null;
               if (!attrDoc) return null;
               return {
                 id: attrDoc._id.toString(),
