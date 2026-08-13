@@ -9,12 +9,12 @@ label {
 input {
   @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
     rounded-lg border-2 border-gray-800 
-     focus:border-thiR my-2 p-2;
+     focus:border-thir my-2 p-2;
 }
 select {
   @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
     rounded-lg border-2 border-gray-800 
-     focus:border-thiR my-2 p-2;
+     focus:border-thir my-2 p-2;
 }
 
 option {
@@ -24,11 +24,11 @@ option {
 textarea {
   @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
     rounded-lg border-2 border-gray-800 
-     focus:border-thiR my-2 p-2;
+     focus:border-thir my-2 p-2;
 }
 
 .btn {
-  @apply bg-thiR p-2 rounded-lg;
+  @apply bg-thir p-2 rounded-lg;
 }
 
 th,
@@ -38,18 +38,15 @@ td {
 
 .activeLink {
   @apply dark:bg-sec-dark mx-2 text-gray-100 rounded-lg py-1  px-4 flex gap-3 
-  items-center hover:bg-thiR dark:text-pri;
+  items-center hover:bg-thir dark:text-pri;
 }
 
 .inactiveLink {
-  @apply text-gray-300 mx-2 rounded-lg py-1  px-4 flex gap-3 items-center hover:bg-thiR;
+  @apply text-gray-300 mx-2 rounded-lg py-1  px-4 flex gap-3 items-center hover:bg-thir;
 }
-
-
 
 @layer base {
   :root {
-
     --background: 0 0% 100%;
 
     --foreground: 0 0% 3.9%;
@@ -98,9 +95,9 @@ td {
 
     --chart-5: 27 87% 67%;
 
-    --radius: 0.5rem}
+    --radius: 0.5rem;
+  }
   .dark {
-
     --background: 0 0% 3.9%;
 
     --foreground: 0 0% 98%;
@@ -147,10 +144,9 @@ td {
 
     --chart-4: 280 65% 60%;
 
-    --chart-5: 340 75% 55%}
+    --chart-5: 340 75% 55%;
+  }
 }
-
-
 
 @layer base {
   * {
