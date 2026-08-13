@@ -173,6 +173,10 @@ const ProductForm = () => {
         setIsFetchingAttributes(true);
         setError(null);
         const sets = await getCategoryAttributeSets(product.category_id);
+        console.log(
+          "ProductForm – Received sets:",
+          JSON.stringify(sets, null, 2),
+        );
         setSteps(sets);
         setCurrentStep(0);
         setValidationErrors({});

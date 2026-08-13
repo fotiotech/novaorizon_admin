@@ -3,9 +3,15 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 export interface ICategoryProperty extends Document {
   name: string;
   description?: string;
-  sets: {
-    type: mongoose.Types.ObjectId;
-    ref: "AttributeSet";
+  mappings: {
+    set: mongoose.Types.ObjectId;
+    groups: {
+      group: mongoose.Types.ObjectId;
+      attributes: {
+        attribute: mongoose.Types.ObjectId;
+        isRequired: boolean;
+      }[];
+    }[];
   }[];
   createdAt: Date;
   updatedAt: Date;
@@ -15,11 +21,32 @@ const CategoryPropertySchema = new Schema<ICategoryProperty>(
   {
     name: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
-    sets: [
+    mappings: [
       {
-        type: Schema.Types.ObjectId,
-        ref: "AttributeSet",
-        required: true,
+        set: {
+          type: Schema.Types.ObjectId,
+          ref: "AttributeSet",
+          required: true,
+        },
+        groups: [
+          {
+            group: {
+              type: Schema.Types.ObjectId,
+              ref: "AttributeGroup",
+              required: true,
+            },
+            attributes: [
+              {
+                attribute: {
+                  type: Schema.Types.ObjectId,
+                  ref: "Attribute",
+                  required: true,
+                },
+                isRequired: { type: Boolean, default: false },
+              },
+            ],
+          },
+        ],
       },
     ],
   },
@@ -29,5 +56,4 @@ const CategoryPropertySchema = new Schema<ICategoryProperty>(
 const CategoryProperty =
   models.CategoryProperty ||
   model<ICategoryProperty>("CategoryProperty", CategoryPropertySchema);
-
 export default CategoryProperty;

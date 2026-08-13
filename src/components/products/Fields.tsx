@@ -16,7 +16,7 @@ interface FieldProps {
   option?: any[];
   handleAttributeChange: (code: string, value: any) => void;
   productId?: string;
-  unitFamily?: { _id: string; name: string } | null;
+  unitFamily?: { id: string; name: string } | null;
   units?: any[]; // all units from the server
   isRequired?: boolean;
 }
@@ -68,8 +68,8 @@ const Fields: React.FC<FieldProps> = ({
       backgroundColor: state.isSelected
         ? "#6366f1"
         : state.isFocused
-        ? "#4b5563"
-        : "#1f2937",
+          ? "#4b5563"
+          : "#1f2937",
       color: state.isSelected ? "white" : provided.color,
       "&:hover": {
         backgroundColor: "#4b5563",
@@ -149,16 +149,16 @@ const Fields: React.FC<FieldProps> = ({
         );
 
       case "number": {
-        const familyId = unitFamily?._id;
+        const familyId = unitFamily?.id;
         // Filter units belonging to this unit family
         const familyUnits = familyId
           ? (units || []).filter((u) => {
-              const uFamilyId = u.unitFamily?._id || u.unitFamily;
+              const uFamilyId = u.unitFamily?.id || u.unitFamily;
               return uFamilyId === familyId;
             })
           : [];
 
-          console.log("Family Units for attribute", code, familyUnits);
+        console.log("Family Units for attribute", code, familyUnits);
 
         const currentValue = field?.value !== undefined ? field.value : field;
         const currentUnit = field?.unit;
@@ -169,9 +169,13 @@ const Fields: React.FC<FieldProps> = ({
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
             value={currentValue ?? ""}
             onChange={(e) => {
-              const newValue = e.target.value === "" ? "" : Number(e.target.value);
+              const newValue =
+                e.target.value === "" ? "" : Number(e.target.value);
               if (familyUnits.length > 0 && currentUnit) {
-                handleAttributeChange(code, { value: newValue, unit: currentUnit });
+                handleAttributeChange(code, {
+                  value: newValue,
+                  unit: currentUnit,
+                });
               } else if (familyUnits.length > 0) {
                 handleAttributeChange(code, newValue);
               } else {
@@ -194,15 +198,17 @@ const Fields: React.FC<FieldProps> = ({
               <div className="flex-1">{numberInput}</div>
               <Select
                 options={unitOptions}
-                value={unitOptions.find((opt) => opt.value === currentUnit) || null}
+                value={
+                  unitOptions.find((opt) => opt.value === currentUnit) || null
+                }
                 onChange={(opt) => {
                   const newUnit = opt?.value;
                   const newVal =
                     currentValue !== undefined && newUnit
                       ? { value: currentValue, unit: newUnit }
                       : currentValue !== undefined && !newUnit
-                      ? currentValue
-                      : "";
+                        ? currentValue
+                        : "";
                   handleAttributeChange(code, newVal);
                 }}
                 className="w-32"
@@ -255,7 +261,7 @@ const Fields: React.FC<FieldProps> = ({
             onChange={(opts: MultiValue<{ value: string; label: string }>) =>
               handleAttributeChange(
                 code,
-                opts.map((o) => o.value)
+                opts.map((o) => o.value),
               )
             }
             styles={customSelectStyles}
@@ -284,8 +290,8 @@ const Fields: React.FC<FieldProps> = ({
                           ? [...field, opt]
                           : field.filter((v: any) => v !== opt)
                         : e.target.checked
-                        ? [opt]
-                        : [];
+                          ? [opt]
+                          : [];
                       handleAttributeChange(code, newVals);
                     }}
                     required={
@@ -442,7 +448,7 @@ const Fields: React.FC<FieldProps> = ({
             onChange={(opts) =>
               handleAttributeChange(
                 code,
-                opts.map((o: any) => o.value)
+                opts.map((o: any) => o.value),
               )
             }
             styles={customSelectStyles}

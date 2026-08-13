@@ -4,12 +4,13 @@ import mongoose, { Types } from "mongoose"; // ✅ single import
 import slugify from "slugify";
 import { connection } from "@/utils/connection";
 import Category from "@/models/Category";
-import CategoryProperty from "@/models/CategoryProperty";
+import CategoryProperty, { ICategoryProperty } from "@/models/CategoryProperty";
 import AttributeSet from "@/models/AttributeSet";
 import Attribute from "@/models/Attribute";
 import "@/models/AttributeGroup";
 import "@/models/UnitFamily";
 import { revalidatePath } from "next/cache";
+import AttributeGroup from "@/models/AttributeGroup";
 
 // ---------- Helper ----------
 function generateSlug(name: string) {
@@ -20,9 +21,7 @@ function generateSlug(name: string) {
 export async function getCategoryProperty(id?: string) {
   await connection();
   if (id) {
-    const property: any = await CategoryProperty.findById(id)
-      .populate("sets")
-      .lean();
+    const property: any = await CategoryProperty.findById(id).lean();
     if (!property) return null;
     return {
       ...property,
@@ -31,7 +30,7 @@ export async function getCategoryProperty(id?: string) {
       updatedAt: property.updatedAt.toISOString(),
     };
   } else {
-    const properties = await CategoryProperty.find().populate("sets").lean();
+    const properties = await CategoryProperty.find().lean();
     return properties.map((prop) => ({
       ...prop,
       _id: prop._id?.toString(),
@@ -41,78 +40,97 @@ export async function getCategoryProperty(id?: string) {
   }
 }
 
-export async function createCategoryProperty(data: {
+export async function createCategoryPropertyWithMappings(data: {
   name: string;
   description?: string;
-  sets: string[];
+  mappings: {
+    set: string;
+    groups: {
+      group: string;
+      attributes: {
+        attribute: string;
+        isRequired: boolean;
+      }[];
+    }[];
+  }[];
 }) {
-  try {
-    await connection();
-    const { name, description, sets } = data;
-    if (sets && sets.length) {
-      const existingSets = await AttributeSet.find({ _id: { $in: sets } });
-      if (existingSets.length !== sets.length) {
-        return { error: "One or more AttributeSet IDs are invalid." };
+  await connection();
+  const { name, description, mappings } = data;
+
+  // Validate all referenced IDs exist
+  for (const m of mappings) {
+    const setExists = await AttributeSet.findById(m.set);
+    if (!setExists) return { error: `Set ${m.set} not found` };
+    for (const g of m.groups) {
+      const groupExists = await AttributeGroup.findById(g.group);
+      if (!groupExists) return { error: `Group ${g.group} not found` };
+      for (const a of g.attributes) {
+        const attrExists = await Attribute.findById(a.attribute);
+        if (!attrExists) return { error: `Attribute ${a.attribute} not found` };
       }
     }
-    const newProperty = new CategoryProperty({
-      name,
-      description,
-      sets: sets || [],
-    });
-    await newProperty.save();
-    revalidatePath("/category-properties");
-    return {
-      success: true,
-      property: {
-        ...newProperty.toObject(),
-        _id: newProperty._id.toString(),
-        createdAt: newProperty.createdAt.toISOString(),
-        updatedAt: newProperty.updatedAt.toISOString(),
-      },
-    };
-  } catch (error: any) {
-    console.error("Error creating category property:", error);
-    return { error: error.message || "Failed to create category property." };
   }
+
+  const property = new CategoryProperty({
+    name,
+    description,
+    mappings: mappings.map((m) => ({
+      set: new mongoose.Types.ObjectId(m.set),
+      groups: m.groups.map((g) => ({
+        group: new mongoose.Types.ObjectId(g.group),
+        attributes: g.attributes.map((a) => ({
+          attribute: new mongoose.Types.ObjectId(a.attribute),
+          isRequired: a.isRequired,
+        })),
+      })),
+    })),
+  });
+
+  await property.save();
+  revalidatePath("/category-properties");
+  return { success: true, property };
 }
 
-export async function updateCategoryProperty(
+export async function updateCategoryPropertyWithMappings(
   id: string,
   data: {
     name?: string;
     description?: string;
-    sets?: string[];
+    mappings?: {
+      set: string;
+      groups: {
+        group: string;
+        attributes: {
+          attribute: string;
+          isRequired: boolean;
+        }[];
+      }[];
+    }[];
   },
 ) {
-  try {
-    await connection();
-    const property = await CategoryProperty.findById(id);
-    if (!property) return { error: "Category property not found." };
-    if (data.name) property.name = data.name;
-    if (data.description !== undefined) property.description = data.description;
-    if (data.sets) {
-      const existingSets = await AttributeSet.find({ _id: { $in: data.sets } });
-      if (existingSets.length !== data.sets.length) {
-        return { error: "One or more AttributeSet IDs are invalid." };
-      }
-      property.sets = data.sets.map((s) => new Types.ObjectId(s));
-    }
-    await property.save();
-    revalidatePath("/category-properties");
-    return {
-      success: true,
-      property: {
-        ...property.toObject(),
-        _id: property._id.toString(),
-        createdAt: property.createdAt.toISOString(),
-        updatedAt: property.updatedAt.toISOString(),
-      },
-    };
-  } catch (error: any) {
-    console.error("Error updating category property:", error);
-    return { error: error.message || "Failed to update category property." };
+  await connection();
+  const property = await CategoryProperty.findById(id);
+  if (!property) return { error: "Category property not found" };
+
+  if (data.name) property.name = data.name;
+  if (data.description !== undefined) property.description = data.description;
+  if (data.mappings) {
+    // Replace mappings entirely
+    property.mappings = data.mappings.map((m) => ({
+      set: new mongoose.Types.ObjectId(m.set),
+      groups: m.groups.map((g) => ({
+        group: new mongoose.Types.ObjectId(g.group),
+        attributes: g.attributes.map((a) => ({
+          attribute: new mongoose.Types.ObjectId(a.attribute),
+          isRequired: a.isRequired,
+        })),
+      })),
+    }));
   }
+
+  await property.save();
+  revalidatePath("/category-properties");
+  return { success: true, property };
 }
 
 export async function deleteCategoryProperty(id: string) {
@@ -274,14 +292,15 @@ export async function deleteCategory(id: string) {
   }
 }
 
-// Types for reusable attribute structure
-export interface AttributeUnitFamily {
+// ---------- Standardized Attribute Set Fetcher ----------
+
+interface AttributeUnitFamily {
   id: string;
   name: string;
   baseUnit: string;
 }
 
-export interface Attribute {
+interface MappedAttribute {
   id: string;
   code: string;
   name: string;
@@ -292,167 +311,264 @@ export interface Attribute {
   sortOrder: number;
 }
 
-export interface Group {
+interface GroupNode {
   id: string;
   code: string;
   name: string;
   parentId: string | null;
   sortOrder: number;
-  attributes: Attribute[];
-  children: Group[];
+  attributes: MappedAttribute[];
+  children: GroupNode[];
 }
 
-export interface AttributeSet {
+interface AttributeSetResult {
   id: string;
   title: string;
   code: string;
-  groups: Group[];
+  groups: GroupNode[];
 }
-
-// ---------- Standardized Attribute Set Fetcher ----------
 
 export async function getCategoryAttributeSets(
   categoryId: string,
-): Promise<AttributeSet[]> {
+): Promise<AttributeSetResult[]> {
   await connection();
 
-  // 1. Fetch category -> property -> sets
   const category: any = await Category.findById(categoryId)
-    .populate<{ property: { sets: { _id: Types.ObjectId }[] } }>({
-      path: "property",
-      populate: { path: "sets" },
-    })
+    .populate<{ property: ICategoryProperty }>("property")
     .lean();
 
   if (!category?.property) return [];
+  const property = category.property;
 
-  const setIds = category.property.sets.map((s: any) => s._id);
-  if (setIds.length === 0) return [];
+  // ----- Use mappings if present -----
+  if (property.mappings && property.mappings.length > 0) {
+    const result: AttributeSetResult[] = [];
 
-  // 2. Fetch attribute sets with groups
-  const attributeSets = await AttributeSet.find({ _id: { $in: setIds } })
-    .populate<{ groups: any[] }>("groups")
-    .lean();
+    for (const mapping of property.mappings) {
+      // Fetch the full AttributeSet with its groups
+      const set = await AttributeSet.findById(mapping.set)
+        .populate<{ groups: any[] }>("groups")
+        .lean();
+      if (!set) continue;
 
-  // 3. Collect all attribute subdocuments (normalize both formats)
-  interface Subdoc {
-    id: string;
-    isRequired: boolean;
-    groupId: string;
-  }
-  const allSubdocs: Subdoc[] = [];
-  for (const set of attributeSets) {
-    for (const group of set.groups || []) {
-      const attrs = group.attributes;
-      if (Array.isArray(attrs) && attrs.length > 0) {
-        if (typeof attrs[0] === "string") {
-          // Plain array of ObjectId strings
-          for (const id of attrs as string[]) {
-            allSubdocs.push({
-              id,
-              isRequired: false,
-              groupId: group._id.toString(),
-            });
+      // ---- 1. Build a map: groupId -> Map<attributeId, isRequired> ----
+      const groupAttrMap = new Map<string, Map<string, boolean>>();
+      for (const gm of mapping.groups) {
+        const attrMap = new Map<string, boolean>();
+        for (const am of gm.attributes) {
+          attrMap.set(am.attribute.toString(), am.isRequired);
+        }
+        groupAttrMap.set(gm.group.toString(), attrMap);
+      }
+
+      // ---- 2. Collect all attribute subdocuments from this set ----
+      // Normalize: group.attributes may be array of ObjectIds or subdocs { id, isRequired }
+      const allSubdocs: { id: string; isRequired: boolean; groupId: string }[] =
+        [];
+      for (const group of set.groups || []) {
+        const attrs = group.attributes || [];
+        for (const item of attrs) {
+          let id: string;
+          let isRequired = false;
+          if (typeof item === "string") {
+            id = item;
+          } else if (item.id) {
+            id = item.id.toString();
+            isRequired = item.isRequired ?? false;
+          } else {
+            continue;
           }
-        } else {
-          // Already subdocuments: { id: ObjectId, isRequired: boolean }
-          for (const sub of attrs as {
-            id: Types.ObjectId;
-            isRequired: boolean;
-          }[]) {
-            if (sub.id) {
-              allSubdocs.push({
-                id: sub.id.toString(),
-                isRequired: sub.isRequired,
-                groupId: group._id.toString(),
-              });
-            }
-          }
+          allSubdocs.push({ id, isRequired, groupId: group._id.toString() });
         }
       }
-    }
-  }
 
-  // 4. Extract valid attribute IDs
-  const attrIds = allSubdocs
-    .map((sub) => sub.id)
-    .filter((id) => Types.ObjectId.isValid(id)) as string[];
-
-  // 5. Fetch attributes with unitFamily
-  const attributes = await Attribute.find({ _id: { $in: attrIds } })
-    .populate<{ unitFamily: any }>("unitFamily")
-    .lean();
-
-  const attrMap: Record<string, any> = {};
-  for (const attr of attributes) {
-    attrMap[attr._id.toString()] = attr;
-  }
-
-  // 6. Build group tree (standardized)
-  const buildTree = (
-    groups: any[],
-    parentId: string | null = null,
-  ): Group[] => {
-    const groupIds = new Set(groups.map((g) => g._id.toString()));
-
-    return groups
-      .filter((g) => {
-        const gParent = g.parent_id?.toString();
-        if (parentId === null) {
-          return !gParent || !groupIds.has(gParent);
-        }
-        return gParent === parentId;
+      // ---- 3. Fetch all attributes (with unitFamily) for this set ----
+      const allAttrIds = allSubdocs.map((s) => s.id);
+      const uniqueAttrIds = [...new Set(allAttrIds)].filter((id) =>
+        Types.ObjectId.isValid(id),
+      );
+      const attrDocs: any[] = await Attribute.find({
+        _id: { $in: uniqueAttrIds },
       })
-      .sort(
-        (a, b) =>
-          (a.sort_order ?? a.group_order ?? 0) -
-          (b.sort_order ?? b.group_order ?? 0),
-      )
-      .map((g) => {
-        const groupSubdocs = allSubdocs.filter(
-          (sub) => sub.groupId === g._id.toString(),
-        );
+        .populate("unitFamily")
+        .lean();
 
-        const attrs: Attribute[] = groupSubdocs
-          .map((sub) => {
-            const attrDoc = attrMap[sub.id];
-            if (!attrDoc) return null;
-            return {
-              id: attrDoc._id.toString(),
-              code: attrDoc.code,
-              name: attrDoc.name,
-              type: attrDoc.type,
-              options: attrDoc.option || [],
-              isRequired: sub.isRequired,
-              unitFamily: attrDoc.unitFamily
-                ? {
-                    id: attrDoc.unitFamily._id.toString(),
-                    name: attrDoc.unitFamily.name,
-                    baseUnit: attrDoc.unitFamily.baseUnit,
-                  }
-                : null,
-              sortOrder: attrDoc.sort_order ?? 0,
-            };
+      const attrDocMap: Record<string, any> = {};
+      for (const doc of attrDocs) {
+        attrDocMap[(doc as any)._id.toString()] = doc;
+      }
+
+      // ---- 4. Build the group tree ----
+      const buildTree = (
+        groups: any[],
+        parentId: string | null = null,
+      ): GroupNode[] => {
+        const groupIds = new Set(groups.map((g) => g._id.toString()));
+        return groups
+          .filter((g) => {
+            const gParent = g.parent_id?.toString();
+            return parentId === null
+              ? !gParent || !groupIds.has(gParent)
+              : gParent === parentId;
           })
-          .filter((item): item is Attribute => item !== null);
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          .map((g) => {
+            const groupId = g._id.toString();
+            // Get the selected attribute map for this group (from the property mapping)
+            const selectedAttrMap = groupAttrMap.get(groupId) || new Map();
 
-        return {
-          id: g._id.toString(),
-          code: g.code,
-          name: g.name,
-          parentId: g.parent_id?.toString() || null,
-          sortOrder: g.sort_order ?? g.group_order ?? 0,
-          attributes: attrs,
-          children: buildTree(groups, g._id.toString()),
-        };
+            // Get all subdocs for this group, then filter to only those in selectedAttrMap
+            const groupSubdocs = allSubdocs.filter(
+              (s) => s.groupId === groupId,
+            );
+            const validSubdocs = groupSubdocs.filter((s) =>
+              selectedAttrMap.has(s.id),
+            );
+
+            // Build attributes from valid subdocs and the fetched attr docs
+            const attrs: MappedAttribute[] = validSubdocs
+              .map((sub) => {
+                const attrDoc = attrDocMap[sub.id];
+                if (!attrDoc) return null;
+                return {
+                  id: attrDoc._id.toString(),
+                  code: attrDoc.code,
+                  name: attrDoc.name,
+                  type: attrDoc.type,
+                  options: attrDoc.option || [],
+                  isRequired: selectedAttrMap.get(sub.id) ?? false,
+                  unitFamily: attrDoc.unitFamily
+                    ? {
+                        id: attrDoc.unitFamily._id.toString(),
+                        name: attrDoc.unitFamily.name,
+                        baseUnit: attrDoc.unitFamily.baseUnit,
+                      }
+                    : null,
+                  sortOrder: attrDoc.sort_order ?? 0,
+                };
+              })
+              .filter((item): item is MappedAttribute => item !== null);
+
+            return {
+              id: groupId,
+              code: g.code,
+              name: g.name,
+              parentId: g.parent_id?.toString() || null,
+              sortOrder: g.sort_order ?? 0,
+              attributes: attrs,
+              children: buildTree(groups, g._id.toString()),
+            };
+          });
+      };
+
+      result.push({
+        id: set._id.toString(),
+        title: set.title,
+        code: set.code,
+        groups: buildTree(set.groups || [], null),
       });
-  };
+    }
 
-  // 7. Transform to standard AttributeSet[]
-  return attributeSets.map((set) => ({
-    id: set._id.toString(),
-    title: set.title,
-    code: set.code,
-    groups: buildTree(set.groups || []),
+    return result;
+  }
+
+  // ---- FALLBACK: old 'sets' array ----
+  const oldSets = (property as any).sets;
+  if (oldSets && Array.isArray(oldSets) && oldSets.length > 0) {
+    const setIds = oldSets.map((s: any) => s._id?.toString() || s.toString());
+    const attributeSets = await AttributeSet.find({ _id: { $in: setIds } })
+      .populate<{ groups: any[] }>("groups")
+      .lean();
+
+    // Build full tree (include all groups and attributes)
+    const buildTreeFull = (
+      groups: any[],
+      parentId: string | null = null,
+    ): GroupNode[] => {
+      const groupIds = new Set(groups.map((g) => g._id.toString()));
+      return groups
+        .filter((g) => {
+          const gParent = g.parent_id?.toString();
+          return parentId === null
+            ? !gParent || !groupIds.has(gParent)
+            : gParent === parentId;
+        })
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        .map((g) => {
+          // Normalize attributes: plain ObjectId or subdoc
+          const attrs: MappedAttribute[] = (g.attributes || [])
+            .map((item: any) => {
+              let attrDoc = item.id ? item.id : item;
+              if (typeof attrDoc === "string") {
+                // If it's a plain ID, we didn't populate – fallback to fetching?
+                // But we already populated, so this shouldn't happen.
+                return null;
+              }
+              if (!attrDoc) return null;
+              return {
+                id: attrDoc._id.toString(),
+                code: attrDoc.code,
+                name: attrDoc.name,
+                type: attrDoc.type,
+                options: attrDoc.option || [],
+                isRequired: item.isRequired ?? false,
+                unitFamily: attrDoc.unitFamily
+                  ? {
+                      id: attrDoc.unitFamily._id.toString(),
+                      name: attrDoc.unitFamily.name,
+                      baseUnit: attrDoc.unitFamily.baseUnit,
+                    }
+                  : null,
+                sortOrder: attrDoc.sort_order ?? 0,
+              };
+            })
+            .filter((item: any): item is MappedAttribute => item !== null);
+
+          return {
+            id: g._id.toString(),
+            code: g.code,
+            name: g.name,
+            parentId: g.parent_id?.toString() || null,
+            sortOrder: g.sort_order ?? 0,
+            attributes: attrs,
+            children: buildTreeFull(groups, g._id.toString()),
+          };
+        });
+    };
+
+    return attributeSets.map((set) => ({
+      id: set._id.toString(),
+      title: set.title,
+      code: set.code,
+      groups: buildTreeFull(set.groups || [], null),
+    }));
+  }
+
+  return [];
+}
+
+export async function getAllAttributeSets() {
+  await connection();
+  return await AttributeSet.find().select("_id title code").lean();
+}
+
+export async function getGroupsBySet(setId: string) {
+  await connection();
+  const set = await AttributeSet.findById(setId).populate("groups").lean();
+  return set?.groups || [];
+}
+
+export async function getAttributesByGroup(groupId: string) {
+  await connection();
+  const group: any = await AttributeGroup.findById(groupId)
+    .populate("attributes.id")
+    .lean();
+  if (!group) return [];
+  return (group.attributes || []).map((sub: any) => ({
+    _id: sub.id._id.toString(),
+    code: sub.id.code,
+    name: sub.id.name,
+    type: sub.id.type,
+    isRequired: sub.isRequired,
   }));
 }
