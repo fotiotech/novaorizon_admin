@@ -1,3 +1,4 @@
+// components/FilesUploader.tsx
 import React, { useEffect, useRef } from "react";
 import { Add } from "@mui/icons-material";
 import { useDropzone } from "react-dropzone";
@@ -10,7 +11,7 @@ type FilesUploaderProps = {
   removeFile: (
     productId: string,
     index: number,
-    filesContent?: string[]
+    filesContent?: string[],
   ) => Promise<{ success: boolean; message?: string }>;
   loading?: boolean;
   progressByName?: Record<string, number>;

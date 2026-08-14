@@ -1,53 +1,78 @@
-import React from "react";
+// components/GalleryUploader.tsx
+import React, { useEffect } from "react";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import FilesUploader from "@/components/FilesUploader";
-import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { useAppDispatch } from "@/app/hooks";
 import { addProduct } from "@/app/store/slices/productSlice";
-import { RootState } from "@/app/store/store";
 
-interface MainImageUploaderProps {
+interface GalleryUploaderProps {
   productId: string;
   field: string[];
   code: string;
 }
 
-const GalleryUploader: React.FC<MainImageUploaderProps> = ({
+const GalleryUploader: React.FC<GalleryUploaderProps> = ({
   productId,
   field = [],
   code,
 }) => {
   const dispatch = useAppDispatch();
-  const { files, loading, addFiles, removeFile, setFiles, progressByName } = useFileUploader();
 
-  // Initialize files from field prop only once
-  React.useEffect(() => {
+  const {
+    files,
+    loading,
+    addFiles,
+    removeFile,
+    setFiles,
+    listFiles,
+    progressByName,
+  } = useFileUploader(productId, [], "gallery"); // 👈 subfolder = 'gallery'
+
+  // Load existing gallery images from S3 (only gallery folder)
+  useEffect(() => {
+    if (productId) {
+      listFiles();
+    }
+  }, [productId, listFiles]);
+
+  // If initial field (existing gallery URLs) is provided, set it (only on mount)
+  useEffect(() => {
     if (field && field.length > 0) {
       setFiles(field);
     }
-  }, []); // Empty dependency array - run only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once
 
-  // Update Redux when files change, but only if files are different from current field
-  React.useEffect(() => {
-    if (files.length > 0 && JSON.stringify(files) !== JSON.stringify(field)) {
+  // Dispatch to Redux
+  useEffect(() => {
+    if (files.length > 0) {
       dispatch(
         addProduct({
           _id: productId,
           field: code,
           value: files,
-        })
+        }),
+      );
+    } else {
+      dispatch(
+        addProduct({
+          _id: productId,
+          field: code,
+          value: [],
+        }),
       );
     }
-  }, [files, dispatch, productId, code]); // Removed field from dependencies
+  }, [files, dispatch, productId, code]);
 
   return (
-    <div className="w-full"> {/* Removed overflow-clip, allow normal flow */}
+    <div className="w-full">
       <FilesUploader
-        productId={productId}          // Pass productId for remove functionality
+        productId={productId}
         files={files}
         loading={loading}
         addFiles={addFiles}
         removeFile={removeFile}
-        progressByName={progressByName} // Pass upload progress (if needed)
+        progressByName={progressByName}
       />
     </div>
   );

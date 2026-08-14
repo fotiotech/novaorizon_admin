@@ -1,22 +1,23 @@
+// hooks/useFileUploader.tsx
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
-} from "firebase/storage";
-import { storage } from "@/utils/firebaseConfig";
-import { deleteProductImages } from "@/app/actions/products";
+  getPresignedUploadUrl,
+  deleteS3Object,
+  deleteMultipleS3Objects,
+  listS3Objects,
+  getPresignedUpdateUrl,
+} from "@/app/actions/s3";
 
 export const useFileUploader = (
   instanceId?: string,
-  initialFiles: string[] = []
+  initialFiles: string[] = [],
+  subfolder?: string, // NEW
 ) => {
   const [files, setFiles] = useState<string[]>(initialFiles);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [progressByName, setProgressByName] = useState<Record<string, number>>(
-    {}
+    {},
   );
   const mountedRef = useRef(true);
 
@@ -28,13 +29,10 @@ export const useFileUploader = (
   }, []);
 
   const makeFilename = (file: File) =>
-    `${Date.now()}-${Math.floor(Math.random() * 1e6)}-${file?.name.replace(
-      /\s+/g,
-      "_"
-    )}`;
+    `${Date.now()}-${Math.floor(Math.random() * 1e6)}-${file.name.replace(/\s+/g, "_")}`;
 
   const uploadFiles = useCallback(
-    async (toUpload: File[]) => {
+    async (toUpload: File[], updateKey?: string) => {
       if (!toUpload.length) return;
       setLoading(true);
       const uploadedUrls: string[] = [];
@@ -42,42 +40,62 @@ export const useFileUploader = (
       for (const file of toUpload) {
         if (!mountedRef.current) break;
 
-        const filename = makeFilename(file);
-        const path = instanceId
-          ? `uploads/${instanceId}/${filename}`
-          : `uploads/${filename}`;
-        const storageRef = ref(storage, path);
+        let filename: string;
+        if (updateKey) {
+          filename = updateKey.split("/").pop() || makeFilename(file);
+        } else {
+          filename = makeFilename(file);
+        }
+
+        setProgressByName((prev) => ({ ...prev, [filename]: 0 }));
 
         try {
-          const task = uploadBytesResumable(storageRef, file, {
-            contentType: file.type || "application/octet-stream",
-          });
+          let uploadUrl: string;
+          let fileKey: string;
+
+          if (updateKey) {
+            const result = await getPresignedUpdateUrl(updateKey, file.type);
+            uploadUrl = result.uploadUrl;
+            fileKey = updateKey;
+          } else {
+            const result = await getPresignedUploadUrl(
+              filename,
+              file.type,
+              instanceId,
+              undefined,
+              subfolder, // pass subfolder
+            );
+            uploadUrl = result.uploadUrl;
+            fileKey = result.fileKey;
+          }
 
           await new Promise<void>((resolve, reject) => {
-            task.on(
-              "state_changed",
-              (snapshot) => {
-                const pct = Math.round(
-                  (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-                );
-                if (mountedRef.current) {
-                  setProgressByName((prev) => ({ ...prev, [filename]: pct }));
-                }
-              },
-              reject,
-              async () => {
-                try {
-                  const downloadURL = await getDownloadURL(task.snapshot.ref);
-                  uploadedUrls.push(downloadURL);
-                  resolve();
-                } catch (error) {
-                  reject(error);
-                }
-              }
+            const xhr = new XMLHttpRequest();
+            xhr.open("PUT", uploadUrl, true);
+            xhr.setRequestHeader(
+              "Content-Type",
+              file.type || "application/octet-stream",
             );
+            xhr.upload.addEventListener("progress", (event) => {
+              if (event.lengthComputable && mountedRef.current) {
+                const pct = Math.round((event.loaded / event.total) * 100);
+                setProgressByName((prev) => ({ ...prev, [filename]: pct }));
+              }
+            });
+            xhr.onload = () => {
+              if (xhr.status === 200) {
+                const publicUrl = `https://${process.env.NEXT_PUBLIC_AWS_BUCKET_NAME}.s3.${process.env.NEXT_PUBLIC_AWS_REGION}.amazonaws.com/${fileKey}`;
+                uploadedUrls.push(publicUrl);
+                resolve();
+              } else {
+                reject(new Error(`Upload failed: ${xhr.statusText}`));
+              }
+            };
+            xhr.onerror = () => reject(new Error("Network error"));
+            xhr.send(file);
           });
         } catch (error) {
-          console.error("Upload error:", error);
+          console.error("Upload error for", filename, error);
         } finally {
           if (mountedRef.current) {
             setProgressByName((prev) => {
@@ -90,69 +108,129 @@ export const useFileUploader = (
       }
 
       if (mountedRef.current) {
-        setFiles((prev) => [...prev, ...uploadedUrls]);
+        if (updateKey) {
+          setFiles((prev) => {
+            const index = prev.findIndex((url) => url.includes(updateKey));
+            if (index !== -1) {
+              const newFiles = [...prev];
+              newFiles[index] = uploadedUrls[0];
+              return newFiles;
+            }
+            return prev;
+          });
+        } else {
+          setFiles((prev) => [...prev, ...uploadedUrls]);
+        }
         setPendingFiles([]);
         setLoading(false);
       }
     },
-    [instanceId]
+    [instanceId, subfolder],
   );
 
+  // Auto-upload pending files
   useEffect(() => {
     if (pendingFiles.length > 0) {
       uploadFiles(pendingFiles);
     }
   }, [pendingFiles, uploadFiles]);
 
+  // ---- CRUD methods ----
   const addFiles = useCallback((newFiles: File[]) => {
     if (!newFiles.length) return;
     setPendingFiles((prev) => [...prev, ...newFiles]);
   }, []);
 
-  const clearFiles = useCallback(() => {
-    setFiles([]);
-    setPendingFiles([]);
-  }, []);
+  const listFiles = useCallback(async () => {
+    setLoading(true);
+    try {
+      const objects = await listS3Objects(instanceId, subfolder);
+      const urls = objects.map((obj) => obj.url);
+      if (mountedRef.current) {
+        setFiles(urls);
+      }
+      return urls;
+    } catch (error) {
+      console.error("Error listing files:", error);
+      return [];
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, [instanceId, subfolder]);
+
+  const updateFile = useCallback(
+    async (index: number, newFile: File) => {
+      if (index < 0 || index >= files.length) {
+        return { success: false, message: "Index out of bounds" };
+      }
+      const oldUrl = files[index];
+      const key = oldUrl.split("/").slice(3).join("/");
+      await uploadFiles([newFile], key);
+      return { success: true };
+    },
+    [files, uploadFiles],
+  );
 
   const removeFile = useCallback(
     async (productId: string, index: number) => {
       if (index < 0 || index >= files.length) {
-        console.error("Index out of bounds");
         return { success: false, message: "Index out of bounds" };
       }
-
       const fileUrl = files[index];
       try {
-        // Delete from Firebase Storage
-        const storageRef = ref(storage, fileUrl);
-        await deleteObject(storageRef);
-
-        // Delete from backend
-        const response: any = await deleteProductImages;
-
-        if (response.success) {
-          setFiles((prev) => prev.filter((_, i) => i !== index));
-          return { success: true };
-        } else {
-          console.error("Backend deletion failed");
-          return { success: false, message: "Backend deletion failed" };
-        }
+        await deleteS3Object(fileUrl);
+        setFiles((prev) => prev.filter((_, i) => i !== index));
+        return { success: true };
       } catch (error) {
         console.error("Deletion error:", error);
         return { success: false, message: (error as Error).message };
       }
     },
-    [files]
+    [files],
   );
+
+  const removeMultipleFiles = useCallback(
+    async (indices: number[]) => {
+      const toRemove = indices
+        .filter((i) => i >= 0 && i < files.length)
+        .map((i) => files[i]);
+      if (!toRemove.length) {
+        return { success: false, message: "No valid files to remove" };
+      }
+      try {
+        await deleteMultipleS3Objects(toRemove);
+        setFiles((prev) => prev.filter((_, i) => !indices.includes(i)));
+        return { success: true, deleted: toRemove.length };
+      } catch (error) {
+        console.error("Batch deletion error:", error);
+        return { success: false, message: (error as Error).message };
+      }
+    },
+    [files],
+  );
+
+  const clearFiles = useCallback(async () => {
+    if (!files.length) return;
+    try {
+      await deleteMultipleS3Objects(files);
+      setFiles([]);
+      setPendingFiles([]);
+    } catch (error) {
+      console.error("Clear files error:", error);
+    }
+  }, [files]);
 
   return {
     files,
     loading,
+    progressByName,
     addFiles,
     setFiles,
+    listFiles,
+    updateFile,
     removeFile,
+    removeMultipleFiles,
     clearFiles,
-    progressByName,
   };
 };
 

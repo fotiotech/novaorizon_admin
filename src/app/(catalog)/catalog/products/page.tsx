@@ -107,9 +107,9 @@ export default function ProductDashboard() {
       const matchesStatus =
         selectedStatus === "all" || product.status === selectedStatus;
       const matchesSearch =
-        product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.model.toLowerCase().includes(searchQuery.toLowerCase());
+        product?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product?.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product?.model?.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesStatus && matchesSearch;
     }) || [];
 
@@ -515,13 +515,13 @@ export default function ProductDashboard() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <Link
-                            href={`/products/edit?id=${product._id}`}
+                            href={`/catalog/products/edit?id=${product._id}`}
                             className="text-blue-600 hover:text-blue-900"
                           >
                             Edit
                           </Link>
                           <Link
-                            href={`/products/delete?id=${product._id}`}
+                            href={`catalog/products/delete?id=${product._id}`}
                             className="text-red-600 hover:text-red-900"
                           >
                             Delete

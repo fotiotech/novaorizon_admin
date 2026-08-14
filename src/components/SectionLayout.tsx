@@ -58,9 +58,7 @@ const SectionLayout: React.FC<SectionLayoutProps> = ({
         )}
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-2">
-        {children}
-      </div>
+      <div className=" dark:bg-gray-900 rounded-lg shadow-sm">{children}</div>
     </div>
   );
 };
