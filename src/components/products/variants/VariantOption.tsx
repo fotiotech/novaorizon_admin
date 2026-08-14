@@ -51,6 +51,8 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
   const [variants, setVariants] = useState<Variant[]>([]);
 
   const isInitializing = useRef(true);
+  const initialized = useRef(false); // ✅ NEW: prevents re‑init on product changes
+
   const updateProductField = useCallback(
     (field: string, value: any) => {
       dispatch(addProduct({ _id: productId, field, value }));
@@ -58,24 +60,29 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
     [dispatch, productId],
   );
 
-  // ----- 1. INITIALIZATION -----
+  // ----- 1. INITIALIZATION (runs only once) -----
   useEffect(() => {
-    const savedThemes = product?.variant_themes || [];
+    // Skip if already initialised or product is not yet available
+    if (initialized.current || !product) return;
+
+    const savedThemes = product.variant_themes || [];
     const validThemes = savedThemes.filter((code: string) =>
       attributes.some((a) => a.code === code),
     );
     setSelectedThemeCodes(validThemes);
 
-    const savedValues = product?.variant_values || {};
+    const savedValues = product.variant_values || {};
     const initialValues: Record<string, string[]> = {};
     attributes.forEach((attr) => {
       initialValues[attr.code] = savedValues[attr.code] || [];
     });
     setThemeValues(initialValues);
 
-    setVariants(product?.variants || []);
+    setVariants(product.variants || []);
+
+    initialized.current = true;
     isInitializing.current = false;
-  }, [productId, attributes]);
+  }, [product, attributes]); // ✅ product is included, but ref prevents re‑run
 
   // ----- 2. GENERATE VARIANTS -----
   const fieldKey = useMemo(
@@ -104,11 +111,9 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
       themeCodes.forEach((code, i) => {
         variant[code] = combo[i];
       });
-      // Initialize each variant field with a default
       variantFields.forEach((field) => {
         if (field.type === "number") variant[field.code] = 0;
-        else if (field.type === "file")
-          variant[field.code] = []; // for images
+        else if (field.type === "file") variant[field.code] = [];
         else variant[field.code] = "";
       });
       return variant;
@@ -118,100 +123,112 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
     updateProductField("variants", newVariants);
   }, [selectedThemeCodes, themeValues, fieldKey, updateProductField]);
 
-  // ----- 3. HANDLERS -----
-  const handleThemeSelect = (selectedOptions: any) => {
-    const selectedCodes = selectedOptions
-      ? selectedOptions.map((opt: any) => opt.value)
-      : [];
-    setSelectedThemeCodes(selectedCodes);
-    updateProductField("variant_themes", selectedCodes);
-  };
+  // ----- 3. HANDLERS (MEMOIZED) -----
+  const handleThemeSelect = useCallback(
+    (selectedOptions: any) => {
+      const selectedCodes = selectedOptions
+        ? selectedOptions.map((opt: any) => opt.value)
+        : [];
+      setSelectedThemeCodes(selectedCodes);
+      updateProductField("variant_themes", selectedCodes);
+    },
+    [updateProductField],
+  );
 
-  const handleThemeValuesChange = (themeCode: string, valuesString: string) => {
-    const values = valuesString
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean);
-    const newThemeValues = { ...themeValues, [themeCode]: values };
-    setThemeValues(newThemeValues);
-    updateProductField("variant_values", newThemeValues);
-  };
+  const handleThemeValuesChange = useCallback(
+    (themeCode: string, valuesString: string) => {
+      const values = valuesString
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+      setThemeValues((prev) => {
+        const newThemeValues = { ...prev, [themeCode]: values };
+        updateProductField("variant_values", newThemeValues);
+        return newThemeValues;
+      });
+    },
+    [updateProductField],
+  );
 
-  const handleVariantChange = (
-    index: number,
-    field: string,
-    value: string | number | string[] | null,
-  ) => {
-    const updatedVariants = variants.map((variant, i) =>
-      i === index ? { ...variant, [field]: value } : variant,
-    );
-    setVariants(updatedVariants);
-    updateProductField("variants", updatedVariants);
-  };
+  // ✅ Stable handler for variant changes – functional update, no deps
+  const handleVariantChange = useCallback(
+    (index: number, field: string, value: any) => {
+      setVariants((prevVariants) => {
+        const updated = prevVariants.map((variant, i) =>
+          i === index ? { ...variant, [field]: value } : variant,
+        );
+        return updated;
+      });
+    },
+    [],
+  );
 
-  // ----- 4. RENDER FIELD INPUT (based on attribute type) -----
-  const renderFieldInput = (
-    field: Attribute,
-    variant: Variant,
-    index: number,
-  ) => {
-    const value = variant[field.code] ?? "";
-    const commonProps = {
-      className: "w-full p-1 border rounded",
-      value,
-    };
-
-    switch (field.type) {
-      case "number":
-        return (
-          <input
-            type="number"
-            {...commonProps}
-            onChange={(e) =>
-              handleVariantChange(index, field.code, Number(e.target.value))
-            }
-          />
-        );
-      case "select":
-        return (
-          <select
-            {...commonProps}
-            onChange={(e) =>
-              handleVariantChange(index, field.code, e.target.value)
-            }
-          >
-            <option value="">Select...</option>
-            {(field.options || []).map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        );
-      case "file":
-        // Use the existing VariantImageUploader for file fields (e.g., main_image, gallery)
-        return (
-          <div className="w-full h-20 overflow-auto">
-            <VariantImageUploader
-              index={index}
-              handleVariantChange={handleVariantChange}
-              // If you need to pass additional props like the field code, you can adapt the uploader
-              // For now, it uses its internal logic to manage images.
-            />
-          </div>
-        );
-      default:
-        return (
-          <input
-            type="text"
-            {...commonProps}
-            onChange={(e) =>
-              handleVariantChange(index, field.code, e.target.value)
-            }
-          />
-        );
+  // ✅ Sync variants to Redux when they change (after initial load)
+  useEffect(() => {
+    if (!isInitializing.current) {
+      updateProductField("variants", variants);
     }
-  };
+  }, [variants, updateProductField]);
+
+  // ----- 4. RENDER -----
+  const renderFieldInput = useCallback(
+    (field: Attribute, variant: Variant, index: number) => {
+      const value = variant[field.code] ?? "";
+      const commonProps = {
+        className: "w-full p-1 border rounded",
+        value,
+      };
+
+      switch (field.type) {
+        case "number":
+          return (
+            <input
+              type="number"
+              {...commonProps}
+              onChange={(e) =>
+                handleVariantChange(index, field.code, Number(e.target.value))
+              }
+            />
+          );
+        case "select":
+          return (
+            <select
+              {...commonProps}
+              onChange={(e) =>
+                handleVariantChange(index, field.code, e.target.value)
+              }
+            >
+              <option value="">Select...</option>
+              {(field.options || []).map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          );
+        case "file":
+          return (
+            <div className="w-full h-20 overflow-auto">
+              <VariantImageUploader
+                index={index}
+                handleVariantChange={handleVariantChange}
+              />
+            </div>
+          );
+        default:
+          return (
+            <input
+              type="text"
+              {...commonProps}
+              onChange={(e) =>
+                handleVariantChange(index, field.code, e.target.value)
+              }
+            />
+          );
+      }
+    },
+    [handleVariantChange],
+  );
 
   const themeOptions = attributes.map((attr) => ({
     value: attr.code,
@@ -286,13 +303,11 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
             <table className="min-w-full border-collapse">
               <thead>
                 <tr className="bg-gray-100">
-                  {/* Dimension columns */}
                   {selectedThemeCodes.map((code) => (
                     <th key={code} className="border p-2 text-left capitalize">
                       {attributes.find((a) => a.code === code)?.name || code}
                     </th>
                   ))}
-                  {/* Variant field columns (including file types) */}
                   {variantFields.map((field) => (
                     <th
                       key={field.code}
