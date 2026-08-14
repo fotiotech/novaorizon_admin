@@ -14,7 +14,7 @@ type AttributeType = {
   code: string;
   unitFamily?: { name: string; symbol: string; _id: string } | null;
   name: string;
-  option?: string | string[] | any[]; // allow any array for flexibility
+  option?: string | string[] | any[];
   type: string;
   sort_order: number;
 };
@@ -108,12 +108,10 @@ const Attributes = () => {
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
 
-  // Robust formatting for options – handles strings, arrays, objects
   const formatOptions = (option: any): string => {
     if (!option) return "-";
     if (Array.isArray(option)) {
       if (option.length === 0) return "-";
-      // If array items are objects, try to extract a display name
       if (typeof option[0] === "object" && option[0] !== null) {
         return option
           .map(
@@ -125,7 +123,6 @@ const Attributes = () => {
       return option.join(", ");
     }
     if (typeof option === "string") {
-      // If it's a comma-separated string, split and trim
       if (option.includes(",")) {
         return option
           .split(",")
@@ -137,26 +134,61 @@ const Attributes = () => {
     return String(option);
   };
 
+  // Styles for react-select – uses CSS variables so it reacts to theme toggles
+  const selectStyles = {
+    control: (base: any) => ({
+      ...base,
+      backgroundColor: "var(--background)",
+      borderColor: "var(--border)",
+      color: "var(--foreground)",
+      borderRadius: "0.5rem",
+      boxShadow: "none",
+      "&:hover": { borderColor: "var(--pri-500)" },
+    }),
+    menu: (base: any) => ({
+      ...base,
+      backgroundColor: "var(--card)",
+      color: "var(--card-foreground)",
+    }),
+    option: (base: any, state: any) => ({
+      ...base,
+      backgroundColor: state.isFocused ? "var(--muted)" : "var(--card)",
+      color: "var(--card-foreground)",
+    }),
+    singleValue: (base: any) => ({
+      ...base,
+      color: "var(--foreground)",
+    }),
+    input: (base: any) => ({
+      ...base,
+      color: "var(--foreground)",
+    }),
+  };
+
   return (
     <div className="max-w-4xl w-full p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
-        <h2 className="font-bold text-xl my-2">Attributes</h2>
+        <h2 className="font-bold text-xl text-foreground my-2">Attributes</h2>
         <div className="flex gap-2">
           <button
             onClick={handleNewAttribute}
-            className="p-2 font-semibold text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            className="p-2 font-semibold text-sm bg-pri-500 text-white rounded hover:bg-pri-600 transition-colors"
           >
             + Attribute
           </button>
         </div>
       </div>
+
+      {/* Error Display */}
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded relative mb-4">
           <strong className="font-bold">Error:</strong>
           <span className="block sm:inline"> {error}</span>
         </div>
       )}
+
+      {/* Form */}
       {(showForm || editingAttributeId) && (
         <AttributeForm
           attributeId={editingAttributeId || undefined}
@@ -165,6 +197,7 @@ const Attributes = () => {
           mode={editingAttributeId ? "edit" : "create"}
         />
       )}
+
       {/* Filter & Sort */}
       <div className="my-3 flex md:flex-row gap-2 items-center">
         <input
@@ -172,7 +205,7 @@ const Attributes = () => {
           placeholder="Filter attributes..."
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
-          className="w-full md:w-1/2 p-2 rounded-lg bg-[#eee] dark:bg-sec-dark border border-gray-300 dark:border-gray-600"
+          className="w-full md:w-1/2 p-2 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-pri-500 focus:border-transparent"
         />
         <Select
           options={sortOptions}
@@ -180,88 +213,90 @@ const Attributes = () => {
           onChange={(opt) => setSortAttrOrder(opt as Option)}
           className="w-1/3 md:w-1/4"
           classNamePrefix="react-select"
+          styles={selectStyles}
         />
       </div>
-      {/* Table with horizontal scroll */}
-      <div className=" bg-white dark:bg-gray-800 rounded-lg shadow w-full overflow-clip">
-        <div className=" overflow-x-auto">
-          <table className=" w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className=" bg-gray-50 dark:bg-gray-700">
+
+      {/* Table */}
+      <div className="bg-card text-card-foreground rounded-lg shadow w-full overflow-clip">
+        <div className="overflow-x-auto">
+          <table className="w-full divide-y divide-border">
+            <thead className="bg-muted">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Code
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Unit Family
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Type
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Sort Order
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Options
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className=" bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-card divide-y divide-border">
               {visibleAttributes?.map((attr) => (
                 <tr
                   key={attr._id}
-                  className=" hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="hover:bg-muted/50 transition-colors"
                 >
                   <td className="text-wrap px-6 py-4 max-w-[150px] truncate">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                    <div className="text-sm font-medium text-foreground">
                       {attr.name}
                     </div>
                   </td>
                   <td className="text-wrap px-6 py-4 max-w-[150px] truncate">
-                    <div className="text-sm text-gray-500 dark:text-gray-300">
+                    <div className="text-sm text-muted-foreground">
                       {attr.code}
                     </div>
                   </td>
-                  <td className="text-wrap px-6 py-4 ">
-                    <div className="text-sm text-gray-500 dark:text-gray-300">
+                  <td className="text-wrap px-6 py-4">
+                    <div className="text-sm text-muted-foreground">
                       {attr.unitFamily?.name || "—"}
                     </div>
                   </td>
-                  <td className="text-wrap px-6 py-4 ">
-                    <div className="text-sm text-gray-500 dark:text-gray-300">
+                  <td className="text-wrap px-6 py-4">
+                    <div className="text-sm text-muted-foreground">
                       {attr.type}
                     </div>
                   </td>
-                  <td className="text-wrap px-6 py-4 ">
-                    <div className="text-sm text-gray-500 dark:text-gray-300">
+                  <td className="text-wrap px-6 py-4">
+                    <div className="text-sm text-muted-foreground">
                       {attr.sort_order}
                     </div>
                   </td>
                   <td className="text-wrap px-6 py-4 max-w-[200px] truncate">
                     <div
-                      className="text-sm text-gray-500 dark:text-gray-300"
+                      className="text-sm text-muted-foreground"
                       title={formatOptions(attr.option)}
                     >
                       {formatOptions(attr.option)}
                     </div>
                   </td>
-                  <td className="text-wrap px-6 py-4  text-sm font-medium">
+                  <td className="text-wrap px-6 py-4 text-sm font-medium">
                     <div className="flex space-x-2">
                       <button
                         onClick={() => handleEditClick(attr._id!)}
-                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                        className="text-pri-500 hover:text-pri-600 transition-colors"
                         aria-label={`Edit attribute ${attr.name}`}
                       >
                         <Edit fontSize="small" />
                       </button>
                       <button
                         onClick={() => handleDeleteAttribute(attr._id!)}
-                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                        className="text-destructive hover:text-destructive/80 transition-colors"
                         aria-label={`Delete attribute ${attr.name}`}
                       >
                         <Delete fontSize="small" />
@@ -275,7 +310,7 @@ const Attributes = () => {
         </div>
 
         {visibleAttributes.length === 0 && (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+          <div className="text-center py-8 text-muted-foreground">
             {filterText
               ? "No attributes match your search"
               : "No attributes found"}

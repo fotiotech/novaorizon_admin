@@ -18,7 +18,6 @@ import {
 } from "chart.js";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
 
-// Register ChartJS components
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -28,10 +27,9 @@ ChartJS.register(
   Tooltip,
   Legend,
   PointElement,
-  LineElement
+  LineElement,
 );
 
-// Types
 interface OverviewData {
   users: {
     total: number;
@@ -64,7 +62,6 @@ export default function AdminOverview() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch overview data
   useEffect(() => {
     async function fetchOverviewData() {
       try {
@@ -77,11 +74,10 @@ export default function AdminOverview() {
         setIsLoading(false);
       }
     }
-
     fetchOverviewData();
   }, []);
 
-  // Data for summary charts
+  // Chart data (static colours are fine, but you can theme them if needed)
   const userStatusData = {
     labels: ["Active", "Inactive"],
     datasets: [
@@ -142,7 +138,6 @@ export default function AdminOverview() {
     ],
   };
 
-  // Chart options
   const chartOptions = {
     responsive: true,
     plugins: {
@@ -155,10 +150,10 @@ export default function AdminOverview() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-100 p-6 flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pri-500 mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -166,9 +161,9 @@ export default function AdminOverview() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 p-6 flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="bg-red-100 text-red-700 p-4 rounded-lg">
+          <div className="bg-destructive/10 text-destructive p-4 rounded-lg">
             <p className="font-semibold">Error</p>
             <p>{error}</p>
           </div>
@@ -178,24 +173,26 @@ export default function AdminOverview() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 lg:p-6">
+    <div className="p-6">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">
+        <h1 className="text-3xl font-bold text-foreground mb-2">
           Admin Dashboard
         </h1>
-        <p className="text-gray-600 mb-8">
-          Overview of your store's performance
+        <p className="text-muted-foreground mb-8">
+          Overview of your store&apos;s performance
         </p>
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {/* Users Card */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border-border">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-600">Users</h2>
+              <h2 className="text-lg font-semibold text-muted-foreground">
+                Users
+              </h2>
               <Link
                 href="/users"
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                className="text-pri-500 hover:text-pri-600 text-sm font-medium"
               >
                 View All
               </Link>
@@ -205,10 +202,10 @@ export default function AdminOverview() {
                 <p className="text-3xl font-bold">
                   {overviewData?.users.total || 0}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   {overviewData?.users.active || 0} active users
                 </p>
-                <p className="text-sm text-green-600 mt-1">
+                <p className="text-sm text-thir-600 mt-1">
                   +{overviewData?.users.newThisMonth || 0} this month
                 </p>
               </div>
@@ -219,12 +216,14 @@ export default function AdminOverview() {
           </div>
 
           {/* Products Card */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md ">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-600">Products</h2>
+              <h2 className="text-lg font-semibold text-muted-foreground">
+                Products
+              </h2>
               <Link
                 href="/products"
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                className="text-pri-500 hover:text-pri-600 text-sm font-medium"
               >
                 View All
               </Link>
@@ -234,10 +233,10 @@ export default function AdminOverview() {
                 <p className="text-3xl font-bold">
                   {overviewData?.products.total || 0}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   {overviewData?.products.active || 0} active products
                 </p>
-                <p className="text-sm text-red-600 mt-1">
+                <p className="text-sm text-destructive mt-1">
                   {overviewData?.products.outOfStock || 0} out of stock
                 </p>
               </div>
@@ -248,12 +247,14 @@ export default function AdminOverview() {
           </div>
 
           {/* Orders Card */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md ">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-600">Orders</h2>
+              <h2 className="text-lg font-semibold text-muted-foreground">
+                Orders
+              </h2>
               <Link
                 href="/orders"
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                className="text-pri-500 hover:text-pri-600 text-sm font-medium"
               >
                 View All
               </Link>
@@ -263,12 +264,12 @@ export default function AdminOverview() {
                 <p className="text-3xl font-bold">
                   {overviewData?.orders.total || 0}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  cfa {overviewData?.orders.revenue?.toFixed(2) || "0.00"}{" "}
+                <p className="text-sm text-muted-foreground mt-1">
+                  CFA {overviewData?.orders.revenue?.toFixed(2) || "0.00"}{" "}
                   revenue
                 </p>
-                <p className="text-sm text-green-600 mt-1">
-                  cfa{" "}
+                <p className="text-sm text-thir-600 mt-1">
+                  CFA{" "}
                   {overviewData?.orders.averageOrderValue?.toFixed(2) || "0.00"}{" "}
                   avg. order
                 </p>
@@ -280,27 +281,27 @@ export default function AdminOverview() {
           </div>
         </div>
 
-        {/* Recent Activity Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+        {/* Recent Activity */}
+        <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border-border mb-8">
           <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
           <div className="space-y-4">
             {overviewData?.recentActivity.map((activity, index) => (
               <div
                 key={index}
-                className="flex items-start p-4 border-b border-gray-100 last:border-0"
+                className="flex items-start p-4  border-border last:border-0"
               >
                 <div
                   className={`rounded-full p-2 mr-4 ${
                     activity.type === "user"
-                      ? "bg-blue-100"
+                      ? "bg-pri-500/10 text-pri-500"
                       : activity.type === "product"
-                      ? "bg-green-100"
-                      : "bg-purple-100"
+                        ? "bg-thir-500/10 text-thir-500"
+                        : "bg-sec-500/10 text-sec-500"
                   }`}
                 >
                   {activity.type === "user" && (
                     <svg
-                      className="w-5 h-5 text-blue-600"
+                      className="w-5 h-5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -316,7 +317,7 @@ export default function AdminOverview() {
                   )}
                   {activity.type === "product" && (
                     <svg
-                      className="w-5 h-5 text-green-600"
+                      className="w-5 h-5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -332,7 +333,7 @@ export default function AdminOverview() {
                   )}
                   {activity.type === "order" && (
                     <svg
-                      className="w-5 h-5 text-purple-600"
+                      className="w-5 h-5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -348,14 +349,16 @@ export default function AdminOverview() {
                   )}
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-medium text-gray-900">
+                  <h3 className="font-medium text-foreground">
                     {activity.title}
                   </h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted-foreground">
                     {activity.description}
                   </p>
                 </div>
-                <div className="text-sm text-gray-500">{activity.time}</div>
+                <div className="text-sm text-muted-foreground">
+                  {activity.time}
+                </div>
               </div>
             ))}
           </div>
@@ -365,12 +368,12 @@ export default function AdminOverview() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Link
             href="/users"
-            className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+            className="bg-card text-card-foreground p-6 rounded-lg shadow-md border-border hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center">
-              <div className="rounded-full bg-blue-100 p-3 mr-4">
+              <div className="rounded-full bg-pri-500/10 text-pri-500 p-3 mr-4">
                 <svg
-                  className="w-6 h-6 text-blue-600"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -385,8 +388,8 @@ export default function AdminOverview() {
                 </svg>
               </div>
               <div>
-                <h3 className="font-semibold text-gray-800">Manage Users</h3>
-                <p className="text-sm text-gray-600">
+                <h3 className="font-semibold text-foreground">Manage Users</h3>
+                <p className="text-sm text-muted-foreground">
                   View and manage user accounts
                 </p>
               </div>
@@ -395,12 +398,12 @@ export default function AdminOverview() {
 
           <Link
             href="/products"
-            className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+            className="bg-card text-card-foreground p-6 rounded-lg shadow-md border-border hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center">
-              <div className="rounded-full bg-green-100 p-3 mr-4">
+              <div className="rounded-full bg-thir-500/10 text-thir-500 p-3 mr-4">
                 <svg
-                  className="w-6 h-6 text-green-600"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -415,8 +418,10 @@ export default function AdminOverview() {
                 </svg>
               </div>
               <div>
-                <h3 className="font-semibold text-gray-800">Manage Products</h3>
-                <p className="text-sm text-gray-600">
+                <h3 className="font-semibold text-foreground">
+                  Manage Products
+                </h3>
+                <p className="text-sm text-muted-foreground">
                   View and manage product inventory
                 </p>
               </div>
@@ -425,12 +430,12 @@ export default function AdminOverview() {
 
           <Link
             href="/orders"
-            className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+            className="bg-card text-card-foreground p-6 rounded-lg shadow-md border-border hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center">
-              <div className="rounded-full bg-purple-100 p-3 mr-4">
+              <div className="rounded-full bg-sec-500/10 text-sec-500 p-3 mr-4">
                 <svg
-                  className="w-6 h-6 text-purple-600"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -445,8 +450,10 @@ export default function AdminOverview() {
                 </svg>
               </div>
               <div>
-                <h3 className="font-semibold text-gray-800">Manage Orders</h3>
-                <p className="text-sm text-gray-600">View and process orders</p>
+                <h3 className="font-semibold text-foreground">Manage Orders</h3>
+                <p className="text-sm text-muted-foreground">
+                  View and process orders
+                </p>
               </div>
             </div>
           </Link>

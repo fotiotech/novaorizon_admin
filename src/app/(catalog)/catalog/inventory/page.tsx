@@ -61,7 +61,6 @@ const InventoryPage: React.FC = () => {
     severity: "success" as "success" | "error",
   });
 
-  // Fetch products on mount
   useEffect(() => {
     setLoading(true);
     dispatch(fetchProducts())
@@ -72,7 +71,6 @@ const InventoryPage: React.FC = () => {
       });
   }, [dispatch]);
 
-  // Recompute products and stats when productState changes
   useEffect(() => {
     if (!productState.allIds.length) {
       setProducts([]);
@@ -84,8 +82,7 @@ const InventoryPage: React.FC = () => {
       const rows: ProductRow[] = productState.allIds.map((id) => {
         const p = productState.byId[id];
         const quantity = p.quantity ?? 0;
-        const threshold = p.lowStockThreshold ?? 10; // now from store
-
+        const threshold = p.lowStockThreshold ?? 10;
         const status: ProductRow["stockStatus"] =
           quantity <= 0
             ? "out_of_stock"
@@ -171,7 +168,6 @@ const InventoryPage: React.FC = () => {
         message: err.message || "Failed to update product",
         severity: "error",
       });
-      // Refetch is already done inside the thunk, but if it failed, we can retry
       await dispatch(fetchProducts());
     } finally {
       setSaving(false);
@@ -194,10 +190,11 @@ const InventoryPage: React.FC = () => {
   return (
     <div className="w-full space-y-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Inventory Management</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          Inventory Management
+        </h1>
       </div>
 
-      {/* Single Snackbar with Alert */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
@@ -220,33 +217,58 @@ const InventoryPage: React.FC = () => {
 
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card>
+          <Card className="bg-card text-card-foreground">
             <CardContent>
-              <Typography variant="h6">In Stock</Typography>
-              <Typography variant="h4">{stats.in_stock.count}</Typography>
-              <Typography color="textSecondary">
+              <Typography variant="h6" className="text-foreground">
+                In Stock
+              </Typography>
+              <Typography variant="h4" className="text-foreground">
+                {stats.in_stock.count}
+              </Typography>
+              <Typography
+                color="textSecondary"
+                className="text-muted-foreground"
+              >
                 Total Items: {stats.in_stock.totalStock}
               </Typography>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-card text-card-foreground">
             <CardContent>
-              <Typography variant="h6" className="flex items-center">
-                Low Stock <Warning className="ml-2 text-yellow-500" />
+              <Typography
+                variant="h6"
+                className="flex items-center text-foreground"
+              >
+                Low Stock <Warning className="ml-2 text-sec-500" />
               </Typography>
-              <Typography variant="h4">{stats.low_stock.count}</Typography>
-              <Typography color="textSecondary">
+              <Typography variant="h4" className="text-foreground">
+                {stats.low_stock.count}
+              </Typography>
+              <Typography
+                color="textSecondary"
+                className="text-muted-foreground"
+              >
                 Items Need Attention
               </Typography>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-card text-card-foreground">
             <CardContent>
-              <Typography variant="h6" className="flex items-center">
-                Out of Stock <Warning className="ml-2 text-red-500" />
+              <Typography
+                variant="h6"
+                className="flex items-center text-foreground"
+              >
+                Out of Stock <Warning className="ml-2 text-destructive" />
               </Typography>
-              <Typography variant="h4">{stats.out_of_stock.count}</Typography>
-              <Typography color="textSecondary">Need Replenishment</Typography>
+              <Typography variant="h4" className="text-foreground">
+                {stats.out_of_stock.count}
+              </Typography>
+              <Typography
+                color="textSecondary"
+                className="text-muted-foreground"
+              >
+                Need Replenishment
+              </Typography>
             </CardContent>
           </Card>
         </div>
@@ -254,14 +276,19 @@ const InventoryPage: React.FC = () => {
 
       {stats && stats.lowStockProducts.length > 0 && (
         <Alert severity="warning" className="mb-6">
-          <Typography variant="subtitle1" className="font-bold mb-2">
+          <Typography
+            variant="subtitle1"
+            className="font-bold mb-2 text-foreground"
+          >
             Low Stock Alerts
           </Typography>
           <div className="space-y-2">
             {stats.lowStockProducts.map((p) => (
               <div key={p._id} className="flex justify-between items-center">
-                <Typography variant="body2">{p.productName}</Typography>
-                <Typography variant="body2">
+                <Typography variant="body2" className="text-foreground">
+                  {p.productName}
+                </Typography>
+                <Typography variant="body2" className="text-muted-foreground">
                   Stock: {p.stockQuantity} / {p.lowStockThreshold}
                 </Typography>
               </div>
@@ -270,43 +297,46 @@ const InventoryPage: React.FC = () => {
         </Alert>
       )}
 
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50 dark:bg-gray-700">
+      <div className="bg-card text-card-foreground shadow rounded-lg overflow-auto">
+        <table className="min-w-full divide-y divide-border">
+          <thead className="bg-muted">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Product
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 SKU
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Stock Level
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Low Stock Threshold
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Last Updated
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-border bg-card">
             {products.map((prod) => (
               <tr key={prod._id}>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <Typography variant="body2" className="font-medium">
+                  <Typography
+                    variant="body2"
+                    className="font-medium text-foreground"
+                  >
                     {prod.productName}
                   </Typography>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <Typography variant="body2" className="text-gray-500">
+                  <Typography variant="body2" className="text-muted-foreground">
                     {prod.sku}
                   </Typography>
                 </td>
@@ -354,7 +384,10 @@ const InventoryPage: React.FC = () => {
                       disabled={saving}
                     />
                   ) : (
-                    <Typography variant="body2" className="text-gray-500">
+                    <Typography
+                      variant="body2"
+                      className="text-muted-foreground"
+                    >
                       {prod.lowStockThreshold}
                     </Typography>
                   )}
@@ -375,7 +408,7 @@ const InventoryPage: React.FC = () => {
                   </Typography>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <Typography variant="body2" className="text-gray-500">
+                  <Typography variant="body2" className="text-muted-foreground">
                     {new Date(prod.lastUpdated).toLocaleString()}
                   </Typography>
                 </td>
@@ -423,7 +456,7 @@ const InventoryPage: React.FC = () => {
 export default InventoryPage;
 
 function getStockStatus(q: number, t: number) {
-  if (q <= 0) return "text-red-500";
-  if (q <= t) return "text-yellow-500";
-  return "text-green-500";
+  if (q <= 0) return "text-destructive font-medium";
+  if (q <= t) return "text-sec-500 font-medium";
+  return "text-thir-500 font-medium";
 }

@@ -57,7 +57,6 @@ const AllOrderPage = () => {
       setAllOrders((prev) =>
         prev.filter((order) => order.orderNumber !== orderNumber),
       );
-      // Refresh pagination info
       fetchOrders(page);
     } else {
       console.log("Failed to delete order or order not found.");
@@ -86,7 +85,7 @@ const AllOrderPage = () => {
   return (
     <div className="max-w-6xl mx-auto p-6">
       <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-primary mb-8">All Orders</h2>
+        <h2 className="text-3xl font-bold text-foreground mb-8">All Orders</h2>
         <Link href={"/orders/chat"} className="btn">
           Chats
         </Link>
@@ -95,7 +94,7 @@ const AllOrderPage = () => {
         {allOrders.map((order) => (
           <div
             key={order._id}
-            className="border border-border rounded-2xl shadow-sm hover:shadow-md transition-all bg-background"
+            className="border border-border rounded-2xl shadow-sm hover:shadow-md transition-all bg-card"
           >
             <div className="p-4">
               <div className="flex justify-between items-center mb-2">
@@ -118,20 +117,20 @@ const AllOrderPage = () => {
               </p>
 
               <div className="text-sm space-y-1 mb-4">
-                <p className="font-semibold">Customer:</p>
-                <p>
+                <p className="font-semibold text-foreground">Customer:</p>
+                <p className="text-foreground">
                   {order.firstName} {order.lastName}
                 </p>
                 <p className="text-muted-foreground">{order.email}</p>
               </div>
 
               <div className="text-sm space-y-1 mb-4">
-                <p className="font-semibold">Payment Status:</p>
+                <p className="font-semibold text-foreground">Payment Status:</p>
                 <p
                   className={`font-medium ${
                     order.paymentStatus === "paid"
-                      ? "text-green-600"
-                      : "text-red-600"
+                      ? "text-thir-600"
+                      : "text-destructive"
                   }`}
                 >
                   {order.paymentStatus}
@@ -139,7 +138,7 @@ const AllOrderPage = () => {
               </div>
 
               <div className="text-sm space-y-2 mb-4">
-                <p className="font-semibold">Products:</p>
+                <p className="font-semibold text-foreground">Products:</p>
                 <ul className="space-y-2">
                   {order.products.map((item) => (
                     <li
@@ -168,17 +167,16 @@ const AllOrderPage = () => {
                 </ul>
               </div>
 
-              <div className="border-t pt-4">
-                <p className="text-sm font-semibold">Total:</p>
+              <div className="border-t border-border pt-4">
+                <p className="text-sm font-semibold text-foreground">Total:</p>
                 <p className="text-lg font-bold text-primary">
                   <Prices amount={order.total} />
                 </p>
               </div>
 
-              {/* Updated link to dynamic route */}
               <Link
                 href={`/sales/orders/${order.orderNumber}`}
-                className="inline-block mt-4 text-sm text-blue-500 hover:underline"
+                className="inline-block mt-4 text-sm text-pri-500 hover:text-pri-600 transition-colors"
               >
                 View Details
               </Link>
@@ -193,17 +191,17 @@ const AllOrderPage = () => {
           <button
             onClick={() => handlePageChange(page - 1)}
             disabled={page === 1}
-            className="px-4 py-2 border rounded disabled:opacity-50"
+            className="px-4 py-2 border border-border rounded bg-card text-foreground hover:bg-muted transition-colors disabled:opacity-50"
           >
             Previous
           </button>
-          <span>
+          <span className="text-foreground">
             Page {page} of {totalPages} ({totalOrders} orders)
           </span>
           <button
             onClick={() => handlePageChange(page + 1)}
             disabled={page === totalPages}
-            className="px-4 py-2 border rounded disabled:opacity-50"
+            className="px-4 py-2 border border-border rounded bg-card text-foreground hover:bg-muted transition-colors disabled:opacity-50"
           >
             Next
           </button>

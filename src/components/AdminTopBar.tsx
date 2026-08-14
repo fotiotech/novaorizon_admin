@@ -10,6 +10,7 @@ import { useSession } from "next-auth/react";
 import { SignIn } from "./auth/SignInButton";
 import { useUnreadMessages } from "@/app/(customers)/customers/chat/_component/useUnreadMessages";
 import axios from "axios";
+import { ThemeToggle } from "./theme-toggle";
 
 interface AdminTopBarProps {
   sideBarToggle: boolean;
@@ -73,6 +74,7 @@ const AdminTopBar = ({
         </div>
       </div>
       <div className="flex items-center gap-4">
+        <ThemeToggle />
         <Link href={"/notifications"} className="relative">
           <button className="relative p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800">
             <Notifications className="h-5 w-5" />

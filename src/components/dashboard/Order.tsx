@@ -54,9 +54,32 @@ export default function Order() {
     fetchAnalytics();
   }, []);
 
-  if (loading) return <div className="p-6">Loading...</div>;
-  if (error) return <div className="p-6">Error: {error}</div>;
-  if (!analytics) return <div className="p-6">No data found</div>;
+  if (loading)
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pri-500 mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading order data...</p>
+        </div>
+      </div>
+    );
+
+  if (error)
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center bg-destructive/10 text-destructive p-4 rounded-lg">
+          <p className="font-semibold">Error</p>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+
+  if (!analytics)
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center text-muted-foreground">No data found</div>
+      </div>
+    );
 
   const statusChartData = {
     labels: Object.keys(analytics.ordersByStatus),
@@ -74,76 +97,92 @@ export default function Order() {
   };
 
   return (
-    <div className="lg:p-6">
-      <h1 className="text-3xl font-bold mb-6">Order Analytics Dashboard</h1>
+    <div className="p-6 lg:p-8 space-y-6">
+      <h1 className="text-3xl font-bold text-foreground">
+        Order Analytics Dashboard
+      </h1>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-2">Total Orders</h2>
-          <p className="text-3xl">{analytics.totalOrders}</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border">
+          <h2 className="text-xl font-semibold text-muted-foreground mb-2">
+            Total Orders
+          </h2>
+          <p className="text-3xl font-bold">{analytics.totalOrders}</p>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-2">Total Revenue</h2>
-          <p className="text-3xl">cfa {analytics.totalRevenue.toFixed(2)}</p>
+        <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border">
+          <h2 className="text-xl font-semibold text-muted-foreground mb-2">
+            Total Revenue
+          </h2>
+          <p className="text-3xl font-bold">
+            CFA {analytics.totalRevenue.toFixed(2)}
+          </p>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-2">Average Order Value</h2>
-          <p className="text-3xl">
-            cfa {analytics.averageOrderValue.toFixed(2)}
+        <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border">
+          <h2 className="text-xl font-semibold text-muted-foreground mb-2">
+            Average Order Value
+          </h2>
+          <p className="text-3xl font-bold">
+            CFA {analytics.averageOrderValue.toFixed(2)}
           </p>
         </div>
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border">
           <h2 className="text-xl font-semibold mb-4">Orders by Status</h2>
           <Doughnut data={statusChartData} />
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border">
           <h2 className="text-xl font-semibold mb-4">Revenue Analytics</h2>
           {/* Additional revenue charts can be added here */}
+          <p className="text-muted-foreground">Coming soon...</p>
         </div>
       </div>
 
       {/* Recent Orders Table */}
-      <div className="bg-white p-6 rounded-lg shadow">
+      <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border">
         <h2 className="text-xl font-semibold mb-4">Recent Orders</h2>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Order Number
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Customer
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Total
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Payment Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Status
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-border">
               {analytics.recentOrders.map((order: any) => (
                 <tr key={order._id.toString()}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/sales/orders/${order.orderNumber}`}>
+                    <Link
+                      href={`/sales/orders/${order.orderNumber}`}
+                      className="text-pri-500 hover:text-pri-600 transition-colors"
+                    >
                       View Details
                     </Link>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">{order.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    cfa {order.total.toFixed(2)}
+                  <td className="px-6 py-4 whitespace-nowrap text-foreground">
+                    {order.email}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 whitespace-nowrap text-foreground">
+                    CFA {order.total.toFixed(2)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-foreground">
                     {order.paymentStatus}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -151,17 +190,17 @@ export default function Order() {
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
                       ${
                         order.orderStatus === "completed"
-                          ? "bg-green-100 text-green-800"
+                          ? "bg-thir-500/20 text-thir-700 dark:text-thir-400"
                           : ""
                       }
                       ${
                         order.orderStatus === "processing"
-                          ? "bg-yellow-100 text-yellow-800"
+                          ? "bg-sec-500/20 text-sec-700 dark:text-sec-400"
                           : ""
                       }
                       ${
                         order.orderStatus === "cancelled"
-                          ? "bg-red-100 text-red-800"
+                          ? "bg-destructive/20 text-destructive"
                           : ""
                       }
                     `}

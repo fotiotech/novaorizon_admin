@@ -1,4 +1,3 @@
-// app/dashboard/products/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -22,7 +21,6 @@ import { clearProduct, resetProduct } from "@/app/store/slices/productSlice";
 import { v4 as uuidv4 } from "uuid";
 import { persistor } from "@/app/store/store";
 
-// Register ChartJS components
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -35,7 +33,6 @@ ChartJS.register(
   LineElement,
 );
 
-// Types
 interface Product {
   _id: string;
   title: string;
@@ -82,7 +79,6 @@ export default function ProductDashboard() {
     }
   };
 
-  // Fetch product data
   useEffect(() => {
     async function fetchProductData() {
       try {
@@ -95,11 +91,9 @@ export default function ProductDashboard() {
         setIsLoading(false);
       }
     }
-
     fetchProductData();
   }, []);
 
-  // Filter products based on category, status, and search query
   const filteredProducts: Product[] =
     productData?.recentProducts.filter((product) => {
       const matchesCategory =
@@ -113,7 +107,6 @@ export default function ProductDashboard() {
       return matchesCategory && matchesStatus && matchesSearch;
     }) || [];
 
-  // Data for status chart
   const statusChartData = {
     labels: productData ? Object.keys(productData.productsByStatus) : [],
     datasets: [
@@ -135,7 +128,6 @@ export default function ProductDashboard() {
     ],
   };
 
-  // Data for category chart
   const categoryChartData = {
     labels: productData ? Object.keys(productData.productsByCategory) : [],
     datasets: [
@@ -161,7 +153,6 @@ export default function ProductDashboard() {
     ],
   };
 
-  // Data for monthly additions chart
   const monthlyAdditionsData = {
     labels: [
       "Jan",
@@ -189,7 +180,6 @@ export default function ProductDashboard() {
     ],
   };
 
-  // Chart options
   const chartOptions = {
     responsive: true,
     plugins: {
@@ -201,10 +191,10 @@ export default function ProductDashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading product data...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pri-500 mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading product data...</p>
         </div>
       </div>
     );
@@ -212,9 +202,9 @@ export default function ProductDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="bg-red-100 text-red-700 p-4 rounded-lg">
+          <div className="bg-destructive/10 text-destructive p-4 rounded-lg">
             <p className="font-semibold">Error</p>
             <p>{error}</p>
           </div>
@@ -224,27 +214,27 @@ export default function ProductDashboard() {
   }
 
   return (
-    <div className="min-h-screen lg:p-6">
+    <div className="p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4">
-          <h1 className="text-3xl font-bold text-gray-800">Products</h1>
+          <h1 className="text-3xl font-bold text-foreground">Products</h1>
           <div onClick={clearStore}>
             <Link
               href="/catalog/products/new"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              className="bg-pri-500 hover:bg-pri-600 text-white px-4 py-2 rounded-lg transition-colors"
             >
               + New Product
             </Link>
           </div>
         </div>
 
-        {/* Summary Cards */}
+        {/* Summary Cards – no borders added */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
             <div className="flex items-center">
-              <div className="rounded-full bg-blue-100 p-3">
+              <div className="rounded-full bg-pri-500/10 text-pri-500 p-3">
                 <svg
-                  className="w-6 h-6 text-blue-500"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -259,7 +249,7 @@ export default function ProductDashboard() {
                 </svg>
               </div>
               <div className="ml-4">
-                <h2 className="text-lg font-semibold text-gray-600">
+                <h2 className="text-lg font-semibold text-muted-foreground">
                   Total Products
                 </h2>
                 <p className="text-2xl font-bold">
@@ -269,11 +259,11 @@ export default function ProductDashboard() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
             <div className="flex items-center">
-              <div className="rounded-full bg-green-100 p-3">
+              <div className="rounded-full bg-thir-500/10 text-thir-500 p-3">
                 <svg
-                  className="w-6 h-6 text-green-500"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -288,7 +278,7 @@ export default function ProductDashboard() {
                 </svg>
               </div>
               <div className="ml-4">
-                <h2 className="text-lg font-semibold text-gray-600">
+                <h2 className="text-lg font-semibold text-muted-foreground">
                   Active Products
                 </h2>
                 <p className="text-2xl font-bold">
@@ -298,11 +288,11 @@ export default function ProductDashboard() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
             <div className="flex items-center">
-              <div className="rounded-full bg-red-100 p-3">
+              <div className="rounded-full bg-destructive/10 text-destructive p-3">
                 <svg
-                  className="w-6 h-6 text-red-500"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -317,7 +307,7 @@ export default function ProductDashboard() {
                 </svg>
               </div>
               <div className="ml-4">
-                <h2 className="text-lg font-semibold text-gray-600">
+                <h2 className="text-lg font-semibold text-muted-foreground">
                   Out of Stock
                 </h2>
                 <p className="text-2xl font-bold">
@@ -327,11 +317,11 @@ export default function ProductDashboard() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
             <div className="flex items-center">
-              <div className="rounded-full bg-yellow-100 p-3">
+              <div className="rounded-full bg-sec-500/10 text-sec-500 p-3">
                 <svg
-                  className="w-6 h-6 text-yellow-500"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -346,7 +336,7 @@ export default function ProductDashboard() {
                 </svg>
               </div>
               <div className="ml-4">
-                <h2 className="text-lg font-semibold text-gray-600">
+                <h2 className="text-lg font-semibold text-muted-foreground">
                   Low Stock
                 </h2>
                 <p className="text-2xl font-bold">
@@ -357,16 +347,16 @@ export default function ProductDashboard() {
           </div>
         </div>
 
-        {/* Charts Section */}
+        {/* Charts Section – no borders */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4">Products by Status</h2>
             <div className="h-80">
               <Doughnut data={statusChartData} options={chartOptions} />
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4">
               Monthly Product Additions
             </h2>
@@ -376,8 +366,8 @@ export default function ProductDashboard() {
           </div>
         </div>
 
-        {/* Products Table Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
+        {/* Products Table – only theme‑aware dividers, no extra borders */}
+        <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
             <h2 className="text-xl font-semibold mb-4 md:mb-0">
               Recent Products
@@ -388,7 +378,7 @@ export default function ProductDashboard() {
                 <input
                   type="text"
                   placeholder="Search products..."
-                  className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-pri-500"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -397,7 +387,7 @@ export default function ProductDashboard() {
               <div className="flex gap-2">
                 <select
                   title="category"
-                  className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-pri-500"
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
                 >
@@ -414,7 +404,7 @@ export default function ProductDashboard() {
 
                 <select
                   title="status"
-                  className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-pri-500"
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
                 >
@@ -428,37 +418,38 @@ export default function ProductDashboard() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y">
+              {/* divide-y without a color uses the border from the element, which is theme‑aware via the base layer */}
+              <thead className="bg-muted/50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Product
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     SKU
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Price
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Stock Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Category
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-card divide-y">
                 {filteredProducts.length > 0 ? (
                   filteredProducts.map((product) => (
                     <tr key={product._id}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center overflow-hidden">
+                            <div className="h-10 w-10 rounded-lg bg-pri-500/10 flex items-center justify-center overflow-hidden">
                               {product.main_image ? (
                                 <img
                                   src={product.main_image}
@@ -466,7 +457,7 @@ export default function ProductDashboard() {
                                   className="h-full w-full object-cover"
                                 />
                               ) : (
-                                <span className="font-medium text-blue-800">
+                                <span className="font-medium text-pri-500">
                                   {product.title?.charAt(0).toUpperCase() ||
                                     "P"}
                                 </span>
@@ -474,22 +465,22 @@ export default function ProductDashboard() {
                             </div>
                           </div>
                           <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-foreground">
                               {product.title || "Untitled Product"}
                             </div>
-                            <div className="text-sm text-gray-500">
+                            <div className="text-sm text-muted-foreground">
                               {product.model}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-foreground">
                           {product.sku}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-foreground">
                           ${product.sale_price || product.list_price || 0}
                         </div>
                       </td>
@@ -498,17 +489,17 @@ export default function ProductDashboard() {
                           className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
                           ${
                             product.stock_status?.includes("In Stock")
-                              ? "bg-green-100 text-green-800"
+                              ? "bg-thir-500/20 text-thir-700 dark:text-thir-400"
                               : product.stock_status?.includes("Low Stock")
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-red-100 text-red-800"
+                                ? "bg-sec-500/20 text-sec-700 dark:text-sec-400"
+                                : "bg-destructive/20 text-destructive"
                           }`}
                         >
                           {product.stock_status?.join(", ") || "N/A"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-pri-500/20 text-pri-700 dark:text-pri-400">
                           {product.category}
                         </span>
                       </td>
@@ -516,13 +507,13 @@ export default function ProductDashboard() {
                         <div className="flex space-x-2">
                           <Link
                             href={`/catalog/products/edit?id=${product._id}`}
-                            className="text-blue-600 hover:text-blue-900"
+                            className="text-pri-500 hover:text-pri-600"
                           >
                             Edit
                           </Link>
                           <Link
                             href={`catalog/products/delete?id=${product._id}`}
-                            className="text-red-600 hover:text-red-900"
+                            className="text-destructive hover:text-destructive/80"
                           >
                             Delete
                           </Link>
@@ -534,7 +525,7 @@ export default function ProductDashboard() {
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-6 py-4 text-center text-sm text-gray-500"
+                      className="px-6 py-4 text-center text-sm text-muted-foreground"
                     >
                       No products found matching your criteria
                     </td>

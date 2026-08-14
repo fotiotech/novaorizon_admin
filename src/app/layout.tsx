@@ -5,10 +5,13 @@ import Providers from "./providers";
 import Script from "next/script";
 import { Inter } from "next/font/google";
 import { AdminLayout } from "@/components";
+import { ThemeProvider } from "@/components/theme-provider";
+import { cn } from "@/lib/utils";
 
 const inter = Inter({
-  subsets: ["latin"], // Choose the subsets you need
-  weight: ["400", "700"], // Specify font weights
+  subsets: ["latin"],
+  variable: "--font-sans",
+  weight: ["400", "700"],
 });
 
 export default function RootLayout({
@@ -17,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={cn("font-sans", inter.variable)}>
       <head>
         {/* Google Tag Manager */}
         <Script
@@ -48,11 +51,18 @@ export default function RootLayout({
             style={{ display: "none", visibility: "hidden" }}
           ></iframe>
         </noscript>
-        <div className={`${inter.className}  `}>
-          <Providers>
+
+        {/* ✅ Wrap everything in Providers, which already includes your ThemeProvider */}
+        <Providers>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
             <AdminLayout>{children}</AdminLayout>
-          </Providers>
-        </div>
+          </ThemeProvider>
+        </Providers>
       </body>
     </html>
   );

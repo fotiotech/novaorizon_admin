@@ -22,13 +22,13 @@ import ManageRelatedProduct from "../../../../../components/products/ManageRelat
 import VariantsManager from "@/components/products/variants/VariantOption";
 
 // ------------------------------------------------------------------
-// Updated types to match the standardized camelCase structure
+// Types (unchanged)
 // ------------------------------------------------------------------
 export type AttributeDetail = {
   id: string;
   code: string;
   name: string;
-  options?: string[]; // was "option"
+  options?: string[];
   type: string;
   isRequired?: boolean;
   unitFamily?: {
@@ -40,24 +40,24 @@ export type AttributeDetail = {
 };
 
 export type GroupNode = {
-  id: string; // was "_id"
+  id: string;
   code: string;
   name: string;
-  parentId: string | null; // was "parent_id"
-  sortOrder: number; // was "sort_order"
+  parentId: string | null;
+  sortOrder: number;
   attributes: AttributeDetail[];
   children: GroupNode[];
 };
 
 type AttributeSetStep = {
-  id: string; // was "_id"
+  id: string;
   title: string;
   code: string;
   groups: GroupNode[];
 };
 
 // ------------------------------------------------------------------
-// ProductForm Component
+// Component
 // ------------------------------------------------------------------
 const ProductForm = () => {
   const dispatch = useAppDispatch();
@@ -120,7 +120,6 @@ const ProductForm = () => {
     return errors;
   };
 
-  // Validate all groups in all steps
   const validateAllSteps = (): boolean => {
     const allErrors: { [key: string]: string[] } = {};
     let hasErrors = false;
@@ -128,7 +127,7 @@ const ProductForm = () => {
       step.groups.forEach((group) => {
         const errors = validateGroup(group, true);
         if (errors.length > 0) {
-          allErrors[group.id] = errors; // use group.id
+          allErrors[group.id] = errors;
           hasErrors = true;
         }
       });
@@ -137,7 +136,6 @@ const ProductForm = () => {
     return !hasErrors;
   };
 
-  // Validate only the current step's groups
   const validateCurrentStep = (): boolean => {
     if (currentStep >= steps.length) return true;
     const currentStepData = steps[currentStep];
@@ -162,7 +160,6 @@ const ProductForm = () => {
     return true;
   };
 
-  // Fetch attribute sets when category changes
   useEffect(() => {
     const fetchAttributeSets = async () => {
       if (!product.category_id) {
@@ -190,7 +187,6 @@ const ProductForm = () => {
     fetchAttributeSets();
   }, [product.category_id]);
 
-  // Fetch units once
   useEffect(() => {
     const fetchUnits = async () => {
       try {
@@ -259,7 +255,6 @@ const ProductForm = () => {
     setIsSubmitting(true);
 
     if (!validateAllSteps()) {
-      // Find first step with errors
       let firstErrorStep = 0;
       for (let i = 0; i < steps.length; i++) {
         const hasError = steps[i].groups.some(
@@ -311,9 +306,7 @@ const ProductForm = () => {
     }
   };
 
-  // Inside ProductForm component
   const allVariantFields = useMemo(() => {
-    // Search through all steps for the first group with code "variant_fields"
     for (const step of steps) {
       const group = step.groups.find((g) => g.code === "variant_fields");
       if (group) return group.attributes || [];
@@ -334,7 +327,6 @@ const ProductForm = () => {
     );
   }
 
-  // Render a group (recursive)
   function renderGroup(group: GroupNode, isChild = false) {
     const { id, code, name, attributes, children } = group;
     const groupErrors = validationErrors[id] || [];
@@ -349,27 +341,30 @@ const ProductForm = () => {
       if (code === "variant_themes") {
         return (
           <section key={id} className="mb-2">
-            <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
+            <h2 className="text-sm font-semibold text-muted-foreground pb-2">
+              {name}
+            </h2>
             <VariantsManager
               productId={productId}
               product={product}
               attributes={attributes}
-              variantFields={allVariantFields} // ✅ from all steps
+              variantFields={allVariantFields}
             />
             {children?.length > 0 &&
               children.map((child) => renderGroup(child, true))}
           </section>
         );
       }
-      // Inside renderGroup, after checking for variant_themes and variants
       if (code === "product_relationships") {
         return (
           <section key={id} className="mb-2">
-            <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
+            <h2 className="text-sm font-semibold text-muted-foreground pb-2">
+              {name}
+            </h2>
             <ManageRelatedProduct
               id={productId}
               product={product}
-              attribute={attributes} // array containing relation_type and related_products
+              attribute={attributes}
             />
             {children?.length > 0 &&
               children.map((child) => renderGroup(child, true))}
@@ -383,7 +378,9 @@ const ProductForm = () => {
 
     return (
       <section key={id} className="mb-2">
-        <h2 className="text-sm font-semibold text-gray-600 pb-2">{name}</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground pb-2">
+          {name}
+        </h2>
         <div className="flex flex-col gap-4">
           {attributes.map((a) => (
             <div key={a.id}>
@@ -414,7 +411,7 @@ const ProductForm = () => {
 
   if (!product.category_id) {
     return (
-      <div className="flex flex-col max-w-3xl bg-white mx-auto p-4 rounded-lg">
+      <div className="flex flex-col max-w-3xl bg-card text-card-foreground mx-auto p-4 rounded-lg">
         <Alert severity="warning">
           Please select a category first to load product attributes.
         </Alert>
@@ -424,7 +421,7 @@ const ProductForm = () => {
 
   return (
     <>
-      <form className="flex flex-col max-w-4xl bg-white mx-auto p-4 rounded-lg">
+      <form className="flex flex-col max-w-4xl bg-card text-card-foreground mx-auto p-4 rounded-lg shadow-md">
         <div className="flex-1">
           {error && !success && <Alert severity="error">{error}</Alert>}
           {success && !error && <Alert severity="success">{success}</Alert>}
@@ -476,7 +473,7 @@ const ProductForm = () => {
             <button
               type="button"
               onClick={clearStoreAndRedirect}
-              className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded transition mr-4"
+              className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded transition mr-4"
             >
               Cancel
             </button>
@@ -484,7 +481,7 @@ const ProductForm = () => {
               <button
                 type="button"
                 onClick={handlePrev}
-                className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded transition"
+                className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded transition"
               >
                 Previous
               </button>
@@ -496,7 +493,7 @@ const ProductForm = () => {
               <button
                 type="button"
                 onClick={handleNext}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition"
+                className="px-6 py-2 bg-pri-500 hover:bg-pri-600 text-white rounded transition"
               >
                 Next
               </button>
@@ -505,7 +502,7 @@ const ProductForm = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={isLoading || redirecting || isSubmitting}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
+                className="px-6 py-2 bg-pri-500 hover:bg-pri-600 text-white rounded transition disabled:bg-muted disabled:text-muted-foreground"
               >
                 {isLoading || isSubmitting ? "Saving..." : "Save Product"}
               </button>
@@ -513,7 +510,7 @@ const ProductForm = () => {
           </div>
         </div>
 
-        <div className="mt-4 text-center text-sm text-gray-500">
+        <div className="mt-4 text-center text-sm text-muted-foreground">
           Step {currentStep + 1} of {steps.length}
         </div>
       </form>
