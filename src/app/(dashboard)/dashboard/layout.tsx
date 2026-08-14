@@ -12,7 +12,7 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
-    <div className="dashboard-layout">
+    <div className="dashboard-layout p-2 lg:p-6">
       <main>{children}</main>
     </div>
   );

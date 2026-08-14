@@ -83,7 +83,7 @@ const AllOrderPage = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-6xl mx-auto">
       <div className="mb-6 flex justify-between items-center">
         <h2 className="text-3xl font-bold text-foreground mb-8">All Orders</h2>
         <Link href={"/orders/chat"} className="btn">

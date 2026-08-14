@@ -45,7 +45,7 @@ export default function AttributesLayout({
       </div>
 
       {/* Page content */}
-      <div>{children}</div>
+      <div className="">{children}</div>
     </div>
   );
 }

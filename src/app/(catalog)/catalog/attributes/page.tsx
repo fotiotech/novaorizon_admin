@@ -166,7 +166,7 @@ const Attributes = () => {
   };
 
   return (
-    <div className="max-w-4xl w-full p-6">
+    <div className="max-w-4xl w-full">
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="font-bold text-xl text-foreground my-2">Attributes</h2>
