@@ -66,8 +66,8 @@ interface AdminSideBarProps {
 const slugify = (title: string) =>
   title
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-") // replace non-alphanumeric with hyphens
-    .replace(/^-|-$/g, ""); // trim leading/trailing hyphens
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 
 // Original menu configuration (without href prefixes)
 export const rawMenuConfig = [
@@ -143,7 +143,6 @@ export const rawMenuConfig = [
       { name: "FAQs", href: "/faqs", icon: <Assignment /> },
     ],
   },
-
   {
     title: "Analytics",
     links: [
@@ -160,7 +159,6 @@ export const rawMenuConfig = [
       },
     ],
   },
-
   {
     title: "Users",
     links: [
@@ -226,13 +224,13 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   const pathname = usePathname();
   const unreadCount = useUnreadMessages();
 
-  // State for collapsible sections: keyed by section title, true = expanded
+  // All sections expanded by default (important for large screens)
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
   >(() => {
     const initial: Record<string, boolean> = {};
     menuConfig.forEach((section) => {
-      initial[section.title] = false; // all collapsed by default
+      initial[section.title] = true;
     });
     return initial;
   });
@@ -244,17 +242,17 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     }));
   };
 
-  const open = "fixed lg:relative inset-y-0 left-0 z-50 translate-x-0";
-  const hide = "fixed lg:relative inset-y-0 -left-full lg:translate-x-0";
-
   const handleClose = () => {
     if (screenSize <= 1024) setSideBarToggle(false);
   };
 
+  const isLargeScreen = screenSize > 1024;
+  const shouldShow = sideBarToggle || isLargeScreen;
+
   return (
     <>
-      {/* Backdrop for mobile */}
-      {sideBarToggle && screenSize <= 1024 && (
+      {/* Backdrop for mobile only */}
+      {sideBarToggle && !isLargeScreen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={handleClose}
@@ -263,9 +261,15 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 
       <aside
         ref={domNode}
-        className={`${sideBarToggle || screenSize > 1024 ? open : hide} 
-          w-3/4 lg:w-64 h-full overflow-y-auto transition-transform duration-300 ease-in-out
-          bg-white dark:bg-gray-800 shadow-lg flex flex-col justify-between`}
+        className={`
+          fixed lg:relative inset-y-0 left-0 z-50
+          transform transition-transform duration-300 ease-in-out
+          ${shouldShow ? "translate-x-0" : "-translate-x-full"}
+          lg:translate-x-0
+          w-3/4 lg:w-64 h-full overflow-y-auto
+          bg-white dark:bg-gray-800 shadow-lg
+          flex flex-col justify-between
+        `}
       >
         <div>
           <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
@@ -275,12 +279,12 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                 Admin Panel
               </span>
             </Link>
-            {screenSize <= 1024 && (
+            {!isLargeScreen && (
               <button
-                title="button"
+                title="Close sidebar"
                 type="button"
                 onClick={handleClose}
-                className="lg:hidden p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -329,7 +333,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                             onClick={handleClose}
                             className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 ${
                               pathname === link.href ||
-                              pathname.startsWith(link.href)
+                              pathname?.startsWith(link.href)
                                 ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
                                 : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                             }`}
@@ -340,8 +344,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                               </span>
                               <span className="font-medium">{link.name}</span>
                             </div>
-
-                            {/* Unread Count Badge */}
                             {link.showUnreadCount && unreadCount > 0 && (
                               <span className="bg-red-500 text-white rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
                                 {unreadCount > 99 ? "99+" : unreadCount}
