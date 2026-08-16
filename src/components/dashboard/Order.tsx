@@ -96,6 +96,22 @@ export default function Order() {
     ],
   };
 
+  // Helper to get status badge color
+  const getStatusBadgeClass = (status: string) => {
+    const base =
+      "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
+    switch (status?.toLowerCase()) {
+      case "completed":
+        return `${base} bg-thir-500/20 text-thir-700 dark:text-thir-400`;
+      case "processing":
+        return `${base} bg-sec-500/20 text-sec-700 dark:text-sec-400`;
+      case "cancelled":
+        return `${base} bg-destructive/20 text-destructive`;
+      default:
+        return `${base} bg-muted text-muted-foreground`;
+    }
+  };
+
   return (
     <div className=" space-y-6">
       <h1 className="text-3xl font-bold text-foreground">
@@ -163,50 +179,46 @@ export default function Order() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Status
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
               {analytics.recentOrders.map((order: any) => (
                 <tr key={order._id.toString()}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link
-                      href={`/sales/orders/${order.orderNumber}`}
-                      className="text-pri-500 hover:text-pri-600 transition-colors"
-                    >
-                      View Details
-                    </Link>
+                  <td className="px-6 py-4 whitespace-nowrap text-foreground font-medium">
+                    #{order.orderNumber}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-foreground">
                     {order.email}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-foreground">
-                    CFA {order.total.toFixed(2)}
+                    CFA {order.total?.toFixed(2) || "0.00"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-foreground">
-                    {order.paymentStatus}
+                    <span
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        order.paymentStatus === "paid"
+                          ? "bg-thir-500/20 text-thir-700 dark:text-thir-400"
+                          : "bg-destructive/20 text-destructive"
+                      }`}
+                    >
+                      {order.paymentStatus || "pending"}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                      ${
-                        order.orderStatus === "completed"
-                          ? "bg-thir-500/20 text-thir-700 dark:text-thir-400"
-                          : ""
-                      }
-                      ${
-                        order.orderStatus === "processing"
-                          ? "bg-sec-500/20 text-sec-700 dark:text-sec-400"
-                          : ""
-                      }
-                      ${
-                        order.orderStatus === "cancelled"
-                          ? "bg-destructive/20 text-destructive"
-                          : ""
-                      }
-                    `}
-                    >
-                      {order.orderStatus}
+                    <span className={getStatusBadgeClass(order.orderStatus)}>
+                      {order.orderStatus || "pending"}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <Link
+                      href={`/sales/orders/${order.orderNumber}`}
+                      className="text-pri-500 hover:text-pri-600 transition-colors text-sm"
+                    >
+                      View Details
+                    </Link>
                   </td>
                 </tr>
               ))}

@@ -1,48 +1,36 @@
 "use server";
 import { connection } from "@/utils/connection";
-import Order from "@/models/Order";
+import Order, { OrderDocument } from "@/models/Order";
 import { revalidatePath } from "next/cache";
 import Shipping from "@/models/Shipping";
-import "@/models/User";
 import Transaction from "@/models/Transaction";
-import { Order as OrderT } from "@/constant/types/finance";
 
-interface FindOrdersOptions {
+export async function findOrders(options?: {
   orderNumber?: string;
   userId?: string | null;
   page?: number;
   limit?: number;
-}
-
-// For single order lookup, returns the order object or null
-// For list (with or without userId) returns paginated result with { orders, total, page, totalPages }
-export async function findOrders(options: FindOrdersOptions = {}) {
-  const { orderNumber, userId, page = 1, limit = 10 } = options;
+}) {
   await connection();
 
+  const { orderNumber, userId, page = 1, limit = 10 } = options || {};
+
   try {
-    // If orderNumber is provided, return single order (exact match)
+    let query = {};
     if (orderNumber) {
-      const order = await Order.findOne({ orderNumber }).lean();
-      if (!order) return null;
-      return {
-        ...order,
-        _id: order._id.toString(),
-        userId: order.userId?.toString(),
-        transactionId: order.transaction_id,
-      };
+      query = { orderNumber: new RegExp(orderNumber, "i") };
+    } else if (userId) {
+      query = { userId };
     }
 
-    // Build query for list
-    const query: any = {};
-    if (userId) {
-      query.userId = userId;
-    }
-
-    // If no userId and no orderNumber, get all (paginated)
     const skip = (page - 1) * limit;
+
     const [orders, total] = await Promise.all([
-      Order.find(query).skip(skip).limit(limit).lean(),
+      Order.find(query)
+        .populate("billingAddressId paymentMethodId")
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       Order.countDocuments(query),
     ]);
 
@@ -50,12 +38,11 @@ export async function findOrders(options: FindOrdersOptions = {}) {
       orders: orders.map((order) => ({
         ...order,
         _id: order._id.toString(),
-        userId: order.userId?.toString(),
-        transactionId: order.transaction_id,
+        userId: order.userId.toString(),
       })),
       total,
-      page,
       totalPages: Math.ceil(total / limit),
+      currentPage: page,
     };
   } catch (error: any) {
     console.error(`Error fetching orders: ${error.message}`);
@@ -65,7 +52,7 @@ export async function findOrders(options: FindOrdersOptions = {}) {
 
 export async function createOrUpdateOrder(
   payment_ref: string,
-  data: OrderT,
+  data: Partial<OrderDocument>,
 ): Promise<{ success: boolean; order?: any; error?: string }> {
   await connection();
 
@@ -85,7 +72,6 @@ export async function createOrUpdateOrder(
     shippingStatus = "pending",
     orderStatus = "processing",
     discount = 0,
-    userId,
     shippingAddress = {
       street: "",
       city: "",
@@ -94,6 +80,15 @@ export async function createOrUpdateOrder(
       country: "",
       carrier: "Novaorizon",
     },
+    billingAddress = {
+      street: "",
+      city: "",
+      region: "",
+      address: "",
+      country: "",
+    },
+    billingAddressId,
+    paymentMethodId,
     ...rest
   } = data;
 
@@ -106,7 +101,6 @@ export async function createOrUpdateOrder(
     shippingStatus,
     orderStatus,
     discount,
-    userId,
     shippingAddress: {
       street: shippingAddress.street || "",
       region: shippingAddress.region || "",
@@ -115,6 +109,15 @@ export async function createOrUpdateOrder(
       carrier: shippingAddress.carrier || "Novaorizon",
       country: shippingAddress.country || "",
     },
+    billingAddress: {
+      street: billingAddress.street || "",
+      city: billingAddress.city || "",
+      region: billingAddress.region || "",
+      address: billingAddress.address || "",
+      country: billingAddress.country || "",
+    },
+    billingAddressId: billingAddressId || null,
+    paymentMethodId: paymentMethodId || null,
   };
 
   try {
@@ -130,12 +133,10 @@ export async function createOrUpdateOrder(
     );
 
     console.log(
-      `[createOrUpdateOrder] Order ${savedOrder._id} saved/updated successfully`,
+      `[createOrUpdateOrder] Order ${savedOrder.orderNumber} saved/updated successfully`,
     );
 
-    // --- FIX: Create shipping and transaction ONLY when payment is PAID (not cancelled) ---
     if (savedOrder && savedOrder.paymentStatus === "paid") {
-      // Create shipping record
       try {
         const createShipping = new Shipping({
           orderId: savedOrder._id,
@@ -159,7 +160,6 @@ export async function createOrUpdateOrder(
           shippingRes,
         );
 
-        // Update order with shipping reference
         await Order.findByIdAndUpdate(savedOrder._id, {
           shippingId: shippingRes._id,
         });
@@ -170,7 +170,6 @@ export async function createOrUpdateOrder(
         );
       }
 
-      // Create transaction record
       try {
         const existingTransaction = await Transaction.findOne({
           orderId: savedOrder._id,
@@ -210,7 +209,6 @@ export async function createOrUpdateOrder(
       }
     }
 
-    // Handle refunds
     if (savedOrder && savedOrder.paymentStatus === "refunded") {
       try {
         const refundTransaction = new Transaction({
@@ -260,29 +258,23 @@ export async function deleteOrder(orderNumber: string) {
     }
 
     console.log(`Order with order number ${orderNumber} deleted successfully`);
-    revalidatePath("/sales/orders"); // adjust path to match your routes
-    return true;
+    // ✅ Fixed revalidation path to match the actual route
+    revalidatePath("/sales/orders");
+    return deletedOrder;
   } catch (error: any) {
     console.error("Error deleting order:", error.message);
     return null;
   }
 }
 
-// Improved tracking number generator
-async function generateTrackingNumber(base: string): Promise<string> {
-  // Generate a unique tracking number: base + timestamp + random
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  let tracking = `${base}-${timestamp}-${random}`;
-
-  // Ensure uniqueness
-  let existing = await Shipping.findOne({ trackingNumber: tracking });
-  let attempt = 0;
-  while (existing && attempt < 5) {
-    const extra = Math.random().toString(36).substring(2, 5).toUpperCase();
-    tracking = `${base}-${timestamp}-${random}-${extra}`;
-    existing = await Shipping.findOne({ trackingNumber: tracking });
-    attempt++;
+async function generateTrackingNumber(trackingNumber: string): Promise<string> {
+  const existing = await Shipping.findOne({ trackingNumber });
+  if (existing) {
+    return trackingNumber;
   }
-  return tracking;
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  for (let i = 0; i < 10; i++) {
+    trackingNumber += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return trackingNumber;
 }

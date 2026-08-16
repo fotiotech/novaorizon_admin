@@ -1,244 +1,181 @@
-// components/sales/OrderDetails.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
-import Image from "next/image";
-import { Orders } from "@/constant/types";
-import { findOrders } from "@/app/actions/order";
 import { Prices } from "@/components/Prices";
-import { CollapsibleSection } from "./CollapsibleSection";
-import { SkeletonLoader } from "./SkeletonLoader";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-// ... (all sub‑components: OrderInfo, CustomerInfo, ShippingInfo, ProductList, OrderSummary remain the same)
-
-interface OrderDetailsProps {
-  orderNumber: string;
+interface OrderDetailsClientProps {
+  order: any; // Replace with your actual Order type
 }
 
-// OrderInfo component
-const OrderInfo = ({ order }: { order: Orders }) => (
-  <div className="space-y-2">
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-      <p className="text-sm sm:text-base">
-        <strong>Status:</strong> {order.orderStatus}
-      </p>
-      <p className="text-sm sm:text-base">
-        <strong>Payment:</strong> {order.paymentStatus} via{" "}
-        {order.paymentMethod}
-      </p>
-      {order.transactionId && (
-        <p className="text-sm sm:text-base">
-          <strong>Transaction ID:</strong> {order.transactionId}
-        </p>
-      )}
-      <p className="text-sm sm:text-base">
-        <strong>Date:</strong>{" "}
-        {new Date(order.createdAt || "").toLocaleString()}
-      </p>
-    </div>
-  </div>
-);
-
-// CustomerInfo component
-const CustomerInfo = ({ order }: { order: Orders }) => (
-  <div className="space-y-2">
-    <p className="text-sm sm:text-base">
-      <strong>Name:</strong> {order.firstName} {order.lastName}
-    </p>
-    <p className="text-sm sm:text-base">
-      <strong>Email:</strong> {order.email}
-    </p>
-  </div>
-);
-
-// ShippingInfo component
-const ShippingInfo = ({ order }: { order: Orders }) => (
-  <div className="space-y-2">
-    <p className="text-sm sm:text-base">
-      <strong>Address:</strong> {order.shippingAddress?.street},{" "}
-      {order.shippingAddress?.city}, {order.shippingAddress?.region},{" "}
-      {order.shippingAddress?.postalCode}, {order.shippingAddress?.country}
-    </p>
-    <p className="text-sm sm:text-base">
-      <strong>Status:</strong> {order.shippingStatus as any}
-    </p>
-    {order.shippingDate && (
-      <p className="text-sm sm:text-base">
-        <strong>Shipped:</strong>{" "}
-        {new Date(order.shippingDate).toLocaleDateString()}
-      </p>
-    )}
-    {order.deliveryDate && (
-      <p className="text-sm sm:text-base">
-        <strong>Delivered:</strong>{" "}
-        {new Date(order.deliveryDate).toLocaleDateString()}
-      </p>
-    )}
-  </div>
-);
-
-// ProductList component with memoization
-const ProductList = React.memo(({ products }: { products: any[] }) => (
-  <ul className="space-y-4">
-    {products.map((product: any) => (
-      <li
-        key={`${product.productId}-${product.quantity}`}
-        className="flex flex-col xs:flex-row items-start xs:items-center gap-4 p-4 border border-border rounded-xl"
-      >
-        {product.main_image && (
-          <div className="flex-shrink-0">
-            <Image
-              src={product.main_image}
-              alt={product.name}
-              width={64}
-              height={64}
-              className="rounded-lg"
-              placeholder="blur"
-              blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaUMk9k2e6Cz+WMk9k2e6Cz+WMD5p//2Q=="
-            />
-          </div>
-        )}
-        <div className="text-sm flex-1">
-          <p className="font-medium text-foreground">{product.name}</p>
-          <p className="text-muted-foreground">Qty: {product.quantity}</p>
-          <p className="text-muted-foreground">
-            Price: <Prices amount={product.price} />
-          </p>
-        </div>
-      </li>
-    ))}
-  </ul>
-));
-
-ProductList.displayName = "ProductList";
-
-// OrderSummary component
-const OrderSummary = ({ order }: { order: Orders }) => (
-  <div className="space-y-2">
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      <p className="text-sm sm:text-base">
-        <strong>Subtotal:</strong> <Prices amount={order.subtotal!} />
-      </p>
-      <p className="text-sm sm:text-base">
-        <strong>Tax:</strong> <Prices amount={order.tax!} />
-      </p>
-      <p className="text-sm sm:text-base">
-        <strong>Shipping:</strong> <Prices amount={order.shippingCost!} />
-      </p>
-      <p className="text-sm sm:text-base">
-        <strong>Discount:</strong> -<Prices amount={order.discount!} />
-      </p>
-      <p className="col-span-2 sm:col-span-4 text-base sm:text-lg font-bold text-primary mt-2 border-t pt-2">
-        Total: <Prices amount={order.total!} />
-      </p>
-    </div>
-  </div>
-);
-
-const OrderDetails = ({ orderNumber }: OrderDetailsProps) => {
-  const [order, setOrder] = useState<Orders | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchOrder = useCallback(async () => {
-    if (!orderNumber) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await findOrders({ orderNumber });
-      if (
-        response &&
-        typeof response === "object" &&
-        "orderNumber" in response
-      ) {
-        setOrder(response as any);
-      } else {
-        setError("Order not found");
-      }
-    } catch (err) {
-      console.error("Error fetching order:", err);
-      setError("Failed to load order details");
-    } finally {
-      setLoading(false);
-    }
-  }, [orderNumber]);
-
-  useEffect(() => {
-    fetchOrder();
-  }, [fetchOrder]);
-
-  const orderSections = useMemo(() => {
-    if (!order) return null;
-    return (
-      <>
-        <CollapsibleSection title="Order Info" defaultOpen>
-          <OrderInfo order={order} />
-        </CollapsibleSection>
-        <CollapsibleSection title="Customer">
-          <CustomerInfo order={order} />
-        </CollapsibleSection>
-        <CollapsibleSection title="Shipping">
-          <ShippingInfo order={order} />
-        </CollapsibleSection>
-        <CollapsibleSection title="Products">
-          <ProductList products={order.products} />
-        </CollapsibleSection>
-        <CollapsibleSection title="Summary" defaultOpen>
-          <OrderSummary order={order} />
-        </CollapsibleSection>
-        {order.notes && (
-          <CollapsibleSection title="Notes">
-            <p className="text-muted-foreground text-sm sm:text-base">
-              {order.notes}
-            </p>
-          </CollapsibleSection>
-        )}
-      </>
-    );
-  }, [order]);
-
-  if (loading) return <SkeletonLoader />;
-  if (error) {
-    return (
-      <div className="max-w-5xl mx-auto p-4 sm:p-6">
-        <div className="flex justify-center items-center h-96">
-          <div className="text-center">
-            <p className="text-lg text-destructive mb-4">{error}</p>
-            <button
-              onClick={fetchOrder}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm sm:text-base"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  if (!order) {
-    return (
-      <div className="max-w-5xl mx-auto p-4 sm:p-6">
-        <div className="flex justify-center items-center h-96">
-          <p className="text-lg text-muted-foreground">Order not found</p>
-        </div>
-      </div>
-    );
-  }
+export default function OrderDetailsClient({ order }: OrderDetailsClientProps) {
+  const router = useRouter();
 
   return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6">
-      <div className="space-y-6 bg-background border border-border p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-md">
-        <h1 className="text-2xl sm:text-3xl font-bold text-primary mb-4">
+    <div className="max-w-4xl mx-auto p-6 space-y-8">
+      {/* Back button */}
+      <button
+        onClick={() => router.back()}
+        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        ← Back to orders
+      </button>
+
+      {/* Order Header */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-foreground">
           Order #{order.orderNumber}
         </h1>
-        <div className="space-y-6">{orderSections}</div>
+        <span
+          className={`px-3 py-1 rounded-full text-sm font-semibold ${
+            order.paymentStatus === "paid"
+              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+          }`}
+        >
+          {order.paymentStatus}
+        </span>
+      </div>
+
+      {/* Order Info Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-card border border-border rounded-lg p-6">
+        <div>
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Order Date
+          </h2>
+          <p className="text-foreground">
+            {new Date(order.createdAt).toLocaleString()}
+          </p>
+        </div>
+        <div>
+          <h2 className="text-sm font-medium text-muted-foreground">Status</h2>
+          <p className="text-foreground capitalize">{order.orderStatus}</p>
+        </div>
+        <div>
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Customer
+          </h2>
+          <p className="text-foreground">
+            {order.firstName} {order.lastName}
+          </p>
+          <p className="text-sm text-muted-foreground">{order.email}</p>
+        </div>
+        <div>
+          <h2 className="text-sm font-medium text-muted-foreground">Total</h2>
+          <p className="text-2xl font-bold text-foreground">
+            <Prices amount={order.total} />
+          </p>
+        </div>
+      </div>
+
+      {/* Shipping & Billing */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-card border border-border rounded-lg p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-4">
+            Shipping Address
+          </h2>
+          <p className="text-foreground">
+            {order.shippingAddress?.street}
+            <br />
+            {order.shippingAddress?.city},{" "}
+            {order.shippingAddress?.region || order.shippingAddress?.state}{" "}
+            {order.shippingAddress?.postalCode}
+            <br />
+            {order.shippingAddress?.country}
+          </p>
+        </div>
+        <div className="bg-card border border-border rounded-lg p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-4">
+            Billing Address
+          </h2>
+          <p className="text-foreground">
+            {order.billingAddress?.street}
+            <br />
+            {order.billingAddress?.city},{" "}
+            {order.billingAddress?.region || order.billingAddress?.state}{" "}
+            {order.billingAddress?.postalCode}
+            <br />
+            {order.billingAddress?.country}
+          </p>
+        </div>
+      </div>
+
+      {/* Products */}
+      <div className="bg-card border border-border rounded-lg p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">Products</h2>
+        <ul className="divide-y divide-border">
+          {order.products.map((item: any) => (
+            <li key={item.productId?.toString()} className="py-4 flex gap-4">
+              {item.main_image && (
+                <Image
+                  src={item.main_image}
+                  alt={item.name}
+                  width={80}
+                  height={80}
+                  className="rounded-lg object-cover"
+                />
+              )}
+              <div className="flex-1">
+                <p className="font-medium text-foreground">{item.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  Qty: {item.quantity} × <Prices amount={item.price} />
+                </p>
+                <p className="text-sm font-semibold text-foreground mt-1">
+                  Subtotal: <Prices amount={item.price * item.quantity} />
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="border-t border-border pt-4 mt-4 flex justify-between text-foreground">
+          <span>Subtotal</span>
+          <span>
+            <Prices amount={order.subtotal || order.total} />
+          </span>
+        </div>
+        {order.discount > 0 && (
+          <div className="flex justify-between text-muted-foreground text-sm">
+            <span>Discount</span>
+            <span>
+              -<Prices amount={order.discount} />
+            </span>
+          </div>
+        )}
+        {order.shippingCost > 0 && (
+          <div className="flex justify-between text-muted-foreground text-sm">
+            <span>Shipping</span>
+            <span>
+              <Prices amount={order.shippingCost} />
+            </span>
+          </div>
+        )}
+        {order.tax > 0 && (
+          <div className="flex justify-between text-muted-foreground text-sm">
+            <span>Tax</span>
+            <span>
+              <Prices amount={order.tax} />
+            </span>
+          </div>
+        )}
+        <div className="flex justify-between text-lg font-bold text-foreground border-t border-border pt-4 mt-4">
+          <span>Total</span>
+          <span>
+            <Prices amount={order.total} />
+          </span>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-4">
+        <Link
+          href="/sales/orders"
+          className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+        >
+          Back to All Orders
+        </Link>
+        {/* Additional actions like invoice, etc. can go here */}
       </div>
     </div>
   );
-};
-
-export default OrderDetails;
+}

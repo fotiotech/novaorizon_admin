@@ -5,7 +5,6 @@ interface Product {
   name: string;
   quantity: number;
   price: number;
-  main_image?: string; // add if you store image in order
 }
 
 export interface OrderDocument extends Document {
@@ -21,8 +20,13 @@ export interface OrderDocument extends Document {
   shippingCost: number;
   total: number;
   paymentStatus: "pending" | "paid" | "failed" | "cancelled" | "refunded";
-  paymentMethod: string;
+  paymentMethod: string; // still store as string for quick display
   transaction_id?: string;
+  // Reference to the selected billing address
+  billingAddressId?: mongoose.Types.ObjectId;
+  // Reference to the selected payment method
+  paymentMethodId?: mongoose.Types.ObjectId;
+  // Embedded copies for historical consistency (kept for backward compatibility)
   billingAddress: {
     street: string;
     city: string;
@@ -47,7 +51,6 @@ export interface OrderDocument extends Document {
   notes?: string;
   couponCode?: string;
   discount: number;
-  shippingId?: mongoose.Types.ObjectId; // if you reference Shipping
 }
 
 const OrderSchema = new mongoose.Schema<OrderDocument>(
@@ -72,7 +75,6 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
         name: { type: String, required: true },
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
-        main_image: { type: String }, // optional: store image URL
       },
     ],
     subtotal: { type: Number, required: true },
@@ -85,6 +87,17 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
       default: "pending",
     },
     paymentMethod: { type: String, required: true },
+    billingAddressId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Address",
+      required: false, // optional for existing orders
+    },
+    paymentMethodId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PaymentMethod",
+      required: false,
+    },
+    // Embedded copies (still required)
     billingAddress: {
       street: { type: String, required: true },
       city: { type: String, required: true },
@@ -115,27 +128,9 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
     notes: { type: String },
     couponCode: { type: String },
     discount: { type: Number, default: 0 },
-    shippingId: { type: mongoose.Schema.Types.ObjectId, ref: "Shipping" },
   },
   { timestamps: true },
 );
-
-// Add indexes for performance
-OrderSchema.index({ orderNumber: 1 });
-OrderSchema.index({ userId: 1 });
-
-// Pre-hook for deletion (cascade to Shipping if needed)
-OrderSchema.pre("findOneAndDelete", async function (next) {
-  try {
-    const doc = await this.model.findOne(this.getFilter());
-    if (doc) {
-      await mongoose.model("Shipping").deleteMany({ orderId: doc._id });
-    }
-    next();
-  } catch (err: any) {
-    next(err);
-  }
-});
 
 const Order: Model<OrderDocument> =
   mongoose.models.Order || mongoose.model<OrderDocument>("Order", OrderSchema);

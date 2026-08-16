@@ -6,7 +6,7 @@ import i18n from "./i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
 import { Provider as ReduxProvider } from "react-redux";
-import { UserProvider } from "./context/UserContext";
+import { UserDataProvider } from "./context/UserDataContext"; // 👈 Import the new provider
 import { CartProvider } from "./context/CartContext";
 import { store, persistor } from "./store/store";
 import { PersistGate } from "redux-persist/integration/react";
@@ -25,7 +25,11 @@ const Providers = ({ children }: ProviderProps) => {
           <ReduxProvider store={store}>
             <PersistGate loading={null} persistor={persistor}>
               <CartProvider>
-                <UserProvider>{children}</UserProvider>
+                <UserDataProvider>
+                  {" "}
+                  {/* 👈 Replaced UserProvider */}
+                  {children}
+                </UserDataProvider>
               </CartProvider>
             </PersistGate>
           </ReduxProvider>

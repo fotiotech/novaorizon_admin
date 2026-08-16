@@ -97,12 +97,14 @@ const AdminTopBar = ({
                 {user?.email?.slice(0, 7)}...
               </p>
               <div className="relative h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-200 font-medium">
-                {unreadCount > 0 && (
-                  <p className="absolute right-0 -top-2 bg-red-500 text-xs rounded-full px-1 min-w-[18px] text-center">
-                    {unreadCount}
-                  </p>
-                )}
-                {user?.email?.charAt(0).toUpperCase() || "U"}
+                <Link href={`/profile/`}>
+                  {unreadCount > 0 && (
+                    <p className="absolute right-0 -top-2 bg-red-500 text-xs rounded-full px-1 min-w-[18px] text-center">
+                      {unreadCount}
+                    </p>
+                  )}
+                  {user?.email?.charAt(0).toUpperCase() || "U"}
+                </Link>
               </div>
             </div>
           ) : (
