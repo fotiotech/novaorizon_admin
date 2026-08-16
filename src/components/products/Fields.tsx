@@ -5,8 +5,16 @@ import Select, { MultiValue } from "react-select";
 import MainImageUploader from "./MainImageUploader";
 import GalleryUploader from "./GalleryUploader";
 import { getBrands } from "@/app/actions/brand";
+import { getCarriers } from "@/app/actions/carrier"; // 👈 new import
 import { Brand } from "@/constant/types";
 import RichTextEditorWrapper from "@/components/RichTextEditorWrapper";
+
+// Define a minimal Carrier type (you can import from a shared types file if available)
+interface Carrier {
+  _id: string;
+  name: string;
+  // other fields are optional for this component
+}
 
 interface FieldProps {
   type?: string;
@@ -17,7 +25,7 @@ interface FieldProps {
   handleAttributeChange: (code: string, value: any) => void;
   productId?: string;
   unitFamily?: { id: string; name: string } | null;
-  units?: any[]; // all units from the server
+  units?: any[];
   isRequired?: boolean;
 }
 
@@ -34,14 +42,29 @@ const Fields: React.FC<FieldProps> = ({
   isRequired,
 }) => {
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [carriers, setCarriers] = useState<Carrier[]>([]); // 👈 new state
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch brands and carriers on mount
   useEffect(() => {
-    getBrands()
-      .then(setBrands)
-      .catch((err) => {
+    Promise.all([
+      getBrands().catch((err) => {
         console.error("Brand fetch error:", err);
         setError("Failed to fetch brands. Please refresh.");
+        return [];
+      }),
+      getCarriers().catch((err) => {
+        console.error("Carrier fetch error:", err);
+        setError("Failed to fetch carriers. Please refresh.");
+        return [];
+      }),
+    ])
+      .then(([brandsData, carriersData]) => {
+        setBrands(brandsData);
+        setCarriers(carriersData);
+      })
+      .catch(() => {
+        setError("Failed to fetch data. Please refresh.");
       });
   }, []);
 
@@ -150,15 +173,12 @@ const Fields: React.FC<FieldProps> = ({
 
       case "number": {
         const familyId = unitFamily?.id;
-        // Filter units belonging to this unit family
         const familyUnits = familyId
           ? (units || []).filter((u) => {
               const uFamilyId = u.unitFamily?.id || u.unitFamily;
               return uFamilyId === familyId;
             })
           : [];
-
-        console.log("Family Units for attribute", code, familyUnits);
 
         const currentValue = field?.value !== undefined ? field.value : field;
         const currentUnit = field?.unit;
@@ -186,7 +206,6 @@ const Fields: React.FC<FieldProps> = ({
           />
         );
 
-        // If this attribute has a unit family with available units, show dropdown
         if (familyUnits.length > 0) {
           const unitOptions = familyUnits.map((u) => ({
             value: u.symbol,
@@ -220,11 +239,11 @@ const Fields: React.FC<FieldProps> = ({
           );
         }
 
-        // No unit family – just the number input
         return numberInput;
       }
 
-      case "select":
+      case "select": {
+        // ----- Special case: Brand (single select) -----
         if (code === "brand") {
           return (
             <Select
@@ -247,6 +266,53 @@ const Fields: React.FC<FieldProps> = ({
           );
         }
 
+        // ----- Special case: Carrier (multi-select) -----
+        if (code === "carrier") {
+          const carrierOptions = carriers.map((c) => ({
+            value: c._id,
+            label: c.name,
+          }));
+
+          // field should be an array of carrier IDs
+          const selectedValues = Array.isArray(field)
+            ? field
+                .map((id) => {
+                  const option = carrierOptions.find((o) => o.value === id);
+                  return option || null;
+                })
+                .filter(
+                  (item): item is { value: string; label: string } =>
+                    item !== null,
+                )
+            : [];
+
+          return (
+            <Select
+              isMulti
+              options={carrierOptions}
+              value={selectedValues}
+              onChange={(
+                opts: MultiValue<{ value: string; label: string } | null>,
+              ) =>
+                handleAttributeChange(
+                  code,
+                  opts
+                    .filter(
+                      (o): o is { value: string; label: string } => o !== null,
+                    )
+                    .map((o) => o.value),
+                )
+              }
+              styles={customSelectStyles}
+              className="react-select-container"
+              classNamePrefix="react-select"
+              required={isRequired}
+              placeholder="Select carriers..."
+            />
+          );
+        }
+
+        // ----- Default multi‑select for other "select" attributes -----
         return (
           <Select
             isMulti
@@ -258,10 +324,16 @@ const Fields: React.FC<FieldProps> = ({
                     .map((v) => ({ value: v, label: v }))
                 : []
             }
-            onChange={(opts: MultiValue<{ value: string; label: string }>) =>
+            onChange={(
+              opts: MultiValue<{ value: string; label: string } | null>,
+            ) =>
               handleAttributeChange(
                 code,
-                opts.map((o) => o.value),
+                opts
+                  .filter(
+                    (o): o is { value: string; label: string } => o !== null,
+                  )
+                  .map((o) => o.value),
               )
             }
             styles={customSelectStyles}
@@ -270,6 +342,7 @@ const Fields: React.FC<FieldProps> = ({
             required={isRequired}
           />
         );
+      }
 
       case "checkbox":
         return (

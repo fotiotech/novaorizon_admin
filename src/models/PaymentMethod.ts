@@ -110,22 +110,50 @@ const PaymentMethodModel =
   (mongoose.models.PaymentMethod as Model<IPaymentMethodBase>) ||
   mongoose.model<IPaymentMethodBase>("PaymentMethod", BasePaymentMethodSchema);
 
-// Register discriminators ONLY if not already registered
+// Register discriminators and store them in variables
+let CreditCardModel: Model<ICreditCardPaymentMethod>;
+let MobileMoneyModel: Model<IMobileMoneyPaymentMethod>;
+let PayPalModel: Model<IPayPalPaymentMethod>;
+
 if (!PaymentMethodModel.discriminators?.CreditCard) {
-  PaymentMethodModel.discriminator("CreditCard", CreditCardSchema);
-}
-if (!PaymentMethodModel.discriminators?.MobileMoney) {
-  PaymentMethodModel.discriminator("MobileMoney", MobileMoneySchema);
-}
-if (!PaymentMethodModel.discriminators?.PayPal) {
-  PaymentMethodModel.discriminator("PayPal", PayPalSchema);
+  CreditCardModel = PaymentMethodModel.discriminator<ICreditCardPaymentMethod>(
+    "CreditCard",
+    CreditCardSchema,
+  );
+} else {
+  CreditCardModel = PaymentMethodModel.discriminators
+    .CreditCard as Model<ICreditCardPaymentMethod>;
 }
 
-// Export the base model and discriminators (for direct use if needed)
+if (!PaymentMethodModel.discriminators?.MobileMoney) {
+  MobileMoneyModel =
+    PaymentMethodModel.discriminator<IMobileMoneyPaymentMethod>(
+      "MobileMoney",
+      MobileMoneySchema,
+    );
+} else {
+  MobileMoneyModel = PaymentMethodModel.discriminators
+    .MobileMoney as Model<IMobileMoneyPaymentMethod>;
+}
+
+if (!PaymentMethodModel.discriminators?.PayPal) {
+  PayPalModel = PaymentMethodModel.discriminator<IPayPalPaymentMethod>(
+    "PayPal",
+    PayPalSchema,
+  );
+} else {
+  PayPalModel = PaymentMethodModel.discriminators
+    .PayPal as Model<IPayPalPaymentMethod>;
+}
+
+// ------------------ Exports ------------------
 export {
   PaymentMethodModel as PaymentMethod,
-  // Also export the discriminator models if needed
+  CreditCardModel as CreditCardPaymentMethod,
+  MobileMoneyModel as MobileMoneyPaymentMethod,
+  PayPalModel as PayPalPaymentMethod,
 };
+
 export type {
   IPaymentMethod,
   ICreditCardPaymentMethod,

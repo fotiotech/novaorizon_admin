@@ -1,7 +1,7 @@
 import { findCustomer } from "@/app/actions/customer";
 import { generatePaymentLink } from "@/app/actions/monetbil_payment";
 import { useCart } from "@/app/context/CartContext";
-import { useUser } from "@/app/context/UserContext";
+import { useUserData } from "@/app/context/UserDataContext"; // 👈 new import
 import { CartItem } from "@/app/reducer/cartReducer";
 import { Customer, MonetbilPaymentRequest } from "@/constant/types";
 import React, { useEffect, useState } from "react";
@@ -9,36 +9,46 @@ import React, { useEffect, useState } from "react";
 function MonetbilPayment() {
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const { cart } = useCart();
-  const { user } = useUser(); // Replace with actual service key from Monetbil
+  const { user } = useUserData(); // 👈 use new context
   const [customer, setCustomer] = useState<Customer>();
   const [operator, setOperator] = useState<string>("");
 
   const calculateTotal = (cartItems: any) => {
-    // Assuming each cart item has a `price` and `quantity` property
     return cartItems.reduce(
       (total: number, item: CartItem) => total + item.price * item.quantity,
-      0
+      0,
     );
   };
 
   useEffect(() => {
     async function getCustomer() {
-      if (user?._id) {
-        const response = await findCustomer(user._id);
+      // Use 'id' or '_id' – whichever exists
+      const userId = user?.id || user?._id;
+      if (userId) {
+        const response = await findCustomer(userId);
         setCustomer(response);
       }
     }
     getCustomer();
-  }, []);
+  }, [user]); // 👈 add user as dependency
+
+  // Safely access billingAddress fields
+  const billingAddress =
+    (customer?.billingAddress as {
+      phone?: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+    }) || {};
 
   const paymentData: MonetbilPaymentRequest = {
     serviceKey: process.env.NEXT_PUBLIC_MONETBIL_KEY as string,
     amount: calculateTotal(cart),
-    phone: customer?.billingAddress.phone,
+    phone: billingAddress?.phone,
     user: user?.name,
-    firstName: customer?.billingAddress.firstName,
-    lastName: customer?.billingAddress.lastName,
-    email: customer?.billingAddress.email,
+    firstName: billingAddress.firstName,
+    lastName: billingAddress.lastName,
+    email: billingAddress.email,
     operator: operator,
     returnUrl: `${process.env.NEXT_PUBLIC_API_URL}/checkout/payment/success`,
     notifyUrl: `${process.env.NEXT_PUBLIC_API_URL}/checkout/payment/notification`,
@@ -65,10 +75,9 @@ function MonetbilPayment() {
             }}
             className={`${
               operator === "CM_ORANGEMONEY" ? "bg-gray-300" : ""
-            } border p-2 rounded-lg
-            `}
+            } border p-2 rounded-lg cursor-pointer`}
           >
-            Orange Cameroun S.A{" "}
+            Orange Cameroun S.A
           </li>
           <li
             onClick={() => {
@@ -77,18 +86,18 @@ function MonetbilPayment() {
             }}
             className={`${
               operator === "CM_MTNMOBILEMONEY" ? "bg-gray-300" : ""
-            } border p-2 rounded-lg`}
+            } border p-2 rounded-lg cursor-pointer`}
           >
             MTN Cameroon Ltd
           </li>
           <li
             onClick={() => {
-              setOperator("CM_EUMM ");
+              setOperator("CM_EUMM");
               fetchPaymentLink();
             }}
-            className={` ${
-              operator === "CM_EUMM " ? "bg-gray-300" : ""
-            } border p-2 rounded-lg`}
+            className={`${
+              operator === "CM_EUMM" ? "bg-gray-300" : ""
+            } border p-2 rounded-lg cursor-pointer`}
           >
             EXPRESS UNION FINANCE
           </li>

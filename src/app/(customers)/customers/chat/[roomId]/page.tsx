@@ -1,6 +1,6 @@
 // app/chat/[roomId]/page.tsx - Individual Chat Page
 "use client";
-import { useUser } from "@/app/context/UserContext";
+import { useUserData } from "@/app/context/UserDataContext"; // 👈 new import
 import { useEffect, useState, useRef } from "react";
 import { db } from "@/utils/firebasedb";
 import {
@@ -18,7 +18,6 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 
 interface Message {
   id: string;
@@ -34,8 +33,8 @@ interface ChatPageProps {
 }
 
 export default function ChatPage({ params }: ChatPageProps) {
-  const { data: session } = useSession();
-    const user = session?.user as any;
+  // 👇 Use UserDataContext instead of useUser + useSession
+  const { user } = useUserData();
   const { roomId } = params;
   const router = useRouter();
 
@@ -95,12 +94,10 @@ export default function ChatPage({ params }: ChatPageProps) {
     }
   };
 
-
-  // Add this useEffect to mark messages as read when component mounts
+  // Mark messages as read when component mounts
   useEffect(() => {
     if (!user || !roomId || !db) return;
 
-    // Mark messages as read when entering the chat
     const markMessagesAsRead = async () => {
       try {
         const roomRef = doc(db, "chatRooms", roomId);
@@ -115,6 +112,7 @@ export default function ChatPage({ params }: ChatPageProps) {
     markMessagesAsRead();
   }, [user, roomId]);
 
+  // Fetch room details
   useEffect(() => {
     async function fetchRoom() {
       if (!db || !roomId) {
@@ -132,7 +130,6 @@ export default function ChatPage({ params }: ChatPageProps) {
             ...(snap.data() as any),
           });
         } else {
-          // Room doesn't exist
           setRoom(null);
         }
       } catch (error) {
@@ -163,6 +160,7 @@ export default function ChatPage({ params }: ChatPageProps) {
     return () => unsubscribe();
   }, [roomId]);
 
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -291,7 +289,7 @@ export default function ChatPage({ params }: ChatPageProps) {
                               onClick={() =>
                                 updateMessage(
                                   m.id,
-                                  prompt("Edit message:", m.text) || m.text
+                                  prompt("Edit message:", m.text) || m.text,
                                 )
                               }
                             >

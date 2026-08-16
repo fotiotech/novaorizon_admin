@@ -353,7 +353,7 @@ export async function getCategoryAttributeSets(
 
       // ---- 1. Build maps and collect selected group IDs ----
       const groupAttrMap = new Map<string, Map<string, boolean>>();
-      const selectedGroupIds = new Set<string>(); // track which groups are selected
+      const selectedGroupIds = new Set<string>();
 
       for (const gm of mapping.groups) {
         const groupId = gm.group.toString();
@@ -401,34 +401,34 @@ export async function getCategoryAttributeSets(
         attrDocMap[(doc as any)._id.toString()] = doc;
       }
 
-      // ---- 4. Build the group tree (only selected groups) ----
+      // ---- 4. Build the group tree (only selected groups) with cycle detection ----
       const buildTree = (
         groups: any[],
         parentId: string | null = null,
+        visited: Set<string> = new Set(),
       ): GroupNode[] => {
+        // Prevent infinite loops due to cyclic parent references
+        const parentKey = parentId ?? "__ROOT__";
+        if (visited.has(parentKey)) return [];
+        visited.add(parentKey);
+
         const groupIds = new Set(groups.map((g) => g._id.toString()));
         return groups
           .filter((g) => {
             const gId = g._id.toString();
-            // Only include groups that are selected in the mapping
             if (!selectedGroupIds.has(gId)) return false;
             const gParent = g.parent_id?.toString();
             if (parentId === null) {
-              // Root: either no parent, or parent not selected (so it becomes root)
               if (!gParent) return true;
               return !selectedGroupIds.has(gParent);
             } else {
-              // Child: parent must match
               return gParent === parentId;
             }
           })
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
           .map((g) => {
             const groupId = g._id.toString();
-            // Get the selected attribute map for this group
             const selectedAttrMap = groupAttrMap.get(groupId) || new Map();
-
-            // Get all subdocs for this group, then filter to only those in selectedAttrMap
             const groupSubdocs = allSubdocs.filter(
               (s) => s.groupId === groupId,
             );
@@ -436,7 +436,6 @@ export async function getCategoryAttributeSets(
               selectedAttrMap.has(s.id),
             );
 
-            // Build attributes from valid subdocs and the fetched attr docs
             const attrs: MappedAttribute[] = validSubdocs
               .map((sub) => {
                 const attrDoc = attrDocMap[sub.id];
@@ -467,12 +466,15 @@ export async function getCategoryAttributeSets(
               parentId: g.parent_id?.toString() || null,
               sortOrder: g.sort_order ?? 0,
               attributes: attrs,
-              children: buildTree(groups, g._id.toString()),
+              children: buildTree(
+                groups,
+                g._id.toString(),
+                new Set(visited), // pass a copy to avoid polluting sibling branches
+              ),
             };
           });
       };
 
-      // Build result for this set
       result.push({
         id: set._id.toString(),
         title: set.title,
@@ -484,7 +486,7 @@ export async function getCategoryAttributeSets(
     return result;
   }
 
-  // ---- FALLBACK: old 'sets' array (unchanged) ----
+  // ---- FALLBACK: old 'sets' array (unchanged, but also cycle-safe) ----
   const oldSets = (property as any).sets;
   if (oldSets && Array.isArray(oldSets) && oldSets.length > 0) {
     const setIds = oldSets.map((s: any) => s._id?.toString() || s.toString());
@@ -495,7 +497,12 @@ export async function getCategoryAttributeSets(
     const buildTreeFull = (
       groups: any[],
       parentId: string | null = null,
+      visited: Set<string> = new Set(),
     ): GroupNode[] => {
+      const parentKey = parentId ?? "__ROOT__";
+      if (visited.has(parentKey)) return [];
+      visited.add(parentKey);
+
       const groupIds = new Set(groups.map((g) => g._id.toString()));
       return groups
         .filter((g) => {
@@ -537,7 +544,7 @@ export async function getCategoryAttributeSets(
             parentId: g.parent_id?.toString() || null,
             sortOrder: g.sort_order ?? 0,
             attributes: attrs,
-            children: buildTreeFull(groups, g._id.toString()),
+            children: buildTreeFull(groups, g._id.toString(), new Set(visited)),
           };
         });
     };
