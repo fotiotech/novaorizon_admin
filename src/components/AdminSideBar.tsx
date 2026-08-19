@@ -87,7 +87,7 @@ export const rawMenuConfig = [
     links: [
       { name: "Orders", href: "/orders", icon: <ShoppingBag /> },
       { name: "Order Status", href: "/order_status", icon: <CheckCircle /> },
-      { name: "Shipments", href: "/shipments", icon: <LocalShipping /> },
+      { name: "Carriers", href: "/carriers", icon: <LocalShipping /> },
       { name: "Refunds & Returns", href: "/refunds_returns", icon: <Replay /> },
     ],
   },

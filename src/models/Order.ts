@@ -19,14 +19,17 @@ export interface OrderDocument extends Document {
   tax: number;
   shippingCost: number;
   total: number;
-  paymentStatus: "pending" | "paid" | "failed" | "cancelled" | "refunded";
-  paymentMethod: string; // still store as string for quick display
+  paymentStatus:
+    | "pending"
+    | "cod_pending"
+    | "paid"
+    | "failed"
+    | "cancelled"
+    | "refunded";
+  paymentMethod: string;
   transaction_id?: string;
-  // Reference to the selected billing address
   billingAddressId?: mongoose.Types.ObjectId;
-  // Reference to the selected payment method
   paymentMethodId?: mongoose.Types.ObjectId;
-  // Embedded copies for historical consistency (kept for backward compatibility)
   billingAddress: {
     street: string;
     city: string;
@@ -40,12 +43,13 @@ export interface OrderDocument extends Document {
     region: string;
     address: string;
     country: string;
-    carrier?: string;
+    carrier?: string; // kept for display/history, but now we also store carrierId
   };
+  carrierId?: mongoose.Types.ObjectId; // 👈 new field referencing Carrier model
   shippingStatus: "pending" | "shipped" | "delivered";
   shippingDate?: Date;
   deliveryDate?: Date;
-  orderStatus: "processing" | "completed" | "cancelled";
+  orderStatus: "pending" | "processing" | "shipped" | "in transit" | "completed" | "cancelled" |"returned";
   createdAt?: Date;
   updatedAt?: Date;
   notes?: string;
@@ -83,21 +87,27 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
     total: { type: Number, required: true },
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid", "failed", "cancelled", "refunded"],
+      enum: [
+        "pending",
+        "cod_pending",
+        "paid",
+        "failed",
+        "cancelled",
+        "refunded",
+      ],
       default: "pending",
     },
     paymentMethod: { type: String, required: true },
     billingAddressId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Address",
-      required: false, // optional for existing orders
+      required: false,
     },
     paymentMethodId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "PaymentMethod",
       required: false,
     },
-    // Embedded copies (still required)
     billingAddress: {
       street: { type: String, required: true },
       city: { type: String, required: true },
@@ -110,8 +120,14 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
       region: { type: String, required: true },
       city: { type: String, required: true },
       address: { type: String, required: true },
-      carrier: { type: String },
+      carrier: { type: String }, // display name or ID (kept for compatibility)
       country: { type: String, required: true },
+    },
+    carrierId: {
+      // 👈 new field
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Carrier",
+      required: false,
     },
     shippingStatus: {
       type: String,
@@ -122,7 +138,7 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
     deliveryDate: { type: Date },
     orderStatus: {
       type: String,
-      enum: ["processing", "completed", "cancelled"],
+      enum: ["pending", "processing", "shipped", "in transit", "completed", "returned", "cancelled"],
       default: "processing",
     },
     notes: { type: String },

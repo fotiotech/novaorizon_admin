@@ -2,7 +2,6 @@
 
 import { FormState, SignupFormSchema } from "./definitions";
 import { redirect } from "next/navigation";
-import Customer from "@/models/Customer";
 import User from "@/models/User";
 import { connection } from "@/utils/connection";
 import { signIn } from "@/app/auth";
@@ -50,9 +49,6 @@ export async function signup(state: FormState, formData: FormData) {
         message: "An error occurred while creating your account.",
       };
     }
-
-    const newCustomer = new Customer({ userId: user._id });
-    await newCustomer.save();
 
     return signIn();
   }

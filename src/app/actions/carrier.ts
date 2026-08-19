@@ -46,16 +46,21 @@ export async function getCarriers() {
   }));
 }
 
+// carrier.ts
 export async function getCarriersById(_id: string) {
   await connection();
   const data = await Carrier.findOne({ _id });
+  
+  // 🛑 If no carrier is found, return null
+  if (!data) return null;
+
   return {
     ...data.toObject(),
-    _id: data?._id.toString(),
-    regionsServed: data.regionsServed.map((region: any) => ({
+    _id: data._id.toString(),
+    regionsServed: data.regionsServed?.map((region: any) => ({
       ...region.toObject(),
-      _id: region?._id.toString(),
-    })),
+      _id: region._id?.toString(),
+    })) || [],
   };
 }
 

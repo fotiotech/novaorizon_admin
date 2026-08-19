@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
-export interface IAttributeGroup extends Document {
+export interface IAttributeGroup {
   _id: string;
   code: string;
   name: string;

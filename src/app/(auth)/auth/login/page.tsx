@@ -10,6 +10,8 @@ export default async function SignInPage(props: {
 }) {
   const session = await auth();
 
+  console.log('Session in login:', session);
+
   // If user is already authenticated, redirect to callbackUrl or home
   if (session) {
     redirect(props.searchParams.callbackUrl || "/");

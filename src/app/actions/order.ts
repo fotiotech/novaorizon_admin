@@ -4,23 +4,78 @@ import Order, { OrderDocument } from "@/models/Order";
 import { revalidatePath } from "next/cache";
 import Shipping from "@/models/Shipping";
 import Transaction from "@/models/Transaction";
+import "@/models/Address";
+import "@/models/PaymentMethod";
 
 export async function findOrders(options?: {
   orderNumber?: string;
   userId?: string | null;
   page?: number;
   limit?: number;
+  orderStatus?: string;
+  paymentStatus?: string;
+  search?: string; // will search in orderNumber, email, firstName, lastName
+  dateFrom?: Date;
+  dateTo?: Date;
+  carrier?: string; // NEW: filter by carrier name
 }) {
   await connection();
 
-  const { orderNumber, userId, page = 1, limit = 10 } = options || {};
+  const {
+    orderNumber,
+    userId,
+    page = 1,
+    limit = 10,
+    orderStatus,
+    paymentStatus,
+    search,
+    dateFrom,
+    dateTo,
+    carrier, // destructure carrier
+  } = options || {};
 
   try {
-    let query = {};
+    let query: any = {};
+
+    // Exact orderNumber match (if provided)
     if (orderNumber) {
-      query = { orderNumber: new RegExp(orderNumber, "i") };
-    } else if (userId) {
-      query = { userId };
+      query.orderNumber = new RegExp(orderNumber, "i");
+    }
+
+    // User filter
+    if (userId) {
+      query.userId = userId;
+    }
+
+    // Status filters
+    if (orderStatus) {
+      query.orderStatus = orderStatus;
+    }
+    if (paymentStatus) {
+      query.paymentStatus = paymentStatus;
+    }
+
+    // Date range
+    if (dateFrom || dateTo) {
+      query.createdAt = {};
+      if (dateFrom) query.createdAt.$gte = dateFrom;
+      if (dateTo) query.createdAt.$lte = dateTo;
+    }
+
+    // Search across orderNumber, email, firstName, lastName
+    if (search) {
+      const searchRegex = new RegExp(search, "i");
+      query.$or = [
+        { orderNumber: searchRegex },
+        { email: searchRegex },
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+      ];
+    }
+
+    // Carrier filter: match shippingAddress.carrier
+    if (carrier) {
+      query["shippingAddress.carrier"] = carrier;
     }
 
     const skip = (page - 1) * limit;
@@ -28,6 +83,7 @@ export async function findOrders(options?: {
     const [orders, total] = await Promise.all([
       Order.find(query)
         .populate("billingAddressId paymentMethodId")
+        .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -49,6 +105,70 @@ export async function findOrders(options?: {
     throw error;
   }
 }
+export async function updateOrderStatus(
+  orderNumber: string,
+  updates: {
+    paymentStatus?: OrderDocument["paymentStatus"];
+    orderStatus?: OrderDocument["orderStatus"];
+  }
+): Promise<{ success: boolean; order?: any; error?: string }> {
+  await connection();
+
+  if (!orderNumber) {
+    return { success: false, error: "Order number is required" };
+  }
+
+  if (!updates.paymentStatus && !updates.orderStatus) {
+    return { success: false, error: "At least one status must be provided" };
+  }
+
+  try {
+    // Build update object
+    const updateFields: any = {};
+    if (updates.paymentStatus) updateFields.paymentStatus = updates.paymentStatus;
+    if (updates.orderStatus) updateFields.orderStatus = updates.orderStatus;
+
+    // Use findOneAndUpdate with $set and skip validation (safe for status updates)
+    const order = await Order.findOneAndUpdate(
+      { orderNumber },
+      { $set: updateFields },
+      { new: true, runValidators: false } // ⬅️ Skip validation to avoid missing billingAddress error
+    );
+
+    if (!order) {
+      return { success: false, error: `Order with number ${orderNumber} not found` };
+    }
+
+    // If paymentStatus becomes "refunded", create a refund transaction
+    if (updates.paymentStatus === "refunded") {
+      try {
+        const refundTransaction = new Transaction({
+          orderId: order._id,
+          userId: order.userId,
+          amount: order.total,
+          type: "refund",
+          description: `Refund for order #${order.orderNumber}`,
+          status: "completed",
+          paymentMethod: order.paymentMethod,
+          date: new Date(),
+        });
+        await refundTransaction.save();
+      } catch (refundError) {
+        console.error("[updateOrderStatus] Error creating refund transaction:", refundError);
+      }
+    }
+
+    // Revalidate relevant paths
+    revalidatePath("/sales/orders");
+    // Optionally revalidate carrier detail pages (if we know the carrier, but it's not in scope)
+    // The client will refresh via router.refresh()
+
+    return { success: true, order: order.toObject() };
+  } catch (error: any) {
+    console.error("[updateOrderStatus] Error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
 
 export async function createOrUpdateOrder(
   payment_ref: string,
@@ -61,9 +181,6 @@ export async function createOrUpdateOrder(
     return { success: false, error: "Missing payment_ref or data" };
   }
 
-  console.log(
-    `[createOrUpdateOrder] Creating/updating order with orderNumber: ${payment_ref}`,
-  );
 
   const {
     tax = 0,
@@ -132,108 +249,6 @@ export async function createOrUpdateOrder(
       },
     );
 
-    console.log(
-      `[createOrUpdateOrder] Order ${savedOrder.orderNumber} saved/updated successfully`,
-    );
-
-    if (savedOrder && savedOrder.paymentStatus === "paid") {
-      try {
-        const createShipping = new Shipping({
-          orderId: savedOrder._id,
-          userId: savedOrder.userId,
-          address: {
-            street: savedOrder.shippingAddress.street,
-            city: savedOrder.shippingAddress.city,
-            region: savedOrder.shippingAddress.region,
-            address: savedOrder.shippingAddress.address,
-            country: savedOrder.shippingAddress.country,
-            carrier: savedOrder.shippingAddress.carrier || "Novaorizon",
-          },
-          trackingNumber: await generateTrackingNumber(payment_ref),
-          shippingCost: savedOrder.shippingCost || 0,
-          status: "processing",
-        });
-
-        const shippingRes = await createShipping.save();
-        console.log(
-          `Shipping created for order ${savedOrder.orderNumber}:`,
-          shippingRes,
-        );
-
-        await Order.findByIdAndUpdate(savedOrder._id, {
-          shippingId: shippingRes._id,
-        });
-      } catch (shippingError) {
-        console.error(
-          "[createOrUpdateOrder] Error creating shipping:",
-          shippingError,
-        );
-      }
-
-      try {
-        const existingTransaction = await Transaction.findOne({
-          orderId: savedOrder._id,
-        });
-
-        if (!existingTransaction) {
-          const createTransaction = new Transaction({
-            orderId: savedOrder._id,
-            userId: savedOrder.userId,
-            amount: savedOrder.total,
-            type: "income",
-            description: `Payment for order #${savedOrder.orderNumber}`,
-            status: "completed",
-            paymentMethod: savedOrder.paymentMethod,
-            date: new Date(),
-          });
-
-          const transactionRes = await createTransaction.save();
-          console.log(
-            `Transaction created for order ${savedOrder.orderNumber}:`,
-            transactionRes,
-          );
-        } else {
-          await Transaction.findByIdAndUpdate(existingTransaction._id, {
-            status: "completed",
-            amount: savedOrder.total,
-          });
-          console.log(
-            `Transaction updated for order ${savedOrder.orderNumber}`,
-          );
-        }
-      } catch (transactionError) {
-        console.error(
-          "[createOrUpdateOrder] Error creating transaction:",
-          transactionError,
-        );
-      }
-    }
-
-    if (savedOrder && savedOrder.paymentStatus === "refunded") {
-      try {
-        const refundTransaction = new Transaction({
-          orderId: savedOrder._id,
-          userId: savedOrder.userId,
-          amount: savedOrder.total,
-          type: "refund",
-          description: `Refund for order #${savedOrder.orderNumber}`,
-          status: "completed",
-          paymentMethod: savedOrder.paymentMethod,
-          date: new Date(),
-        });
-
-        await refundTransaction.save();
-        console.log(
-          `Refund transaction created for order ${savedOrder.orderNumber}`,
-        );
-      } catch (refundError) {
-        console.error(
-          "[createOrUpdateOrder] Error creating refund transaction:",
-          refundError,
-        );
-      }
-    }
-
     return { success: true, order: savedOrder };
   } catch (err: any) {
     console.error("[createOrUpdateOrder] Error saving order:", err);
@@ -267,7 +282,7 @@ export async function deleteOrder(orderNumber: string) {
   }
 }
 
-async function generateTrackingNumber(trackingNumber: string): Promise<string> {
+export async function generateTrackingNumber(trackingNumber: string): Promise<string> {
   const existing = await Shipping.findOne({ trackingNumber });
   if (existing) {
     return trackingNumber;

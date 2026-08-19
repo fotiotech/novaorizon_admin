@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, model, models } from "mongoose";
 
-export interface IBrand extends Document {
+export interface IBrand {
   _id: string;
   url_slug?: string;
   name: string;

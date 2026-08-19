@@ -36,20 +36,6 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (status === "loading") return;
-
-    if (!session) {
-      router.push("/auth/login");
-      return;
-    }
-
-    // Check if user has admin role
-    if (!session.user || session.user.role !== "admin") {
-      router.push("/auth/unauthorized");
-    }
-  }, [session, status, router]);
 
   if (status === "loading") {
     return (
@@ -62,9 +48,6 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     );
   }
 
-  if (!session || !session.user || session.user.role !== "admin") {
-    return null;
-  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">

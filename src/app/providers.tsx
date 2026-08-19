@@ -26,8 +26,6 @@ const Providers = ({ children }: ProviderProps) => {
             <PersistGate loading={null} persistor={persistor}>
               <CartProvider>
                 <UserDataProvider>
-                  {" "}
-                  {/* 👈 Replaced UserProvider */}
                   {children}
                 </UserDataProvider>
               </CartProvider>

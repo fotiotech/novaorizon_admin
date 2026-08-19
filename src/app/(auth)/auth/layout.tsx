@@ -1,13 +1,18 @@
 
 
-export default function Layout({
+export default function AuthLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    
-      <div className="">{children}</div>
-    
+    <html lang="en" >
+      
+      <body>
+        <div>{children}</div>
+
+        
+      </body>
+    </html>
   );
 }
