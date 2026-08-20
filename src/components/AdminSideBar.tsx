@@ -224,7 +224,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   const pathname = usePathname();
   const unreadCount = useUnreadMessages();
 
-  // All sections expanded by default (important for large screens)
+  // All sections expanded by default
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
   >(() => {
@@ -254,7 +254,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
       {/* Backdrop for mobile only */}
       {sideBarToggle && !isLargeScreen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={handleClose}
         />
       )}
@@ -267,15 +267,15 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           ${shouldShow ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
           w-3/4 lg:w-64 h-full overflow-y-auto
-          bg-white dark:bg-gray-800 shadow-lg
+          bg-background text-foreground border-r border-border shadow-lg
           flex flex-col justify-between
         `}
       >
         <div>
-          <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+          <div className="p-4 flex items-center justify-between border-b border-border">
             <Link href="/" className="flex items-center">
               <Image src="/logo.png" alt="logo" width={60} height={40} />
-              <span className="ml-2 text-xl font-bold text-gray-800 dark:text-white">
+              <span className="ml-2 text-xl font-bold text-foreground">
                 Admin Panel
               </span>
             </Link>
@@ -284,7 +284,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                 title="Close sidebar"
                 type="button"
                 onClick={handleClose}
-                className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -312,13 +312,13 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                     <Link
                       href={`/${section.slug}`}
                       onClick={handleClose}
-                      className="text-xs uppercase font-semibold text-gray-500 dark:text-gray-400 tracking-wide hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                      className="text-xs uppercase font-semibold text-muted-foreground hover:text-foreground transition-colors tracking-wide"
                     >
                       {section.title}
                     </Link>
                     <button
                       onClick={() => toggleSection(section.title)}
-                      className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 p-1 transition-colors"
+                      className="text-muted-foreground hover:text-foreground p-1 transition-colors"
                       aria-label={isExpanded ? "Collapse" : "Expand"}
                     >
                       {isExpanded ? "▾" : "▸"}
@@ -334,18 +334,18 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                             className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 ${
                               pathname === link.href ||
                               pathname?.startsWith(link.href)
-                                ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                                : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                                ? "bg-primary/10 text-primary"
+                                : "text-foreground hover:bg-muted"
                             }`}
                           >
                             <div className="flex items-center gap-3">
-                              <span className="text-gray-500 dark:text-gray-400">
+                              <span className="text-muted-foreground">
                                 {link.icon}
                               </span>
                               <span className="font-medium">{link.name}</span>
                             </div>
                             {link.showUnreadCount && unreadCount > 0 && (
-                              <span className="bg-red-500 text-white rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
+                              <span className="bg-destructive text-destructive-foreground rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
                                 {unreadCount > 99 ? "99+" : unreadCount}
                               </span>
                             )}
@@ -359,11 +359,11 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
             })}
           </nav>
         </div>
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="p-4 border-t border-border">
           <Link
             href={signOutLink.href}
             onClick={handleClose}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900 transition-colors duration-200 font-medium"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors duration-200 font-medium"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
