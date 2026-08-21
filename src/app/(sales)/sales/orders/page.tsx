@@ -2,35 +2,60 @@
 "use client";
 
 import { deleteOrder, findOrders } from "@/app/actions/order";
+
 import { Prices } from "@/components/Prices";
-import { Orders } from "@/constant/types";
 import { Delete } from "@mui/icons-material";
-import Image from "next/image";
 import Link from "next/link";
 import React, { useEffect, useState, useCallback } from "react";
 import { SkeletonLoader } from "./_component/SkeletonLoader";
+import { OrderStatusUpdater } from "../../components/OrderStatusUpdate";
+import SearchFilter from "../../components/SearchFilter";
+
+interface FilterOptions {
+  search: string;
+  orderStatus: string;
+  paymentStatus: string;
+  dateFrom: string;
+  dateTo: string;
+}
 
 const AllOrderPage = () => {
-  const [allOrders, setAllOrders] = useState<Orders[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const limit = 9;
+  const [filters, setFilters] = useState<FilterOptions>({
+    search: "",
+    orderStatus: "",
+    paymentStatus: "",
+    dateFrom: "",
+    dateTo: "",
+  });
+
+  const limit = 10;
 
   const fetchOrders = useCallback(
-    async (currentPage: number) => {
+    async (currentPage: number, currentFilters: FilterOptions) => {
       setLoading(true);
       try {
-        const response = await findOrders({ page: currentPage, limit });
-        if (response && "orders" in response) {
-          setAllOrders(response.orders as any[]);
-          setTotalPages(response.totalPages || 1);
-          setTotalOrders(response.total);
+        const result = await findOrders({
+          search: currentFilters.search || undefined,
+          orderStatus: currentFilters.orderStatus || undefined,
+          paymentStatus: currentFilters.paymentStatus || undefined,
+          dateFrom: currentFilters.dateFrom ? new Date(currentFilters.dateFrom) : undefined,
+          dateTo: currentFilters.dateTo ? new Date(currentFilters.dateTo) : undefined,
+          page: currentPage,
+          limit,
+        });
+        if (result && "orders" in result) {
+          setOrders(result.orders as any[]);
+          setTotalPages(result.totalPages || 1);
+          setTotalOrders(result.total);
         } else {
-          setAllOrders([]);
+          setOrders([]);
         }
       } catch (error) {
         console.error("Error fetching orders:", error);
@@ -42,170 +67,206 @@ const AllOrderPage = () => {
   );
 
   useEffect(() => {
-    fetchOrders(page);
-  }, [page, fetchOrders]);
+    fetchOrders(page, filters);
+  }, [page, filters, fetchOrders]);
 
-  async function delOrder(orderNumber: string) {
-    if (
-      !window.confirm(`Are you sure you want to delete order #${orderNumber}?`)
-    ) {
+  const handleFilterChange = (newFilters: FilterOptions) => {
+    setFilters(newFilters);
+    setPage(1); // reset to first page when filters change
+  };
+
+  const handleDelete = async (orderNumber: string) => {
+    if (!window.confirm(`Are you sure you want to delete order #${orderNumber}?`)) {
       return;
     }
     setDeletingId(orderNumber);
     const result = await deleteOrder(orderNumber);
     if (result) {
-      setAllOrders((prev) =>
-        prev.filter((order) => order.orderNumber !== orderNumber),
-      );
-      fetchOrders(page);
+      // Refetch current page after deletion
+      fetchOrders(page, filters);
     } else {
       console.log("Failed to delete order or order not found.");
     }
     setDeletingId(null);
-  }
+  };
 
-  const handlePageChange = (newPage: number) => {
+  const goToPage = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
     }
   };
 
-  if (loading) {
+  const getStatusBadgeClass = (status: string) => {
+    const base = "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
+    switch (status?.toLowerCase()) {
+      case "completed":
+        return `${base} bg-green/20 text-green-700 dark:text-green-400`;
+      case "processing":
+        return `${base} bg-blue/20 text-blue-700 dark:text-blue-400`;
+      case "shipped":
+        return `${base} bg-blue/20 text-blue-700 dark:text-blue-400`;
+      case "in transit":
+        return `${base} bg-orange/20 text-orange-700 dark:text-orange-400`;
+      case "cancelled":
+        return `${base} bg-destructive/20 text-destructive`;
+      default:
+        return `${base} bg-muted text-muted-foreground`;
+    }
+  };
+
+  const getPaymentBadgeClass = (status: string) => {
+    const base = "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
+    switch (status?.toLowerCase()) {
+      case "paid":
+        return `${base} bg-green/20 text-green-700 dark:text-green-400`;
+      case "refunded":
+        return `${base} bg-orange/20 text-orange-700 dark:text-orange-400`;
+      case "failed":
+      case "cancelled":
+        return `${base} bg-destructive/20 text-destructive`;
+      default:
+        return `${base} bg-muted text-muted-foreground`;
+    }
+  };
+
+  if (loading && orders.length === 0) {
     return <SkeletonLoader />;
   }
 
-  if (!allOrders.length) {
-    return (
-      <div className="text-center py-20 text-muted-foreground">
-        No orders found.
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-foreground mb-8">All Orders</h2>
-        <Link href={"/orders/chat"} className="btn">
+        <h2 className="text-3xl font-bold text-foreground">All Orders</h2>
+        <Link href="/orders/chat" className="btn">
           Chats
         </Link>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {allOrders.map((order) => (
-          <div
-            key={order._id}
-            className="border border-border rounded-2xl shadow-sm hover:shadow-md transition-all bg-card"
-          >
-            <div className="p-4">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-lg font-semibold text-foreground">
-                  Order #{order.orderNumber}
-                </h3>
-                <button
-                  title="Delete Order"
-                  type="button"
-                  onClick={() => delOrder(order.orderNumber)}
-                  disabled={deletingId === order.orderNumber}
-                  className="text-destructive hover:text-destructive/80 disabled:opacity-50"
-                >
-                  <Delete fontSize="small" />
-                </button>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                Placed on:{" "}
-                {new Date(order.createdAt || "").toLocaleDateString()}
-              </p>
 
-              <div className="text-sm space-y-1 mb-4">
-                <p className="font-semibold text-foreground">Customer:</p>
-                <p className="text-foreground">
-                  {order.firstName} {order.lastName}
-                </p>
-                <p className="text-muted-foreground">{order.email}</p>
-              </div>
+      {/* Search & Filter */}
+      <SearchFilter onFilterChange={handleFilterChange} initialFilters={filters} />
 
-              <div className="text-sm space-y-1 mb-4">
-                <p className="font-semibold text-foreground">Payment Status:</p>
-                <p
-                  className={`font-medium ${
-                    order.paymentStatus === "paid"
-                      ? "text-thir-600"
-                      : "text-destructive"
-                  }`}
-                >
-                  {order.paymentStatus}
-                </p>
-              </div>
+      {/* Orders Table */}
+      <div className="bg-card p-6 rounded-lg shadow-md border border-border mt-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-foreground">
+            Orders {totalOrders > 0 && `(${totalOrders})`}
+          </h3>
+          {loading && <span className="text-sm text-muted-foreground">Loading...</span>}
+        </div>
 
-              <div className="text-sm space-y-2 mb-4">
-                <p className="font-semibold text-foreground">Products:</p>
-                <ul className="space-y-2">
-                  {order.products.map((item) => (
-                    <li
-                      key={item.productId?.toString()}
-                      className="flex items-center gap-4"
-                    >
-                      {item.main_image && (
-                        <Image
-                          src={item.main_image}
-                          alt={item.name}
-                          width={50}
-                          height={50}
-                          className="rounded-lg"
-                        />
-                      )}
-                      <div>
-                        <p className="text-sm font-medium text-foreground">
-                          {item.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Qty: {item.quantity} × <Prices amount={item.price} />
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Order #
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Customer
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Total
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Payment
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Order Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-card divide-y divide-border">
+              {orders.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-4 text-center text-muted-foreground">
+                    No orders found.
+                  </td>
+                </tr>
+              ) : (
+                orders.map((order:any) => (
+                  <tr key={order._id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-foreground font-medium">
+                      #{order.orderNumber}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-foreground">
+                      {order.firstName} {order.lastName}
+                      <br />
+                      <span className="text-xs text-muted-foreground">{order.email}</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-foreground">
+                      CFA {order.total?.toFixed(2) || "0.00"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={getPaymentBadgeClass(order.paymentStatus)}>
+                        {order.paymentStatus || "pending"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={getStatusBadgeClass(order.orderStatus)}>
+                        {order.orderStatus || "pending"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-foreground text-sm">
+                      {new Date(order.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap space-x-2">
+                      <Link
+                        href={`/sales/orders/${order.orderNumber}`}
+                        className="text-primary hover:text-primary/80 transition-colors text-sm"
+                      >
+                        View
+                      </Link>
+                      <OrderStatusUpdater orderNumber={order.orderNumber} />
+                      <button
+                        title="Delete Order"
+                        type="button"
+                        onClick={() => handleDelete(order.orderNumber)}
+                        disabled={deletingId === order.orderNumber}
+                        className="text-destructive hover:text-destructive/80 disabled:opacity-50 text-sm"
+                      >
+                        <Delete fontSize="small" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-              <div className="border-t border-border pt-4">
-                <p className="text-sm font-semibold text-foreground">Total:</p>
-                <p className="text-lg font-bold text-primary">
-                  <Prices amount={order.total} />
-                </p>
-              </div>
-
-              <Link
-                href={`/sales/orders/${order.orderNumber}`}
-                className="inline-block mt-4 text-sm text-pri-500 hover:text-pri-600 transition-colors"
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-muted-foreground">
+              Showing {orders.length} of {totalOrders} orders
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => goToPage(page - 1)}
+                disabled={page === 1}
+                className="px-3 py-1 border border-input rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition text-foreground"
               >
-                View Details
-              </Link>
+                Previous
+              </button>
+              <span className="px-3 py-1 text-foreground">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => goToPage(page + 1)}
+                disabled={page === totalPages}
+                className="px-3 py-1 border border-input rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition text-foreground"
+              >
+                Next
+              </button>
             </div>
           </div>
-        ))}
+        )}
       </div>
-
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4 mt-8">
-          <button
-            onClick={() => handlePageChange(page - 1)}
-            disabled={page === 1}
-            className="px-4 py-2 border border-border rounded bg-card text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span className="text-foreground">
-            Page {page} of {totalPages} ({totalOrders} orders)
-          </span>
-          <button
-            onClick={() => handlePageChange(page + 1)}
-            disabled={page === totalPages}
-            className="px-4 py-2 border border-border rounded bg-card text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      )}
     </div>
   );
 };

@@ -88,23 +88,23 @@ export async function findProducts(id?: string) {
         return { success: false, error: "Product not found" };
       }
 
+      // Keep the populated objects instead of converting to strings
       const result = {
         ...product,
         _id: product._id?.toString(),
-        category_id:
-          product.category_id?._id?.toString() ||
-          product.category_id?.toString(),
-        brand: product.brand?._id?.toString() || product.brand?.toString(),
+        category_id: product.category_id,          // ✅ keep populated object
+        brand: product.brand,                      // ✅ keep populated object
         quantity: product.quantity ?? 0,
         lowStockThreshold: product.lowStockThreshold ?? 10,
       };
 
+      // For related products, also keep their populated category_id
       if (result.related_products?.ids) {
         result.related_products.ids = result.related_products.ids.map(
           (relatedProduct: any) => ({
             ...relatedProduct,
             _id: relatedProduct._id?.toString(),
-            category_id: relatedProduct.category_id?.toString(),
+            category_id: relatedProduct.category_id, // keep populated
           }),
         );
       }
@@ -112,6 +112,7 @@ export async function findProducts(id?: string) {
       return result;
     }
 
+    // For multiple products (no id)
     const products = await Product.find()
       .populate({
         path: "brand",
@@ -135,9 +136,8 @@ export async function findProducts(id?: string) {
     return products.map((product: any) => ({
       ...product,
       _id: product._id?.toString(),
-      category_id:
-        product.category_id?._id?.toString() || product.category_id?.toString(),
-      brand: product.brand?._id?.toString() || product.brand?.toString(),
+      category_id: product.category_id, // ✅ keep populated object
+      brand: product.brand,             // ✅ keep populated object
       quantity: product.quantity ?? 0,
       lowStockThreshold: product.lowStockThreshold ?? 10,
     }));

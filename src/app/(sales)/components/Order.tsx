@@ -24,6 +24,10 @@ export default function Order() {
   const [error, setError] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<any>(null);
 
+  // Recent orders state
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(true);
+
   const [filters, setFilters] = useState<FilterOptions>({
     search: "",
     orderStatus: "",
@@ -34,6 +38,7 @@ export default function Order() {
 
   const limit = 10;
 
+  // Fetch main orders (with filters & pagination)
   const fetchOrders = async () => {
     setLoading(true);
     try {
@@ -57,6 +62,30 @@ export default function Order() {
     }
   };
 
+  // Fetch recent orders (latest 5)
+  const fetchRecentOrders = async () => {
+    setLoadingRecent(true);
+    try {
+      // Use findOrders with a small limit and no filters, sorted by creation date desc
+      // Note: assuming the API supports sorting. If not, we can sort client-side.
+      const result = await findOrders({
+        page: 1,
+        limit: 5,
+        // optional: add sort parameter if supported
+      });
+      // Sort by createdAt descending (most recent first)
+      const sorted = (result.orders || []).sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setRecentOrders(sorted);
+    } catch (err) {
+      console.error("Failed to fetch recent orders", err);
+    } finally {
+      setLoadingRecent(false);
+    }
+  };
+
   const fetchAnalytics = async () => {
     try {
       const data = await getOrderAnalytics();
@@ -68,6 +97,7 @@ export default function Order() {
 
   useEffect(() => {
     fetchAnalytics();
+    fetchRecentOrders();
   }, []);
 
   useEffect(() => {
@@ -159,68 +189,57 @@ export default function Order() {
         </div>
       )}
 
-      <SearchFilter onFilterChange={handleFilterChange} initialFilters={filters} />
-
+      {/* Recent Orders Section */}
       <div className="bg-card p-6 rounded-lg shadow-md border border-border">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-foreground">
-            All Orders {total > 0 && `(${total})`}
-          </h2>
-          {loading && <span className="text-sm text-muted-foreground">Loading...</span>}
+          <h2 className="text-xl font-semibold text-foreground">Recent Orders</h2>
+          <Link
+            href="/sales/orders"
+            className="text-sm text-primary hover:text-primary/80 transition-colors"
+          >
+            View All
+          </Link>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-border">
-            <thead className="bg-muted">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Order #
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Total
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Payment
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Order Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-card divide-y divide-border">
-              {orders.length === 0 ? (
+        {loadingRecent ? (
+          <div className="text-muted-foreground">Loading recent orders...</div>
+        ) : recentOrders.length === 0 ? (
+          <div className="text-muted-foreground">No recent orders.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-muted">
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-muted-foreground">
-                    No orders found.
-                  </td>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Order #
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Customer
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Total
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
-              ) : (
-                orders.map((order) => (
+              </thead>
+              <tbody className="bg-card divide-y divide-border">
+                {recentOrders.map((order:any) => (
                   <tr key={order._id}>
                     <td className="px-6 py-4 whitespace-nowrap text-foreground font-medium">
                       #{order.orderNumber}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-foreground">
                       {order.firstName} {order.lastName}
-                      <br />
-                      <span className="text-xs text-muted-foreground">{order.email}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-foreground">
                       CFA {order.total?.toFixed(2) || "0.00"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={getPaymentBadgeClass(order.paymentStatus)}>
-                        {order.paymentStatus || "pending"}
-                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={getStatusBadgeClass(order.orderStatus)}>
@@ -230,49 +249,24 @@ export default function Order() {
                     <td className="px-6 py-4 whitespace-nowrap text-foreground text-sm">
                       {new Date(order.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap space-x-2">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <Link
                         href={`/sales/orders/${order.orderNumber}`}
                         className="text-primary hover:text-primary/80 transition-colors text-sm"
                       >
                         View
                       </Link>
-                      <OrderStatusUpdater orderNumber={order.orderNumber} />
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              Showing {orders.length} of {total} orders
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => goToPage(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="px-3 py-1 border border-input rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition text-foreground"
-              >
-                Previous
-              </button>
-              <span className="px-3 py-1 text-foreground">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 border border-input rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition text-foreground"
-              >
-                Next
-              </button>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+
+
+      
     </div>
   );
 }

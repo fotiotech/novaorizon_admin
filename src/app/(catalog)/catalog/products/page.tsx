@@ -1,38 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { getProductAnalytics } from "@/app/actions/analytic";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  PointElement,
-  LineElement,
-} from "chart.js";
-import { Bar, Doughnut, Line } from "react-chartjs-2";
-import { useAppDispatch } from "@/app/hooks";
-import { clearProduct, resetProduct } from "@/app/store/slices/productSlice";
-import { v4 as uuidv4 } from "uuid";
-import { persistor } from "@/app/store/store";
+import { findProducts } from "@/app/actions/products";
+import { Delete } from "@mui/icons-material";
+import { useDebouncedCallback } from "use-debounce";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  PointElement,
-  LineElement,
-);
-
+// Product type matches the structure returned by findProducts (populated)
 interface Product {
   _id: string;
   title: string;
@@ -42,159 +16,153 @@ interface Product {
   list_price: number;
   stock_status: string[];
   main_image: string;
-  status: string;
-  category: string;
-  brand: string;
+  status?: string;
+  category_id: { _id: string; name: string } | string; // populated object or string ID
+  brand: { _id: string; name: string } | string;
+  quantity: number;
+  lowStockThreshold: number;
   createdAt: string;
 }
 
-interface ProductAnalytics {
-  totalProducts: number;
-  activeProducts: number;
-  outOfStock: number;
-  lowStock: number;
-  productsByStatus: Record<string, number>;
-  productsByCategory: Record<string, number>;
-  monthlyAdditions: number[];
-  recentProducts: Product[];
+interface FilterOptions {
+  search: string;
+  category: string;
+  status: string;
 }
 
-export default function ProductDashboard() {
-  const dispatch = useAppDispatch();
-  const [productData, setProductData] = useState<ProductAnalytics | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+export default function ProductsPage() {
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const clearStore = async () => {
-    try {
-      await persistor.purge();
-      dispatch(clearProduct());
-      dispatch(resetProduct(`temp-${uuidv4()}`));
-    } catch (err) {
-      console.error("Error during cleanup and redirect:", err);
-      setError("Failed to redirect. Please try again.");
-    }
-  };
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
 
-  useEffect(() => {
-    async function fetchProductData() {
-      try {
-        const data = await getProductAnalytics();
-        setProductData(data);
-      } catch (err) {
-        console.error("Failed to fetch product data:", err);
-        setError("Failed to fetch product data");
-      } finally {
-        setIsLoading(false);
+  const [filters, setFilters] = useState<FilterOptions>({
+    search: "",
+    category: "",
+    status: "",
+  });
+
+  // Fetch all products (no id → array)
+  const fetchAllProducts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await findProducts();
+      // Check for error response
+      if (result && typeof result === "object" && "success" in result && result.success === false) {
+        setError(result.error || "Failed to fetch products");
+        setAllProducts([]);
+        return;
       }
+      if (Array.isArray(result)) {
+        setAllProducts(result);
+      } else {
+        setError("Unexpected response from server");
+        setAllProducts([]);
+      }
+    } catch (err) {
+      console.error("Error fetching products:", err);
+      setError("Failed to load products.");
+    } finally {
+      setLoading(false);
     }
-    fetchProductData();
   }, []);
 
-  const filteredProducts: Product[] =
-    productData?.recentProducts.filter((product) => {
-      const matchesCategory =
-        selectedCategory === "all" || product.category === selectedCategory;
-      const matchesStatus =
-        selectedStatus === "all" || product.status === selectedStatus;
-      const matchesSearch =
-        product?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product?.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product?.model?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesStatus && matchesSearch;
-    }) || [];
+  useEffect(() => {
+    fetchAllProducts();
+  }, [fetchAllProducts]);
 
-  const statusChartData = {
-    labels: productData ? Object.keys(productData.productsByStatus) : [],
-    datasets: [
-      {
-        label: "Products by Status",
-        data: productData ? Object.values(productData.productsByStatus) : [],
-        backgroundColor: [
-          "rgba(75, 192, 192, 0.7)",
-          "rgba(255, 99, 132, 0.7)",
-          "rgba(255, 206, 86, 0.7)",
-        ],
-        borderColor: [
-          "rgba(75, 192, 192, 1)",
-          "rgba(255, 99, 132, 1)",
-          "rgba(255, 206, 86, 1)",
-        ],
-        borderWidth: 1,
-      },
-    ],
+  // Safely get category name from populated object or string
+  const getCategoryName = (cat: Product["category_id"]): string => {
+    if (!cat) return "Uncategorized";
+    if (typeof cat === "string") return cat;
+    return cat.name || "Uncategorized";
   };
 
-  const categoryChartData = {
-    labels: productData ? Object.keys(productData.productsByCategory) : [],
-    datasets: [
-      {
-        label: "Products by Category",
-        data: productData ? Object.values(productData.productsByCategory) : [],
-        backgroundColor: [
-          "rgba(255, 99, 132, 0.7)",
-          "rgba(54, 162, 235, 0.7)",
-          "rgba(255, 206, 86, 0.7)",
-          "rgba(75, 192, 192, 0.7)",
-          "rgba(153, 102, 255, 0.7)",
-        ],
-        borderColor: [
-          "rgba(255, 99, 132, 1)",
-          "rgba(54, 162, 235, 1)",
-          "rgba(255, 206, 86, 1)",
-          "rgba(75, 192, 192, 1)",
-          "rgba(153, 102, 255, 1)",
-        ],
-        borderWidth: 1,
-      },
-    ],
+  // Client‑side filtering
+  const filteredProducts = useMemo(() => {
+    let result = allProducts;
+
+    if (filters.search.trim()) {
+      const searchLower = filters.search.toLowerCase();
+      result = result.filter(
+        (p:any) =>
+          p.title?.toLowerCase().includes(searchLower) ||
+          p.sku?.toLowerCase().includes(searchLower) ||
+          p.model?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    if (filters.category) {
+      result = result.filter((p:any) => getCategoryName(p.category_id) === filters.category);
+    }
+
+    if (filters.status) {
+      result = result.filter((p:any) => (p.status || "active") === filters.status);
+    }
+
+    return result;
+  }, [allProducts, filters]);
+
+  // Pagination
+  const totalFiltered = filteredProducts.length;
+  const totalPages = Math.ceil(totalFiltered / itemsPerPage);
+  const paginatedProducts = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return filteredProducts.slice(start, start + itemsPerPage);
+  }, [filteredProducts, page, itemsPerPage]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
+
+  // Delete stub – replace with actual delete action
+  const handleDelete = async (productId: string) => {
+    if (!window.confirm("Are you sure you want to delete this product?")) return;
+    alert("Delete functionality not implemented.");
   };
 
-  const monthlyAdditionsData = {
-    labels: [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ],
-    datasets: [
-      {
-        label: "Monthly Product Additions",
-        data: productData?.monthlyAdditions || [],
-        fill: false,
-        backgroundColor: "rgba(153, 102, 255, 0.2)",
-        borderColor: "rgba(153, 102, 255, 1)",
-        tension: 0.1,
-      },
-    ],
+  // Debounced search
+  const debouncedSearch = useDebouncedCallback((value: string) => {
+    setFilters((prev:any) => ({ ...prev, search: value }));
+  }, 500);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    debouncedSearch(e.target.value);
   };
 
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: "top" as const,
-      },
-    },
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFilters((prev:any) => ({ ...prev, [name]: value }));
   };
 
-  if (isLoading) {
+  const handleClearFilters = () => {
+    setFilters({ search: "", category: "", status: "" });
+    setPage(1);
+  };
+
+  const goToPage = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
+  };
+
+  // Build category options from the populated names
+  const categories = useMemo(() => {
+    const cats = new Set<string>();
+    allProducts.forEach((p:any) => {
+      const name = getCategoryName(p.category_id);
+      if (name) cats.add(name);
+    });
+    return Array.from(cats);
+  }, [allProducts]);
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pri-500 mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading product data...</p>
+          <p className="mt-4 text-muted-foreground">Loading products...</p>
         </div>
       </div>
     );
@@ -203,338 +171,183 @@ export default function ProductDashboard() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="bg-destructive/10 text-destructive p-4 rounded-lg">
-            <p className="font-semibold">Error</p>
-            <p>{error}</p>
-          </div>
+        <div className="text-center bg-destructive/10 text-destructive p-4 rounded-lg">
+          <p className="font-semibold">Error</p>
+          <p>{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4">
-          <h1 className="text-3xl font-bold text-foreground">Products</h1>
-          <div onClick={clearStore}>
-            <Link
-              href="/catalog/products/new"
-              className="bg-pri-500 hover:bg-pri-600 text-white px-4 py-2 rounded-lg transition-colors"
+    <div className="max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4">
+        <h1 className="text-3xl font-bold text-foreground">All Products</h1>
+        <Link
+          href="/catalog/products/new"
+          className="bg-pri-500 hover:bg-pri-600 text-white px-4 py-2 rounded-lg transition-colors"
+        >
+          + New Product
+        </Link>
+      </div>
+
+      {/* Filter bar */}
+      <div className="bg-card p-4 rounded-lg shadow-md border border-border space-y-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">Search</label>
+            <input
+              type="text"
+              defaultValue={filters.search}
+              onChange={handleSearchChange}
+              placeholder="Search by title, SKU, model..."
+              className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">Category</label>
+            <select
+              name="category"
+              value={filters.category}
+              onChange={handleSelectChange}
+              className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              + New Product
-            </Link>
+              <option value="">All Categories</option>
+              {categories.map((cat:any) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">Status</label>
+            <select
+              name="status"
+              value={filters.status}
+              onChange={handleSelectChange}
+              className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="draft">Draft</option>
+            </select>
           </div>
         </div>
+        <div className="flex justify-end">
+          <button
+            onClick={handleClearFilters}
+            className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Clear Filters
+          </button>
+        </div>
+      </div>
 
-        {/* Summary Cards – no borders added */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <div className="rounded-full bg-pri-500/10 text-pri-500 p-3">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h2 className="text-lg font-semibold text-muted-foreground">
-                  Total Products
-                </h2>
-                <p className="text-2xl font-bold">
-                  {productData?.totalProducts || 0}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <div className="rounded-full bg-thir-500/10 text-thir-500 p-3">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h2 className="text-lg font-semibold text-muted-foreground">
-                  Active Products
-                </h2>
-                <p className="text-2xl font-bold">
-                  {productData?.activeProducts || 0}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <div className="rounded-full bg-destructive/10 text-destructive p-3">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h2 className="text-lg font-semibold text-muted-foreground">
-                  Out of Stock
-                </h2>
-                <p className="text-2xl font-bold">
-                  {productData?.outOfStock || 0}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <div className="rounded-full bg-sec-500/10 text-sec-500 p-3">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h2 className="text-lg font-semibold text-muted-foreground">
-                  Low Stock
-                </h2>
-                <p className="text-2xl font-bold">
-                  {productData?.lowStock || 0}
-                </p>
-              </div>
-            </div>
-          </div>
+      {/* Products Table */}
+      <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">
+            Products {totalFiltered > 0 && `(${totalFiltered})`}
+          </h2>
         </div>
 
-        {/* Charts Section – no borders */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">Products by Status</h2>
-            <div className="h-80">
-              <Doughnut data={statusChartData} options={chartOptions} />
-            </div>
-          </div>
-
-          <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">
-              Monthly Product Additions
-            </h2>
-            <div className="h-80">
-              <Line data={monthlyAdditionsData} options={chartOptions} />
-            </div>
-          </div>
-        </div>
-
-        {/* Products Table – only theme‑aware dividers, no extra borders */}
-        <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <h2 className="text-xl font-semibold mb-4 md:mb-0">
-              Recent Products
-            </h2>
-
-            <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search products..."
-                  className="px-4 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-pri-500"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <select
-                  title="category"
-                  className="px-4 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-pri-500"
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                >
-                  <option value="all">All Categories</option>
-                  {productData &&
-                    Object.keys(productData.productsByCategory).map(
-                      (category) => (
-                        <option key={category} value={category}>
-                          {category}
-                        </option>
-                      ),
-                    )}
-                </select>
-
-                <select
-                  title="status"
-                  className="px-4 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-pri-500"
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                >
-                  <option value="all">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="draft">Draft</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y">
-              {/* divide-y without a color uses the border from the element, which is theme‑aware via the base layer */}
-              <thead className="bg-muted/50">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Product</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">SKU</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Price</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Stock</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Category</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-card divide-y divide-border">
+              {paginatedProducts.length === 0 ? (
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Product
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    SKU
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Price
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Stock Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-muted-foreground">
+                    No products found.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="bg-card divide-y">
-                {filteredProducts.length > 0 ? (
-                  filteredProducts.map((product) => (
-                    <tr key={product._id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-lg bg-pri-500/10 flex items-center justify-center overflow-hidden">
-                              {product.main_image ? (
-                                <img
-                                  src={product.main_image}
-                                  alt={product.title}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <span className="font-medium text-pri-500">
-                                  {product.title?.charAt(0).toUpperCase() ||
-                                    "P"}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-foreground">
-                              {product.title || "Untitled Product"}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {product.model}
-                            </div>
+              ) : (
+                paginatedProducts.map((product:any) => (
+                  <tr key={product._id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className="h-10 w-10 rounded-lg bg-pri-500/10 flex items-center justify-center overflow-hidden">
+                            {product.main_image ? (
+                              <img src={product.main_image} alt={product.title} className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="font-medium text-pri-500">
+                                {product.title?.charAt(0).toUpperCase() || "P"}
+                              </span>
+                            )}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-foreground">
-                          {product.sku}
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-foreground">{product.title || "Untitled"}</div>
+                          <div className="text-sm text-muted-foreground">{product.model}</div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-foreground">
-                          ${product.sale_price || product.list_price || 0}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                          ${
-                            product.stock_status?.includes("In Stock")
-                              ? "bg-thir-500/20 text-thir-700 dark:text-thir-400"
-                              : product.stock_status?.includes("Low Stock")
-                                ? "bg-sec-500/20 text-sec-700 dark:text-sec-400"
-                                : "bg-destructive/20 text-destructive"
-                          }`}
-                        >
-                          {product.stock_status?.join(", ") || "N/A"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-pri-500/20 text-pri-700 dark:text-pri-400">
-                          {product.category}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <Link
-                            href={`/catalog/products/edit?id=${product._id}`}
-                            className="text-pri-500 hover:text-pri-600"
-                          >
-                            Edit
-                          </Link>
-                          <Link
-                            href={`catalog/products/delete?id=${product._id}`}
-                            className="text-destructive hover:text-destructive/80"
-                          >
-                            Delete
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-4 text-center text-sm text-muted-foreground"
-                    >
-                      No products found matching your criteria
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">{product.sku}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                      ${product.sale_price || product.list_price || 0}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                        ${product.stock_status?.includes("In Stock") ? "bg-thir-500/20 text-thir-700 dark:text-thir-400"
+                        : product.stock_status?.includes("Low Stock") ? "bg-sec-500/20 text-sec-700 dark:text-sec-400"
+                        : "bg-destructive/20 text-destructive"}`}>
+                        {product.stock_status?.join(", ") || "N/A"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-pri-500/20 text-pri-700 dark:text-pri-400">
+                        {getCategoryName(product.category_id)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <Link href={`/catalog/products/edit?id=${product._id}`} className="text-pri-500 hover:text-pri-600">Edit</Link>
+                        <button onClick={() => handleDelete(product._id)} className="text-destructive hover:text-destructive/80">
+                          <Delete fontSize="small" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-muted-foreground">
+              Showing {paginatedProducts.length} of {totalFiltered} products
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => goToPage(page - 1)}
+                disabled={page === 1}
+                className="px-3 py-1 border border-input rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition text-foreground"
+              >
+                Previous
+              </button>
+              <span className="px-3 py-1 text-foreground">Page {page} of {totalPages}</span>
+              <button
+                onClick={() => goToPage(page + 1)}
+                disabled={page === totalPages}
+                className="px-3 py-1 border border-input rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition text-foreground"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

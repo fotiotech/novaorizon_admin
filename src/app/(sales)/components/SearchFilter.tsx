@@ -70,8 +70,8 @@ export default function SearchFilter({
   };
 
   return (
-    <div className="bg-card p-4 rounded-lg shadow-md border border-border space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div className="w-full overflow-x-auto bg-card p-4 rounded-lg shadow-md border border-border">
+      <div className="min-w-[640px] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="col-span-1 md:col-span-2">
           <label className="block text-sm font-medium text-muted-foreground mb-1">
             Search
@@ -128,8 +128,8 @@ export default function SearchFilter({
           </select>
         </div>
 
-        <div className="flex gap-2">
-          <div className="flex-1">
+        <div className="flex gap-2 min-w-0">
+          <div className="flex-1 min-w-0">
             <label className="block text-sm font-medium text-muted-foreground mb-1">
               From
             </label>
@@ -141,7 +141,7 @@ export default function SearchFilter({
               className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <label className="block text-sm font-medium text-muted-foreground mb-1">
               To
             </label>
@@ -156,7 +156,7 @@ export default function SearchFilter({
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end mt-4">
         <button
           onClick={handleClear}
           className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
