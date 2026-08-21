@@ -1,4 +1,4 @@
-// app/promotions/page.tsx
+// app/marketing/promotions/page.tsx
 import { listPromotions } from '@/app/actions/promotion';
 import Link from 'next/link';
 
@@ -14,10 +14,15 @@ export default async function PromotionsPage() {
         </Link>
       </div>
       <ul className="space-y-2">
-        {promotions.map((p:any) => (
+        {promotions.map((p: any) => (
           <li key={p._id} className="border p-4 rounded flex justify-between">
             <div>
-              <strong>{p.name}</strong> – {p.type}
+              <strong>{p.name}</strong>
+              {p.promotionTypeId && (
+                <span className="ml-2 text-sm text-gray-500">
+                  ({p.promotionTypeId.name})
+                </span>
+              )}
               <span className={`ml-2 text-sm ${p.isActive ? 'text-green-600' : 'text-gray-500'}`}>
                 {p.isActive ? 'Active' : 'Inactive'}
               </span>

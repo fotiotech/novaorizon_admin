@@ -122,7 +122,7 @@ export const rawMenuConfig = [
   {
     title: "Marketing",
     links: [
-      { name: "Promotions", href: "/discounts_coupons", icon: <Discount /> },
+      { name: "Promotions", href: "/promotions", icon: <Discount /> },
       { name: "Email Campaigns", href: "/email_marketing", icon: <Email /> },
       {
         name: "Content Merchandising",

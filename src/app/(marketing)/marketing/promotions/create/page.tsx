@@ -1,11 +1,12 @@
 // app/promotions/create/page.tsx
 
-import { PromotionForm } from "@/app/(marketing)/components/PromotionForm";
-import { getPromotionOptions, createPromotion } from "@/app/actions/promotion";
+import { DynamicPromotionForm } from "@/app/(marketing)/components/PromotionForm";
+import { createPromotion } from "@/app/actions/promotion";
+import { listPromotionTypes } from "@/app/actions/promotionType";
 
 
 export default async function CreatePromotionPage() {
-  const options = await getPromotionOptions();
+  const { data: types } = await listPromotionTypes({ isActive: true }, { limit: 100 });
 
   async function handleCreate(data: any) {
     'use server';
@@ -15,7 +16,7 @@ export default async function CreatePromotionPage() {
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-2xl font-bold mb-6">Create Promotion</h1>
-      <PromotionForm options={options} onSubmit={handleCreate} />
+      <DynamicPromotionForm promotionTypes={types as any} onSubmit={handleCreate} />
     </div>
   );
 }

@@ -1,50 +1,43 @@
-import { models, model, Schema } from "mongoose";
-
+// models/Promotion.ts
+import { Schema, model, models } from 'mongoose';
 
 const promotionSchema = new Schema(
   {
-    // Basic info
-    name: { type: String, required: true, trim: true },
-    description: { type: String, trim: true },
-    type: {
-      type: String,
-      enum: ['percentage', 'fixed_amount', 'buy_x_get_y', 'free_shipping', 'bundle_discount'],
+    // Reference to the promotion type
+    promotionTypeId: {
+      type: Schema.Types.ObjectId,
+      ref: 'PromotionType',
       required: true,
     },
+    // Values for the properties defined in the promotion type
+    propertyValues: {
+      type: Map,
+      of: Schema.Types.Mixed,
+      default: {},
+    },
+    // Basic info (can be inherited from type or overridden)
+    name: { type: String, required: true, trim: true },
+    description: { type: String, trim: true },
     // Active period
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
-    // Status (overrides date range if needed)
     isActive: { type: Boolean, default: true },
-
-    // Priority (lower number = higher priority when stacking)
     priority: { type: Number, default: 0 },
-
     // Customer eligibility
     customerEligibility: {
       allCustomers: { type: Boolean, default: true },
       customerGroupIds: [{ type: Schema.Types.ObjectId, ref: 'CustomerGroup' }],
-      // minimum order value to qualify
       minOrderAmount: { type: Number, default: 0 },
     },
-
     // Usage limits
     usageLimits: {
-      totalUses: { type: Number, default: null }, // null = unlimited
+      totalUses: { type: Number, default: null },
       perCustomer: { type: Number, default: null },
-      perOrder: { type: Number, default: 1 }, // can this promo be applied multiple times in one order?
+      perOrder: { type: Number, default: 1 },
     },
-
-    // Stacking rules
+    // Stacking
     stackable: { type: Boolean, default: false },
-    exclusiveWith: [{ type: Schema.Types.ObjectId, ref: 'Promotion' }], // cannot combine with these
-
-    // Dynamic rules – structure depends on `type`
-    property: [{
-      type: Schema.Types.ObjectId,
-      ref: 'PromotionProperty'
-    }],
-
+    exclusiveWith: [{ type: Schema.Types.ObjectId, ref: 'Promotion' }],
     // Metadata
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -54,8 +47,5 @@ const promotionSchema = new Schema(
   }
 );
 
-export const Promotion =
-    models.Promotion || model('Promotion', promotionSchema);
-
+export const Promotion = models.Promotion || model('Promotion', promotionSchema);
 export default Promotion;
-

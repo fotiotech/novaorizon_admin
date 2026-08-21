@@ -48,14 +48,14 @@ const AdminTopBar = ({
   }, []);
 
   return (
-    <div className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow-md">
+    <div className="flex justify-between items-center p-4 bg-background border-b border-border shadow-sm">
       <div className="flex items-center gap-3">
         <div className={`${screenSize >= 1024 ? "invisible" : ""}`}>
           <button
             title="button"
             type="button"
             onClick={() => setSideBarToggle((sideBarToggle) => !sideBarToggle)}
-            className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
           >
             <Menu className="h-6 w-6" />
           </button>
@@ -76,12 +76,12 @@ const AdminTopBar = ({
       <div className="flex items-center gap-4">
         <ThemeToggle />
         <Link href={"/notifications"} className="relative">
-          <button className="relative p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800">
+          <button className="relative p-2 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
             <Notifications className="h-5 w-5" />
             {notifications.length > 0 && (
               <span className="absolute top-0 right-0 flex h-4 w-4 -mt-1 -mr-1">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex items-center justify-center rounded-full h-4 w-4 bg-red-500 text-xs text-white">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive/75"></span>
+                <span className="relative inline-flex items-center justify-center rounded-full h-4 w-4 bg-destructive text-destructive-foreground text-xs">
                   {notifications.length}
                 </span>
               </span>
@@ -93,13 +93,13 @@ const AdminTopBar = ({
         <div className="flex items-center gap-2">
           {user ? (
             <div className="flex items-center gap-2">
-              <p className="font-medium text-gray-700 dark:text-gray-300 hidden sm:block">
+              <p className="font-medium text-foreground hidden sm:block">
                 {user?.email?.slice(0, 7)}...
               </p>
-              <div className="relative h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-200 font-medium">
+              <div className="relative h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
                 <Link href={`/profile/`}>
                   {unreadCount > 0 && (
-                    <p className="absolute right-0 -top-2 bg-red-500 text-xs rounded-full px-1 min-w-[18px] text-center">
+                    <p className="absolute right-0 -top-2 bg-destructive text-destructive-foreground text-xs rounded-full px-1 min-w-[18px] text-center">
                       {unreadCount}
                     </p>
                   )}

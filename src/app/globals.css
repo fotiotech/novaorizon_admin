@@ -4,6 +4,10 @@
 @tailwind components;
 @tailwind utilities;
 
+* {
+  border: 0 solid transparent;  /* optional, Tailwind already does this */
+}
+
 label {
   @apply text-sm font-medium block mb-1;
 }
@@ -97,58 +101,57 @@ td {
     --sidebar-ring: 210 80% 50%;
   }
 
-  .dark {
-    /* Dark mode – lighter/brighter variants for better contrast */
-    --background: 0 0% 0%;             /* black */
-    --foreground: 0 0% 100%;           /* white */
+.dark {
+  /* Deep navy background – clearly blue, not gray */
+  --background: 220 40% 12%;
+  --foreground: 0 0% 100%;
 
-    --primary: 210 80% 60%;            /* lighter blue */
-    --primary-foreground: 0 0% 0%;
+  --primary: 210 80% 60%;
+  --primary-foreground: 0 0% 0%;
 
-    --secondary: 30 90% 65%;           /* lighter orange */
-    --secondary-foreground: 0 0% 0%;
+  --secondary: 30 90% 65%;
+  --secondary-foreground: 0 0% 0%;
 
-    --accent: 140 70% 55%;             /* lighter green */
-    --accent-foreground: 0 0% 0%;
+  --accent: 140 70% 55%;
+  --accent-foreground: 0 0% 0%;
 
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 65%;
+  --muted: 220 30% 18%;              /* slightly desaturated for contrast */
+  --muted-foreground: 0 0% 65%;
 
-    --card: 0 0% 5%;
-    --card-foreground: 0 0% 100%;
-    --popover: 0 0% 5%;
-    --popover-foreground: 0 0% 100%;
+  --card: 220 40% 8%;                /* deeper for card depth */
+  --card-foreground: 0 0% 100%;
+  --popover: 220 40% 8%;
+  --popover-foreground: 0 0% 100%;
 
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 0% 100%;
+  --destructive: 0 62% 30%;
+  --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 210 80% 60%;               /* lighter blue */
+  --border: 220 30% 22%;             /* visible but not harsh */
+  --input: 220 30% 22%;
+  --ring: 210 80% 60%;
 
-    --chart-1: 210 80% 60%;
-    --chart-2: 30 90% 65%;
-    --chart-3: 140 70% 55%;
-    --chart-4: 0 0% 70%;
-    --chart-5: 0 0% 50%;
-    --sidebar: 0 0% 5%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 210 80% 60%;
-    --sidebar-primary-foreground: 0 0% 0%;
-    --sidebar-accent: 140 70% 55%;
-    --sidebar-accent-foreground: 0 0% 0%;
-    --sidebar-border: 0 0% 20%;
-    --sidebar-ring: 210 80% 60%;
-  }
+  --chart-1: 210 80% 60%;
+  --chart-2: 30 90% 65%;
+  --chart-3: 140 70% 55%;
+  --chart-4: 0 0% 70%;
+  --chart-5: 0 0% 50%;
+
+  --sidebar: 220 40% 12%;            /* matches background */
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-primary: 210 80% 60%;
+  --sidebar-primary-foreground: 0 0% 0%;
+  --sidebar-accent: 140 70% 55%;
+  --sidebar-accent-foreground: 0 0% 0%;
+  --sidebar-border: 220 30% 22%;
+  --sidebar-ring: 210 80% 60%;
+}
 
   .theme {
     --font-heading: var(--font-sans);
     --font-sans: var(--font-sans);
   }
 
-  * {
-    @apply border-border outline-ring/50;
-  }
+
   body {
     @apply bg-background text-foreground;
   }
