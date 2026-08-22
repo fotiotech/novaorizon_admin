@@ -1,3 +1,4 @@
+// models/User.ts
 import mongoose, { Document, Schema, Model } from "mongoose";
 import bcrypt from "bcryptjs";
 
@@ -21,6 +22,7 @@ const UserSchema = new mongoose.Schema(
     },
     role: {
       type: String,
+      default: "user",
     },
     image: {
       type: String,
@@ -32,6 +34,10 @@ const UserSchema = new mongoose.Schema(
       enum: ["active", "inactive"],
       default: "active",
     },
+    permissions: {
+      type: [String],
+      default: [],
+    },
     created_at: {
       type: Date,
       default: Date.now,
@@ -41,10 +47,9 @@ const UserSchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-// Hash the password before saving the user model
 UserSchema.pre("save", async function (next) {
   if (this.isModified("password")) {
     const salt = await bcrypt.genSalt(10);
@@ -53,12 +58,9 @@ UserSchema.pre("save", async function (next) {
   next();
 });
 
-// Add a method to compare passwords
 UserSchema.methods.matchPassword = async function (enteredPassword: string) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Export the model
 const User = mongoose.models.User || mongoose.model("User", UserSchema);
-
 export default User;

@@ -9,6 +9,14 @@ export default function AppPage() {
       <ul className="space-y-2">
         <li>
           <Link
+            href="/content-management/app/navigation"
+            className="block p-4 bg-card border border-border rounded-lg hover:bg-muted/50 hover:shadow-md transition-all duration-200 text-foreground"
+          >
+            Navigation / Menus
+          </Link>
+        </li>
+        <li>
+          <Link
             href="/content-management/app/hero_content"
             className="block p-4 bg-card border border-border rounded-lg hover:bg-muted/50 hover:shadow-md transition-all duration-200 text-foreground"
           >
@@ -17,10 +25,10 @@ export default function AppPage() {
         </li>
         <li>
           <Link
-            href="/content-management/app/navigation"
+            href="/content-management/app/seo"
             className="block p-4 bg-card border border-border rounded-lg hover:bg-muted/50 hover:shadow-md transition-all duration-200 text-foreground"
           >
-            Navigation / Menus
+            SEO settings
           </Link>
         </li>
       </ul>
