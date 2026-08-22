@@ -16,7 +16,7 @@ const ProductCollectionPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
 
   async function fetchCollections() {
@@ -52,7 +52,7 @@ const ProductCollectionPage = () => {
 
     try {
       const collectionToDelete = collections.find(
-        (c) => c.collection._id === id
+        (c) => c.collection._id === id,
       );
       setCollections((prev) => prev.filter((c) => c.collection._id !== id));
 
@@ -118,7 +118,7 @@ const ProductCollectionPage = () => {
           <p className="text-gray-600 mt-1">Manage your product collections</p>
         </div>
         <Link
-          href="/content_merchandising/collection/create"
+          href="/content-management/app/navigation/collection/create"
           className="bg-blue-600 px-4 py-2 rounded-lg text-white hover:bg-blue-700 transition-colors flex items-center"
         >
           <svg
@@ -258,7 +258,7 @@ const ProductCollectionPage = () => {
 
                   <div className="flex items-center space-x-2">
                     <Link
-                      href={`/content_merchandising/collection/edit?id=${collection._id}`}
+                      href={`/content-management/app/navigation/collection/edit?id=${collection._id}`}
                       className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
                       <svg

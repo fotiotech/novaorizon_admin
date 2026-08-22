@@ -360,14 +360,14 @@ export async function updateCollection(id: string, formData: FormData) {
     const collection = await Collection.findByIdAndUpdate(
       id,
       { $set: updates },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).lean();
 
     if (!collection) {
       return { success: false, error: "Collection not found" };
     }
 
-    revalidatePath("/collection");
+    revalidatePath("/content-management/app/navigation/collection");
     return {
       success: true,
       data: collection,
@@ -419,7 +419,7 @@ export async function deleteCollection(id: string) {
       return { success: false, error: "Collection not found" };
     }
 
-    revalidatePath("/collection");
+    revalidatePath("/content-management/app/navigation/collection");
     return {
       success: true,
       message: "Collection deleted successfully",
