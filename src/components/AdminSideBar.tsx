@@ -124,21 +124,16 @@ export const rawMenuConfig = [
     links: [
       { name: "Promotions", href: "/promotions", icon: <Discount /> },
       { name: "Email Campaigns", href: "/email_marketing", icon: <Email /> },
-      {
-        name: "Content Merchandising",
-        href: "/content_merchandising",
-        icon: <CollectionsBookmark />,
-      },
-      { name: "SEO", href: "/seo", icon: <Public /> },
       { name: "Affiliate Marketing", href: "/affiliate", icon: <Code /> },
     ],
   },
   {
     title: "Content Management",
     links: [
-      { name: "Hero Sections", href: "/hero_section", icon: <Store /> },
-      { name: "Banners", href: "/banners", icon: <Campaign /> },
-      { name: "Landing Pages", href: "/landing_pages", icon: <Language /> },
+      { name: "App", href: "/app", icon: <Store /> },
+      { name: "Pages", href: "/pages", icon: <Campaign /> },
+      { name: "Posts", href: "/posts", icon: <Language /> },
+      { name: "Media", href: "/media", icon: <Language /> },
       { name: "Blog", href: "/blog", icon: <Campaign /> },
       { name: "FAQs", href: "/faqs", icon: <Assignment /> },
     ],

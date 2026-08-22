@@ -31,7 +31,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     parent_id: "",
     description: "",
     imageUrl: [],
-    property: "", // store property ID
+    property: "",
   });
   const { files, loading, addFiles, removeFile } = useFileUploader();
   const [attributes, setAttributes] = useState<any | null>(null);
@@ -41,6 +41,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [properties, setProperties] = useState<any[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+  const [inheritProperty, setInheritProperty] = useState<boolean>(false);
 
   // Fetch available category properties
   useEffect(() => {
@@ -99,6 +100,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     setCategoryData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleToggleChange = () => {
+    setInheritProperty((prev) => !prev);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -109,8 +114,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         ...categoryData,
         imageUrl: files || [],
         attributes: attributes || [],
-        propertyId: selectedPropertyId || undefined, // pass property ID
+        propertyId: selectedPropertyId || undefined,
+        inheritProperty: inheritProperty, // explicitly send the toggle value
       };
+
+      console.log("[CategoryForm] Submitting with inheritProperty:", inheritProperty);
 
       const result = await createCategory(
         formData,
@@ -146,6 +154,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       setAttributes(null);
       setToggleCreateAttribute(false);
       setError(null);
+      setInheritProperty(false);
     }
   };
 
@@ -232,6 +241,81 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
           </p>
         </div>
 
+        {/* Inheritance Toggle - Clear Yes/No */}
+        <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Inherit Properties from Parent Categories
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                When enabled, this category will combine its own property with
+                all ancestors' properties (child overrides parent).
+              </p>
+            </div>
+
+            {/* Toggle Switch */}
+            <div className="flex items-center gap-3 ml-4">
+              <span
+                className={`text-sm font-medium ${
+                  !inheritProperty
+                    ? "text-gray-700 dark:text-gray-300"
+                    : "text-gray-400 dark:text-gray-500"
+                }`}
+              >
+                No
+              </span>
+
+              <button
+                type="button"
+                onClick={handleToggleChange}
+                className={`
+                  relative inline-flex h-6 w-11 items-center rounded-full 
+                  transition-colors duration-200 focus:outline-none focus:ring-2 
+                  focus:ring-blue-500 focus:ring-offset-2
+                  ${inheritProperty ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"}
+                `}
+                role="switch"
+                aria-checked={inheritProperty}
+              >
+                <span
+                  className={`
+                    inline-block h-4 w-4 transform rounded-full 
+                    bg-white transition-transform duration-200
+                    ${inheritProperty ? "translate-x-6" : "translate-x-1"}
+                  `}
+                />
+              </button>
+
+              <span
+                className={`text-sm font-medium ${
+                  inheritProperty
+                    ? "text-green-600 dark:text-green-400"
+                    : "text-gray-400 dark:text-gray-500"
+                }`}
+              >
+                Yes
+              </span>
+            </div>
+          </div>
+
+          {/* Status indicator */}
+          <div className="mt-2">
+            <span
+              className={`
+                inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                ${
+                  inheritProperty
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                    : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                }
+              `}
+            >
+              {inheritProperty ? "✓ Inheritance enabled" : "✗ Inheritance disabled"}
+            </span>
+          </div>
+        </div>
+
         <div>
           <FilesUploader
             files={files}
@@ -271,7 +355,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
           >
             {isLoading ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
                 {mode === "edit" ? "Updating..." : "Creating..."}
               </>
             ) : mode === "edit" ? (

@@ -8,8 +8,9 @@ import React, {
   useRef,
 } from "react";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
-import { addProduct } from "@/app/store/slices/productSlice";
+import { addProduct, resetProduct } from "@/app/store/slices/productSlice";
 import { fetchCategory } from "@/fetch/fetchCategory";
+import { v4 as uuidv4 } from "uuid";
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
@@ -39,6 +40,15 @@ const Category = () => {
 
   const [filter, setFilter] = useState("");
   const debouncedFilter = useDebounce(filter, 300);
+
+  const tempId = useMemo(() => uuidv4(), []);
+
+  useEffect(() => {
+    if (firstProductId) return;
+    dispatch(
+      resetProduct(tempId),
+    );
+  }, [dispatch, firstProductId, tempId]);
 
   useEffect(() => {
     dispatch(fetchCategory());
