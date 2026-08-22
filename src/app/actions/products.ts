@@ -92,8 +92,8 @@ export async function findProducts(id?: string) {
       const result = {
         ...product,
         _id: product._id?.toString(),
-        category_id: product.category_id,          // ✅ keep populated object
-        brand: product.brand,                      // ✅ keep populated object
+        category_id: product.category_id, // ✅ keep populated object
+        brand: product.brand, // ✅ keep populated object
         quantity: product.quantity ?? 0,
         lowStockThreshold: product.lowStockThreshold ?? 10,
       };
@@ -137,7 +137,7 @@ export async function findProducts(id?: string) {
       ...product,
       _id: product._id?.toString(),
       category_id: product.category_id, // ✅ keep populated object
-      brand: product.brand,             // ✅ keep populated object
+      brand: product.brand, // ✅ keep populated object
       quantity: product.quantity ?? 0,
       lowStockThreshold: product.lowStockThreshold ?? 10,
     }));
@@ -280,6 +280,100 @@ export async function updateProduct(
   } catch (error) {
     console.error("Error updating product:", error);
     return { success: false, error: "Failed to update product" };
+  }
+}
+
+export async function createOrUpdateProduct(
+  productData: any,
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    await connection();
+
+    const {
+      _id, // temporary client ID – ignored for new products
+      category_id,
+      brand,
+      related_products,
+      quantity,
+      lowStockThreshold,
+      ...attributes
+    } = productData;
+
+    const cleanedAttributes = cleanObject(attributes);
+    const updateData: any = { ...cleanedAttributes, updatedAt: new Date() };
+
+    // Handle optional fields (same as before)
+    if (category_id)
+      updateData.category_id = new mongoose.Types.ObjectId(category_id);
+    if (brand) updateData.brand = new mongoose.Types.ObjectId(brand);
+    if (related_products?.ids) {
+      updateData.related_products = {
+        ids: related_products.ids.map(
+          (id: string) => new mongoose.Types.ObjectId(id),
+        ),
+      };
+    }
+    if (quantity !== undefined) updateData.quantity = Number(quantity);
+    if (lowStockThreshold !== undefined)
+      updateData.lowStockThreshold = Number(lowStockThreshold);
+    if (attributes.name) {
+      updateData.slug = generateSlug(
+        attributes.name,
+        attributes.department ?? null,
+      );
+    }
+
+    let product;
+    let isNew = false;
+
+    // Check if we have a valid ObjectId and it exists in the database
+    if (_id && mongoose.Types.ObjectId.isValid(_id)) {
+      const existing = await Product.findById(_id);
+      if (existing) {
+        // UPDATE: product exists – use the provided _id
+        product = await Product.findOneAndUpdate(
+          { _id: new mongoose.Types.ObjectId(_id) },
+          { $set: updateData },
+          { new: true, runValidators: true },
+        );
+        if (!product) {
+          return { success: false, error: "Product not found" };
+        }
+      } else {
+        isNew = true;
+      }
+    } else {
+      isNew = true;
+    }
+
+    // CREATE: product does not exist (or no valid _id provided)
+    if (isNew) {
+      // Prepare the data for insertion (do NOT include _id)
+      const createData = {
+        ...updateData,
+        createdAt: new Date(),
+        dsin: generateDsin(), // if you have a dsin field
+        // category_id, brand, etc. are already inside updateData
+      };
+
+      // Insert a new document – MongoDB will assign _id automatically
+      const newProduct = new Product(createData);
+      product = await newProduct.save();
+      if (!product) {
+        return { success: false, error: "Failed to create product" };
+      }
+    }
+
+    revalidatePath("/products");
+
+    // Convert _id to string for the client
+    const result = product.toObject ? product.toObject() : product;
+    result._id = result._id.toString();
+
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Error in createOrUpdateProduct:", error);
+    return { success: false, error: "Failed to save product" };
   }
 }
 

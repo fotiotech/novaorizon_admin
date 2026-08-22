@@ -6,7 +6,11 @@ import { RootState } from "@/app/store/store";
 import { addProduct, clearProduct } from "@/app/store/slices/productSlice";
 import { getCategoryAttributeSets } from "@/app/actions/category";
 import { getUnits } from "@/app/actions/unit";
-import { updateProduct, createProduct } from "@/app/actions/products";
+import {
+  updateProduct,
+  createProduct,
+  createOrUpdateProduct,
+} from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import {
   Box,
@@ -278,12 +282,7 @@ const ProductForm = () => {
       setError(null);
       setSuccess(null);
 
-      let res;
-      if (!isNewProduct) {
-        res = await updateProduct(productId, product);
-      } else {
-        res = await createProduct(product as any);
-      }
+      const res = await createOrUpdateProduct({ _id: productId, ...product });
 
       if (res.success) {
         setSuccess(
