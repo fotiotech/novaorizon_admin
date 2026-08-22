@@ -208,12 +208,13 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
           );
         case "file":
           return (
-            <div className="w-full h-20 overflow-auto">
-              <VariantImageUploader
-                index={index}
-                handleVariantChange={handleVariantChange}
-              />
-            </div>
+            <VariantImageUploader
+              index={index}
+              fieldCode={field.code}
+              productId={productId}
+              initialFiles={(variant[field.code] as string[]) || []}
+              handleVariantChange={handleVariantChange}
+            />
           );
         default:
           return (

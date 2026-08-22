@@ -4,7 +4,9 @@ import FilesUploader from "@/components/FilesUploader";
 
 interface VariantImageUploaderProps {
   index: number;
-  productId?: string;
+  fieldCode: string; // new – which variant field to update
+  productId?: string; // new – used as base S3 folder
+  initialFiles?: string[]; // new – existing URLs for this field
   handleVariantChange: (
     index: number,
     field: string,
@@ -13,13 +15,17 @@ interface VariantImageUploaderProps {
 }
 
 const VariantImageUploader: React.FC<VariantImageUploaderProps> = React.memo(
-  ({ index, productId, handleVariantChange }) => {
-    const { files, loading, addFiles, removeFile, progressByName } =
-      useFileUploader(productId);
+  ({ index, fieldCode, productId, initialFiles = [], handleVariantChange }) => {
+    // Build a subfolder: variants/variant-{index}/{fieldCode}
+    const subfolder = `variants/variant-${index}/${fieldCode}`;
 
+    const { files, loading, addFiles, removeFile, progressByName } =
+      useFileUploader(productId, initialFiles, subfolder);
+
+    // Whenever files change, update the variant's field
     useEffect(() => {
-      handleVariantChange(index, "gallery", files);
-    }, [files, index, handleVariantChange]);
+      handleVariantChange(index, fieldCode, files);
+    }, [files, index, fieldCode, handleVariantChange]);
 
     return (
       <FilesUploader

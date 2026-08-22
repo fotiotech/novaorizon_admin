@@ -3,9 +3,8 @@ import SectionLayout from "@/components/SectionLayout";
 
 const salesLinks = [
   { name: "Orders", href: "/sales/orders" },
-  { name: "Order Status", href: "/sales/order_status" },
   { name: "Carriers", href: "/sales/carriers" },
-  { name: "Refunds & Returns", href: "/sales/refunds_returns" },
+  { name: "Refunds", href: "/sales/refunds" },
 ];
 
 export default function SalesLayout({
