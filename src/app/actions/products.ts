@@ -283,6 +283,25 @@ export async function updateProduct(
   }
 }
 
+/**
+ * Safely converts a value to a mongoose ObjectId.
+ * Returns null if conversion fails.
+ */
+function toObjectId(value: any): mongoose.Types.ObjectId | null {
+  if (!value) return null;
+  // If it's already an ObjectId, return it.
+  if (value instanceof mongoose.Types.ObjectId) return value;
+  // If it's an object with an _id property, extract it.
+  if (typeof value === "object" && value._id) {
+    return toObjectId(value._id);
+  }
+  // If it's a string, check if it's a valid hex string.
+  if (typeof value === "string" && mongoose.Types.ObjectId.isValid(value)) {
+    return new mongoose.Types.ObjectId(value);
+  }
+  return null;
+}
+
 export async function createOrUpdateProduct(
   productData: any,
 ): Promise<{ success: boolean; data?: any; error?: string }> {
@@ -290,7 +309,7 @@ export async function createOrUpdateProduct(
     await connection();
 
     const {
-      _id, // temporary client ID – ignored for new products
+      _id,
       category_id,
       brand,
       related_products,
@@ -299,40 +318,68 @@ export async function createOrUpdateProduct(
       ...attributes
     } = productData;
 
+    // Clean the attributes – remove null/undefined/empty strings
     const cleanedAttributes = cleanObject(attributes);
-    const updateData: any = { ...cleanedAttributes, updatedAt: new Date() };
 
-    // Handle optional fields (same as before)
-    if (category_id)
-      updateData.category_id = new mongoose.Types.ObjectId(category_id);
-    if (brand) updateData.brand = new mongoose.Types.ObjectId(brand);
-    if (related_products?.ids) {
-      updateData.related_products = {
-        ids: related_products.ids.map(
-          (id: string) => new mongoose.Types.ObjectId(id),
-        ),
-      };
+    // Exclude system fields that should not be updated
+    const { createdAt, updatedAt, __v, dsin, ...safeAttributes } =
+      cleanedAttributes;
+
+    // Build update data
+    const updateData: any = {
+      ...safeAttributes,
+      updatedAt: new Date(), // always set updatedAt
+    };
+
+    // Convert category_id
+    const categoryObjectId = toObjectId(category_id);
+    if (categoryObjectId) {
+      updateData.category_id = categoryObjectId;
     }
-    if (quantity !== undefined) updateData.quantity = Number(quantity);
-    if (lowStockThreshold !== undefined)
+
+    // Convert brand
+    const brandObjectId = toObjectId(brand);
+    if (brandObjectId) {
+      updateData.brand = brandObjectId;
+    }
+
+    // Convert related_products.ids
+    if (related_products?.ids?.length) {
+      const validIds = related_products.ids
+        .map((id: any) => toObjectId(id))
+        .filter((id: any) => id !== null);
+      if (validIds.length > 0) {
+        updateData.related_products = { ids: validIds };
+      }
+    }
+
+    // Quantity & threshold
+    if (quantity !== undefined) {
+      updateData.quantity = Number(quantity);
+    }
+    if (lowStockThreshold !== undefined) {
       updateData.lowStockThreshold = Number(lowStockThreshold);
-    if (attributes.name) {
+    }
+
+    // Regenerate slug if name changed
+    if (safeAttributes.name) {
       updateData.slug = generateSlug(
-        attributes.name,
-        attributes.department ?? null,
+        safeAttributes.name,
+        safeAttributes.department ?? null,
       );
     }
 
     let product;
     let isNew = false;
 
-    // Check if we have a valid ObjectId and it exists in the database
-    if (_id && mongoose.Types.ObjectId.isValid(_id)) {
-      const existing = await Product.findById(_id);
+    // Check if we have a valid _id and it exists in DB
+    const existingId = toObjectId(_id);
+    if (existingId) {
+      const existing = await Product.findById(existingId);
       if (existing) {
-        // UPDATE: product exists – use the provided _id
+        // UPDATE
         product = await Product.findOneAndUpdate(
-          { _id: new mongoose.Types.ObjectId(_id) },
+          { _id: existingId },
           { $set: updateData },
           { new: true, runValidators: true },
         );
@@ -346,17 +393,14 @@ export async function createOrUpdateProduct(
       isNew = true;
     }
 
-    // CREATE: product does not exist (or no valid _id provided)
+    // CREATE
     if (isNew) {
-      // Prepare the data for insertion (do NOT include _id)
       const createData = {
         ...updateData,
         createdAt: new Date(),
-        dsin: generateDsin(), // if you have a dsin field
-        // category_id, brand, etc. are already inside updateData
+        dsin: generateDsin(),
+        // Optionally, you can also include category/brand if they were passed
       };
-
-      // Insert a new document – MongoDB will assign _id automatically
       const newProduct = new Product(createData);
       product = await newProduct.save();
       if (!product) {
@@ -366,9 +410,12 @@ export async function createOrUpdateProduct(
 
     revalidatePath("/products");
 
-    // Convert _id to string for the client
+    // Convert to plain object and return with string _id
     const result = product.toObject ? product.toObject() : product;
     result._id = result._id.toString();
+
+    // Optionally populate category and brand if needed
+    // (you can also return the raw document and let client handle it)
 
     return { success: true, data: result };
   } catch (error) {
