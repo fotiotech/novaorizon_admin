@@ -51,7 +51,6 @@ export async function getCart(identifier: {
     .lean();
 
   if (!cart) {
-    // Create a new empty cart
     cart = await Cart.create({
       userId: userId || undefined,
       sessionId: sessionId || undefined,
@@ -72,7 +71,7 @@ export async function getCart(identifier: {
     items: cart?.items.map((item: any) => ({
       ...item,
       _id: item._id.toString(),
-      name: item.title || "",
+      name: item.productId?.title || "", // ✅ FIXED
       productId: item.productId?._id?.toString() || item.productId?.toString(),
     })),
   };
