@@ -1,12 +1,9 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
-import { IAttribute } from "./Attribute";
-import { IAttributeGroup } from "./AttributeGroup";
 
 export interface IAttributeSet extends Document {
   title: string;
   code: string;
   description?: string;
-  groups: IAttributeGroup[];
   sort_order?: number;
   isActive: boolean;
   createdAt?: Date;
@@ -23,9 +20,6 @@ const AttributeSetSchema = new Schema<IAttributeSet>(
       trim: true,
     },
     description: { type: String, required: false },
-    groups: [
-      { type: Schema.Types.ObjectId, ref: "AttributeGroup", default: [] },
-    ],
     sort_order: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },

@@ -6,14 +6,6 @@ import {
   getAttributeSet,
   updateAttributeSet,
 } from "@/app/actions/attribute_sets";
-import { findAllAttributeGroups } from "@/app/actions/attributegroup";
-import Select from "react-select";
-
-interface Group {
-  _id: string;
-  name: string;
-  code: string;
-}
 
 interface AttributeSetFormProps {
   attributeSetId?: string; // if provided, we're in edit mode
@@ -32,37 +24,9 @@ const AttributeSetForm: React.FC<AttributeSetFormProps> = ({
   const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
   const [sort_order, setSortOrder] = useState<number | null>(null);
-  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
-  const [allGroups, setAllGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Fetch all groups (flat list) for selection
-  useEffect(() => {
-    const fetchGroups = async () => {
-      try {
-        const groups = await findAllAttributeGroups();
-        // findAllAttributeGroups returns a tree; flatten it
-        const flatten = (tree: any[]): Group[] => {
-          let flat: Group[] = [];
-          tree.forEach((node) => {
-            flat.push({ _id: node._id, name: node.name, code: node.code });
-            if (node.children) {
-              flat = flat.concat(flatten(node.children));
-            }
-          });
-          return flat;
-        };
-        const flatGroups = groups ? flatten(groups) : [];
-        setAllGroups(flatGroups);
-      } catch (err) {
-        console.error("Failed to fetch groups:", err);
-        setError("Could not load attribute groups");
-      }
-    };
-    fetchGroups();
-  }, []);
 
   // Fetch existing attribute set data when editing
   useEffect(() => {
@@ -75,7 +39,6 @@ const AttributeSetForm: React.FC<AttributeSetFormProps> = ({
           setCode(data.code);
           setDescription(data.description || "");
           setSortOrder(data.sort_order || 0);
-          setSelectedGroupIds(data?.attributeGroup); // array of group IDs
         } catch (err: any) {
           console.error("Failed to fetch attribute set:", err);
           setError(err.message || "Could not load attribute set");
@@ -97,10 +60,6 @@ const AttributeSetForm: React.FC<AttributeSetFormProps> = ({
       setError("Title is required");
       return;
     }
-    if (selectedGroupIds.length === 0) {
-      setError("Select at least one attribute group");
-      return;
-    }
 
     setIsLoading(true);
     setError(null);
@@ -110,11 +69,8 @@ const AttributeSetForm: React.FC<AttributeSetFormProps> = ({
         title: title.trim(),
         code: code.trim(),
         description: description.trim() || undefined,
-        groupIds: selectedGroupIds,
-        sort_order: sort_order || 0, // default to 0 if null
+        sort_order: sort_order || 0,
       };
-
-      console.log("Submitting payload:", payload);
 
       let result;
       if (isEditing && attributeSetId) {
@@ -135,11 +91,6 @@ const AttributeSetForm: React.FC<AttributeSetFormProps> = ({
       setIsLoading(false);
     }
   };
-
-  const options = allGroups.map((group) => ({
-    value: group._id,
-    label: `${group.name} (${group.code})`,
-  }));
 
   if (isFetching) {
     return (
@@ -209,28 +160,6 @@ const AttributeSetForm: React.FC<AttributeSetFormProps> = ({
             rows={2}
             placeholder="Optional description"
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Select Attribute Groups *
-          </label>
-          <Select
-            isMulti
-            options={options}
-            value={options.filter((opt) =>
-              selectedGroupIds.includes(opt.value),
-            )}
-            onChange={(selected) =>
-              setSelectedGroupIds(selected.map((s) => s.value))
-            }
-            className="basic-multi-select"
-            classNamePrefix="react-select"
-            placeholder="Search and select groups..."
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Choose one or more existing attribute groups.
-          </p>
         </div>
 
         <div className="flex justify-end gap-2">

@@ -42,7 +42,10 @@ export async function getCategoryProperty(id?: string) {
   }
 }
 
+// ---------- Category Property CRUD (fixed) ----------
+
 export async function createCategoryPropertyWithMappings(data: {
+  code: string; // NEW: required
   name: string;
   description?: string;
   mappings: {
@@ -57,7 +60,7 @@ export async function createCategoryPropertyWithMappings(data: {
   }[];
 }) {
   await connection();
-  const { name, description, mappings } = data;
+  const { code, name, description, mappings } = data;
 
   // Validate all referenced IDs exist
   for (const m of mappings) {
@@ -73,10 +76,14 @@ export async function createCategoryPropertyWithMappings(data: {
     }
   }
 
-  const property = new CategoryProperty({
-    name,
-    description,
-    mappings: mappings.map((m) => ({
+  // Check if a property with this code already exists
+  let property = await CategoryProperty.findOne({ code });
+
+  if (property) {
+    // Update existing
+    property.name = name;
+    if (description !== undefined) property.description = description;
+    property.mappings = mappings.map((m) => ({
       set: new mongoose.Types.ObjectId(m.set),
       groups: m.groups.map((g) => ({
         group: new mongoose.Types.ObjectId(g.group),
@@ -85,17 +92,55 @@ export async function createCategoryPropertyWithMappings(data: {
           isRequired: a.isRequired,
         })),
       })),
-    })),
-  });
+    }));
+    await property.save();
+  } else {
+    // Create new
+    property = new CategoryProperty({
+      code,
+      name,
+      description,
+      mappings: mappings.map((m) => ({
+        set: new mongoose.Types.ObjectId(m.set),
+        groups: m.groups.map((g) => ({
+          group: new mongoose.Types.ObjectId(g.group),
+          attributes: g.attributes.map((a) => ({
+            attribute: new mongoose.Types.ObjectId(a.attribute),
+            isRequired: a.isRequired,
+          })),
+        })),
+      })),
+    });
+    await property.save();
+  }
 
-  await property.save();
-  revalidatePath("/category-properties");
-  return { success: true, property };
+  revalidatePath("/catalog/categories/property");
+
+  // Convert to plain object before returning
+  const plain = property.toObject();
+  plain._id = plain._id.toString();
+  plain.createdAt = plain.createdAt.toISOString();
+  plain.updatedAt = plain.updatedAt.toISOString();
+  plain.mappings = plain.mappings.map((m: any) => ({
+    ...m,
+    set: m.set.toString(),
+    groups: m.groups.map((g: any) => ({
+      ...g,
+      group: g.group.toString(),
+      attributes: g.attributes.map((a: any) => ({
+        ...a,
+        attribute: a.attribute.toString(),
+      })),
+    })),
+  }));
+
+  return { success: true, property: plain };
 }
 
 export async function updateCategoryPropertyWithMappings(
   id: string,
   data: {
+    code?: string; // NEW: optional, but if provided will update
     name?: string;
     description?: string;
     mappings?: {
@@ -114,6 +159,17 @@ export async function updateCategoryPropertyWithMappings(
   const property = await CategoryProperty.findById(id);
   if (!property) return { error: "Category property not found" };
 
+  // If code is being updated, check uniqueness (except for this property)
+  if (data.code) {
+    const existing = await CategoryProperty.findOne({ code: data.code });
+    if (existing && existing._id.toString() !== id) {
+      return {
+        error: `Code "${data.code}" is already used by another property.`,
+      };
+    }
+    property.code = data.code;
+  }
+
   if (data.name) property.name = data.name;
   if (data.description !== undefined) property.description = data.description;
   if (data.mappings) {
@@ -130,8 +186,27 @@ export async function updateCategoryPropertyWithMappings(
   }
 
   await property.save();
-  revalidatePath("/category-properties");
-  return { success: true, property };
+  revalidatePath("/catalog/categories/property");
+
+  // Convert to plain object before returning
+  const plain = property.toObject();
+  plain._id = plain._id.toString();
+  plain.createdAt = plain.createdAt.toISOString();
+  plain.updatedAt = plain.updatedAt.toISOString();
+  plain.mappings = plain.mappings.map((m: any) => ({
+    ...m,
+    set: m.set.toString(),
+    groups: m.groups.map((g: any) => ({
+      ...g,
+      group: g.group.toString(),
+      attributes: g.attributes.map((a: any) => ({
+        ...a,
+        attribute: a.attribute.toString(),
+      })),
+    })),
+  }));
+
+  return { success: true, property: plain };
 }
 
 export async function deleteCategoryProperty(id: string) {
@@ -231,14 +306,18 @@ async function collectAncestorProperties(categoryId: string): Promise<{
 }> {
   await connection();
   const propertyIds: string[] = [];
-  let current:any = await Category.findById(categoryId).populate("property").lean();
+  let current: any = await Category.findById(categoryId)
+    .populate("property")
+    .lean();
   let depth = 0;
   while (current && depth < 10) {
     if (current.property) {
       propertyIds.push(current.property._id.toString());
     }
     if (!current.parent_id) break;
-    current = await Category.findById(current.parent_id).populate("property").lean();
+    current = await Category.findById(current.parent_id)
+      .populate("property")
+      .lean();
     depth++;
   }
 
@@ -278,7 +357,10 @@ async function collectAncestorProperties(categoryId: string): Promise<{
       for (const gm of mapping.groups) {
         const groupKey = gm.group.toString();
         if (!setData.groups.has(groupKey)) {
-          setData.groups.set(groupKey, { group: groupKey, attributes: new Map() });
+          setData.groups.set(groupKey, {
+            group: groupKey,
+            attributes: new Map(),
+          });
         }
         const groupData = setData.groups.get(groupKey)!;
         for (const am of gm.attributes) {
@@ -306,6 +388,14 @@ async function collectAncestorProperties(categoryId: string): Promise<{
   return { mappings: mergedMappings, propertyIds };
 }
 
+function generatePropertyCode(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "") // remove special characters, keep letters, digits, spaces
+    .trim()
+    .replace(/\s+/g, "_"); // replace spaces with underscores
+}
+
 export async function createCategory(
   formData: {
     _id?: string;
@@ -319,7 +409,14 @@ export async function createCategory(
   id?: string | null,
 ) {
   try {
-    const { name, parent_id, description, imageUrl, propertyId, inheritProperty } = formData;
+    const {
+      name,
+      parent_id,
+      description,
+      imageUrl,
+      propertyId,
+      inheritProperty,
+    } = formData;
     const url_slug = generateSlug(name + (description || ""));
     await connection();
 
@@ -363,34 +460,47 @@ export async function createCategory(
     // 2. If inheritProperty is true, merge ancestors' properties and create a new property
     if (inheritProperty && categoryId) {
       // Fetch ancestors and merge
-      const { mappings, propertyIds } = await collectAncestorProperties(categoryId);
+      const { mappings, propertyIds } =
+        await collectAncestorProperties(categoryId);
 
       console.log("[createCategory] Found ancestor property IDs:", propertyIds);
       console.log("[createCategory] Merged mappings count:", mappings.length);
 
       if (mappings.length === 0) {
-        console.warn("[createCategory] No mappings found in ancestors. Cannot create inherited property.");
-        // Optionally show a warning but still return success
-        return { success: true, warning: "No ancestor properties found to inherit." };
+        console.warn(
+          "[createCategory] No mappings found in ancestors. Cannot create inherited property.",
+        );
+        return {
+          success: true,
+          warning: "No ancestor properties found to inherit.",
+        };
       }
 
-      // Create a new CategoryProperty using the existing function
-      const propertyName = `${name} (Inherited)`;
+      // Generate a unique code for the inherited property
+      const baseCode = generatePropertyCode(name || ""); // e.g., "men_shoes"
+
       const propertyDescription = `Auto-generated from ancestors`;
 
       const result = await createCategoryPropertyWithMappings({
-        name: propertyName,
+        code: baseCode,
+        name: name || "",
         description: propertyDescription,
         mappings,
       });
 
       if (!result.success) {
-        console.error("[createCategory] Failed to create inherited property:", result.error);
+        console.error(
+          "[createCategory] Failed to create inherited property:",
+          result.error,
+        );
         return { error: result.error || "Failed to create inherited property" };
       }
 
       const newProperty = result.property;
-      console.log("[createCategory] Created new property ID:", newProperty._id.toString());
+      console.log(
+        "[createCategory] Created new property ID:",
+        newProperty._id.toString(),
+      );
 
       // Update the category's property field to this new property
       await Category.findByIdAndUpdate(categoryId, {
@@ -405,7 +515,11 @@ export async function createCategory(
     revalidatePath("/categories");
     return { success: true };
   } catch (error: any) {
-    console.error("Error processing category request:", error.message, error.stack);
+    console.error(
+      "Error processing category request:",
+      error.message,
+      error.stack,
+    );
     return { error: "Something went wrong." };
   }
 }
@@ -490,7 +604,8 @@ async function buildAttributeSetsFromMappings(
       groupAttrMap.set(groupId, attrMap);
     }
 
-    const allSubdocs: { id: string; isRequired: boolean; groupId: string }[] = [];
+    const allSubdocs: { id: string; isRequired: boolean; groupId: string }[] =
+      [];
     for (const group of set.groups || []) {
       const attrs = group.attributes || [];
       for (const item of attrs) {
@@ -549,7 +664,9 @@ async function buildAttributeSetsFromMappings(
           const groupId = g._id.toString();
           const selectedAttrMap = groupAttrMap.get(groupId) || new Map();
           const groupSubdocs = allSubdocs.filter((s) => s.groupId === groupId);
-          const validSubdocs = groupSubdocs.filter((s) => selectedAttrMap.has(s.id));
+          const validSubdocs = groupSubdocs.filter((s) =>
+            selectedAttrMap.has(s.id),
+          );
 
           const attrs: MappedAttribute[] = validSubdocs
             .map((sub) => {
@@ -615,23 +732,14 @@ export async function getAllAttributeSets() {
   return await AttributeSet.find().select("_id title code").lean();
 }
 
-export async function getGroupsBySet(setId: string) {
+// Fetch all attribute groups (flat list)
+export async function getAllAttributeGroups() {
   await connection();
-  const set = await AttributeSet.findById(setId).populate("groups").lean();
-  return set?.groups || [];
+  return await AttributeGroup.find().select("_id name code").lean();
 }
 
-export async function getAttributesByGroup(groupId: string) {
+// Fetch all attributes (flat list)
+export async function getAllAttributes() {
   await connection();
-  const group: any = await AttributeGroup.findById(groupId)
-    .populate("attributes.id")
-    .lean();
-  if (!group) return [];
-  return (group.attributes || []).map((sub: any) => ({
-    _id: sub.id._id.toString(),
-    code: sub.id.code,
-    name: sub.id.name,
-    type: sub.id.type,
-    isRequired: sub.isRequired,
-  }));
+  return await Attribute.find().select("_id name code type").lean();
 }

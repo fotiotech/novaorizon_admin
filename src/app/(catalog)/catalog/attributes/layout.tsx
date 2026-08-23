@@ -15,7 +15,7 @@ export default function AttributesLayout({
   const subNavLinks = [
     { name: "Attributes", href: "/catalog/attributes" },
     { name: "Sets", href: "/catalog/attributes/sets" },
-    { name: "Groups", href: "/catalog/attributes/group" },
+    { name: "Groups", href: "/catalog/attributes/groups" },
     { name: "Units", href: "/catalog/attributes/units" },
   ];
 

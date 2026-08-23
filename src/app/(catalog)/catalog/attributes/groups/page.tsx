@@ -1,69 +1,686 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import {
+  createAttributeGroup,
+  findAllAttributeGroups,
+  findGroup,
+  updateAttributeGroup,
+  deleteAttributeGroup,
+} from "@/app/actions/attributegroup";
 import { findAttributesAndValues } from "@/app/actions/attributes";
-import { getCategory } from "@/app/actions/category";
-import { findAttributeForGroups } from "@/app/actions/attributegroup";
-import { getAttributeSets } from "@/app/actions/attribute_sets";
-import GroupManagement from "../_component/GroupManagement";
+import Link from "next/link";
+import React, { useEffect, useMemo, useState } from "react";
+import Select from "react-select";
 
-const CategoryAttribute = () => {
-  const [categoryData, setCategoryData] = useState<any[]>([]);
-  const [allAttributes, setAllAttributes] = useState<any[]>([]);
-  const [groups, setGroups] = useState<any[]>([]);
-  const [allAttributeSets, setAllAttributeSets] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+// Types
+type AttributeType = {
+  _id?: string;
+  id?: string;
+  code: string;
+  name: string;
+  option?: string;
+  type: string;
+  sort_order: number;
+};
+
+type AttributesGroup = {
+  _id: string;
+  code: string;
+  name: string;
+  parent_id: string;
+  attributes?: string[];
+  sort_order: number;
+  children?: AttributesGroup[];
+};
+
+interface Option {
+  value: string;
+  label: string;
+}
+
+// Main Group Component
+const Group = () => {
+  const [attributes, setAttributes] = useState<AttributeType[]>([]);
+  const [groups, setGroups] = useState<AttributesGroup[]>([]);
+  const [name, setName] = useState<string>("");
+  const [code, setCode] = useState<string>("");
+  const [sortOrder, setSortOrder] = useState<number | null>(null);
+  const [groupId, setGroupId] = useState<string>("");
+  const [action, setAction] = useState<string>("");
+  const [editGroupId, setEditGroupId] = useState<string>("");
+  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
+  const [parentGroupId, setParentGroupId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [filterText, setFilterText] = useState<string>("");
+  const [sortAttrOrder, setSortAttrOrder] = useState<Option>({
+    value: "asc",
+    label: "A → Z",
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
+  // Fetch data on component mount
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const fetchData = async () => {
+      setIsLoading(true);
       try {
-        setIsLoading(true);
+        const [attributesResponse, groupsResponse] = await Promise.all([
+          findAttributesAndValues(),
+          findAllAttributeGroups(),
+        ]);
+
+        if (attributesResponse?.length > 0) {
+          setAttributes(attributesResponse as unknown as AttributeType[]);
+        }
+
+        if (groupsResponse) {
+          setGroups(groupsResponse as unknown as AttributesGroup[]);
+        }
+
         setError(null);
-
-        // Fetch all required data in parallel
-        const [categoriesResult, attributesResult, groupsResult, setsResult] =
-          await Promise.all([
-            getCategory(), // returns array of categories
-            findAttributesAndValues(),
-            findAttributeForGroups(),
-            getAttributeSets(),
-          ]);
-
-        if (categoriesResult) setCategoryData(categoriesResult);
-        if (attributesResult) setAllAttributes(attributesResult as any[]);
-        if (Array.isArray(groupsResult)) setGroups(groupsResult);
-        if (setsResult.success) setAllAttributeSets(setsResult.data as any[]);
       } catch (err) {
         console.error("Error fetching data:", err);
-        setError("Failed to load data");
+        setError(err instanceof Error ? err.message : "Failed to load data");
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchInitialData();
+    fetchData();
   }, []);
 
+  // Fetch group details when groupId or editGroupId changes
+  useEffect(() => {
+    const fetchGroupDetails = async () => {
+      if (!groupId && !editGroupId) return;
+      setIsLoading(true);
+      try {
+        const idToFetch = editGroupId || groupId;
+        const groupResponse = await findGroup(idToFetch);
+
+        if (groupResponse) {
+          setCode(groupResponse.code || "");
+          setName(groupResponse.name || "");
+          setParentGroupId(groupResponse.parent_id || "");
+          setSortOrder(groupResponse.sort_order || null);
+
+          const currentAttributeIds =
+            groupResponse.attributes?.map((attr: any) => attr._id || attr.id) ||
+            [];
+          setSelectedAttributes(currentAttributeIds);
+        }
+      } catch (err) {
+        console.error("Error fetching group:", err);
+        setError(err instanceof Error ? err.message : "Failed to load group");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchGroupDetails();
+  }, [groupId, editGroupId]);
+
+  // Handle saving group (create or update)
+  const handleSaveGroup = async () => {
+    setIsLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      let response;
+
+      if (editGroupId) {
+        const data = {
+          name,
+          code,
+          parent_id: parentGroupId,
+          attributes: selectedAttributes,
+          sort_order: sortOrder as number,
+        };
+        response = await updateAttributeGroup(editGroupId, data);
+      } else {
+        response = await createAttributeGroup(
+          action,
+          groupId,
+          name,
+          code,
+          parentGroupId,
+          selectedAttributes,
+          sortOrder as number,
+        );
+      }
+
+      if (response) {
+        setSuccess(
+          editGroupId
+            ? "Group updated successfully!"
+            : "Group created successfully!",
+        );
+
+        // Refresh groups list
+        const res = await findAllAttributeGroups();
+        setGroups(res as unknown as AttributesGroup[]);
+
+        // Reset form if it was a create action
+        if (!editGroupId) {
+          resetForm();
+        }
+      }
+    } catch (err) {
+      console.error("Error saving group:", err);
+      setError(err instanceof Error ? err.message : "Failed to save group");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle deleting a group
+  const handleDeleteGroup = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this group?")) return;
+
+    setIsLoading(true);
+    try {
+      await deleteAttributeGroup(id);
+      setSuccess("Group deleted successfully!");
+
+      // Refresh groups list
+      const res = await findAllAttributeGroups();
+      setGroups(res as unknown as AttributesGroup[]);
+
+      // If the deleted group was selected, reset the form
+      if (groupId === id || editGroupId === id) {
+        resetForm();
+        setGroupId("");
+        setEditGroupId("");
+        setAction("");
+      }
+    } catch (err) {
+      console.error("Error deleting group:", err);
+      setError(err instanceof Error ? err.message : "Failed to delete group");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Toggle attribute selection
+  const handleAttributeToggle = (attributeId: string) => {
+    setSelectedAttributes((prev) =>
+      prev.includes(attributeId)
+        ? prev.filter((id) => id !== attributeId)
+        : [...prev, attributeId],
+    );
+  };
+
+  // Reset form fields
+  const resetForm = () => {
+    setName("");
+    setCode("");
+    setSortOrder(null);
+    setParentGroupId("");
+    setSelectedAttributes([]);
+  };
+
+  // Toggle group expansion in overview
+  const toggleGroupExpansion = (id: string) => {
+    setExpandedGroups((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  // Sort options for attributes
+  const sortOptions: Option[] = [
+    { value: "asc", label: "A → Z" },
+    { value: "desc", label: "Z → A" },
+  ];
+
+  // Filter and sort attributes based on user input
+  const visibleAttributes = useMemo(() => {
+    const filtered = attributes?.filter(
+      (a) =>
+        a?.name?.toLowerCase().includes(filterText?.toLowerCase()) ||
+        a?.code?.toLowerCase().includes(filterText?.toLowerCase()),
+    );
+    const sorted = filtered.sort((a, b) =>
+      sortAttrOrder.value === "asc"
+        ? a?.name?.localeCompare(b.name)
+        : b?.name?.localeCompare(a.name),
+    );
+    return sorted;
+  }, [attributes, filterText, sortAttrOrder]);
+
+  // Get the current group being edited/viewed
+  const currentGroup = useMemo(() => {
+    return groups.find((g) => g._id === (editGroupId || groupId));
+  }, [groups, editGroupId, groupId]);
+
+  // Function to get parent group name
+  const getParentGroupName = (parentId: string) => {
+    if (!parentId) return "-";
+    const parent = groups.find((g) => g._id === parentId);
+    return parent ? parent.name : parentId;
+  };
+
+  // Function to get attribute names for display
+  const getAttributeNames = (attributeIds: string[] = []) => {
+    return attributeIds
+      .map((id) => {
+        const attr = attributes.find((a) => a._id === id);
+        return attr ? attr.name : null;
+      })
+      .filter(Boolean)
+      .join(", ");
+  };
+
+  // Flatten groups for table display with hierarchy information
+  const flattenedGroups = useMemo(() => {
+    const flatten = (groupList: AttributesGroup[], level = 0): any[] => {
+      let result: any[] = [];
+
+      groupList.forEach((group) => {
+        result.push({
+          ...group,
+          level,
+          hasChildren: group.children && group.children.length > 0,
+          isExpanded: expandedGroups.has(group._id),
+        });
+
+        if (expandedGroups.has(group._id) && group.children) {
+          result = result.concat(flatten(group.children, level + 1));
+        }
+      });
+
+      return result;
+    };
+
+    const rootGroups = groups.filter((group) => !group.parent_id);
+    return flatten(rootGroups);
+  }, [groups, expandedGroups]);
+
   return (
-    <div className="mb-4 p-2 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">
-        Category Attribute Management
-      </h1>
+    <div className="max-w-7xl mx-auto lg:px-8 w-full">
+      <h2 className="font-bold text-2xl my-4">Attribute Groups Management</h2>
 
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+          <strong className="font-bold">Error:</strong>
+          <span className="block sm:inline"> {error}</span>
         </div>
       )}
 
-      <GroupManagement
-        groups={groups}
-        allAttributes={allAttributes}
-        isLoading={isLoading}
-      />
+      {success && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
+          <strong className="font-bold">Success:</strong>
+          <span className="block sm:inline"> {success}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="lg:col-span-1 space-y-4">
+          {(action === "create" || action === "edit") && (
+            <div className="bg-white p-4 rounded-lg shadow">
+              <h3 className="font-medium mb-3 flex items-center justify-between">
+                {editGroupId ? "Edit Group" : "Create New Group"}
+                {editGroupId && (
+                  <button
+                    onClick={() => {
+                      setEditGroupId("");
+                      resetForm();
+                      setAction("");
+                    }}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </h3>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Parent Group
+                  </label>
+                  <select
+                    title="parent"
+                    value={parentGroupId}
+                    onChange={(e) => setParentGroupId(e.target.value)}
+                    className="w-full p-2 rounded-lg bg-gray-50 border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">No parent (root group)</option>
+                    {groups
+                      .filter((group) => group._id !== (editGroupId || groupId))
+                      .map((group) => (
+                        <option key={group._id} value={group._id}>
+                          {group.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Group Code
+                  </label>
+                  <input
+                    type="text"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="e.g., name_top10"
+                    className="w-full p-2 rounded-lg bg-gray-50 border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Group Name
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter group name"
+                    className="w-full p-2 rounded-lg bg-gray-50 border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Sort Order
+                  </label>
+                  <input
+                    type="number"
+                    value={sortOrder === null ? "" : sortOrder}
+                    onChange={(e) =>
+                      setSortOrder(
+                        e.target.value === "" ? null : Number(e.target.value),
+                      )
+                    }
+                    placeholder="Order number"
+                    className="w-full p-2 rounded-lg bg-gray-50 border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveGroup}
+                  disabled={isLoading || !name || !code}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded disabled:opacity-50 flex items-center justify-center"
+                >
+                  {isLoading ? (
+                    <>
+                      <svg
+                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : editGroupId ? (
+                    "Update Group"
+                  ) : (
+                    "Create Group"
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Attributes Selection and Groups Overview */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Attributes Selection */}
+          {action === "add attributes" && (
+            <div className="bg-white p-4 rounded-lg shadow">
+              <h3 className="font-medium mb-3">Assign Attributes to Group</h3>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600">
+                  Selected: {selectedAttributes.length} attributes
+                  {currentGroup && ` for "${currentGroup.name}"`}
+                </p>
+              </div>
+
+              <div className="mb-4 flex flex-col md:flex-row gap-3">
+                <input
+                  type="text"
+                  placeholder="Filter attributes by name or code..."
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  className="flex-1 p-2 rounded-lg bg-gray-50 border border-gray-300"
+                />
+                <Select
+                  options={sortOptions}
+                  value={sortAttrOrder}
+                  onChange={(opt) => setSortAttrOrder(opt as Option)}
+                  className="w-full md:w-40"
+                  classNames={{
+                    control: () => "!bg-gray-50 !border-gray-300 !rounded-lg",
+                  }}
+                />
+              </div>
+
+              <div className="h-64 overflow-y-auto border rounded-lg p-3 bg-gray-50">
+                {visibleAttributes.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">
+                    {filterText
+                      ? "No attributes match your search"
+                      : "No attributes available"}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {visibleAttributes.map((attr) => (
+                      <div
+                        key={attr._id}
+                        className="flex items-center gap-2 py-1"
+                      >
+                        <input
+                          type="checkbox"
+                          id={`attr-${attr._id}`}
+                          checked={selectedAttributes.includes(attr._id || "")}
+                          onChange={() => handleAttributeToggle(attr._id || "")}
+                          className={`${
+                            selectedAttributes.includes(attr?._id as string)
+                              ? "text-blue-600"
+                              : ""
+                          } "h-4 w-4  rounded focus:ring-blue-400"`}
+                        />
+                        <label
+                          htmlFor={`attr-${attr._id}`}
+                          className="text-sm cursor-pointer flex-1"
+                        >
+                          <span className="font-medium">{attr.name}</span>
+                          <span className="text-gray-500 ml-2">
+                            ({attr.code})
+                          </span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end mt-4">
+                <button
+                  type="button"
+                  onClick={handleSaveGroup}
+                  disabled={isLoading}
+                  className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded text-sm disabled:opacity-50"
+                >
+                  {isLoading ? "Saving..." : "Save Attributes"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Groups Overview Table */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-medium">All Groups</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setAction("create");
+                    setEditGroupId("");
+                    resetForm();
+                  }}
+                  className="text-sm bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded"
+                >
+                  + New Group
+                </button>
+              </div>
+            </div>
+
+            {groups.length === 0 ? (
+              <p className="text-center text-gray-500 py-4">
+                No groups created yet
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Name
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Code
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Parent
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Order
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Attributes
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {flattenedGroups.map((group) => (
+                      <tr
+                        key={group._id}
+                        className={`hover:bg-gray-50 ${
+                          group._id === (editGroupId || groupId)
+                            ? "bg-blue-50"
+                            : ""
+                        }`}
+                        style={{ paddingLeft: `${group.level * 20}px` }}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            {group.hasChildren && (
+                              <button
+                                type="button"
+                                onClick={() => toggleGroupExpansion(group._id)}
+                                className="mr-2 w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200"
+                              >
+                                {group.isExpanded ? "−" : "+"}
+                              </button>
+                            )}
+                            <div className="text-sm font-medium text-gray-900">
+                              {group.name}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">
+                            {group.code}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">
+                            {getParentGroupName(group.parent_id)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">
+                            {group.group_order}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-500 max-w-xs">
+                            {group.attributes && group.attributes.length > 0 ? (
+                              <span title={getAttributeNames(group.attributes)}>
+                                {group.attributes.length} attribute(s)
+                              </span>
+                            ) : (
+                              "-"
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => {
+                                setAction("edit");
+                                setEditGroupId(group._id);
+                              }}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteGroup(group._id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
-export default CategoryAttribute;
+export default Group;

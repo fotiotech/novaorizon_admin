@@ -1,6 +1,7 @@
 import mongoose, { Schema, model, models, Document } from "mongoose";
 
 export interface ICategoryProperty extends Document {
+  code: string;
   name: string;
   description?: string;
   mappings: {
@@ -19,6 +20,7 @@ export interface ICategoryProperty extends Document {
 
 const CategoryPropertySchema = new Schema<ICategoryProperty>(
   {
+    code: { type: String, required: true, unique: true },
     name: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
     mappings: [

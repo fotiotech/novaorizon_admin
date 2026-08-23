@@ -217,7 +217,7 @@ export async function createAttributeGroup(
         },
         { new: true },
       );
-      revalidatePath("/attributes");
+      revalidatePath("/catalog/attributes/groups");
       return serializeGroup(res);
     } else if (action === "create" || action === "edit") {
       const newGroup = await AttributeGroup.findOneAndUpdate(
@@ -233,7 +233,7 @@ export async function createAttributeGroup(
         },
         { upsert: true, new: true, lean: true },
       );
-      revalidatePath("/attributes");
+      revalidatePath("/catalog/attributes/groups");
       return serializeGroup(newGroup);
     }
   } catch (error) {
@@ -342,7 +342,7 @@ export async function updateAttributeGroup(
       new: true,
     }).lean();
 
-    revalidatePath("/attributes");
+    revalidatePath("/catalog/attributes/groups");
     return serializeGroup(updated);
   } catch (error) {
     console.error("[AttributeGroup] Error updating group:", error);
@@ -357,7 +357,7 @@ export async function deleteAttributeGroup(id: string) {
     await AttributeGroup.findByIdAndDelete({
       _id: new mongoose.Types.ObjectId(id),
     });
-    revalidatePath("/attributes");
+    revalidatePath("/catalog/attributes/groups");
     return { success: true };
   } catch (error) {
     console.error("[AttributeGroup] Error deleting group:", error);
