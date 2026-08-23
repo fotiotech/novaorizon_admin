@@ -11,7 +11,8 @@ import {
 export const useFileUploader = (
   instanceId?: string,
   initialFiles: string[] = [],
-  subfolder?: string, // NEW
+  subfolder?: string,
+  onRemoveSuccess?: (fileUrl: string) => Promise<void>, // NEW
 ) => {
   const [files, setFiles] = useState<string[]>(initialFiles);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -63,7 +64,7 @@ export const useFileUploader = (
               file.type,
               instanceId,
               undefined,
-              subfolder, // pass subfolder
+              subfolder,
             );
             uploadUrl = result.uploadUrl;
             fileKey = result.fileKey;
@@ -128,14 +129,12 @@ export const useFileUploader = (
     [instanceId, subfolder],
   );
 
-  // Auto-upload pending files
   useEffect(() => {
     if (pendingFiles.length > 0) {
       uploadFiles(pendingFiles);
     }
   }, [pendingFiles, uploadFiles]);
 
-  // ---- CRUD methods ----
   const addFiles = useCallback((newFiles: File[]) => {
     if (!newFiles.length) return;
     setPendingFiles((prev) => [...prev, ...newFiles]);
@@ -172,7 +171,8 @@ export const useFileUploader = (
   );
 
   const removeFile = useCallback(
-    async (productId: string, index: number) => {
+    async (entityId: string, index: number) => {
+      // entityId is not used by S3 deletion but kept for consistency
       if (index < 0 || index >= files.length) {
         return { success: false, message: "Index out of bounds" };
       }
@@ -180,13 +180,17 @@ export const useFileUploader = (
       try {
         await deleteS3Object(fileUrl);
         setFiles((prev) => prev.filter((_, i) => i !== index));
+        // Trigger database update callback if provided
+        if (onRemoveSuccess) {
+          await onRemoveSuccess(fileUrl);
+        }
         return { success: true };
       } catch (error) {
         console.error("Deletion error:", error);
         return { success: false, message: (error as Error).message };
       }
     },
-    [files],
+    [files, onRemoveSuccess],
   );
 
   const removeMultipleFiles = useCallback(
@@ -200,6 +204,7 @@ export const useFileUploader = (
       try {
         await deleteMultipleS3Objects(toRemove);
         setFiles((prev) => prev.filter((_, i) => !indices.includes(i)));
+        // Optionally call onRemoveSuccess for each file if needed
         return { success: true, deleted: toRemove.length };
       } catch (error) {
         console.error("Batch deletion error:", error);

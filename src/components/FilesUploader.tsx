@@ -5,16 +5,17 @@ import { useDropzone } from "react-dropzone";
 import Image from "next/image";
 
 type FilesUploaderProps = {
-  productId?: string;
+  productId?: string; // legacy – can be any entity ID; passed to removeFile
   files: string[];
   addFiles: (newFiles: File[]) => void;
   removeFile: (
-    productId: string,
+    entityId: string,
     index: number,
     filesContent?: string[],
   ) => Promise<{ success: boolean; message?: string }>;
   loading?: boolean;
   progressByName?: Record<string, number>;
+  onRemove?: (fileUrl: string) => Promise<void>; // NEW: called after successful S3 deletion
 };
 
 const FilesUploader: React.FC<FilesUploaderProps> = ({
@@ -24,6 +25,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   removeFile,
   loading = false,
   progressByName = {},
+  onRemove, // NEW
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -51,7 +53,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     e.stopPropagation();
 
     if (!productId) {
-      console.error("Product ID is required to remove files");
+      console.error("Product/Entity ID is required to remove files");
       return;
     }
 
@@ -66,6 +68,10 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
 
     try {
       const result = await removeFile(productId, index, files);
+      if (result?.success && onRemove) {
+        // After S3 deletion, call the database update callback
+        await onRemove(files[index]);
+      }
       if (!result?.success) {
         console.error("Failed to remove file:", result?.message);
       }

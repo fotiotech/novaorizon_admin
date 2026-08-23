@@ -16,7 +16,6 @@ import { getCategory } from "@/app/actions/category";
 import { getAllCollections } from "@/app/actions/collection";
 
 const CollectionForm = ({ id }: { id?: string }) => {
-  const { files, loading: load, addFiles, removeFile } = useFileUploader();
   const router = useRouter();
   const [collections, setCollections] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +37,55 @@ const CollectionForm = ({ id }: { id?: string }) => {
     status: "active",
   });
 
+  // Helper to build FormData from current state (reused for submit and remove)
+  const buildFormData = (data: typeof formData, rulesData: any[]) => {
+    const fd = new FormData();
+    fd.append("name", data.name);
+    fd.append("description", data.description);
+    fd.append("category_id", data.category_id);
+    fd.append("imageUrl", data.imageUrl || ""); // can be empty
+    fd.append("status", data.status);
+    fd.append("rules", JSON.stringify(rulesData));
+    return fd;
+  };
+
+  // ----- File Uploader with database removal callback -----
+  const {
+    files,
+    loading: fileLoading,
+    addFiles,
+    removeFile,
+  } = useFileUploader(
+    undefined, // instanceId (not needed)
+    formData.imageUrl ? [formData.imageUrl] : [], // initial files
+    undefined, // subfolder
+    async (fileUrl: string) => {
+      // This callback runs after S3 deletion
+      if (!id) {
+        // If we are creating a new collection, just update local state
+        setFormData((prev) => ({ ...prev, imageUrl: "" }));
+        return;
+      }
+
+      try {
+        // Update the collection in the database: set imageUrl to empty
+        const updatedData = { ...formData, imageUrl: "" };
+        const fd = buildFormData(updatedData, rules);
+        const result = await updateCollection(id, fd);
+        if (result.success) {
+          setFormData((prev) => ({ ...prev, imageUrl: "" }));
+          setSuccess("Image removed successfully");
+          setTimeout(() => setSuccess(null), 3000);
+        } else {
+          setError(result.error || "Failed to remove image from database");
+        }
+      } catch (err) {
+        console.error("Error updating collection after remove:", err);
+        setError("Failed to update collection after removing image");
+      }
+    },
+  );
+
   // Fetch categories and collection data
   useEffect(() => {
     async function fetchCollections() {
@@ -47,7 +95,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
         if (result.success) {
           const mappedCollections = result.data || [];
           console.log({ mappedCollections });
-
           setCollections(mappedCollections);
         } else {
           setError(result.error || "Failed to fetch collections");
@@ -85,7 +132,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
           });
 
           if (data?.imageUrl) {
-            addFiles([{ url: data.imageUrl, name: "existing-image" }] as any);
+            // The hook already initializes with imageUrl via initialFiles, so we don't need to add again
           }
           if (data?.rules) {
             setRules(
@@ -94,7 +141,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 operator: rule.operator || "$eq",
                 value: rule.value || "",
                 position: rule.position || 0,
-              }))
+              })),
             );
           }
         }
@@ -111,7 +158,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
   const handleInputChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    >,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -119,7 +166,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
       [name]: value,
     }));
   };
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,7 +187,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
 
       // Validate rules
       const invalidRules = rules.some(
-        (rule) => !rule.attribute || !rule.operator || !rule.value
+        (rule) => !rule.attribute || !rule.operator || !rule.value,
       );
 
       if (invalidRules) {
@@ -149,14 +195,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
         return;
       }
 
-      // Create FormData object
-      const submitFormData = new FormData();
-      submitFormData.append("name", formData.name);
-      submitFormData.append("description", formData.description);
-      submitFormData.append("category_id", formData.category_id);
-      submitFormData.append("imageUrl", files[0]);
-      submitFormData.append("status", formData.status);
-      submitFormData.append("rules", JSON.stringify(rules));
+      const submitFormData = buildFormData(formData, rules);
 
       let result;
       if (id) {
@@ -169,10 +208,10 @@ const CollectionForm = ({ id }: { id?: string }) => {
         setSuccess(
           id
             ? "Collection updated successfully"
-            : "Collection created successfully"
+            : "Collection created successfully",
         );
         setTimeout(() => {
-          router.push("/content_merchandising/collection");
+          router.push("/content-management/app/navigation/collection");
           router.refresh();
         }, 1500);
       } else {
@@ -281,10 +320,13 @@ const CollectionForm = ({ id }: { id?: string }) => {
               Image
             </label>
             <FilesUploader
+              productId={id} // pass collection ID for removal
               files={files}
-              loading={loading}
+              loading={fileLoading}
               addFiles={addFiles}
               removeFile={removeFile}
+              progressByName={{}}
+              // onRemove is now handled inside the hook's callback
             />
           </div>
 
@@ -305,7 +347,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
             </select>
           </div>
 
-          <div className="py-6 ">
+          <div className="py-6">
             <CollectionRuleForm rules={rules} onAddRule={setRules} />
           </div>
 
@@ -345,7 +387,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
                       rules,
                     },
                     null,
-                    2
+                    2,
                   )}
                 </pre>
               </div>
