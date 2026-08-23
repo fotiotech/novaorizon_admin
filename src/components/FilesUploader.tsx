@@ -5,27 +5,19 @@ import { useDropzone } from "react-dropzone";
 import Image from "next/image";
 
 type FilesUploaderProps = {
-  productId?: string; // legacy – can be any entity ID; passed to removeFile
   files: string[];
   addFiles: (newFiles: File[]) => void;
-  removeFile: (
-    entityId: string,
-    index: number,
-    filesContent?: string[],
-  ) => Promise<{ success: boolean; message?: string }>;
+  onRemove: (index: number, fileUrl: string) => Promise<void>; // parent handles deletion
   loading?: boolean;
   progressByName?: Record<string, number>;
-  onRemove?: (fileUrl: string) => Promise<void>; // NEW: called after successful S3 deletion
 };
 
 const FilesUploader: React.FC<FilesUploaderProps> = ({
-  productId,
   files,
   addFiles,
-  removeFile,
+  onRemove,
   loading = false,
   progressByName = {},
-  onRemove, // NEW
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -52,12 +44,10 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     e.preventDefault();
     e.stopPropagation();
 
-    if (!productId) {
-      console.error("Product/Entity ID is required to remove files");
-      return;
-    }
+    const fileUrl = files[index];
+    if (!fileUrl) return;
 
-    const fileName = files[index]?.split("/").pop() || "";
+    const fileName = fileUrl.split("/").pop() || "";
     const isUploading =
       progressByName[fileName] !== undefined && progressByName[fileName] < 100;
 
@@ -66,17 +56,14 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
       return;
     }
 
+    if (!window.confirm("Are you sure you want to remove this image?")) return;
+
     try {
-      const result = await removeFile(productId, index, files);
-      if (result?.success && onRemove) {
-        // After S3 deletion, call the database update callback
-        await onRemove(files[index]);
-      }
-      if (!result?.success) {
-        console.error("Failed to remove file:", result?.message);
-      }
+      await onRemove(index, fileUrl);
+      // Parent updates its state, so we don't modify files here.
     } catch (error) {
-      console.error("Error removing file:", error);
+      console.error("Remove failed:", error);
+      alert((error as Error).message || "Failed to remove image");
     }
   };
 

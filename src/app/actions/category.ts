@@ -12,6 +12,7 @@ import Attribute from "@/models/Attribute";
 import AttributeGroup from "@/models/AttributeGroup";
 import "@/models/UnitFamily";
 import { revalidatePath } from "next/cache";
+import { deleteS3Object } from "./s3";
 
 // ---------- Helper ----------
 function generateSlug(name: string) {
@@ -715,4 +716,48 @@ export async function getAllAttributeGroups() {
 export async function getAllAttributes() {
   await connection();
   return await Attribute.find().select("_id name code type").lean();
+}
+
+/**
+ * Delete a specific image URL from a category's imageUrl array
+ * and remove the file from S3.
+ */
+export async function deleteCategoryImage(
+  categoryId: string,
+  imageUrl: string,
+) {
+  try {
+    await connection();
+
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      return { success: false, error: "Invalid category ID" };
+    }
+
+    // Find the category
+    const category = await Category.findById(categoryId);
+    if (!category) {
+      return { success: false, error: "Category not found" };
+    }
+
+    // Ensure imageUrl is in the array
+    if (!category.imageUrl?.includes(imageUrl)) {
+      return { success: false, error: "Image not found in category" };
+    }
+
+    // Delete from S3
+    await deleteS3Object(imageUrl);
+
+    // Remove from the array
+    category.imageUrl = category.imageUrl.filter(
+      (url: string) => url !== imageUrl,
+    );
+    await category.save();
+
+    revalidatePath("/categories"); // adjust path as needed
+
+    return { success: true, data: category.imageUrl };
+  } catch (error) {
+    console.error("Error deleting category image:", error);
+    return { success: false, error: "Failed to delete image" };
+  }
 }

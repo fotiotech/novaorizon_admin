@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import Product from "@/models/Product";
 import "@/models/Category";
 import { Collection } from "@/models/Collection";
+import { deleteS3Object } from "./s3";
 
 // Helper function to parse rule values based on their expected type
 function parseRuleValue(value: any, operator: string) {
@@ -427,5 +428,41 @@ export async function deleteCollection(id: string) {
   } catch (error) {
     console.error("Error deleting collection:", error);
     return { success: false, error: "Failed to delete collection" };
+  }
+}
+
+/**
+ * Delete the image from a collection (single image) and remove from S3.
+ */
+export async function deleteCollectionImage(collectionId: string) {
+  try {
+    await connection();
+
+    if (!mongoose.Types.ObjectId.isValid(collectionId)) {
+      return { success: false, error: "Invalid collection ID" };
+    }
+
+    const collection = await Collection.findById(collectionId);
+    if (!collection) {
+      return { success: false, error: "Collection not found" };
+    }
+
+    if (!collection.imageUrl) {
+      return { success: false, error: "No image to delete" };
+    }
+
+    // Delete from S3
+    await deleteS3Object(collection.imageUrl);
+
+    // Clear the imageUrl field
+    collection.imageUrl = "";
+    await collection.save();
+
+    revalidatePath("/collections");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting collection image:", error);
+    return { success: false, error: "Failed to delete image" };
   }
 }

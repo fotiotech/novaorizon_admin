@@ -6,6 +6,7 @@ import {
   getCategory,
   createCategory,
   getCategoryProperty,
+  deleteCategoryImage, // new action
 } from "@/app/actions/category";
 import { Category as Cat } from "@/constant/types";
 import { useFileUploader } from "@/hooks/useFileUploader";
@@ -33,7 +34,6 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     imageUrl: [],
     property: "",
   });
-  const { files, loading, addFiles, removeFile } = useFileUploader();
   const [attributes, setAttributes] = useState<any | null>(null);
   const [toggleCreateAttribute, setToggleCreateAttribute] =
     useState<boolean>(false);
@@ -42,6 +42,38 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   const [properties, setProperties] = useState<any[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
   const [inheritProperty, setInheritProperty] = useState<boolean>(false);
+
+  // ----- File Uploader (simplified, no callback) -----
+  const {
+    files,
+    loading: fileLoading,
+    addFiles,
+    setFiles,
+  } = useFileUploader(
+    undefined, // instanceId
+    mode === "edit" && categoryData.imageUrl ? categoryData.imageUrl : [], // initialFiles
+    undefined, // subfolder
+  );
+
+  // Handle image removal – calls server action
+  const handleRemoveImage = async (index: number, fileUrl: string) => {
+    if (mode === "edit" && categoryId) {
+      // Edit mode: delete from database and S3
+      const result = await deleteCategoryImage(categoryId, fileUrl);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to remove image");
+      }
+      // Update local state – remove the image from the array
+      setFiles((prev) => prev.filter((_, i) => i !== index));
+      setCategoryData((prev) => ({
+        ...prev,
+        imageUrl: prev.imageUrl?.filter((url) => url !== fileUrl) || [],
+      }));
+    } else {
+      // Create mode: just remove from local state
+      setFiles((prev) => prev.filter((_, i) => i !== index));
+    }
+  };
 
   // Fetch available category properties
   useEffect(() => {
@@ -76,8 +108,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               category.property?._id || category.property || "",
             );
             if (category.attributes) setAttributes(category.attributes);
+            // Set initial files
             if (category.imageUrl && category.imageUrl.length > 0) {
-              addFiles(category.imageUrl);
+              setFiles(category.imageUrl);
+            } else {
+              setFiles([]);
             }
           } else {
             setError("Category not found");
@@ -91,7 +126,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       }
     };
     fetchCategoryData();
-  }, [categoryId, mode, addFiles]);
+  }, [categoryId, mode, setFiles]);
 
   const handleInputChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -115,10 +150,13 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         imageUrl: files || [],
         attributes: attributes || [],
         propertyId: selectedPropertyId || undefined,
-        inheritProperty: inheritProperty, // explicitly send the toggle value
+        inheritProperty: inheritProperty,
       };
 
-      console.log("[CategoryForm] Submitting with inheritProperty:", inheritProperty);
+      console.log(
+        "[CategoryForm] Submitting with inheritProperty:",
+        inheritProperty,
+      );
 
       const result = await createCategory(
         formData,
@@ -155,6 +193,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       setToggleCreateAttribute(false);
       setError(null);
       setInheritProperty(false);
+      setFiles([]);
     }
   };
 
@@ -241,7 +280,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
           </p>
         </div>
 
-        {/* Inheritance Toggle - Clear Yes/No */}
+        {/* Inheritance Toggle */}
         <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
           <div className="flex items-center justify-between">
             <div>
@@ -254,7 +293,6 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               </p>
             </div>
 
-            {/* Toggle Switch */}
             <div className="flex items-center gap-3 ml-4">
               <span
                 className={`text-sm font-medium ${
@@ -265,28 +303,23 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               >
                 No
               </span>
-
               <button
                 type="button"
                 onClick={handleToggleChange}
-                className={`
-                  relative inline-flex h-6 w-11 items-center rounded-full 
-                  transition-colors duration-200 focus:outline-none focus:ring-2 
-                  focus:ring-blue-500 focus:ring-offset-2
-                  ${inheritProperty ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"}
-                `}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  inheritProperty
+                    ? "bg-blue-600"
+                    : "bg-gray-300 dark:bg-gray-600"
+                }`}
                 role="switch"
                 aria-checked={inheritProperty}
               >
                 <span
-                  className={`
-                    inline-block h-4 w-4 transform rounded-full 
-                    bg-white transition-transform duration-200
-                    ${inheritProperty ? "translate-x-6" : "translate-x-1"}
-                  `}
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                    inheritProperty ? "translate-x-6" : "translate-x-1"
+                  }`}
                 />
               </button>
-
               <span
                 className={`text-sm font-medium ${
                   inheritProperty
@@ -298,20 +331,17 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               </span>
             </div>
           </div>
-
-          {/* Status indicator */}
           <div className="mt-2">
             <span
-              className={`
-                inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                ${
-                  inheritProperty
-                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                    : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
-                }
-              `}
+              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                inheritProperty
+                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                  : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+              }`}
             >
-              {inheritProperty ? "✓ Inheritance enabled" : "✗ Inheritance disabled"}
+              {inheritProperty
+                ? "✓ Inheritance enabled"
+                : "✗ Inheritance disabled"}
             </span>
           </div>
         </div>
@@ -319,9 +349,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         <div>
           <FilesUploader
             files={files}
-            loading={loading}
+            loading={fileLoading}
             addFiles={addFiles}
-            removeFile={removeFile}
+            onRemove={handleRemoveImage}
           />
         </div>
 

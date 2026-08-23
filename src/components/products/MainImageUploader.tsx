@@ -26,7 +26,7 @@ const MainImageUploader: React.FC<MainImageUploaderProps> = ({
     setFiles,
     listFiles,
     progressByName,
-  } = useFileUploader(productId, [], "main"); // 👈 subfolder = 'main'
+  } = useFileUploader(productId, [], "main");
 
   // Load existing main images from S3 (only main folder)
   useEffect(() => {
@@ -63,13 +63,17 @@ const MainImageUploader: React.FC<MainImageUploaderProps> = ({
     }
   }, [files, dispatch, productId, code]);
 
+  // Wrap removeFile to match onRemove signature
+  const handleRemove = async (index: number) => {
+    await removeFile(index);
+  };
+
   return (
     <FilesUploader
-      productId={productId}
       files={files}
       loading={loading}
       addFiles={addFiles}
-      removeFile={removeFile}
+      onRemove={handleRemove}
       progressByName={progressByName}
     />
   );

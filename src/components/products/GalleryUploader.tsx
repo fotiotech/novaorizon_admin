@@ -26,7 +26,7 @@ const GalleryUploader: React.FC<GalleryUploaderProps> = ({
     setFiles,
     listFiles,
     progressByName,
-  } = useFileUploader(productId, [], "gallery"); // 👈 subfolder = 'gallery'
+  } = useFileUploader(productId, [], "gallery");
 
   // Load existing gallery images from S3 (only gallery folder)
   useEffect(() => {
@@ -64,14 +64,18 @@ const GalleryUploader: React.FC<GalleryUploaderProps> = ({
     }
   }, [files, dispatch, productId, code]);
 
+  // Wrap removeFile to match onRemove signature
+  const handleRemove = async (index: number) => {
+    await removeFile(index);
+  };
+
   return (
     <div className="w-full">
       <FilesUploader
-        productId={productId}
         files={files}
         loading={loading}
         addFiles={addFiles}
-        removeFile={removeFile}
+        onRemove={handleRemove}
         progressByName={progressByName}
       />
     </div>

@@ -7,6 +7,7 @@ import {
   updateMenu,
   MenuData,
   getMenuContentOptions,
+  deleteMenuBackgroundImage, // new action
 } from "@/app/actions/menu";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import Spinner from "@/components/Spinner";
@@ -122,6 +123,35 @@ const MenuForm = ({ id }: MenuFormProps) => {
       }));
     }
   }, [bgUpload.files, menu.backgroundImage]);
+
+  // ---- Custom remove handler for background image ----
+  const handleRemoveBackgroundImage = async (
+    index: number,
+    fileUrl: string,
+  ) => {
+    // Only allow removal if editing an existing menu
+    if (!id) {
+      // Create mode: just remove from local state
+      bgUpload.setFiles([]);
+      setMenu((prev) => ({ ...prev, backgroundImage: "" }));
+      return;
+    }
+
+    // Edit mode: call server action
+    try {
+      const result = await deleteMenuBackgroundImage(id);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to remove background image");
+      }
+      // Update local state
+      bgUpload.setFiles([]);
+      setMenu((prev) => ({ ...prev, backgroundImage: "" }));
+      setSuccess("Background image removed successfully");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || "Failed to remove image");
+    }
+  };
 
   // ------------------------------------------------------------
   // Fetch existing menu data (if editing)
@@ -688,28 +718,15 @@ const MenuForm = ({ id }: MenuFormProps) => {
             Background Image
           </label>
           <FilesUploader
-            productId={id || "menu"}
             files={bgUpload.files}
             addFiles={bgUpload.addFiles}
-            removeFile={bgUpload.removeFile}
+            onRemove={handleRemoveBackgroundImage}
             loading={bgUpload.loading}
             progressByName={bgUpload.progressByName}
           />
-          {bgUpload.files.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                bgUpload.clearFiles();
-                setMenu((prev) => ({ ...prev, backgroundImage: "" }));
-              }}
-              className="mt-2 text-sm text-destructive hover:text-destructive/80"
-            >
-              Remove background image
-            </button>
-          )}
           <p className="text-xs text-muted-foreground mt-1">
             Upload an image to set as the menu background. Only the first image
-            will be used.
+            will be used. Click × to remove.
           </p>
         </div>
 

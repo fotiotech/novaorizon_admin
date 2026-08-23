@@ -2,6 +2,8 @@
 import { connection } from "@/utils/connection";
 import HeroContent from "@/models/HeroContent";
 import { revalidatePath } from "next/cache";
+import { deleteS3Object } from "./s3";
+import mongoose from "mongoose";
 
 export async function findHeroContent() {
   try {
@@ -84,7 +86,7 @@ export async function createHeroContent(prevState: any, formData: FormData) {
 export async function updateHeroContent(
   id: string,
   prevState: any,
-  formData: FormData
+  formData: FormData,
 ) {
   try {
     await connection();
@@ -120,7 +122,7 @@ export async function updateHeroContent(
         cta_link,
         updated_at: Date.now(),
       },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!updatedContent) {
@@ -130,7 +132,7 @@ export async function updateHeroContent(
       };
     }
 
-    revalidatePath("/");
+    revalidatePath("/content-management/app/hero_content");
     return {
       success: true,
       message: "Hero content updated successfully",
@@ -141,5 +143,67 @@ export async function updateHeroContent(
       success: false,
       message: "Failed to update hero content",
     };
+  }
+}
+
+// app/actions/content_management.ts
+
+export async function deleteHeroContent(id: string) {
+  try {
+    await connection();
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return { success: false, error: "Invalid hero ID" };
+    }
+
+    const hero = await HeroContent.findById(id);
+    if (!hero) {
+      return { success: false, error: "Hero content not found" };
+    }
+
+    // Delete the image from S3 if it exists
+    if (hero.imageUrl) {
+      await deleteS3Object(hero.imageUrl);
+    }
+
+    // Delete the document
+    await hero.deleteOne();
+
+    revalidatePath("/content-management/app/hero_content");
+    return { success: true, message: "Hero content deleted successfully" };
+  } catch (error) {
+    console.error("Error deleting hero content:", error);
+    return { success: false, error: "Failed to delete hero content" };
+  }
+}
+
+export async function deleteHeroImage(heroId: string) {
+  try {
+    await connection();
+
+    if (!mongoose.Types.ObjectId.isValid(heroId)) {
+      return { success: false, error: "Invalid hero ID" };
+    }
+
+    const hero = await HeroContent.findById(heroId);
+    if (!hero) {
+      return { success: false, error: "Hero not found" };
+    }
+
+    if (!hero.imageUrl) {
+      return { success: false, error: "No image to delete" };
+    }
+
+    await deleteS3Object(hero.imageUrl);
+
+    hero.imageUrl = "";
+    await hero.save();
+
+    revalidatePath("/hero"); // adjust path
+
+    return { success: true, message: "Image removed successfully" };
+  } catch (error) {
+    console.error("Error deleting hero image:", error);
+    return { success: false, error: "Failed to delete image" };
   }
 }

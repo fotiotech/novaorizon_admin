@@ -12,7 +12,6 @@ export const useFileUploader = (
   instanceId?: string,
   initialFiles: string[] = [],
   subfolder?: string,
-  onRemoveSuccess?: (fileUrl: string) => Promise<void>, // NEW
 ) => {
   const [files, setFiles] = useState<string[]>(initialFiles);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -129,6 +128,7 @@ export const useFileUploader = (
     [instanceId, subfolder],
   );
 
+  // Auto-upload pending files
   useEffect(() => {
     if (pendingFiles.length > 0) {
       uploadFiles(pendingFiles);
@@ -170,9 +170,9 @@ export const useFileUploader = (
     [files, uploadFiles],
   );
 
+  // Only deletes from S3 – no database update; use FilesUploader's onRemove for that
   const removeFile = useCallback(
-    async (entityId: string, index: number) => {
-      // entityId is not used by S3 deletion but kept for consistency
+    async (index: number) => {
       if (index < 0 || index >= files.length) {
         return { success: false, message: "Index out of bounds" };
       }
@@ -180,17 +180,12 @@ export const useFileUploader = (
       try {
         await deleteS3Object(fileUrl);
         setFiles((prev) => prev.filter((_, i) => i !== index));
-        // Trigger database update callback if provided
-        if (onRemoveSuccess) {
-          await onRemoveSuccess(fileUrl);
-        }
         return { success: true };
       } catch (error) {
-        console.error("Deletion error:", error);
         return { success: false, message: (error as Error).message };
       }
     },
-    [files, onRemoveSuccess],
+    [files],
   );
 
   const removeMultipleFiles = useCallback(
@@ -204,10 +199,8 @@ export const useFileUploader = (
       try {
         await deleteMultipleS3Objects(toRemove);
         setFiles((prev) => prev.filter((_, i) => !indices.includes(i)));
-        // Optionally call onRemoveSuccess for each file if needed
         return { success: true, deleted: toRemove.length };
       } catch (error) {
-        console.error("Batch deletion error:", error);
         return { success: false, message: (error as Error).message };
       }
     },
@@ -233,7 +226,7 @@ export const useFileUploader = (
     setFiles,
     listFiles,
     updateFile,
-    removeFile,
+    removeFile, // kept for backward compatibility (S3 only)
     removeMultipleFiles,
     clearFiles,
   };

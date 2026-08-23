@@ -10,6 +10,7 @@ import Promotion from "@/models/Promotion";
 import { revalidatePath } from "next/cache";
 import mongoose from "mongoose";
 import { Collection } from "@/models/Collection";
+import { deleteS3Object } from "./s3";
 
 // ------------------------------------------------------------
 // Interface matching the new schema
@@ -226,4 +227,35 @@ export async function getMenuContentOptions(type: string) {
     value: item._id.toString(),
     label: item.name || item.title || "Unnamed",
   }));
+}
+
+export async function deleteMenuBackgroundImage(menuId: string) {
+  try {
+    await connection();
+
+    if (!mongoose.Types.ObjectId.isValid(menuId)) {
+      return { success: false, error: "Invalid menu ID" };
+    }
+
+    const menu = await Menu.findById(menuId);
+    if (!menu) {
+      return { success: false, error: "Menu not found" };
+    }
+
+    if (!menu.backgroundImage) {
+      return { success: false, error: "No background image to delete" };
+    }
+
+    await deleteS3Object(menu.backgroundImage);
+
+    menu.backgroundImage = "";
+    await menu.save();
+
+    revalidatePath("//content-management/app/navigation"); // adjust path
+
+    return { success: true, message: "Background image removed successfully" };
+  } catch (error) {
+    console.error("Error deleting menu background image:", error);
+    return { success: false, error: "Failed to delete image" };
+  }
 }

@@ -3,6 +3,7 @@
 import {
   createHeroContent,
   updateHeroContent,
+  deleteHeroImage, // NEW server action
 } from "@/app/actions/content_management";
 import FilesUploader from "@/components/FilesUploader";
 import Spinner from "@/components/Spinner";
@@ -31,92 +32,31 @@ const HeroForm: React.FC<HeroFormProps> = ({
   onSuccess,
   onCancel,
 }) => {
-  // ----- File Uploader with database removal callback -----
-  const { files, loading, addFiles, removeFile, setFiles } = useFileUploader(
-    undefined, // instanceId (not needed)
-    initialData?.imageUrl ? [initialData.imageUrl] : [], // initial files
-    undefined, // subfolder
-    async (fileUrl: string) => {
-      // This callback runs after S3 deletion
-      // For create mode, we don't have an ID, so we just update local state
-      if (mode === "create") {
-        // Nothing to do in database; just let local state update
-        return;
-      }
-
-      if (!initialData?._id) {
-        console.warn("No ID for update – cannot clear image in database");
-        return;
-      }
-
-      // Build FormData with empty imageUrl
-      const data = new FormData();
-      data.append("title", formData.title);
-      data.append("description", formData.description);
-      data.append("cta_text", formData.cta_text);
-      data.append("cta_link", formData.cta_link);
-      data.append("imageUrl", ""); // empty to clear
-
-      try {
-        const result = await updateHeroContent(initialData._id, null, data);
-        if (result.success) {
-          // Update local formData to reflect cleared image
-          setFormData((prev) => ({ ...prev, imageUrl: "" }));
-          setSubmitStatus({
-            success: true,
-            message: "Image removed successfully",
-            loading: false,
-          });
-          // Clear success message after a few seconds
-          setTimeout(() => {
-            setSubmitStatus({ success: false, message: "", loading: false });
-          }, 3000);
-        } else {
-          setSubmitStatus({
-            success: false,
-            message: result.message || "Failed to remove image",
-            loading: false,
-          });
-        }
-      } catch (error) {
-        console.error("Error updating hero after image removal:", error);
-        setSubmitStatus({
-          success: false,
-          message: "An error occurred while removing the image",
-          loading: false,
-        });
-      }
-    },
-  );
-
   const [formData, setFormData] = useState({
     title: initialData?.title || "",
     description: initialData?.description || "",
     cta_text: initialData?.cta_text || "",
     cta_link: initialData?.cta_link || "",
-    imageUrl: initialData?.imageUrl || "", // keep for local state, but it's managed via files
   });
+
+  // useFileUploader – now without database callback
+  const { files, loading, addFiles, setFiles } = useFileUploader(
+    undefined,
+    initialData?.imageUrl ? [initialData.imageUrl] : [],
+  );
+
   const [submitStatus, setSubmitStatus] = useState({
     success: false,
     message: "",
     loading: false,
   });
 
-  // When initialData changes, sync files and formData
+  // Sync files when initialData changes (e.g., after edit)
   useEffect(() => {
-    if (initialData) {
-      setFormData({
-        title: initialData.title || "",
-        description: initialData.description || "",
-        cta_text: initialData.cta_text || "",
-        cta_link: initialData.cta_link || "",
-        imageUrl: initialData.imageUrl || "",
-      });
-      if (initialData.imageUrl) {
-        setFiles([initialData.imageUrl]);
-      } else {
-        setFiles([]);
-      }
+    if (initialData?.imageUrl) {
+      setFiles([initialData.imageUrl]);
+    } else {
+      setFiles([]);
     }
   }, [initialData, setFiles]);
 
@@ -135,6 +75,30 @@ const HeroForm: React.FC<HeroFormProps> = ({
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // Handle image removal – calls server action
+  const handleRemoveImage = async (index: number, fileUrl: string) => {
+    if (mode === "update" && initialData?._id) {
+      const result = await deleteHeroImage(initialData._id);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to remove image");
+      }
+      // Remove from local state
+      setFiles((prev) => prev.filter((_, i) => i !== index));
+      // Optionally show success message
+      setSubmitStatus({
+        success: true,
+        message: "Image removed successfully",
+        loading: false,
+      });
+      setTimeout(() => {
+        setSubmitStatus({ success: false, message: "", loading: false });
+      }, 3000);
+    } else {
+      // In create mode, just remove from local state
+      setFiles((prev) => prev.filter((_, i) => i !== index));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -170,7 +134,7 @@ const HeroForm: React.FC<HeroFormProps> = ({
     data.append("description", formData.description);
     data.append("cta_text", formData.cta_text);
     data.append("cta_link", formData.cta_link);
-    data.append("imageUrl", files[0]); // use the first file
+    data.append("imageUrl", files[0]);
 
     try {
       let result;
@@ -201,7 +165,6 @@ const HeroForm: React.FC<HeroFormProps> = ({
             description: "",
             cta_text: "",
             cta_link: "",
-            imageUrl: "",
           });
           setFiles([]);
         }
@@ -255,8 +218,7 @@ const HeroForm: React.FC<HeroFormProps> = ({
           files={files}
           loading={loading}
           addFiles={addFiles}
-          removeFile={removeFile}
-          // onRemove is not needed because the hook's callback handles database update
+          onRemove={handleRemoveImage}
         />
       </div>
 

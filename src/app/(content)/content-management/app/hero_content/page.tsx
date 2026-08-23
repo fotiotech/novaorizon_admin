@@ -1,33 +1,59 @@
 "use client";
 
-import { findHeroContent } from "@/app/actions/content_management";
+import {
+  findHeroContent,
+  deleteHeroContent,
+} from "@/app/actions/content_management";
 import { HeroSection } from "@/constant/types";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
-import { Edit, Add, Image as ImageIcon } from "@mui/icons-material";
+import { Edit, Add, Image as ImageIcon, Delete } from "@mui/icons-material";
 
-const HeroContent = () => {
+const HeroContentPage = () => {
   const [heroContent, setHeroContent] = useState<HeroSection[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const fetchHeroContent = async () => {
+    try {
+      setLoading(true);
+      const content = await findHeroContent();
+      if (content) {
+        setHeroContent(content);
+      }
+    } catch (err) {
+      console.error("Failed to fetch hero content:", err);
+      setError("Failed to load hero content. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function getHeroContent() {
-      try {
-        setLoading(true);
-        const content = await findHeroContent();
-        if (content) {
-          setHeroContent(content);
-        }
-      } catch (err) {
-        console.error("Failed to fetch hero content:", err);
-        setError("Failed to load hero content. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    getHeroContent();
+    fetchHeroContent();
   }, []);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this hero content?")) {
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      const result = await deleteHeroContent(id);
+      if (result.success) {
+        // Refresh the list
+        await fetchHeroContent();
+      } else {
+        alert(result.error || "Failed to delete hero content");
+      }
+    } catch (error) {
+      alert("An error occurred while deleting");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -71,7 +97,7 @@ const HeroContent = () => {
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           <p>{error}</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={fetchHeroContent}
             className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
           >
             Try Again
@@ -85,7 +111,7 @@ const HeroContent = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Hero Content</h2>
-        <Link href={"/store_config/hero_content/add_hero_content"}>
+        <Link href={"/content-management/app/hero_content/new"}>
           <button
             type="button"
             className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
@@ -130,17 +156,34 @@ const HeroContent = () => {
                       </span>
                     )}
                   </div>
-                  <Link
-                    href={`/content-management/app/hero_content/edit?id=${hero._id}`}
-                  >
-                    <button
-                      title="Edit hero content"
-                      type="button"
-                      className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 flex items-center gap-1"
+                  <div className="flex gap-2">
+                    <Link
+                      href={`/content-management/app/hero_content/edit?id=${hero._id}`}
                     >
-                      <Edit fontSize="small" /> Edit
+                      <button
+                        title="Edit hero content"
+                        type="button"
+                        className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 flex items-center gap-1"
+                      >
+                        <Edit fontSize="small" /> Edit
+                      </button>
+                    </Link>
+                    <button
+                      title="Delete hero content"
+                      type="button"
+                      onClick={() => handleDelete(hero._id as string)}
+                      disabled={deletingId === hero._id}
+                      className="px-3 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {deletingId === hero._id ? (
+                        "Deleting..."
+                      ) : (
+                        <>
+                          <Delete fontSize="small" /> Delete
+                        </>
+                      )}
                     </button>
-                  </Link>
+                  </div>
                 </div>
               </div>
             </div>
@@ -155,7 +198,7 @@ const HeroContent = () => {
           <p className="text-gray-500 mb-4">
             Get started by adding your first hero banner
           </p>
-          <Link href={"/store_config/banner_sliders/add_hero_content"}>
+          <Link href={"/content-management/app/hero_content/new"}>
             <button
               type="button"
               className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
@@ -169,4 +212,4 @@ const HeroContent = () => {
   );
 };
 
-export default HeroContent;
+export default HeroContentPage;

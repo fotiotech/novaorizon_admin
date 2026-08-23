@@ -1,12 +1,13 @@
+// components/VariantImageUploader.tsx
 import React, { useEffect } from "react";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import FilesUploader from "@/components/FilesUploader";
 
 interface VariantImageUploaderProps {
   index: number;
-  fieldCode: string; // new – which variant field to update
-  productId?: string; // new – used as base S3 folder
-  initialFiles?: string[]; // new – existing URLs for this field
+  fieldCode: string;
+  productId?: string;
+  initialFiles?: string[];
   handleVariantChange: (
     index: number,
     field: string,
@@ -27,13 +28,17 @@ const VariantImageUploader: React.FC<VariantImageUploaderProps> = React.memo(
       handleVariantChange(index, fieldCode, files);
     }, [files, index, fieldCode, handleVariantChange]);
 
+    // Wrap removeFile to match onRemove signature
+    const handleRemove = async (indexToRemove: number) => {
+      await removeFile(indexToRemove);
+    };
+
     return (
       <FilesUploader
-        productId={productId || `variant-${index}`}
         files={files}
         loading={loading}
         addFiles={addFiles}
-        removeFile={removeFile}
+        onRemove={handleRemove}
         progressByName={progressByName}
       />
     );

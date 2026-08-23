@@ -7,6 +7,7 @@ import {
   createCollection,
   getCollectionById,
   updateCollection,
+  deleteCollectionImage, // new action
 } from "@/app/actions/collection";
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
@@ -37,54 +38,48 @@ const CollectionForm = ({ id }: { id?: string }) => {
     status: "active",
   });
 
-  // Helper to build FormData from current state (reused for submit and remove)
+  // Helper to build FormData
   const buildFormData = (data: typeof formData, rulesData: any[]) => {
     const fd = new FormData();
     fd.append("name", data.name);
     fd.append("description", data.description);
     fd.append("category_id", data.category_id);
-    fd.append("imageUrl", data.imageUrl || ""); // can be empty
+    fd.append("imageUrl", data.imageUrl || "");
     fd.append("status", data.status);
     fd.append("rules", JSON.stringify(rulesData));
     return fd;
   };
 
-  // ----- File Uploader with database removal callback -----
+  // ----- File Uploader (simplified, no callback) -----
   const {
     files,
     loading: fileLoading,
     addFiles,
-    removeFile,
+    setFiles,
   } = useFileUploader(
-    undefined, // instanceId (not needed)
+    undefined, // instanceId
     formData.imageUrl ? [formData.imageUrl] : [], // initial files
     undefined, // subfolder
-    async (fileUrl: string) => {
-      // This callback runs after S3 deletion
-      if (!id) {
-        // If we are creating a new collection, just update local state
-        setFormData((prev) => ({ ...prev, imageUrl: "" }));
-        return;
-      }
-
-      try {
-        // Update the collection in the database: set imageUrl to empty
-        const updatedData = { ...formData, imageUrl: "" };
-        const fd = buildFormData(updatedData, rules);
-        const result = await updateCollection(id, fd);
-        if (result.success) {
-          setFormData((prev) => ({ ...prev, imageUrl: "" }));
-          setSuccess("Image removed successfully");
-          setTimeout(() => setSuccess(null), 3000);
-        } else {
-          setError(result.error || "Failed to remove image from database");
-        }
-      } catch (err) {
-        console.error("Error updating collection after remove:", err);
-        setError("Failed to update collection after removing image");
-      }
-    },
   );
+
+  // Handle image removal – calls server action
+  const handleRemoveImage = async (index: number, fileUrl: string) => {
+    if (id) {
+      // Edit mode: delete from database and S3
+      const result = await deleteCollectionImage(id);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to remove image");
+      }
+      // Update local state
+      setFiles([]);
+      setFormData((prev) => ({ ...prev, imageUrl: "" }));
+      setSuccess("Image removed successfully");
+      setTimeout(() => setSuccess(null), 3000);
+    } else {
+      // Create mode: just remove from local state
+      setFiles((prev) => prev.filter((_, i) => i !== index));
+    }
+  };
 
   // Fetch categories and collection data
   useEffect(() => {
@@ -93,9 +88,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
         setLoading(true);
         const result = await getAllCollections();
         if (result.success) {
-          const mappedCollections = result.data || [];
-          console.log({ mappedCollections });
-          setCollections(mappedCollections);
+          setCollections(result.data || []);
         } else {
           setError(result.error || "Failed to fetch collections");
         }
@@ -122,7 +115,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
             ? collectionData.data[0]
             : collectionData.data;
 
-          // Update form data with collection values
           setFormData({
             name: data.name || "",
             description: data.description || "",
@@ -132,8 +124,11 @@ const CollectionForm = ({ id }: { id?: string }) => {
           });
 
           if (data?.imageUrl) {
-            // The hook already initializes with imageUrl via initialFiles, so we don't need to add again
+            setFiles([data.imageUrl]);
+          } else {
+            setFiles([]);
           }
+
           if (data?.rules) {
             setRules(
               data.rules.map((rule: any) => ({
@@ -153,7 +148,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
     };
 
     fetchData();
-  }, [id]);
+  }, [id, setFiles]);
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -185,7 +180,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
         return;
       }
 
-      // Validate rules
       const invalidRules = rules.some(
         (rule) => !rule.attribute || !rule.operator || !rule.value,
       );
@@ -320,13 +314,10 @@ const CollectionForm = ({ id }: { id?: string }) => {
               Image
             </label>
             <FilesUploader
-              productId={id} // pass collection ID for removal
               files={files}
               loading={fileLoading}
               addFiles={addFiles}
-              removeFile={removeFile}
-              progressByName={{}}
-              // onRemove is now handled inside the hook's callback
+              onRemove={handleRemoveImage}
             />
           </div>
 
@@ -397,7 +388,9 @@ const CollectionForm = ({ id }: { id?: string }) => {
           <div className="flex justify-end space-x-4 pt-4">
             <button
               type="button"
-              onClick={() => router.push("/collection")}
+              onClick={() =>
+                router.push("/content-management/app/navigation/collection")
+              }
               className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
               disabled={isSubmitting}
             >
