@@ -99,7 +99,7 @@ const Categories = () => {
             href="/catalog/categories/property"
             className="px-4 py-2 font-semibold bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg transition-colors"
           >
-            + New Property
+            + Property
           </Link>
           <button
             onClick={handleNewCategory}

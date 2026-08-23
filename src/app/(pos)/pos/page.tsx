@@ -146,7 +146,7 @@ export default function Pos() {
                 {product.title}
               </h3>
               <p className="text-blue-600 font-bold">
-                ${product.list_price?.toFixed(2) || "0.00"}
+                cfa{product.list_price?.toFixed(2) || "0.00"}
               </p>
               <button
                 onClick={() => handleAddToCart(product._id)}
