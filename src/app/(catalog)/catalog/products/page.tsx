@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { findProducts } from "@/app/actions/products";
+import { findProducts, deleteProduct } from "@/app/actions/products";
 import { Delete } from "@mui/icons-material";
 import { useDebouncedCallback } from "use-debounce";
 
@@ -51,7 +51,12 @@ export default function ProductsPage() {
     try {
       const result = await findProducts();
       // Check for error response
-      if (result && typeof result === "object" && "success" in result && result.success === false) {
+      if (
+        result &&
+        typeof result === "object" &&
+        "success" in result &&
+        result.success === false
+      ) {
         setError(result.error || "Failed to fetch products");
         setAllProducts([]);
         return;
@@ -88,19 +93,23 @@ export default function ProductsPage() {
     if (filters.search.trim()) {
       const searchLower = filters.search.toLowerCase();
       result = result.filter(
-        (p:any) =>
+        (p: any) =>
           p.title?.toLowerCase().includes(searchLower) ||
           p.sku?.toLowerCase().includes(searchLower) ||
-          p.model?.toLowerCase().includes(searchLower)
+          p.model?.toLowerCase().includes(searchLower),
       );
     }
 
     if (filters.category) {
-      result = result.filter((p:any) => getCategoryName(p.category_id) === filters.category);
+      result = result.filter(
+        (p: any) => getCategoryName(p.category_id) === filters.category,
+      );
     }
 
     if (filters.status) {
-      result = result.filter((p:any) => (p.status || "active") === filters.status);
+      result = result.filter(
+        (p: any) => (p.status || "active") === filters.status,
+      );
     }
 
     return result;
@@ -118,15 +127,28 @@ export default function ProductsPage() {
     setPage(1);
   }, [filters]);
 
-  // Delete stub – replace with actual delete action
+  // Delete product handler
   const handleDelete = async (productId: string) => {
-    if (!window.confirm("Are you sure you want to delete this product?")) return;
-    alert("Delete functionality not implemented.");
+    if (!window.confirm("Are you sure you want to delete this product?"))
+      return;
+
+    try {
+      const result = await deleteProduct(productId);
+      if (result.success) {
+        // Refresh the product list after deletion
+        await fetchAllProducts();
+      } else {
+        alert(result.error || "Failed to delete product.");
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("An error occurred while deleting the product.");
+    }
   };
 
   // Debounced search
   const debouncedSearch = useDebouncedCallback((value: string) => {
-    setFilters((prev:any) => ({ ...prev, search: value }));
+    setFilters((prev: any) => ({ ...prev, search: value }));
   }, 500);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,7 +157,7 @@ export default function ProductsPage() {
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFilters((prev:any) => ({ ...prev, [name]: value }));
+    setFilters((prev: any) => ({ ...prev, [name]: value }));
   };
 
   const handleClearFilters = () => {
@@ -150,7 +172,7 @@ export default function ProductsPage() {
   // Build category options from the populated names
   const categories = useMemo(() => {
     const cats = new Set<string>();
-    allProducts.forEach((p:any) => {
+    allProducts.forEach((p: any) => {
       const name = getCategoryName(p.category_id);
       if (name) cats.add(name);
     });
@@ -195,7 +217,9 @@ export default function ProductsPage() {
       <div className="bg-card p-4 rounded-lg shadow-md border border-border space-y-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">Search</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">
+              Search
+            </label>
             <input
               type="text"
               defaultValue={filters.search}
@@ -205,7 +229,9 @@ export default function ProductsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">Category</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">
+              Category
+            </label>
             <select
               name="category"
               value={filters.category}
@@ -213,13 +239,17 @@ export default function ProductsPage() {
               className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">All Categories</option>
-              {categories.map((cat:any) => (
-                <option key={cat} value={cat}>{cat}</option>
+              {categories.map((cat: any) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">Status</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">
+              Status
+            </label>
             <select
               name="status"
               value={filters.status}
@@ -255,30 +285,49 @@ export default function ProductsPage() {
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted/50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Product</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">SKU</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Price</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Stock</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Category</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Product
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  SKU
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Price
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Stock
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Category
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
               {paginatedProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-muted-foreground">
+                  <td
+                    colSpan={6}
+                    className="px-6 py-4 text-center text-sm text-muted-foreground"
+                  >
                     No products found.
                   </td>
                 </tr>
               ) : (
-                paginatedProducts.map((product:any) => (
+                paginatedProducts.map((product: any) => (
                   <tr key={product._id}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
                           <div className="h-10 w-10 rounded-lg bg-pri-500/10 flex items-center justify-center overflow-hidden">
                             {product.main_image ? (
-                              <img src={product.main_image} alt={product.title} className="h-full w-full object-cover" />
+                              <img
+                                src={product.main_image}
+                                alt={product.title}
+                                className="h-full w-full object-cover"
+                              />
                             ) : (
                               <span className="font-medium text-pri-500">
                                 {product.title?.charAt(0).toUpperCase() || "P"}
@@ -287,20 +336,32 @@ export default function ProductsPage() {
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-foreground">{product.title || "Untitled"}</div>
-                          <div className="text-sm text-muted-foreground">{product.model}</div>
+                          <div className="text-sm font-medium text-foreground">
+                            {product.title || "Untitled"}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {product.model}
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">{product.sku}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                      {product.sku}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                       ${product.sale_price || product.list_price || 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                        ${product.stock_status?.includes("In Stock") ? "bg-thir-500/20 text-thir-700 dark:text-thir-400"
-                        : product.stock_status?.includes("Low Stock") ? "bg-sec-500/20 text-sec-700 dark:text-sec-400"
-                        : "bg-destructive/20 text-destructive"}`}>
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                        ${
+                          product.stock_status?.includes("In Stock")
+                            ? "bg-thir-500/20 text-thir-700 dark:text-thir-400"
+                            : product.stock_status?.includes("Low Stock")
+                              ? "bg-sec-500/20 text-sec-700 dark:text-sec-400"
+                              : "bg-destructive/20 text-destructive"
+                        }`}
+                      >
                         {product.stock_status?.join(", ") || "N/A"}
                       </span>
                     </td>
@@ -311,8 +372,16 @@ export default function ProductsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <Link href={`/catalog/products/edit?id=${product._id}`} className="text-pri-500 hover:text-pri-600">Edit</Link>
-                        <button onClick={() => handleDelete(product._id)} className="text-destructive hover:text-destructive/80">
+                        <Link
+                          href={`/catalog/products/edit?id=${product._id}`}
+                          className="text-pri-500 hover:text-pri-600"
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(product._id)}
+                          className="text-destructive hover:text-destructive/80"
+                        >
                           <Delete fontSize="small" />
                         </button>
                       </div>
@@ -337,7 +406,9 @@ export default function ProductsPage() {
               >
                 Previous
               </button>
-              <span className="px-3 py-1 text-foreground">Page {page} of {totalPages}</span>
+              <span className="px-3 py-1 text-foreground">
+                Page {page} of {totalPages}
+              </span>
               <button
                 onClick={() => goToPage(page + 1)}
                 disabled={page === totalPages}
