@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useFormState } from "react-dom"; // <-- useFormState from react-dom
-import { createPage, updatePage } from "@/app/actions/page";
+import { createPage, updatePage } from "@/app/actions/pageActions";
 
 type ActionState = {
   errors?: Record<string, string[]>;

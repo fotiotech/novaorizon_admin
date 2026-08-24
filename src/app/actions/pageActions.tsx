@@ -49,9 +49,7 @@ function formDataToObject(formData: FormData): Record<string, any> {
 // ----------------------------------------------
 // 3. Create Page
 // ----------------------------------------------
-export async function createPage(
-  formData: FormData,
-): Promise<{ errors?: Record<string, string[]>; success?: boolean }> {
+export async function createPage(formData: FormData) {
   await connection();
 
   const raw = formDataToObject(formData);
@@ -96,10 +94,7 @@ export async function createPage(
 // ----------------------------------------------
 // 4. Update Page
 // ----------------------------------------------
-export async function updatePage(
-  id: string,
-  formData: FormData,
-): Promise<{ errors?: Record<string, string[]>; success?: boolean }> {
+export async function updatePage(id: string, formData: FormData) {
   await connection();
 
   const raw = formDataToObject(formData);

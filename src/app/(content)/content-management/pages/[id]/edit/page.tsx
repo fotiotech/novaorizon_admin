@@ -1,4 +1,4 @@
-import { getPageById } from "@/app/actions/page";
+import { getPageById } from "@/app/actions/pageActions";
 import PageForm from "../../components/PageForm";
 
 interface EditPageParams {

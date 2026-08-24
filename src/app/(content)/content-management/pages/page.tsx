@@ -1,4 +1,4 @@
-import { getPages, deletePage } from "@/app/actions/page";
+import { getPages, deletePage } from "@/app/actions/pageActions";
 import Link from "next/link";
 
 export default async function PagesList() {
