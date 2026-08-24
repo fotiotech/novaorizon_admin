@@ -83,11 +83,27 @@ export const rawMenuConfig = [
     ],
   },
   {
+    title: "Analytics",
+    links: [
+      { name: "Sales Analytics", href: "/sales_reports", icon: <Assessment /> },
+      {
+        name: "Customer Analytics",
+        href: "/customer_report",
+        icon: <BarChart />,
+      },
+      {
+        name: "Inventory Reports",
+        href: "/inventory_reports",
+        icon: <Inventory />,
+      },
+    ],
+  },
+  {
     title: "Sales",
     links: [
       { name: "Orders", href: "/orders", icon: <ShoppingBag /> },
       { name: "Carriers", href: "/carriers", icon: <LocalShipping /> },
-      { name: "Refunds & Returns", href: "/refunds_returns", icon: <Replay /> },
+      { name: "Refunds", href: "/refunds", icon: <Replay /> },
     ],
   },
   {
@@ -107,88 +123,31 @@ export const rawMenuConfig = [
   {
     title: "Customers",
     links: [
-      { name: "Customer List", href: "/customers", icon: <Person2 /> },
+      { name: "Customers", href: "/customers", icon: <Person2 /> },
       { name: "Segmentation", href: "/segmentation", icon: <Segment /> },
-      {
-        name: "Communication History",
-        href: "/communication_log",
-        icon: <History />,
-      },
-      { name: "Reviews", href: "/reviews", icon: <Assignment /> },
+      { name: "Feedbacks", href: "/feedbacks", icon: <Assignment /> },
       { name: "Chat", href: "/chat", icon: <Chat />, showUnreadCount: true },
     ],
   },
   {
     title: "Marketing",
     links: [
+      { name: "Content", href: "/content", icon: <Code /> },
+      { name: "Campaigns", href: "/campaigns", icon: <Discount /> },
       { name: "Promotions", href: "/promotions", icon: <Discount /> },
-      { name: "Email Campaigns", href: "/email_marketing", icon: <Email /> },
+      { name: "Email Marketing", href: "/email_marketing", icon: <Email /> },
       { name: "Affiliate Marketing", href: "/affiliate", icon: <Code /> },
+      { name: "SEO", href: "/seo", icon: <Code /> },
     ],
   },
   {
-    title: "Content Management",
+    title: "Store",
     links: [
-      { name: "App", href: "/app", icon: <Store /> },
       { name: "Pages", href: "/pages", icon: <Campaign /> },
       { name: "Posts", href: "/posts", icon: <Language /> },
       { name: "Media", href: "/media", icon: <Language /> },
       { name: "Blog", href: "/blog", icon: <Campaign /> },
       { name: "FAQs", href: "/faqs", icon: <Assignment /> },
-    ],
-  },
-  {
-    title: "Analytics",
-    links: [
-      { name: "Sales Analytics", href: "/sales_reports", icon: <Assessment /> },
-      {
-        name: "Customer Analytics",
-        href: "/customer_report",
-        icon: <BarChart />,
-      },
-      {
-        name: "Inventory Reports",
-        href: "/inventory_reports",
-        icon: <Inventory />,
-      },
-    ],
-  },
-  {
-    title: "Users",
-    links: [
-      { name: "Users", href: "/users", icon: <ManageAccounts /> },
-      {
-        name: "Roles & Permissions",
-        href: "/permissions_roles",
-        icon: <Group />,
-      },
-      { name: "Audit Log", href: "/audit_log", icon: <History /> },
-    ],
-  },
-  {
-    title: "Settings & Integrations",
-    links: [
-      {
-        name: "General Settings",
-        href: "/settings/general",
-        icon: <Settings />,
-      },
-      { name: "Payment Methods", href: "/settings/payment", icon: <Payment /> },
-      {
-        name: "Shipping Options",
-        href: "/settings/shipping",
-        icon: <LocalShipping />,
-      },
-      { name: "Tax Configuration", href: "/settings/tax", icon: <Receipt /> },
-      { name: "Localization", href: "/settings/local", icon: <Room /> },
-      { name: "Financial Overview", href: "/finance", icon: <AttachMoney /> },
-      { name: "Invoices", href: "/invoices", icon: <Receipt /> },
-      { name: "Refunds", href: "/refunds", icon: <Replay /> },
-      {
-        name: "Tax Reports",
-        href: "/tax_shipping_reports",
-        icon: <ReceiptLong />,
-      },
     ],
   },
 ];
@@ -207,7 +166,7 @@ const menuConfig: MenuSection[] = rawMenuConfig.map((section) => {
   return { ...section, slug, links };
 });
 
-const signOutLink: MenuLink = { name: "Sign Out", href: "/auth/signout" };
+const settingsLink: MenuLink = { name: "Settings", href: "/settings" };
 
 const AdminSideBar: React.FC<AdminSideBarProps> = ({
   domNode,
@@ -355,25 +314,12 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
         </div>
         <div className="p-4 border-t border-border">
           <Link
-            href={signOutLink.href}
+            href={settingsLink.href}
             onClick={handleClose}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors duration-200 font-medium"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
-            <span>{signOutLink.name}</span>
+            <Settings />
+            <span>{settingsLink.name}</span>
           </Link>
         </div>
       </aside>

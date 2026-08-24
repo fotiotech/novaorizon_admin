@@ -141,7 +141,7 @@ export async function createMenu(menuData: MenuData) {
     });
     await newMenu.save();
 
-    revalidatePath("/content-management/app/navigation/menus");
+    revalidatePath("/marketing/content/navigation/menus");
     return {
       success: true,
       data: JSON.parse(JSON.stringify(newMenu)),
@@ -169,8 +169,8 @@ export async function updateMenu(id: string, menuData: Partial<MenuData>) {
 
     if (!menu) return { success: false, error: "Menu not found" };
 
-    revalidatePath("/content-management/app/navigation/menus");
-    revalidatePath(`/content-management/app/navigation/menus/edit/${id}`);
+    revalidatePath("/marketing/content/navigation/menus");
+    revalidatePath(`/marketing/content/navigation/menus/edit/${id}`);
 
     return {
       success: true,
@@ -188,7 +188,7 @@ export async function deleteMenu(id: string) {
     const menu = await Menu.findByIdAndDelete(id);
     if (!menu) return { success: false, error: "Menu not found" };
 
-    revalidatePath("/content-management/app/navigation/menus");
+    revalidatePath("/marketing/content/navigation/menus");
     return { success: true, message: "Menu deleted successfully" };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -251,7 +251,7 @@ export async function deleteMenuBackgroundImage(menuId: string) {
     menu.backgroundImage = "";
     await menu.save();
 
-    revalidatePath("//content-management/app/navigation"); // adjust path
+    revalidatePath("/marketing/content/navigation"); // adjust path
 
     return { success: true, message: "Background image removed successfully" };
   } catch (error) {

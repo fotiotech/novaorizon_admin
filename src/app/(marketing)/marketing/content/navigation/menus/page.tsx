@@ -154,7 +154,7 @@ const MenuPage = () => {
           </p>
         </div>
         <Link
-          href="/content-management/app/navigation/menus/create"
+          href="/marketing/content/navigation/menus/create"
           className="bg-primary px-4 py-2 rounded-lg text-primary-foreground hover:bg-primary/90 transition-colors flex items-center"
         >
           <svg
@@ -199,7 +199,7 @@ const MenuPage = () => {
             </p>
             <div className="mt-6">
               <Link
-                href="/content-management/app/navigation/menus/create"
+                href="/marketing/content/navigation/menus/create"
                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
                 Add Menu
@@ -305,7 +305,7 @@ const MenuPage = () => {
                     <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         <Link
-                          href={`/content-management/app/navigation/menus/edit?id=${menu._id}`}
+                          href={`/marketing/content/navigation/menus/edit?id=${menu._id}`}
                           className="text-primary hover:text-primary/80"
                         >
                           Edit

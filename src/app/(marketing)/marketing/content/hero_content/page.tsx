@@ -85,7 +85,7 @@ const HeroContentPage = () => {
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Hero Content</h2>
-          <Link href={"/content-management/app/hero_content/new"}>
+          <Link href={"/marketing/content/hero_content/new"}>
             <button
               type="button"
               className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
@@ -111,7 +111,7 @@ const HeroContentPage = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Hero Content</h2>
-        <Link href={"/content-management/app/hero_content/new"}>
+        <Link href={"/marketing/content/hero_content/new"}>
           <button
             type="button"
             className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
@@ -158,7 +158,7 @@ const HeroContentPage = () => {
                   </div>
                   <div className="flex gap-2">
                     <Link
-                      href={`/content-management/app/hero_content/edit?id=${hero._id}`}
+                      href={`/marketing/content/hero_content/edit?id=${hero._id}`}
                     >
                       <button
                         title="Edit hero content"
@@ -198,7 +198,7 @@ const HeroContentPage = () => {
           <p className="text-gray-500 mb-4">
             Get started by adding your first hero banner
           </p>
-          <Link href={"/content-management/app/hero_content/new"}>
+          <Link href={"/marketing/content/hero_content/new"}>
             <button
               type="button"
               className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"

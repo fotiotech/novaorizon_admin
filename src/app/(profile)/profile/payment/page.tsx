@@ -6,7 +6,7 @@ import {
   deletePaymentMethod,
 } from "@/app/actions/payment";
 import { getUserAddresses } from "@/app/actions/address";
-import PaymentMethodForm from "../_component/PaymentMethodForm";
+import PaymentMethodForm from "../../_component/PaymentMethodForm";
 
 export default function PaymentMethodsPage() {
   const [showForm, setShowForm] = useState(false);

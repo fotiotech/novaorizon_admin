@@ -246,7 +246,7 @@ export async function createCollection(formData: FormData) {
     });
 
     await collection.save();
-    revalidatePath("/collection");
+    revalidatePath("/marketing/content/navigation/collection");
 
     return {
       success: true,
@@ -368,7 +368,7 @@ export async function updateCollection(id: string, formData: FormData) {
       return { success: false, error: "Collection not found" };
     }
 
-    revalidatePath("/content-management/app/navigation/collection");
+    revalidatePath("/marketing/content/navigation/collection");
     return {
       success: true,
       data: collection,
@@ -420,7 +420,7 @@ export async function deleteCollection(id: string) {
       return { success: false, error: "Collection not found" };
     }
 
-    revalidatePath("/content-management/app/navigation/collection");
+    revalidatePath("/marketing/content/navigation/collection");
     return {
       success: true,
       message: "Collection deleted successfully",
@@ -458,7 +458,7 @@ export async function deleteCollectionImage(collectionId: string) {
     collection.imageUrl = "";
     await collection.save();
 
-    revalidatePath("/collections");
+    revalidatePath("/marketing/content/navigation/collections");
 
     return { success: true };
   } catch (error) {

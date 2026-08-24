@@ -205,7 +205,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
             : "Collection created successfully",
         );
         setTimeout(() => {
-          router.push("/content-management/app/navigation/collection");
+          router.push("/marketing/content/navigation/collection");
           router.refresh();
         }, 1500);
       } else {

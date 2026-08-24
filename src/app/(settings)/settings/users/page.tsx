@@ -28,7 +28,7 @@ ChartJS.register(
   Tooltip,
   Legend,
   PointElement,
-  LineElement
+  LineElement,
 );
 
 // Define chart data types

@@ -36,7 +36,6 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -47,7 +46,6 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
       </div>
     );
   }
-
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">

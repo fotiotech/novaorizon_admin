@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { getUserAddresses, deleteAddress } from "@/app/actions/address";
-import AddressForm from "../_component/AddressForm";
+import AddressForm from "../../_component/AddressForm";
 
 export default function AddressesPage() {
   const [showForm, setShowForm] = useState(false);

@@ -9,7 +9,7 @@ export default function AppPage() {
       <ul className="space-y-2">
         <li>
           <Link
-            href="/content-management/app/navigation"
+            href="/marketing/content/navigation"
             className="block p-4 bg-card border border-border rounded-lg hover:bg-muted/50 hover:shadow-md transition-all duration-200 text-foreground"
           >
             Navigation / Menus
@@ -17,7 +17,7 @@ export default function AppPage() {
         </li>
         <li>
           <Link
-            href="/content-management/app/hero_content"
+            href="/marketing/content/hero_content"
             className="block p-4 bg-card border border-border rounded-lg hover:bg-muted/50 hover:shadow-md transition-all duration-200 text-foreground"
           >
             Hero Content
@@ -25,7 +25,7 @@ export default function AppPage() {
         </li>
         <li>
           <Link
-            href="/content-management/app/seo"
+            href="/marketing/content/seo"
             className="block p-4 bg-card border border-border rounded-lg hover:bg-muted/50 hover:shadow-md transition-all duration-200 text-foreground"
           >
             SEO settings
