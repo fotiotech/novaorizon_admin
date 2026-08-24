@@ -3,11 +3,12 @@
 import { signup } from "@/app/lib/actions";
 import Image from "next/image";
 import Link from "next/link";
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
+import { useActionState } from "react";
 import { useState, useEffect } from "react";
 
 export default function SignupForm() {
-  const [state, action] = useFormState(signup, undefined);
+  const [state, action] = useActionState(signup, undefined);
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<{ [key: string]: string[] }>({});
 

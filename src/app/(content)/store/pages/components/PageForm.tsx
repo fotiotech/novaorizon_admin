@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { useFormState } from "react-dom"; // <-- useFormState from react-dom
+import { useActionState } from "react"; // <-- useFormState from react-dom
 import { createPage, updatePage } from "@/app/actions/pageActions";
 
 type ActionState = {
@@ -22,7 +22,7 @@ export default function PageForm({ initialData }: PageFormProps) {
     : createPage;
 
   // Use useFormState (React 18) instead of useActionState
-  const [state, formAction] = useFormState<ActionState, FormData>(
+  const [state, formAction] = useActionState<ActionState, FormData>(
     action as any,
     initialState,
   );
