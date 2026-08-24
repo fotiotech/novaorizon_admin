@@ -117,10 +117,6 @@ export const rawMenuConfig = [
     ],
   },
   {
-    title: "POS",
-    links: [{ name: "Point of sales", href: "/pos", icon: <GetAppRounded /> }],
-  },
-  {
     title: "Customers",
     links: [
       { name: "Customers", href: "/customers", icon: <Person2 /> },
@@ -139,6 +135,10 @@ export const rawMenuConfig = [
       { name: "Affiliate Marketing", href: "/affiliate", icon: <Code /> },
       { name: "SEO", href: "/seo", icon: <Code /> },
     ],
+  },
+  {
+    title: "POS",
+    links: [{ name: "Point of sales", href: "/pos", icon: <GetAppRounded /> }],
   },
   {
     title: "Store",
