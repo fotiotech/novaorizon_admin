@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 * {
-  border: 0 solid transparent;  /* optional, Tailwind already does this */
+  border: 0 solid transparent; /* optional, Tailwind already does this */
 }
 
 label {
@@ -56,16 +56,16 @@ td {
 @layer base {
   :root {
     /* ---- shadcn/ui semantic variables (HSL) ---- */
-    --background: oklch(1 0 0);           /* white */
-    --foreground: oklch(0.145 0 0);             /* black */
+    --background: oklch(1 0 0); /* white */
+    --foreground: oklch(0.145 0 0); /* black */
 
-    --primary: oklch(0.205 0 0);            /* blue */
+    --primary: oklch(0.205 0 0); /* blue */
     --primary-foreground: oklch(0.985 0 0);
 
-    --secondary: oklch(0.97 0 0);           /* orange */
+    --secondary: oklch(0.97 0 0); /* orange */
     --secondary-foreground: oklch(0.205 0 0);
 
-    --accent: oklch(0.97 0 0);             /* green */
+    --accent: oklch(0.97 0 0); /* green */
     --accent-foreground: oklch(0.205 0 0);
 
     --muted: oklch(0.97 0 0);
@@ -81,7 +81,7 @@ td {
 
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);               /* blue */
+    --ring: oklch(0.708 0 0); /* blue */
 
     --radius: 0.625rem;
 
@@ -101,50 +101,50 @@ td {
     --sidebar-ring: oklch(0.708 0 0);
   }
 
-.dark {
-  /* Deep navy background – clearly blue, not gray */
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
+  .dark {
+    /* Deep navy background – clearly blue, not gray */
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
 
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
 
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
 
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
 
-  --muted: oklch(0.269 0 0);              /* slightly desaturated for contrast */
-  --muted-foreground: oklch(0.708 0 0);
+    --muted: oklch(0.269 0 0); /* slightly desaturated for contrast */
+    --muted-foreground: oklch(0.708 0 0);
 
-  --card: oklch(0.205 0 0);                /* deeper for card depth */
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0); /* deeper for card depth */
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
 
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: 0 0% 100%;
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: 0 0% 100%;
 
-  --border: oklch(1 0 0 / 10%);             /* visible but not harsh */
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+    --border: oklch(1 0 0 / 10%); /* visible but not harsh */
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
 
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
 
-  --sidebar: oklch(0.205 0 0);            /* matches background */
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
+    --sidebar: oklch(0.205 0 0); /* matches background */
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+  }
 
   .theme {
     --font-heading: var(--font-sans);
