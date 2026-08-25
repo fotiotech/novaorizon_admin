@@ -3,11 +3,12 @@ export const dynamic = 'force-dynamic';
 import CarrierForm from "@/app/(sales)/components/carriers/CarrierForm";
 import { getCarriersById, updateCarrier } from "@/app/actions/carrier";
 
-export default async function EditCarrierPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function EditCarrierPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const carrier = await getCarriersById(params.id);
   if (!carrier) {
     return <div className="text-destructive">Carrier not found</div>;

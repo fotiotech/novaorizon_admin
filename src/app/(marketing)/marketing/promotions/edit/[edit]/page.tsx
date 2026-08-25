@@ -6,10 +6,11 @@ import { listPromotionTypes } from '@/app/actions/promotionType';
 import { notFound } from 'next/navigation';
 
 interface EditPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export default async function EditPromotionPage({ params }: EditPageProps) {
+export default async function EditPromotionPage(props: EditPageProps) {
+  const params = await props.params;
   const [promotion, { data: types }] = await Promise.all([
     getPromotion(params.id),
     listPromotionTypes({ isActive: true }, { limit: 100 }),

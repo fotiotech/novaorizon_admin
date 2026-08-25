@@ -5,10 +5,11 @@ import { getPromotionType, listPromotionTypeProperties, updatePromotionType } fr
 import { notFound } from 'next/navigation';
 
 interface EditPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export default async function EditPromotionTypePage({ params }: EditPageProps) {
+export default async function EditPromotionTypePage(props: EditPageProps) {
+  const params = await props.params;
   const [promotionType, propertiesData]:any = await Promise.all([
     getPromotionType(params.id, true), // populate properties
     listPromotionTypeProperties({}, { limit: 100 }),

@@ -4,12 +4,13 @@ import { notFound } from 'next/navigation';
 import MetaTagForm from '../_component/MetaTagForm';
 
 interface EditMetaTagPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-const EditMetaTagPage = ({ params }: EditMetaTagPageProps) => {
+const EditMetaTagPage = async (props: EditMetaTagPageProps) => {
+  const params = await props.params;
   if (!params.id) {
     notFound();
   }

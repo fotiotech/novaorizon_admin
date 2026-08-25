@@ -1,7 +1,7 @@
 // app/chat/[roomId]/page.tsx - Individual Chat Page
 "use client";
 import { useUserData } from "@/app/context/UserDataContext"; // 👈 new import
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import { db } from "@/utils/firebasedb";
 import {
   addDoc,
@@ -27,12 +27,13 @@ interface Message {
 }
 
 interface ChatPageProps {
-  params: {
+  params: Promise<{
     roomId: string;
-  };
+  }>;
 }
 
-export default function ChatPage({ params }: ChatPageProps) {
+export default function ChatPage(props: ChatPageProps) {
+  const params = use(props.params);
   // 👇 Use UserDataContext instead of useUser + useSession
   const { user } = useUserData();
   const { roomId } = params;

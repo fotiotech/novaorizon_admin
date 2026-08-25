@@ -5,12 +5,13 @@ import { notFound } from "next/navigation";
 import OrderDetailsClient from "../_component/OrderDetailsPage";
 
 interface PageProps {
-  params: {
+  params: Promise<{
     orderNumber: string;
-  };
+  }>;
 }
 
-export default async function Page({ params }: PageProps) {
+export default async function Page(props: PageProps) {
+  const params = await props.params;
   const { orderNumber } = params;
 
   // Fetch the specific order using the updated findOrders
