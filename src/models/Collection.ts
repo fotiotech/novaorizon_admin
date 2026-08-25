@@ -1,44 +1,40 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 const ruleSchema = new Schema({
-  attribute: {
-    type: String,
-    required: [true, "Rule attribute is required"],
-  },
+  attribute: { type: String, required: true },
   operator: {
     type: String,
     enum: ["$in", "$nin", "$eq", "$ne", "$lt", "$lte", "$gt", "$gte"],
-    required: [true, "Rule operator is required"],
-  },
-  value: {
-    type: Schema.Types.Mixed,
-    required: [true, "Rule value is required"],
-  },
-  position: {
-    type: Number,
     required: true,
-    min: [0, "Position must be non-negative"],
   },
+  value: { type: Schema.Types.Mixed, required: true },
+  position: { type: Number, required: true, min: 0 },
 });
 
 const CollectionSchema = new Schema(
   {
-    name: {
+    name: { type: String, required: true },
+    description: { type: String },
+    imageUrl: { type: String },
+    // NEW: type of collection
+    type: {
       type: String,
-      required: [true, "Collection name is required"],
-      unique: true,
+      enum: ["rule", "manual"],
+      default: "rule",
     },
-    description: {
+    // NEW: target model ("Product" or "Collection")
+    targetType: {
       type: String,
+      enum: ["Product", "Collection"],
+      default: "Product",
     },
-    imageUrl: {
-      type: String,
-    },
-    category_id: {
-      type: Schema.Types.ObjectId,
-      ref: "Category",
-      required: [true, "Category ID is required"],
-    },
+    // NEW: manually selected items (dynamic ref)
+    items: [
+      {
+        type: Schema.Types.ObjectId,
+        refPath: "targetType", // dynamic reference
+      },
+    ],
     rules: [ruleSchema],
     status: {
       type: String,
@@ -47,14 +43,11 @@ const CollectionSchema = new Schema(
     },
   },
   {
-    timestamps: {
-      createdAt: "created_at",
-      updatedAt: "updated_at",
-    },
-  }
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+  },
 );
 
-// Ensure rules are ordered by position
+// Pre-save hook to sort rules
 CollectionSchema.pre("save", function (next) {
   if (this.rules) {
     this.rules.sort((a, b) => a.position - b.position);
@@ -62,11 +55,11 @@ CollectionSchema.pre("save", function (next) {
   next();
 });
 
-// Indexes for better query performance
+// Indexes
 CollectionSchema.index({ name: 1 });
-CollectionSchema.index({ category_id: 1 });
 CollectionSchema.index({ status: 1 });
 CollectionSchema.index({ "rules.attribute": 1 });
+CollectionSchema.index({ targetType: 1 });
 
 export const Collection =
   mongoose.models.Collection || mongoose.model("Collection", CollectionSchema);

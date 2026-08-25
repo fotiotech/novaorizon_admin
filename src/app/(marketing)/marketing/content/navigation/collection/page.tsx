@@ -26,7 +26,6 @@ const ProductCollectionPage = () => {
       if (result.success) {
         const mappedCollections = result.data || [];
         console.log({ mappedCollections });
-
         setCollections(mappedCollections);
       } else {
         setError(result.error || "Failed to fetch collections");
@@ -93,6 +92,11 @@ const ProductCollectionPage = () => {
     });
   };
 
+  // Helper to get display name from item (product or collection)
+  const getItemName = (item: any) => {
+    return item.title || item.name || "Unnamed";
+  };
+
   return (
     <div className="p-4 lg:p-6">
       {error && (
@@ -112,13 +116,14 @@ const ProductCollectionPage = () => {
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            Product Collections
-          </h1>
-          <p className="text-gray-600 mt-1">Manage your product collections</p>
+          <h1 className="text-2xl font-bold text-gray-800">Collections</h1>
+          <p className="text-gray-600 mt-1">
+            Manage your collections – rule‑based or manual, for products or
+            collections
+          </p>
         </div>
         <Link
-          href="/content-management/app/navigation/collection/create"
+          href="/marketing/content/navigation/collection/create"
           className="bg-blue-600 px-4 py-2 rounded-lg text-white hover:bg-blue-700 transition-colors flex items-center"
         >
           <svg
@@ -162,11 +167,11 @@ const ProductCollectionPage = () => {
               No collections
             </h3>
             <p className="mt-1 text-gray-500">
-              Get started by creating a new product collection.
+              Get started by creating a new collection.
             </p>
             <div className="mt-6">
               <Link
-                href="/content_merchandising/collection/create"
+                href="/marketing/content/navigation/collection/create"
                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Add Collection
@@ -175,11 +180,11 @@ const ProductCollectionPage = () => {
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
-            {collections.map(({ collection, products, productCount }) => (
+            {collections.map(({ collection, items, itemCount }) => (
               <div key={collection._id} className="p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div className="flex-1">
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between flex-wrap gap-2">
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">
                           {collection.name}
@@ -190,34 +195,52 @@ const ProductCollectionPage = () => {
                           </p>
                         )}
                       </div>
-                      <span
-                        className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
-                          collection.status === "active"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {collection.status === "active" ? "Active" : "Inactive"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            collection.status === "active"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {collection.status === "active"
+                            ? "Active"
+                            : "Inactive"}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {collection.display}
+                      {/* Collection Type Badge */}
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                        {collection.type === "rule" ? "Rule‑based" : "Manual"}
                       </span>
+                      {/* Target Type Badge */}
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                        {productCount} products
+                        {collection.targetType === "Product"
+                          ? "Products"
+                          : "Collections"}
+                      </span>
+                      {/* Item count */}
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {itemCount}{" "}
+                        {collection.targetType === "Product"
+                          ? "products"
+                          : "collections"}
                       </span>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                         Updated {formatDate(collection.updated_at)}
                       </span>
                     </div>
 
-                    {products.length > 0 && (
+                    {items && items.length > 0 && (
                       <div className="mt-4">
                         <div className="flex items-center justify-between">
                           <h4 className="text-sm font-medium text-gray-900">
-                            Matching Products
+                            {collection.targetType === "Product"
+                              ? "Products"
+                              : "Collections"}{" "}
+                            in this collection
                           </h4>
                           <button
                             onClick={() =>
@@ -233,23 +256,23 @@ const ProductCollectionPage = () => {
 
                         <ul className="mt-2 space-y-1">
                           {(expandedCollections.has(collection._id)
-                            ? products
-                            : products.slice(0, 3)
-                          ).map((product: any) => (
+                            ? items
+                            : items.slice(0, 3)
+                          ).map((item: any) => (
                             <li
-                              key={product._id}
+                              key={item._id}
                               className="text-sm text-gray-600 flex items-center"
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2"></span>
-                              {product.title || product.name}
+                              {getItemName(item)}
                             </li>
                           ))}
                         </ul>
 
-                        {products.length > 3 &&
+                        {items.length > 3 &&
                           !expandedCollections.has(collection._id) && (
                             <p className="text-xs text-gray-500 mt-1">
-                              + {products.length - 3} more products
+                              + {items.length - 3} more
                             </p>
                           )}
                       </div>
@@ -258,7 +281,7 @@ const ProductCollectionPage = () => {
 
                   <div className="flex items-center space-x-2">
                     <Link
-                      href={`/content-management/app/navigation/collection/edit?id=${collection._id}`}
+                      href={`/marketing/content/navigation/collection/edit?id=${collection._id}`}
                       className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
                       <svg

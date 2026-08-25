@@ -3,16 +3,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Providers from "./providers";
 import Script from "next/script";
-import { Inter } from "next/font/google";
+import { Inter, Geist } from "next/font/google";
 import { AdminLayout } from "@/components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  weight: ["400", "700"],
-});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export default function RootLayout({
   children,
@@ -20,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans", inter.variable)}>
+    <html lang="en" className={cn("font-sans", geist.variable)}>
       <head>
         {/* Google Tag Manager */}
         <Script

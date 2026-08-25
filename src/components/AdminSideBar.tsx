@@ -72,17 +72,6 @@ const slugify = (title: string) =>
 // Original menu configuration (without href prefixes)
 export const rawMenuConfig = [
   {
-    title: "Dashboard",
-    links: [
-      { name: "Overview", href: "/overview", icon: <Dashboard /> },
-      {
-        name: "Notifications",
-        href: "/notifications",
-        icon: <Notifications />,
-      },
-    ],
-  },
-  {
     title: "Analytics",
     links: [
       { name: "Sales Analytics", href: "/sales_reports", icon: <Assessment /> },

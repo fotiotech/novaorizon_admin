@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start --webpack"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.9.1",
@@ -90,7 +90,7 @@
     "react-window": "^1.8.11",
     "recharts": "^3.1.2",
     "redux-persist": "^6.0.0",
-    "shadcn": "^4.17.0",
+    "shadcn": "^4.19.0",
     "slugify": "^1.6.6",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
@@ -112,10 +112,10 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/lodash": "^4.17.7",
     "@types/react-dom": "19.2.5",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
     "eslint": "^9",
-    "eslint-config-next": "16.3.2"
+    "eslint-config-next": "16.3.2",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1"
   },
   "packageManager": "pnpm@11.21.0+sha512.521705bce689924eac72f5a3587122f362689ef6571e55ba80076fd637c11132ecffada26fad4ea79c485bfddbfd3d5a2a5b05805a77e893de71ec8a6cca3bb1"
 }

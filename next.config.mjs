@@ -25,10 +25,7 @@ const nextConfig = {
       },
     ],
   },
-  i18n: {
-    locales: ["en", "fr", "de"], // Supported locales
-    defaultLocale: "en", // Default locale
-  },
+
   reactStrictMode: true,
 };
 

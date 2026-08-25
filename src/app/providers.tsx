@@ -1,8 +1,6 @@
 "use client";
 
 import React, { useMemo, ReactNode } from "react";
-import { I18nextProvider } from "react-i18next";
-import i18n from "./i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
 import { Provider as ReduxProvider } from "react-redux";
@@ -20,19 +18,15 @@ const Providers = ({ children }: ProviderProps) => {
 
   return (
     <SessionProvider>
-      <I18nextProvider i18n={i18n}>
-        <QueryClientProvider client={queryClient}>
-          <ReduxProvider store={store}>
-            <PersistGate loading={null} persistor={persistor}>
-              <CartProvider>
-                <UserDataProvider>
-                  {children}
-                </UserDataProvider>
-              </CartProvider>
-            </PersistGate>
-          </ReduxProvider>
-        </QueryClientProvider>
-      </I18nextProvider>
+      <QueryClientProvider client={queryClient}>
+        <ReduxProvider store={store}>
+          <PersistGate loading={null} persistor={persistor}>
+            <CartProvider>
+              <UserDataProvider>{children}</UserDataProvider>
+            </CartProvider>
+          </PersistGate>
+        </ReduxProvider>
+      </QueryClientProvider>
     </SessionProvider>
   );
 };

@@ -3,6 +3,7 @@
 import { getCategory } from "@/app/actions/category";
 import React, { useEffect, useState } from "react";
 
+// ---------- Operator definitions (unchanged) ----------
 const OPERATORS = [
   { label: "In", value: "$in" },
   { label: "Not In", value: "$nin" },
@@ -14,7 +15,8 @@ const OPERATORS = [
   { label: "Greater Than or Equal", value: "$gte" },
 ];
 
-const ATTRIBUTE_OPTIONS = [
+// ---------- Product attributes ----------
+const PRODUCT_ATTRIBUTES = [
   { label: "Category", value: "category_id" },
   { label: "Title", value: "title" },
   { label: "Brand", value: "brand" },
@@ -38,6 +40,20 @@ const ATTRIBUTE_OPTIONS = [
   { label: "Safety Certifications", value: "safety_certifications" },
 ];
 
+// ---------- Collection attributes ----------
+const COLLECTION_ATTRIBUTES = [
+  { label: "Name", value: "name" },
+  { label: "Description", value: "description" },
+  { label: "Image URL", value: "imageUrl" },
+  { label: "Status", value: "status" },
+  { label: "Type", value: "type" }, // "rule" or "manual"
+  { label: "Target Type", value: "targetType" }, // "Product" or "Collection"
+  { label: "Created At", value: "created_at" },
+  { label: "Updated At", value: "updated_at" },
+  // Add any other collection fields you want to filter on
+];
+
+// ---------- Interface ----------
 interface Rule {
   attribute: string;
   operator: string;
@@ -48,15 +64,22 @@ interface Rule {
 interface CollectionRuleFormProps {
   rules: Rule[];
   onAddRule: (rules: Rule[]) => void;
+  targetType?: "Product" | "Collection"; // new prop
 }
 
+// ---------- Main Component ----------
 export default function CollectionRuleForm({
   rules,
   onAddRule,
+  targetType = "Product", // default to Product
 }: CollectionRuleFormProps) {
+  // Choose attribute list based on targetType
+  const attributeOptions =
+    targetType === "Collection" ? COLLECTION_ATTRIBUTES : PRODUCT_ATTRIBUTES;
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-    index: number
+    index: number,
   ) => {
     const { name, value } = e.target;
     const updatedRules: any = [...rules];
@@ -171,6 +194,7 @@ export default function CollectionRuleForm({
                   <AttributeInput
                     value={rule.attribute}
                     onChange={(e) => handleInputChange(e, index)}
+                    options={attributeOptions}
                   />
                 </div>
 
@@ -198,7 +222,8 @@ export default function CollectionRuleForm({
                 </div>
 
                 <div className="md:col-span-4">
-                  {rule.attribute === "category_id" ? (
+                  {rule.attribute === "category_id" &&
+                  targetType === "Product" ? (
                     <>
                       <label className="block mb-1 font-medium text-sm text-gray-700">
                         Category
@@ -248,13 +273,15 @@ export default function CollectionRuleForm({
   );
 }
 
-// Attribute Input with suggestions
+// ---------- Attribute Input with suggestions ----------
 function AttributeInput({
   value,
   onChange,
+  options,
 }: {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  options: { label: string; value: string }[];
 }) {
   const [suggestions, setSuggestions] = useState<
     { label: string; value: string }[]
@@ -264,21 +291,19 @@ function AttributeInput({
 
   useEffect(() => {
     // Find the label for the current value
-    const currentAttribute = ATTRIBUTE_OPTIONS.find(
-      (opt) => opt.value === value
-    );
+    const currentAttribute = options.find((opt) => opt.value === value);
     setInputValue(currentAttribute ? currentAttribute.label : value);
-  }, [value]);
+  }, [value, options]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInputValue(val);
 
     if (val.length > 0) {
-      const filtered = ATTRIBUTE_OPTIONS.filter(
+      const filtered = options.filter(
         (opt) =>
           opt.label.toLowerCase().includes(val.toLowerCase()) ||
-          opt.value.toLowerCase().includes(val.toLowerCase())
+          opt.value.toLowerCase().includes(val.toLowerCase()),
       );
       setSuggestions(filtered);
       setShowSuggestions(true);
@@ -340,7 +365,7 @@ function AttributeInput({
   );
 }
 
-// Category Select Component
+// ---------- Category Select Component (unchanged) ----------
 function CategorySelect({
   value,
   onChange,
@@ -365,7 +390,7 @@ function CategorySelect({
   }, []);
 
   const filtered = categories.filter((cat: any) =>
-    cat.name.toLowerCase().includes(search.toLowerCase())
+    cat.name.toLowerCase().includes(search.toLowerCase()),
   );
 
   const selectedCategory = categories.find((c) => c._id === value);

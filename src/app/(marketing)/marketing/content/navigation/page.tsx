@@ -45,7 +45,7 @@ const ContentMerchandising = () => {
           </div>
 
           <Link
-            href="/content-management/app/navigation/menus"
+            href="/marketing/content/navigation/menus"
             className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
           >
             Manage Menus
@@ -85,7 +85,7 @@ const ContentMerchandising = () => {
           </div>
 
           <Link
-            href="/content-management/app/navigation/collection"
+            href="/marketing/content/navigation/collection"
             className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
           >
             Manage Collections

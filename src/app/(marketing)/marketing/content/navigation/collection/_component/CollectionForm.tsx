@@ -7,13 +7,13 @@ import {
   createCollection,
   getCollectionById,
   updateCollection,
-  deleteCollectionImage, // new action
+  deleteCollectionImage,
+  fetchAvailableItems, // new action
 } from "@/app/actions/collection";
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import CollectionRuleForm from "@/components/collections/RuleEditor";
-import { getCategory } from "@/app/actions/category";
 import { getAllCollections } from "@/app/actions/collection";
 
 const CollectionForm = ({ id }: { id?: string }) => {
@@ -27,61 +27,67 @@ const CollectionForm = ({ id }: { id?: string }) => {
     { attribute: "", operator: "$eq", value: "", position: 0 },
   ]);
   const [showJson, setShowJson] = useState(false);
-  const [categories, setCategories] = useState<any[]>([]);
+  // State for manual items
+  const [items, setItems] = useState<string[]>([]);
+  const [availableItems, setAvailableItems] = useState<any[]>([]);
+  const [itemSearch, setItemSearch] = useState("");
 
   // Form state
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    category_id: "",
     imageUrl: "",
     status: "active",
+    type: "rule", // "rule" | "manual"
+    targetType: "Product", // "Product" | "Collection"
   });
 
   // Helper to build FormData
-  const buildFormData = (data: typeof formData, rulesData: any[]) => {
+  const buildFormData = (
+    data: typeof formData,
+    rulesData: any[],
+    itemsData: string[],
+  ) => {
     const fd = new FormData();
     fd.append("name", data.name);
     fd.append("description", data.description);
-    fd.append("category_id", data.category_id);
     fd.append("imageUrl", data.imageUrl || "");
     fd.append("status", data.status);
+    fd.append("type", data.type);
+    fd.append("targetType", data.targetType);
     fd.append("rules", JSON.stringify(rulesData));
+    fd.append("items", JSON.stringify(itemsData));
     return fd;
   };
 
-  // ----- File Uploader (simplified, no callback) -----
+  // ----- File Uploader -----
   const {
     files,
     loading: fileLoading,
     addFiles,
     setFiles,
   } = useFileUploader(
-    undefined, // instanceId
-    formData.imageUrl ? [formData.imageUrl] : [], // initial files
-    undefined, // subfolder
+    undefined,
+    formData.imageUrl ? [formData.imageUrl] : [],
+    undefined,
   );
 
-  // Handle image removal – calls server action
   const handleRemoveImage = async (index: number, fileUrl: string) => {
     if (id) {
-      // Edit mode: delete from database and S3
       const result = await deleteCollectionImage(id);
       if (!result.success) {
         throw new Error(result.error || "Failed to remove image");
       }
-      // Update local state
       setFiles([]);
       setFormData((prev) => ({ ...prev, imageUrl: "" }));
       setSuccess("Image removed successfully");
       setTimeout(() => setSuccess(null), 3000);
     } else {
-      // Create mode: just remove from local state
       setFiles((prev) => prev.filter((_, i) => i !== index));
     }
   };
 
-  // Fetch categories and collection data
+  // Fetch collections list and data
   useEffect(() => {
     async function fetchCollections() {
       try {
@@ -98,46 +104,33 @@ const CollectionForm = ({ id }: { id?: string }) => {
         setLoading(false);
       }
     }
-
     fetchCollections();
 
     const fetchData = async () => {
       try {
-        const [categoryData, collectionData] = await Promise.all([
-          getCategory(),
-          id ? getCollectionById(id) : Promise.resolve(null),
-        ]);
-
-        setCategories(categoryData);
-
-        if (collectionData?.success && collectionData.data) {
-          let data = Array.isArray(collectionData.data)
-            ? collectionData.data[0]
-            : collectionData.data;
-
-          setFormData({
-            name: data.name || "",
-            description: data.description || "",
-            category_id: data.category_id?._id || data.category_id || "",
-            imageUrl: data.imageUrl || "",
-            status: data.status || "active",
-          });
-
-          if (data?.imageUrl) {
-            setFiles([data.imageUrl]);
-          } else {
-            setFiles([]);
-          }
-
-          if (data?.rules) {
+        if (id) {
+          const collectionData = await getCollectionById(id);
+          if (collectionData?.success && collectionData.data) {
+            const data: any = collectionData.data;
+            setFormData({
+              name: data.name || "",
+              description: data.description || "",
+              imageUrl: data.imageUrl || "",
+              status: data.status || "active",
+              type: data.type || "rule",
+              targetType: data.targetType || "Product",
+            });
             setRules(
-              data.rules.map((rule: any) => ({
-                attribute: rule.attribute || "name",
-                operator: rule.operator || "$eq",
-                value: rule.value || "",
-                position: rule.position || 0,
-              })),
+              data.rules || [
+                { attribute: "", operator: "$eq", value: "", position: 0 },
+              ],
             );
+            setItems(data.items || []);
+            if (data.imageUrl) {
+              setFiles([data.imageUrl]);
+            } else {
+              setFiles([]);
+            }
           }
         }
       } catch (err) {
@@ -149,6 +142,19 @@ const CollectionForm = ({ id }: { id?: string }) => {
 
     fetchData();
   }, [id, setFiles]);
+
+  // Fetch available items when targetType changes (for manual selection)
+  useEffect(() => {
+    if (formData.type === "manual" && formData.targetType) {
+      fetchAvailableItems(formData.targetType, itemSearch)
+        .then((res) => {
+          if (res.success) {
+            setAvailableItems(res.data || []);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [formData.targetType, formData.type, itemSearch]);
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -162,34 +168,45 @@ const CollectionForm = ({ id }: { id?: string }) => {
     }));
   };
 
+  // Handle item selection toggle
+  const toggleItem = (itemId: string) => {
+    setItems((prev) =>
+      prev.includes(itemId)
+        ? prev.filter((id) => id !== itemId)
+        : [...prev, itemId],
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
     try {
-      const { name, category_id } = formData;
+      const { name, type, targetType } = formData;
 
       if (!name.trim()) {
         setError("Name is required");
         return;
       }
 
-      if (!category_id) {
-        setError("Category is required");
-        return;
+      if (type === "rule") {
+        const invalidRules = rules.some(
+          (rule) => !rule.attribute || !rule.operator || !rule.value,
+        );
+        if (invalidRules) {
+          setError("Please complete all rule fields");
+          return;
+        }
+      } else {
+        // manual: at least one item required? Optional: you may allow empty.
+        // if (items.length === 0) {
+        //   setError("Please select at least one item");
+        //   return;
+        // }
       }
 
-      const invalidRules = rules.some(
-        (rule) => !rule.attribute || !rule.operator || !rule.value,
-      );
-
-      if (invalidRules) {
-        setError("Please complete all rule fields");
-        return;
-      }
-
-      const submitFormData = buildFormData(formData, rules);
+      const submitFormData = buildFormData(formData, rules, items);
 
       let result;
       if (id) {
@@ -248,7 +265,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
           {id ? "Edit" : "Create"} Collection
         </h1>
         <p className="text-gray-600 mt-1">
-          {id ? "Update" : "Create a new"} product collection with custom rules
+          {id ? "Update" : "Create a new"} collection – rule‑based or manual
         </p>
       </div>
 
@@ -273,25 +290,40 @@ const CollectionForm = ({ id }: { id?: string }) => {
 
             <div>
               <label className="block mb-2 font-medium text-gray-700">
-                Category *
+                Type *
               </label>
               <select
-                title="category_id"
-                name="category_id"
-                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-                disabled={isSubmitting}
-                value={formData.category_id}
+                name="type"
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+                value={formData.type}
                 onChange={handleInputChange}
+                disabled={isSubmitting}
               >
-                <option value="">Select a category</option>
-                {categories.map((category) => (
-                  <option key={category._id} value={category._id}>
-                    {category.name}
-                  </option>
-                ))}
+                <option value="rule">Rule‑based</option>
+                <option value="manual">Manual selection</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block mb-2 font-medium text-gray-700">
+              Target *
+            </label>
+            <select
+              name="targetType"
+              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+              value={formData.targetType}
+              onChange={handleInputChange}
+              disabled={isSubmitting}
+            >
+              <option value="Product">Products</option>
+              <option value="Collection">Collections</option>
+            </select>
+            <p className="text-sm text-gray-500 mt-1">
+              {formData.targetType === "Product"
+                ? "Rules/items will apply to products."
+                : "Rules/items will apply to other collections."}
+            </p>
           </div>
 
           <div>
@@ -301,7 +333,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
             <textarea
               name="description"
               rows={4}
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
               disabled={isSubmitting}
               placeholder="Enter collection description"
               value={formData.description}
@@ -326,9 +358,8 @@ const CollectionForm = ({ id }: { id?: string }) => {
               Status
             </label>
             <select
-              title="status"
               name="status"
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
               disabled={isSubmitting}
               value={formData.status}
               onChange={handleInputChange}
@@ -338,10 +369,60 @@ const CollectionForm = ({ id }: { id?: string }) => {
             </select>
           </div>
 
-          <div className="py-6">
-            <CollectionRuleForm rules={rules} onAddRule={setRules} />
-          </div>
+          {/* Rules or Manual Items */}
+          {formData.type === "rule" ? (
+            <div className="py-6">
+              <CollectionRuleForm rules={rules} onAddRule={setRules} />
+            </div>
+          ) : (
+            <div className="py-4 border rounded-lg p-4">
+              <h3 className="text-lg font-semibold mb-3">
+                Select{" "}
+                {formData.targetType === "Product" ? "Products" : "Collections"}
+              </h3>
+              <div className="mb-3">
+                <input
+                  type="text"
+                  placeholder={`Search ${formData.targetType === "Product" ? "products" : "collections"}...`}
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              <div className="max-h-60 overflow-y-auto border rounded">
+                {availableItems.length === 0 ? (
+                  <p className="p-4 text-gray-500">No items found.</p>
+                ) : (
+                  availableItems.map((item) => (
+                    <div
+                      key={item._id}
+                      className="flex items-center p-2 hover:bg-gray-50 border-b"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={items.includes(item._id)}
+                        onChange={() => toggleItem(item._id)}
+                        className="mr-3"
+                      />
+                      <span>{item.name}</span>
+                      {item.imageUrl && (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="ml-auto h-8 w-8 object-cover rounded"
+                        />
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-2 text-sm text-gray-600">
+                {items.length} selected
+              </div>
+            </div>
+          )}
 
+          {/* JSON Preview (optional) */}
           <div className="space-y-4">
             <button
               type="button"
@@ -373,9 +454,11 @@ const CollectionForm = ({ id }: { id?: string }) => {
                     {
                       name: formData.name,
                       description: formData.description,
-                      category_id: formData.category_id,
+                      type: formData.type,
+                      targetType: formData.targetType,
                       status: formData.status,
-                      rules,
+                      rules: formData.type === "rule" ? rules : undefined,
+                      items: formData.type === "manual" ? items : undefined,
                     },
                     null,
                     2,
@@ -389,7 +472,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
             <button
               type="button"
               onClick={() =>
-                router.push("/content-management/app/navigation/collection")
+                router.push("/marketing/content/navigation/collection")
               }
               className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
               disabled={isSubmitting}

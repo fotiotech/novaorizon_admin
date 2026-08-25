@@ -2,11 +2,7 @@
 
 import UserRolePermissionsForm from "../../_component/UserRolePermissionsForm";
 
-export default function EditUserPage({
-  params,
-}: {
-  params: { userId: string };
-}) {
+export default function CreateUserPage() {
   return (
     <div className="container mx-auto py-8">
       <UserRolePermissionsForm />

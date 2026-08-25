@@ -24,7 +24,7 @@ function SimpleBarChart({ data }: { data: number[] }) {
   );
 }
 
-export default function AnalyticsPage(): JSX.Element {
+export default function AnalyticsPage() {
   return (
     <main
       style={{
