@@ -344,6 +344,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
             </div>
           </div>
 
+          {/* Custom-styled Show Name Checkbox */}
           <div className="flex items-center space-x-3">
             <input
               type="checkbox"
@@ -351,9 +352,33 @@ const CollectionForm = ({ id }: { id?: string }) => {
               name="showName"
               checked={formData.showName}
               onChange={handleInputChange}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              className="
+                appearance-none
+                w-5 h-5
+                border-2 border-gray-300
+                rounded
+                bg-white
+                checked:bg-blue-600
+                checked:border-blue-600
+                relative
+                after:content-['✓']
+                after:absolute
+                after:inset-0
+                after:flex
+                after:items-center
+                after:justify-center
+                after:text-white
+                after:text-sm
+                after:opacity-0
+                checked:after:opacity-100
+                focus:ring-2 focus:ring-blue-500
+                transition-all
+              "
             />
-            <label htmlFor="showName" className="font-medium text-gray-700">
+            <label
+              htmlFor="showName"
+              className="font-medium text-gray-700 cursor-pointer"
+            >
               Show collection name in rendered output
             </label>
           </div>
@@ -433,7 +458,29 @@ const CollectionForm = ({ id }: { id?: string }) => {
                         type="checkbox"
                         checked={items.includes(item._id)}
                         onChange={() => toggleItem(item._id)}
-                        className="mr-3"
+                        className="
+                          appearance-none
+                          w-5 h-5
+                          border-2 border-gray-300
+                          rounded
+                          bg-white
+                          checked:bg-blue-600
+                          checked:border-blue-600
+                          relative
+                          after:content-['✓']
+                          after:absolute
+                          after:inset-0
+                          after:flex
+                          after:items-center
+                          after:justify-center
+                          after:text-white
+                          after:text-sm
+                          after:opacity-0
+                          checked:after:opacity-100
+                          focus:ring-2 focus:ring-blue-500
+                          transition-all
+                          mr-3
+                        "
                       />
                       <span>{item.name || "Unnamed"}</span>
                       {item.imageUrl && (

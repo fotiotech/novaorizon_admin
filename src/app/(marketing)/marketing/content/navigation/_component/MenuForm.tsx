@@ -84,7 +84,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
     backgroundImage: "",
     isSticky: false,
     sectionTitle: "",
-    order: 0, // NEW: default order
+    order: 0,
   });
 
   const [contentOptions, setContentOptions] = useState<
@@ -180,7 +180,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
             backgroundImage: data.backgroundImage || "",
             isSticky: data.isSticky || false,
             sectionTitle: data.sectionTitle || "",
-            order: data.order || 0, // NEW: load existing order
+            order: data.order || 0,
           });
           await fetchOptions(data.type);
         } else {
@@ -310,7 +310,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
             backgroundImage: "",
             isSticky: false,
             sectionTitle: "",
-            order: 0, // reset order
+            order: 0,
           });
           setContentOptions([]);
           setSearchQuery("");
@@ -581,7 +581,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           </select>
         </div>
 
-        {/* NEW: Order field */}
+        {/* Order field */}
         <div>
           <label
             htmlFor="order"
@@ -687,6 +687,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           />
         </div>
 
+        {/* Show Images Checkbox - Custom Styled */}
         <div className="flex items-center">
           <input
             type="checkbox"
@@ -694,11 +695,32 @@ const MenuForm = ({ id }: MenuFormProps) => {
             name="showImages"
             checked={menu.showImages || false}
             onChange={handleInputChange}
-            className="h-4 w-4 text-primary focus:ring-primary border-border rounded bg-background"
+            className="
+              appearance-none
+              w-5 h-5
+              border-2 border-border
+              rounded
+              bg-background
+              checked:bg-primary
+              checked:border-primary
+              relative
+              after:content-['✓']
+              after:absolute
+              after:inset-0
+              after:flex
+              after:items-center
+              after:justify-center
+              after:text-white
+              after:text-sm
+              after:opacity-0
+              checked:after:opacity-100
+              focus:ring-2 focus:ring-primary
+              transition-all
+            "
           />
           <label
             htmlFor="showImages"
-            className="ml-2 block text-sm text-foreground"
+            className="ml-2 block text-sm text-foreground cursor-pointer"
           >
             Show Images
           </label>
@@ -748,6 +770,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           </p>
         </div>
 
+        {/* Sticky Checkbox - Custom Styled */}
         <div className="flex items-center">
           <input
             type="checkbox"
@@ -755,11 +778,32 @@ const MenuForm = ({ id }: MenuFormProps) => {
             name="isSticky"
             checked={menu.isSticky || false}
             onChange={handleInputChange}
-            className="h-4 w-4 text-primary focus:ring-primary border-border rounded bg-background"
+            className="
+              appearance-none
+              w-5 h-5
+              border-2 border-border
+              rounded
+              bg-background
+              checked:bg-primary
+              checked:border-primary
+              relative
+              after:content-['✓']
+              after:absolute
+              after:inset-0
+              after:flex
+              after:items-center
+              after:justify-center
+              after:text-white
+              after:text-sm
+              after:opacity-0
+              checked:after:opacity-100
+              focus:ring-2 focus:ring-primary
+              transition-all
+            "
           />
           <label
             htmlFor="isSticky"
-            className="ml-2 block text-sm text-foreground"
+            className="ml-2 block text-sm text-foreground cursor-pointer"
           >
             Sticky
           </label>
