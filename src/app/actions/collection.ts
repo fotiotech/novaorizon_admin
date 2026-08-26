@@ -277,6 +277,8 @@ export async function updateCollection(id: string, formData: FormData) {
     const order = parseInt(formData.get("order") as string) || 0;
     const showName = formData.get("showName") === "true";
 
+    console.log("imageUrl", imageUrl);
+
     if (!name?.trim()) return { success: false, error: "Name is required" };
     if (!["rule", "manual"].includes(type)) {
       return { success: false, error: "Invalid collection type" };
@@ -389,6 +391,8 @@ export async function getCollectionById(id: string) {
     }
     await connection();
     const collection = await Collection.findById(id).populate("items").lean();
+    console.log("collection by id", collection);
+
     if (!collection) {
       return { success: false, error: "Collection not found" };
     }

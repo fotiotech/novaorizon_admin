@@ -14,7 +14,43 @@ import "@/models/Category";
 import "@/models/Brand";
 import "@/models/User";
 
-// Types
+// ---------- Helper: Deep Serialize ----------
+function serialize(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+
+  // Handle Mongoose ObjectId
+  if (
+    obj instanceof mongoose.Types.ObjectId ||
+    obj._bsontype === "ObjectId" ||
+    typeof obj.toHexString === "function"
+  ) {
+    return obj.toString();
+  }
+
+  // Handle Date
+  if (obj instanceof Date) {
+    return obj.toISOString();
+  }
+
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(serialize);
+  }
+
+  // Handle plain objects
+  if (typeof obj === "object") {
+    const result: any = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = serialize(obj[key]);
+    }
+    return result;
+  }
+
+  // Primitives
+  return obj;
+}
+
+// ---------- Types ----------
 export interface CreateProductForm {
   category_id: string;
   brand: string;
@@ -30,7 +66,7 @@ interface ProductResponse {
   error?: string;
 }
 
-// Helper Functions
+// ---------- Helper Functions ----------
 function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
   if (!obj || typeof obj !== "object") return {};
   return Object.entries(obj).reduce((acc, [key, value]) => {
@@ -60,12 +96,25 @@ function generateDsin(): string {
     .join("");
 }
 
+function toObjectId(value: any): mongoose.Types.ObjectId | null {
+  if (!value) return null;
+  if (value instanceof mongoose.Types.ObjectId) return value;
+  if (typeof value === "object" && value._id) {
+    return toObjectId(value._id);
+  }
+  if (typeof value === "string" && mongoose.Types.ObjectId.isValid(value)) {
+    return new mongoose.Types.ObjectId(value);
+  }
+  return null;
+}
+
+// ---------- Server Actions ----------
 export async function findProducts(id?: string) {
   try {
     await connection();
 
     if (id) {
-      const product: any = await Product.findById(id)
+      const product = await Product.findById(id)
         .populate({
           path: "brand",
           select: "name",
@@ -88,28 +137,8 @@ export async function findProducts(id?: string) {
         return { success: false, error: "Product not found" };
       }
 
-      // Keep the populated objects instead of converting to strings
-      const result = {
-        ...product,
-        _id: product._id?.toString(),
-        category_id: product.category_id, // ✅ keep populated object
-        brand: product.brand, // ✅ keep populated object
-        quantity: product.quantity ?? 0,
-        lowStockThreshold: product.lowStockThreshold ?? 10,
-      };
-
-      // For related products, also keep their populated category_id
-      if (result.related_products?.ids) {
-        result.related_products.ids = result.related_products.ids.map(
-          (relatedProduct: any) => ({
-            ...relatedProduct,
-            _id: relatedProduct._id?.toString(),
-            category_id: relatedProduct.category_id, // keep populated
-          }),
-        );
-      }
-
-      return result;
+      // Serialize everything recursively
+      return serialize(product);
     }
 
     // For multiple products (no id)
@@ -133,14 +162,7 @@ export async function findProducts(id?: string) {
       return [];
     }
 
-    return products.map((product: any) => ({
-      ...product,
-      _id: product._id?.toString(),
-      category_id: product.category_id, // ✅ keep populated object
-      brand: product.brand, // ✅ keep populated object
-      quantity: product.quantity ?? 0,
-      lowStockThreshold: product.lowStockThreshold ?? 10,
-    }));
+    return serialize(products);
   } catch (error) {
     console.error("Error finding products:", error);
     return { success: false, error: "Failed to fetch products" };
@@ -208,7 +230,7 @@ export async function createProduct(
 export async function updateProduct(
   productId: string,
   formData: any,
-): Promise<any> {
+): Promise<ProductResponse> {
   try {
     await connection();
     const {
@@ -276,35 +298,17 @@ export async function updateProduct(
     }
 
     revalidatePath("/products");
-    return { success: true, data: updatedProduct };
+    // Return serialized version
+    return { success: true, data: serialize(updatedProduct.toObject()) };
   } catch (error) {
     console.error("Error updating product:", error);
     return { success: false, error: "Failed to update product" };
   }
 }
 
-/**
- * Safely converts a value to a mongoose ObjectId.
- * Returns null if conversion fails.
- */
-function toObjectId(value: any): mongoose.Types.ObjectId | null {
-  if (!value) return null;
-  // If it's already an ObjectId, return it.
-  if (value instanceof mongoose.Types.ObjectId) return value;
-  // If it's an object with an _id property, extract it.
-  if (typeof value === "object" && value._id) {
-    return toObjectId(value._id);
-  }
-  // If it's a string, check if it's a valid hex string.
-  if (typeof value === "string" && mongoose.Types.ObjectId.isValid(value)) {
-    return new mongoose.Types.ObjectId(value);
-  }
-  return null;
-}
-
 export async function createOrUpdateProduct(
   productData: any,
-): Promise<{ success: boolean; data?: any; error?: string }> {
+): Promise<ProductResponse> {
   try {
     await connection();
 
@@ -399,7 +403,6 @@ export async function createOrUpdateProduct(
         ...updateData,
         createdAt: new Date(),
         dsin: generateDsin(),
-        // Optionally, you can also include category/brand if they were passed
       };
       const newProduct = new Product(createData);
       product = await newProduct.save();
@@ -410,14 +413,9 @@ export async function createOrUpdateProduct(
 
     revalidatePath("/products");
 
-    // Convert to plain object and return with string _id
+    // Convert to plain object and serialize
     const result = product.toObject ? product.toObject() : product;
-    result._id = result._id.toString();
-
-    // Optionally populate category and brand if needed
-    // (you can also return the raw document and let client handle it)
-
-    return { success: true, data: result };
+    return { success: true, data: serialize(result) };
   } catch (error) {
     console.error("Error in createOrUpdateProduct:", error);
     return { success: false, error: "Failed to save product" };
@@ -442,18 +440,12 @@ export async function deleteProduct(id: string): Promise<ProductResponse> {
   }
 }
 
-interface ProductResponse {
-  success: boolean;
-  data?: any;
-  error?: string;
-}
-
 export async function deleteProductImages(
   productId: string,
   imageUrl?: string,
 ): Promise<ProductResponse> {
   try {
-    await connection(); // Ensure database connection
+    await connection();
 
     if (!productId && !imageUrl) {
       return { success: false, error: "ProductId or imageUrl is required" };
@@ -487,7 +479,8 @@ export async function deleteProductImages(
           (url: string) => url !== imageUrl,
         );
         await product.save();
-        return { success: true, data: product };
+        // Return serialized product
+        return { success: true, data: serialize(product.toObject()) };
       }
     } else if (imageUrl) {
       await deleteFromStorage(imageUrl);
@@ -500,3 +493,5 @@ export async function deleteProductImages(
     return { success: false, error: "Failed to delete product images" };
   }
 }
+
+// Also for any other getters (e.g., findProductByCategory, findProductsForSitemap) – add them if needed

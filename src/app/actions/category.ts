@@ -14,7 +14,43 @@ import "@/models/UnitFamily";
 import { revalidatePath } from "next/cache";
 import { deleteS3Object } from "./s3";
 
-// ---------- Helper ----------
+// ---------- Helper: Deep Serialize ----------
+function serialize(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+
+  // Handle Mongoose ObjectId
+  if (
+    obj instanceof mongoose.Types.ObjectId ||
+    obj._bsontype === "ObjectId" ||
+    typeof obj.toHexString === "function"
+  ) {
+    return obj.toString();
+  }
+
+  // Handle Date
+  if (obj instanceof Date) {
+    return obj.toISOString();
+  }
+
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(serialize);
+  }
+
+  // Handle plain objects
+  if (typeof obj === "object") {
+    const result: any = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = serialize(obj[key]);
+    }
+    return result;
+  }
+
+  // Primitives (string, number, boolean, etc.)
+  return obj;
+}
+
+// ---------- Helper: Slug ----------
 function generateSlug(name: string) {
   return slugify(name, { lower: true });
 }
@@ -23,22 +59,12 @@ function generateSlug(name: string) {
 export async function getCategoryProperty(id?: string) {
   await connection();
   if (id) {
-    const property: any = await CategoryProperty.findById(id).lean();
+    const property = await CategoryProperty.findById(id).lean();
     if (!property) return null;
-    return {
-      ...property,
-      _id: property._id?.toString(),
-      createdAt: property.createdAt.toISOString(),
-      updatedAt: property.updatedAt.toISOString(),
-    };
+    return serialize(property);
   } else {
     const properties = await CategoryProperty.find().lean();
-    return properties.map((prop) => ({
-      ...prop,
-      _id: prop._id?.toString(),
-      createdAt: prop.createdAt.toISOString(),
-      updatedAt: prop.updatedAt.toISOString(),
-    }));
+    return serialize(properties);
   }
 }
 
@@ -112,23 +138,8 @@ export async function createCategoryPropertyWithMappings(data: {
   revalidatePath("/catalog/categories/property");
 
   const plain = property.toObject();
-  plain._id = plain._id.toString();
-  plain.createdAt = plain.createdAt.toISOString();
-  plain.updatedAt = plain.updatedAt.toISOString();
-  plain.mappings = plain.mappings.map((m: any) => ({
-    ...m,
-    set: m.set.toString(),
-    groups: m.groups.map((g: any) => ({
-      ...g,
-      group: g.group.toString(),
-      attributes: g.attributes.map((a: any) => ({
-        ...a,
-        attribute: a.attribute.toString(),
-      })),
-    })),
-  }));
-
-  return { success: true, property: plain };
+  // Convert to plain object (already has ObjectId and Date), then serialize
+  return { success: true, property: serialize(plain) };
 }
 
 export async function updateCategoryPropertyWithMappings(
@@ -182,23 +193,7 @@ export async function updateCategoryPropertyWithMappings(
   revalidatePath("/catalog/categories/property");
 
   const plain = property.toObject();
-  plain._id = plain._id.toString();
-  plain.createdAt = plain.createdAt.toISOString();
-  plain.updatedAt = plain.updatedAt.toISOString();
-  plain.mappings = plain.mappings.map((m: any) => ({
-    ...m,
-    set: m.set.toString(),
-    groups: m.groups.map((g: any) => ({
-      ...g,
-      group: g.group.toString(),
-      attributes: g.attributes.map((a: any) => ({
-        ...a,
-        attribute: a.attribute.toString(),
-      })),
-    })),
-  }));
-
-  return { success: true, property: plain };
+  return { success: true, property: serialize(plain) };
 }
 
 export async function deleteCategoryProperty(id: string) {
@@ -226,65 +221,21 @@ export async function getCategory(
     const category = await Category.findOne({ name });
     if (category) {
       const subCategories = await Category.find({ parent_id: category._id });
-      return subCategories.map((sub) => ({
-        ...sub.toObject(),
-        _id: sub._id.toString(),
-        parent_id: sub.parent_id?.toString(),
-        created_at: sub.created_at.toISOString(),
-        updated_at: sub.updated_at.toISOString(),
-      }));
+      return serialize(subCategories);
     }
     return [];
   } else if (id) {
-    const category: any = await Category.findById(id)
-      .populate("property")
-      .lean();
+    const category = await Category.findById(id).populate("property").lean();
     if (!category) return null;
-    return {
-      ...category,
-      _id: category._id.toString(),
-      parent_id: category.parent_id?.toString(),
-      created_at: category.created_at.toISOString(),
-      updated_at: category.updated_at.toISOString(),
-      property: category.property
-        ? {
-            ...category.property,
-            _id: category.property._id.toString(),
-          }
-        : null,
-    };
+    return serialize(category);
   } else if (parentId) {
     const subCategories = await Category.find({ parent_id: parentId })
       .populate("property")
       .lean();
-    return subCategories.map((sub) => ({
-      ...sub,
-      _id: sub._id?.toString(),
-      parent_id: sub.parent_id?.toString(),
-      created_at: sub.created_at.toISOString(),
-      updated_at: sub.updated_at.toISOString(),
-      property: sub.property
-        ? {
-            ...sub.property,
-            _id: sub.property._id.toString(),
-          }
-        : null,
-    }));
+    return serialize(subCategories);
   } else {
     const categories = await Category.find().populate("property").lean();
-    return categories.map((cat) => ({
-      ...cat,
-      _id: cat._id?.toString(),
-      parent_id: cat.parent_id?.toString(),
-      created_at: cat.created_at.toISOString(),
-      updated_at: cat.updated_at.toISOString(),
-      property: cat.property
-        ? {
-            ...cat.property,
-            _id: cat.property._id.toString(),
-          }
-        : null,
-    }));
+    return serialize(categories);
   }
 }
 
@@ -705,17 +656,20 @@ export async function getCategoryAttributeSets(
 // ---------- Additional helpers ----------
 export async function getAllAttributeSets() {
   await connection();
-  return await AttributeSet.find().select("_id title code").lean();
+  const sets = await AttributeSet.find().select("_id title code").lean();
+  return serialize(sets);
 }
 
 export async function getAllAttributeGroups() {
   await connection();
-  return await AttributeGroup.find().select("_id name code").lean();
+  const groups = await AttributeGroup.find().select("_id name code").lean();
+  return serialize(groups);
 }
 
 export async function getAllAttributes() {
   await connection();
-  return await Attribute.find().select("_id name code type").lean();
+  const attrs = await Attribute.find().select("_id name code type").lean();
+  return serialize(attrs);
 }
 
 /**

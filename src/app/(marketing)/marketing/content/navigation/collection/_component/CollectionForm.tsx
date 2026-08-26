@@ -61,16 +61,28 @@ const CollectionForm = ({ id }: { id?: string }) => {
     return fd;
   };
 
+  // Use "collections" as subfolder to keep images organized
   const {
     files,
     loading: fileLoading,
     addFiles,
     setFiles,
   } = useFileUploader(
-    undefined,
+    id, // pass the collection id if editing, otherwise undefined
     formData.imageUrl ? [formData.imageUrl] : [],
-    undefined,
+    "collections", // <-- dedicated subfolder
   );
+
+  // Sync the first uploaded file URL to formData.imageUrl
+  useEffect(() => {
+    const uploadedUrl = files[0] || "";
+    if (uploadedUrl !== formData.imageUrl) {
+      setFormData((prev) => ({
+        ...prev,
+        imageUrl: uploadedUrl,
+      }));
+    }
+  }, [files, formData.imageUrl]);
 
   const handleRemoveImage = async (index: number, fileUrl: string) => {
     if (id) {
@@ -83,7 +95,9 @@ const CollectionForm = ({ id }: { id?: string }) => {
       setSuccess("Image removed successfully");
       setTimeout(() => setSuccess(null), 3000);
     } else {
+      // For new collections, just remove from local state
       setFiles((prev) => prev.filter((_, i) => i !== index));
+      // The useEffect above will automatically clear formData.imageUrl if files becomes empty
     }
   };
 
@@ -322,7 +336,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
               </p>
             </div>
 
-            {/* Order field */}
             <div>
               <label className="block mb-2 font-medium text-gray-700">
                 Order (lower = higher priority)
