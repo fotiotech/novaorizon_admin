@@ -7,20 +7,20 @@ import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 
 // ------------------------------------------------------------------
-// Interfaces (matches your schema)
+// Interfaces (matches new schema)
 // ------------------------------------------------------------------
 interface Menu {
   _id: string;
   name: string;
-  description: string;
-  content: string[]; // array of ObjectId strings
-  populatedContent?: { _id: string; name: string }[]; // populated from action
-  ctaUrl?: string;
-  ctaText?: string;
-  type: string; // "Home", "Category", "Product", etc.
-  location?: string; // "Banner", "Header", "Section", "Footer"
-  display?: string; // "List", "Grid", "Carousel", "Dropdown", "MegaMenu"
-  position?: string; // "left", "center", "right", "full"
+  description?: string;
+  image?: string;
+  // Content source
+  collectionId?: string | { _id: string; name: string } | null;
+  link?: string;
+  // Display & layout
+  location?: string;
+  display: string;
+  position?: string;
   columns?: number;
   maxDepth?: number;
   showImages?: boolean;
@@ -28,6 +28,7 @@ interface Menu {
   backgroundImage?: string;
   isSticky?: boolean;
   sectionTitle?: string;
+  order: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -35,31 +36,6 @@ interface Menu {
 // ------------------------------------------------------------------
 // Helper functions
 // ------------------------------------------------------------------
-const formatMenuType = (type: string) => {
-  const typeMap: Record<string, string> = {
-    Home: "Home",
-    Category: "Category",
-    Product: "Product",
-    Brand: "Brand",
-    Collection: "Collection",
-    Promotion: "Promotion",
-    URL: "URL",
-    Search: "Search",
-    Page: "Page",
-  };
-  return typeMap[type] || type;
-};
-
-const getContentDisplay = (menu: Menu) => {
-  if (menu.populatedContent && menu.populatedContent.length > 0) {
-    return menu.populatedContent.map((item) => item.name).join(", ");
-  }
-  if (menu.content && menu.content.length > 0) {
-    return `${menu.content.length} items`;
-  }
-  return "—";
-};
-
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return date.toLocaleDateString("en-US", {
@@ -67,6 +43,20 @@ const formatDate = (dateString: string) => {
     month: "short",
     day: "numeric",
   });
+};
+
+const getContentSource = (menu: Menu) => {
+  if (menu.collectionId) {
+    // If collectionId is populated (from aggregation), it might be an object with name
+    if (typeof menu.collectionId === "object" && menu.collectionId.name) {
+      return `Collection: ${menu.collectionId.name}`;
+    }
+    return `Collection ID: ${menu.collectionId}`;
+  }
+  if (menu.link) {
+    return `Link: ${menu.link}`;
+  }
+  return "—";
 };
 
 // ------------------------------------------------------------------
@@ -150,7 +140,8 @@ const MenuPage = () => {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Menus</h1>
           <p className="text-muted-foreground mt-1">
-            Manage your navigation menus and their content links
+            Manage navigation menus – each references a collection or a direct
+            link
           </p>
         </div>
         <Link
@@ -213,7 +204,7 @@ const MenuPage = () => {
                 <tr>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/5"
+                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/6"
                   >
                     Name
                   </th>
@@ -221,25 +212,25 @@ const MenuPage = () => {
                     scope="col"
                     className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/6 hidden sm:table-cell"
                   >
-                    Type
+                    Order
                   </th>
                   <th
                     scope="col"
                     className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/5 hidden md:table-cell"
                   >
-                    Description
+                    Content Source
                   </th>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/5 hidden lg:table-cell"
+                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/6 hidden lg:table-cell"
                   >
-                    Content
+                    Location
                   </th>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/5 hidden xl:table-cell"
+                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/6 hidden xl:table-cell"
                   >
-                    Properties
+                    Display
                   </th>
                   <th
                     scope="col"
@@ -262,37 +253,37 @@ const MenuPage = () => {
                       <div className="text-sm font-medium text-foreground truncate max-w-[120px] sm:max-w-none">
                         {menu.name}
                       </div>
-                      {menu.ctaText && (
+                      {menu.sectionTitle && (
                         <div className="text-xs text-muted-foreground truncate">
-                          CTA: {menu.ctaText}
+                          Section: {menu.sectionTitle}
                         </div>
                       )}
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap hidden sm:table-cell">
                       <span className="text-sm text-foreground">
-                        {formatMenuType(menu.type)}
+                        {menu.order}
                       </span>
                     </td>
                     <td className="px-3 py-4 hidden md:table-cell">
                       <div className="text-sm text-foreground truncate max-w-xs">
-                        {menu.description || "—"}
+                        {getContentSource(menu)}
                       </div>
                     </td>
                     <td className="px-3 py-4 hidden lg:table-cell">
-                      <div className="text-sm text-foreground truncate max-w-xs">
-                        {getContentDisplay(menu)}
-                      </div>
+                      <span className="text-sm text-foreground">
+                        {menu.location || "—"}
+                      </span>
                     </td>
                     <td className="px-3 py-4 hidden xl:table-cell">
-                      <div className="text-sm text-muted-foreground space-y-0.5 truncate max-w-[200px]">
-                        {menu.location && <span>📍 {menu.location} </span>}
-                        {menu.display && <span>Display: {menu.display} </span>}
-                        {menu.columns && <span>Cols: {menu.columns} </span>}
-                        {menu.isSticky && <span>Sticky </span>}
+                      <div className="text-sm text-muted-foreground space-y-0.5 truncate max-w-[150px]">
+                        <span>{menu.display}</span>
+                        {menu.position && <span> | {menu.position}</span>}
+                        {menu.columns && <span> | {menu.columns} col</span>}
+                        {menu.isSticky && <span> | Sticky</span>}
                         {menu.backgroundColor && (
-                          <span className="inline-flex items-center">
+                          <span className="inline-flex items-center ml-1">
                             <span
-                              className="inline-block w-3 h-3 ml-1 rounded-full border border-border"
+                              className="inline-block w-3 h-3 rounded-full border border-border"
                               style={{ backgroundColor: menu.backgroundColor }}
                             />
                           </span>

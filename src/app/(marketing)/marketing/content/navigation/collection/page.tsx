@@ -9,6 +9,24 @@ import {
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 
+// Helper to get human-readable target type label
+const getTargetTypeLabel = (targetType: string) => {
+  const labels: Record<string, string> = {
+    Category: "Categories",
+    Product: "Products",
+    Brand: "Brands",
+    Collection: "Collections",
+    Promotion: "Promotions",
+    Page: "Pages",
+  };
+  return labels[targetType] || targetType;
+};
+
+// Helper to get item display name
+const getItemName = (item: any) => {
+  return item.title || item.name || "Unnamed";
+};
+
 const ProductCollectionPage = () => {
   const [collections, setCollections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +43,6 @@ const ProductCollectionPage = () => {
       const result = await getCollectionsWithProducts();
       if (result.success) {
         const mappedCollections = result.data || [];
-        console.log({ mappedCollections });
         setCollections(mappedCollections);
       } else {
         setError(result.error || "Failed to fetch collections");
@@ -92,11 +109,6 @@ const ProductCollectionPage = () => {
     });
   };
 
-  // Helper to get display name from item (product or collection)
-  const getItemName = (item: any) => {
-    return item.title || item.name || "Unnamed";
-  };
-
   return (
     <div className="p-4 lg:p-6">
       {error && (
@@ -118,13 +130,13 @@ const ProductCollectionPage = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Collections</h1>
           <p className="text-gray-600 mt-1">
-            Manage your collections – rule‑based or manual, for products or
-            collections
+            Manage collections of products, categories, brands, promotions,
+            pages, or other collections
           </p>
         </div>
         <Link
           href="/marketing/content/navigation/collection/create"
-          className="bg-blue-600 px-4 py-2 rounded-lg text-white hover:bg-blue-700 transition-colors flex items-center"
+          className="bg-primary px-4 py-2 rounded-lg text-white hover:bg-blue-700 transition-colors flex items-center"
         >
           <svg
             className="w-5 h-5 mr-2"
@@ -169,10 +181,10 @@ const ProductCollectionPage = () => {
             <p className="mt-1 text-gray-500">
               Get started by creating a new collection.
             </p>
-            <div className="mt-6  bg-primary">
+            <div className="mt-6">
               <Link
                 href="/marketing/content/navigation/collection/create"
-                className="inline-flex items-center px-4 py-2  border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="inline-flex items-center px-4 py-2 border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Add Collection
               </Link>
@@ -217,16 +229,16 @@ const ProductCollectionPage = () => {
                       </span>
                       {/* Target Type Badge */}
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                        {collection.targetType === "Product"
-                          ? "Products"
-                          : "Collections"}
+                        {getTargetTypeLabel(collection.targetType)}
                       </span>
                       {/* Item count */}
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {itemCount}{" "}
-                        {collection.targetType === "Product"
-                          ? "products"
-                          : "collections"}
+                        {itemCount === 1
+                          ? collection.targetType.toLowerCase()
+                          : getTargetTypeLabel(
+                              collection.targetType,
+                            ).toLowerCase()}
                       </span>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                         Updated {formatDate(collection.updated_at)}
@@ -237,10 +249,8 @@ const ProductCollectionPage = () => {
                       <div className="mt-4">
                         <div className="flex items-center justify-between">
                           <h4 className="text-sm font-medium text-gray-900">
-                            {collection.targetType === "Product"
-                              ? "Products"
-                              : "Collections"}{" "}
-                            in this collection
+                            {getTargetTypeLabel(collection.targetType)} in this
+                            collection
                           </h4>
                           <button
                             onClick={() =>

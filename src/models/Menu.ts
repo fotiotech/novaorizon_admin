@@ -1,53 +1,33 @@
-// models/Menu.ts
 import mongoose, { Schema, Model } from "mongoose";
 
 export interface IMenu {
-  // --- Core Identity ---
   name: string;
   description?: string;
-  image?: string; // Icon or thumbnail for the menu item
+  image?: string;
+  // NEW: reference to a Collection (content source)
+  collectionId?: mongoose.Types.ObjectId;
+  // Optional direct link (for static pages, external URLs, etc.)
+  link?: string;
 
-  // --- Content Linking ---
-  content: mongoose.Types.ObjectId[]; // Child menu items or referenced documents
-  ctaUrl?: string; // Direct link override (e.g., /sale)
-  ctaText?: string; // Button text inside the menu item
-
-  // --- Categorization ---
-  type:
-    | "Category"
-    | "Product"
-    | "Brand"
-    | "Collection"
-    | "Promotion"
-    | "MegaMenu"
-    | "URL" // Custom external/internal link
-    | "Search"
-    | "Page"; // Static pages (About, Contact)
-
-  location?: "Banner" | "NavBar" | "SiderBar" | "Home" | "Section" | "Footer";
-
-  // --- Layout & Rendering (Crucial for Ecommerce) ---
+  // --- Display & Layout ---
+  location?: "Banner" | "NavBar" | "SideBar" | "Home" | "Section" | "Footer";
   display: "List" | "Grid" | "Carousel" | "Dropdown" | "MegaMenu";
-
-  position?: "left" | "center" | "right" | "full"; // Mega-menu alignment
-  columns?: number; // Max 6, for mega-menu grid layout
-  maxDepth?: number; // How many levels of nesting are allowed (1-5)
-  showImages?: boolean; // Toggle product/category images in dropdown
-
-  // --- Styling Hooks ---
-  backgroundColor?: string; // Hex or CSS color
-  backgroundImage?: string; // Optional background banner
-  isSticky?: boolean; // Pin to top on scroll
-  sectionTitle?: string; // Heading for the menu block
+  position?: "left" | "center" | "right" | "full";
+  columns?: number;
+  maxDepth?: number;
+  showImages?: boolean;
+  backgroundColor?: string;
+  backgroundImage?: string;
+  isSticky?: boolean;
+  sectionTitle?: string;
   order?: number;
-  // --- Timestamps ---
+
   createdAt: Date;
   updatedAt: Date;
 }
 
 const MenuSchema: Schema = new Schema(
   {
-    // Core
     name: {
       type: String,
       required: [true, "Menu name is required"],
@@ -63,49 +43,26 @@ const MenuSchema: Schema = new Schema(
       type: String,
       trim: true,
     },
-
-    // Content & CTAs
-    content: {
-      type: [Schema.Types.ObjectId],
-      default: [],
+    // --- Content Source ---
+    collectionId: {
+      type: Schema.Types.ObjectId,
+      ref: "Collection",
     },
-    ctaUrl: {
+    link: {
       type: String,
       trim: true,
     },
-    ctaText: {
-      type: String,
-      trim: true,
-      maxlength: [50, "CTA text cannot exceed 50 characters"],
-    },
-
-    // Enums (Updated)
-    type: {
-      type: String,
-      enum: [
-        "Category",
-        "Product",
-        "Brand",
-        "Collection",
-        "Promotion",
-        "MegaMenu",
-        "URL",
-        "Search",
-        "Page",
-      ],
-      required: [true, "Menu type is required"],
-    },
+    // --- Location ---
     location: {
       type: String,
       enum: ["Banner", "NavBar", "SideBar", "Home", "Section", "Footer"],
     },
+    // --- Display ---
     display: {
       type: String,
       enum: ["List", "Grid", "Carousel", "Dropdown", "MegaMenu"],
       required: [true, "Display type is required"],
     },
-
-    // Layout & Mega-menu configs
     position: {
       type: String,
       enum: ["left", "center", "right", "full"],
@@ -127,8 +84,7 @@ const MenuSchema: Schema = new Schema(
       type: Boolean,
       default: false,
     },
-
-    // Styling
+    // --- Styling ---
     backgroundColor: {
       type: String,
       trim: true,
@@ -158,8 +114,8 @@ const MenuSchema: Schema = new Schema(
   },
 );
 
-// Text index for searching menu items
 MenuSchema.index({ name: "text", description: "text" });
+MenuSchema.index({ location: 1, order: 1 });
 
 export const Menu: Model<IMenu> =
   mongoose.models.Menu || mongoose.model<IMenu>("Menu", MenuSchema);

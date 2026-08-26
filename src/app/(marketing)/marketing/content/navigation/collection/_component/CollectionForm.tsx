@@ -42,6 +42,17 @@ const CollectionForm = ({ id }: { id?: string }) => {
     showName: true,
   });
 
+  // Determine if rule mode is allowed based on targetType
+  const isRuleAllowed = ["Product", "Collection"].includes(formData.targetType);
+
+  // When targetType changes, reset type to manual if rule not allowed
+  useEffect(() => {
+    if (!isRuleAllowed && formData.type === "rule") {
+      setFormData((prev) => ({ ...prev, type: "manual" }));
+      setRules([]);
+    }
+  }, [formData.targetType, isRuleAllowed]);
+
   const buildFormData = (
     data: typeof formData,
     rulesData: any[],
@@ -68,9 +79,9 @@ const CollectionForm = ({ id }: { id?: string }) => {
     addFiles,
     setFiles,
   } = useFileUploader(
-    id, // pass the collection id if editing, otherwise undefined
+    id,
     formData.imageUrl ? [formData.imageUrl] : [],
-    "collections", // <-- dedicated subfolder
+    "collections",
   );
 
   // Sync the first uploaded file URL to formData.imageUrl
@@ -95,9 +106,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
       setSuccess("Image removed successfully");
       setTimeout(() => setSuccess(null), 3000);
     } else {
-      // For new collections, just remove from local state
       setFiles((prev) => prev.filter((_, i) => i !== index));
-      // The useEffect above will automatically clear formData.imageUrl if files becomes empty
     }
   };
 
@@ -140,7 +149,18 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 { attribute: "", operator: "$eq", value: "", position: 0 },
               ],
             );
-            setItems(data.items || []);
+            // ✅ FIX: Extract IDs from populated items
+            const itemIds = data.items
+              ? data.items.map((item: any) => {
+                  // If item is an object with _id, return the string version
+                  if (item && typeof item === "object" && item._id) {
+                    return item._id.toString();
+                  }
+                  // Otherwise return the item itself (should be string)
+                  return item;
+                })
+              : [];
+            setItems(itemIds);
             if (data.imageUrl) {
               setFiles([data.imageUrl]);
             } else {
@@ -158,6 +178,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
     fetchData();
   }, [id, setFiles]);
 
+  // Fetch available items when manual mode and target type changes
   useEffect(() => {
     if (formData.type === "manual" && formData.targetType) {
       fetchAvailableItems(formData.targetType, itemSearch)
@@ -206,6 +227,12 @@ const CollectionForm = ({ id }: { id?: string }) => {
       }
 
       if (type === "rule") {
+        if (!isRuleAllowed) {
+          setError(
+            "Rule-based collections are only allowed for Products and Collections.",
+          );
+          return;
+        }
         const invalidRules = rules.some(
           (rule) => !rule.attribute || !rule.operator || !rule.value,
         );
@@ -306,11 +333,19 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
                 value={formData.type}
                 onChange={handleInputChange}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !isRuleAllowed}
               >
-                <option value="rule">Rule‑based</option>
+                <option value="rule" disabled={!isRuleAllowed}>
+                  Rule‑based {!isRuleAllowed && "(not allowed for this target)"}
+                </option>
                 <option value="manual">Manual selection</option>
               </select>
+              {!isRuleAllowed && (
+                <p className="text-sm text-amber-600 mt-1">
+                  Rule‑based collections are only available for Products and
+                  Collections.
+                </p>
+              )}
             </div>
           </div>
 
@@ -326,13 +361,18 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 onChange={handleInputChange}
                 disabled={isSubmitting}
               >
-                <option value="Product">Products</option>
-                <option value="Collection">Collections</option>
+                <option value="Category">Category</option>
+                <option value="Product">Product</option>
+                <option value="Brand">Brand</option>
+                <option value="Collection">Collection</option>
+                <option value="Promotion">Promotion</option>
+                <option value="Page">Page</option>
               </select>
               <p className="text-sm text-gray-500 mt-1">
-                {formData.targetType === "Product"
-                  ? "Rules/items will apply to products."
-                  : "Rules/items will apply to other collections."}
+                {formData.targetType === "Product" ||
+                formData.targetType === "Collection"
+                  ? "Rules/items will apply to this target type."
+                  : "Only manual selection is available for this target type."}
               </p>
             </div>
 
@@ -357,40 +397,35 @@ const CollectionForm = ({ id }: { id?: string }) => {
             </div>
           </div>
 
-          {/* Custom-styled Show Name Checkbox */}
+          {/* Show Name Checkbox */}
           <div className="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              id="showName"
-              name="showName"
-              checked={formData.showName}
-              onChange={handleInputChange}
-              className="
-                appearance-none
-                w-5 h-5
-                border-2 border-gray-300
-                rounded
-                bg-white
-                checked:bg-blue-600
-                checked:border-blue-600
-                relative
-                after:content-['✓']
-                after:absolute
-                after:inset-0
-                after:flex
-                after:items-center
-                after:justify-center
-                after:text-white
-                after:text-sm
-                after:opacity-0
-                checked:after:opacity-100
-                focus:ring-2 focus:ring-blue-500
-                transition-all
-              "
-            />
+            <div
+              className="w-5 h-5 border-2 border-gray-300 rounded bg-white flex items-center justify-center cursor-pointer hover:border-blue-500 transition-colors"
+              onClick={() =>
+                setFormData((prev) => ({ ...prev, showName: !prev.showName }))
+              }
+            >
+              {formData.showName && (
+                <svg
+                  className="w-3.5 h-3.5 text-blue-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={3}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              )}
+            </div>
             <label
-              htmlFor="showName"
               className="font-medium text-gray-700 cursor-pointer"
+              onClick={() =>
+                setFormData((prev) => ({ ...prev, showName: !prev.showName }))
+              }
             >
               Show collection name in rendered output
             </label>
@@ -441,18 +476,21 @@ const CollectionForm = ({ id }: { id?: string }) => {
 
           {formData.type === "rule" ? (
             <div className="py-6">
-              <CollectionRuleForm rules={rules} onAddRule={setRules} />
+              <CollectionRuleForm
+                rules={rules}
+                onAddRule={setRules}
+                targetType={formData.targetType as "Product" | "Collection"}
+              />
             </div>
           ) : (
             <div className="py-4 border rounded-lg p-4">
               <h3 className="text-lg font-semibold mb-3">
-                Select{" "}
-                {formData.targetType === "Product" ? "Products" : "Collections"}
+                Select {formData.targetType}s
               </h3>
               <div className="mb-3">
                 <input
                   type="text"
-                  placeholder={`Search ${formData.targetType === "Product" ? "products" : "collections"}...`}
+                  placeholder={`Search ${formData.targetType.toLowerCase()}s...`}
                   value={itemSearch}
                   onChange={(e) => setItemSearch(e.target.value)}
                   className="w-full p-2 border rounded"
@@ -467,34 +505,26 @@ const CollectionForm = ({ id }: { id?: string }) => {
                       key={item._id}
                       className="flex items-center p-2 hover:bg-gray-50 border-b"
                     >
-                      <input
-                        type="checkbox"
-                        checked={items.includes(item._id)}
-                        onChange={() => toggleItem(item._id)}
-                        className="
-                          appearance-none
-                          w-5 h-5
-                          border-2 border-gray-300
-                          rounded
-                          bg-white
-                          checked:bg-blue-600
-                          checked:border-blue-600
-                          relative
-                          after:content-['✓']
-                          after:absolute
-                          after:inset-0
-                          after:flex
-                          after:items-center
-                          after:justify-center
-                          after:text-white
-                          after:text-sm
-                          after:opacity-0
-                          checked:after:opacity-100
-                          focus:ring-2 focus:ring-blue-500
-                          transition-all
-                          mr-3
-                        "
-                      />
+                      <div
+                        className="w-5 h-5 border-2 border-gray-300 rounded bg-white flex items-center justify-center cursor-pointer hover:border-blue-500 transition-colors mr-3 flex-shrink-0"
+                        onClick={() => toggleItem(item._id)}
+                      >
+                        {items.includes(item._id) && (
+                          <svg
+                            className="w-3.5 h-3.5 text-blue-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={3}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
                       <span>{item.name || "Unnamed"}</span>
                       {item.imageUrl && (
                         <img

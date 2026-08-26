@@ -1,190 +1,215 @@
-// app/actions/menu.ts
 "use server";
 
 import { connection } from "@/utils/connection";
 import { Menu } from "@/models/Menu";
+import { Collection } from "@/models/Collection";
 import Product from "@/models/Product";
 import Category from "@/models/Category";
 import Brand from "@/models/Brand";
 import Promotion from "@/models/Promotion";
+import Page from "@/models/Page"; // if you have a Page model
 import { revalidatePath } from "next/cache";
 import mongoose from "mongoose";
-import { Collection } from "@/models/Collection";
 import { deleteS3Object } from "./s3";
 
-// ------------------------------------------------------------
-// Interface matching the new schema (including order)
-// ------------------------------------------------------------
-export interface MenuData {
-  name: string;
-  description?: string;
-  content: string[]; // array of ObjectId strings
-  ctaUrl?: string;
-  ctaText?: string;
-  type: string; // "Category" | "Product" | ...
-  location?: string;
-  display?: string;
-  position?: string;
-  columns?: number;
-  maxDepth?: number;
-  showImages?: boolean;
-  backgroundColor?: string;
-  backgroundImage?: string;
-  isSticky?: boolean;
-  sectionTitle?: string;
-  order?: number; // NEW: for sorting menus within a location
-}
-
-// ------------------------------------------------------------
-// Helper: populate content recursively (supports nested MegaMenu)
-// ------------------------------------------------------------
-async function populateContent(menu: any) {
-  if (!menu || !menu.content || menu.content.length === 0) return menu;
-
-  const type = menu.type;
-  let model: any;
-  let isMenuModel = false;
-
-  switch (type) {
-    case "Category":
-      model = Category;
-      break;
+// ---------- Helper: get model by target type ----------
+function getModelForTargetType(targetType: string) {
+  switch (targetType) {
     case "Product":
-      model = Product;
-      break;
+      return Product;
+    case "Category":
+      return Category;
     case "Brand":
-      model = Brand;
-      break;
+      return Brand;
     case "Promotion":
-      model = Promotion;
-      break;
+      return Promotion;
+    case "Page":
+      return Page;
     case "Collection":
-      model = Collection;
-      break;
-    case "MegaMenu": // For MegaMenu, content are child Menu IDs
-      model = Menu;
-      isMenuModel = true;
-      break;
+      return Collection;
     default:
-      // For URL, Search, Page, we don't populate
-      return menu;
+      return null;
   }
-
-  const docs = await model.find({ _id: { $in: menu.content } }).lean();
-
-  if (isMenuModel) {
-    // Recursively populate each child menu
-    const populatedChildren = await Promise.all(
-      docs.map(async (doc: any) => {
-        const childMenu = { ...doc };
-        return populateContent(childMenu);
-      }),
-    );
-    menu.populatedContent = populatedChildren.map((child) => ({
-      _id: child._id.toString(),
-      name: child.name,
-      fullData: child, // store the fully populated child for recursive rendering
-    }));
-  } else {
-    // For other types, just store the populated documents
-    menu.populatedContent = docs.map((doc: any) => ({
-      _id: doc._id.toString(),
-      name: doc.name || doc.title || "Unnamed",
-      image: doc.image || doc.imageUrl || null,
-      // Add other fields if needed
-    }));
-  }
-
-  return menu;
 }
 
-// ------------------------------------------------------------
-// Get menus by location (sorted by order)
-// ------------------------------------------------------------
+// ---------- Parse rule value (same as collection.ts) ----------
+function parseRuleValue(value: any, operator: string) {
+  if (operator === "$in" || operator === "$nin") {
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed;
+        if (value.includes(",")) {
+          return value.split(",").map((item: string) => item.trim());
+        }
+        return [value];
+      } catch {
+        if (value.includes(",")) {
+          return value.split(",").map((item: string) => item.trim());
+        }
+        return [value];
+      }
+    }
+    return [value];
+  }
+
+  if (["$lt", "$lte", "$gt", "$gte"].includes(operator)) {
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  }
+
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return value;
+}
+
+// ---------- Build query from rules (only for Product & Collection) ----------
+function buildQueryFromRules(rules: any[], targetType: string) {
+  if (!["Product", "Collection"].includes(targetType)) return {};
+  if (!rules || rules.length === 0) return {};
+
+  const query: any = { $and: [] };
+
+  for (const rule of rules) {
+    if (!rule.attribute || !rule.operator) continue;
+    const value = parseRuleValue(rule.value, rule.operator);
+
+    if (targetType === "Product" && rule.attribute === "category_id") {
+      if (Array.isArray(value)) {
+        const objectIds = value
+          .filter((v) => mongoose.Types.ObjectId.isValid(v))
+          .map((v) => new mongoose.Types.ObjectId(v));
+        if (objectIds.length) {
+          query.$and.push({
+            [rule.attribute]: { [rule.operator]: objectIds },
+          });
+        }
+      } else if (mongoose.Types.ObjectId.isValid(value)) {
+        query.$and.push({
+          [rule.attribute]: new mongoose.Types.ObjectId(value),
+        });
+      }
+    } else {
+      query.$and.push({
+        [rule.attribute]: { [rule.operator]: value },
+      });
+    }
+  }
+
+  return query.$and.length > 0 ? query : {};
+}
+
+// ---------- Resolve items from a collection ----------
+async function resolveCollectionItems(collectionId: string) {
+  const collection: any = await Collection.findById(collectionId).lean();
+  if (!collection) return [];
+
+  if (collection.type === "rule") {
+    const Model = getModelForTargetType(collection.targetType);
+    if (!Model) return [];
+    const query = buildQueryFromRules(collection.rules, collection.targetType);
+    if (Object.keys(query).length === 0) return [];
+    const items = await (Model as mongoose.Model<any>)
+      .find(query)
+      .limit(50)
+      .lean();
+    return items;
+  } else {
+    // manual – items are stored as ObjectIds, we need to populate them
+    const Model = getModelForTargetType(collection.targetType);
+    if (!Model) return [];
+    const items = await (Model as mongoose.Model<any>)
+      .find({
+        _id: { $in: collection.items },
+      })
+      .lean();
+    return items;
+  }
+}
+
+// ---------- Get menus by location (with items) ----------
 export async function getMenusByLocation(location: string) {
   try {
     await connection();
-    const menus = await Menu.find({ location }).sort({ order: 1 }); // ascending order
-    const populatedMenus = await Promise.all(
-      menus.map(async (menu) => populateContent(menu.toObject())),
+    const menus = await Menu.find({ location }).sort({ order: 1 }).lean();
+    const enriched = await Promise.all(
+      menus.map(async (menu) => {
+        let items: any[] = [];
+        if (menu.collectionId) {
+          items = await resolveCollectionItems(menu.collectionId.toString());
+        }
+        return {
+          ...menu,
+          items, // attached for rendering
+        };
+      }),
     );
-    return {
-      success: true,
-      data: JSON.parse(JSON.stringify(populatedMenus)),
-    };
+    return { success: true, data: JSON.parse(JSON.stringify(enriched)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-// ------------------------------------------------------------
-// CRUD operations (updated to handle order)
-// ------------------------------------------------------------
+// ---------- Get single menu by ID ----------
 export async function getMenuById(id: string) {
   try {
     await connection();
-    const menu = await Menu.findById(id);
+    const menu = await Menu.findById(id).lean();
     if (!menu) return { success: false, error: "Menu not found" };
 
-    const populatedMenu = await populateContent(menu.toObject());
+    let items: any[] = [];
+    if (menu.collectionId) {
+      items = await resolveCollectionItems(menu.collectionId.toString());
+    }
 
     return {
       success: true,
-      data: JSON.parse(JSON.stringify(populatedMenu)),
+      data: JSON.parse(JSON.stringify({ ...menu, items })),
     };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
+// ---------- Get all menus (without items, for listing) ----------
+// ---------- Get all menus (without items, for listing) ----------
 export async function getAllMenus() {
   try {
     await connection();
-    const menus = await Menu.find().sort({ createdAt: -1 });
-    const populatedMenus = await Promise.all(
-      menus.map(async (menu) => populateContent(menu.toObject())),
-    );
-    return {
-      success: true,
-      data: JSON.parse(JSON.stringify(populatedMenus)),
-    };
+    const menus = await Menu.find()
+      .populate("collectionId", "name") // Populate collection name
+      .sort({ createdAt: -1 })
+      .lean();
+    return { success: true, data: JSON.parse(JSON.stringify(menus)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-export async function getMenusByType(type: string) {
+// ---------- Create a new menu ----------
+export async function createMenu(menuData: any) {
   try {
     await connection();
-    const menus = await Menu.find({ type }).sort({ createdAt: -1 });
-    const populatedMenus = await Promise.all(
-      menus.map(async (menu) => populateContent(menu.toObject())),
-    );
-    return {
-      success: true,
-      data: JSON.parse(JSON.stringify(populatedMenus)),
-    };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
-export async function createMenu(menuData: MenuData) {
-  try {
-    await connection();
-    // Convert content strings to ObjectIds
-    const contentIds = (menuData.content || []).map(
-      (id) => new mongoose.Types.ObjectId(id),
-    );
-
-    // Include order if provided, else default 0
     const newMenu = new Menu({
-      ...menuData,
-      content: contentIds,
-      order: menuData.order ?? 0, // NEW: handle order
+      name: menuData.name,
+      description: menuData.description,
+      image: menuData.image,
+      collectionId: menuData.collectionId || undefined,
+      link: menuData.link || undefined,
+      location: menuData.location,
+      display: menuData.display,
+      position: menuData.position,
+      columns: menuData.columns,
+      maxDepth: menuData.maxDepth,
+      showImages: menuData.showImages,
+      backgroundColor: menuData.backgroundColor,
+      backgroundImage: menuData.backgroundImage,
+      isSticky: menuData.isSticky,
+      sectionTitle: menuData.sectionTitle,
+      order: menuData.order ?? 0,
     });
     await newMenu.save();
-
     revalidatePath("/marketing/content/navigation/menus");
     return {
       success: true,
@@ -196,33 +221,40 @@ export async function createMenu(menuData: MenuData) {
   }
 }
 
-export async function updateMenu(id: string, menuData: Partial<MenuData>) {
+// ---------- Update an existing menu ----------
+export async function updateMenu(id: string, menuData: any) {
   try {
     await connection();
-    const updateData: any = { ...menuData };
-    if (menuData.content) {
-      updateData.content = menuData.content.map(
-        (id) => new mongoose.Types.ObjectId(id),
-      );
-    }
-    // order is included in spread, but we ensure it's set
-    if (menuData.order !== undefined) {
-      updateData.order = menuData.order;
-    }
-
-    const menu = await Menu.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
-
-    if (!menu) return { success: false, error: "Menu not found" };
-
+    const updated = await Menu.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          name: menuData.name,
+          description: menuData.description,
+          image: menuData.image,
+          collectionId: menuData.collectionId || undefined,
+          link: menuData.link || undefined,
+          location: menuData.location,
+          display: menuData.display,
+          position: menuData.position,
+          columns: menuData.columns,
+          maxDepth: menuData.maxDepth,
+          showImages: menuData.showImages,
+          backgroundColor: menuData.backgroundColor,
+          backgroundImage: menuData.backgroundImage,
+          isSticky: menuData.isSticky,
+          sectionTitle: menuData.sectionTitle,
+          order: menuData.order ?? 0,
+        },
+      },
+      { new: true, runValidators: true },
+    );
+    if (!updated) return { success: false, error: "Menu not found" };
     revalidatePath("/marketing/content/navigation/menus");
     revalidatePath(`/marketing/content/navigation/menus/edit/${id}`);
-
     return {
       success: true,
-      data: JSON.parse(JSON.stringify(menu)),
+      data: JSON.parse(JSON.stringify(updated)),
       message: "Menu updated successfully",
     };
   } catch (error: any) {
@@ -230,12 +262,12 @@ export async function updateMenu(id: string, menuData: Partial<MenuData>) {
   }
 }
 
+// ---------- Delete a menu ----------
 export async function deleteMenu(id: string) {
   try {
     await connection();
     const menu = await Menu.findByIdAndDelete(id);
     if (!menu) return { success: false, error: "Menu not found" };
-
     revalidatePath("/marketing/content/navigation/menus");
     return { success: true, message: "Menu deleted successfully" };
   } catch (error: any) {
@@ -243,64 +275,24 @@ export async function deleteMenu(id: string) {
   }
 }
 
-// ------------------------------------------------------------
-// Fetch content options for form selection
-// ------------------------------------------------------------
-export async function getMenuContentOptions(type: string) {
-  await connection();
-
-  let items: any[] = [];
-  switch (type) {
-    case "Category":
-      items = await Category.find().select("_id name").lean();
-      break;
-    case "Product":
-      items = await Product.find().select("_id title").lean();
-      break;
-    case "Brand":
-      items = await Brand.find().select("_id name").lean();
-      break;
-    case "Promotion":
-      items = await Promotion.find().select("_id name").lean();
-      break;
-    case "Collection":
-      items = await Collection.find().select("_id name").lean();
-      break;
-    default:
-      // For Home, URL, Search, Page – no content options
-      return [];
-  }
-
-  return items.map((item) => ({
-    value: item._id.toString(),
-    label: item.name || item.title || "Unnamed",
-  }));
-}
-
+// ---------- Delete background image from a menu ----------
 export async function deleteMenuBackgroundImage(menuId: string) {
   try {
     await connection();
-
     if (!mongoose.Types.ObjectId.isValid(menuId)) {
       return { success: false, error: "Invalid menu ID" };
     }
-
     const menu = await Menu.findById(menuId);
     if (!menu) {
       return { success: false, error: "Menu not found" };
     }
-
     if (!menu.backgroundImage) {
       return { success: false, error: "No background image to delete" };
     }
-
     await deleteS3Object(menu.backgroundImage);
-
     menu.backgroundImage = "";
     await menu.save();
-
-    revalidatePath("/marketing/content/navigation"); // adjust path
-
+    revalidatePath("/marketing/content/navigation/menus");
     return { success: true, message: "Background image removed successfully" };
   } catch (error) {
     console.error("Error deleting menu background image:", error);

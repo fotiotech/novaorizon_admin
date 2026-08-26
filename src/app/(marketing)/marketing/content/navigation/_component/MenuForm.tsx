@@ -1,82 +1,42 @@
-// components/MenuForm.tsx
 "use client";
 
+import React, { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   getMenuById,
   createMenu,
   updateMenu,
-  MenuData,
-  getMenuContentOptions,
   deleteMenuBackgroundImage,
 } from "@/app/actions/menu";
-import React, { useEffect, useState, useRef } from "react";
+import { getAllCollections } from "@/app/actions/collection";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import FilesUploader from "@/components/FilesUploader";
 import useFileUploader from "@/hooks/useFileUploader";
 
-// ------------------------------------------------------------
-// Constants
-// ------------------------------------------------------------
-const MENU_TYPES = {
-  CATEGORY: "Category",
-  PRODUCT: "Product",
-  BRAND: "Brand",
-  COLLECTION: "Collection",
-  PROMOTION: "Promotion",
-  URL: "URL",
-  SEARCH: "Search",
-  PAGE: "Page",
-} as const;
-
-type MenuType = (typeof MENU_TYPES)[keyof typeof MENU_TYPES];
-
-const CONTENT_TYPES: MenuType[] = [
-  "Category",
-  "Product",
-  "Brand",
-  "Collection",
-  "Promotion",
-];
-
-// ------------------------------------------------------------
-// Interface
-// ------------------------------------------------------------
 interface MenuFormProps {
   id?: string;
 }
 
-// ------------------------------------------------------------
-// Helper: filter options
-// ------------------------------------------------------------
-const filterOptions = (
-  options: { value: string; label: string }[],
-  query: string,
-) => {
-  if (!query.trim()) return options;
-  const lowerQuery = query.toLowerCase().trim();
-  return options.filter((opt) => opt.label.toLowerCase().includes(lowerQuery));
-};
-
-// ------------------------------------------------------------
-// Main Component
-// ------------------------------------------------------------
 const MenuForm = ({ id }: MenuFormProps) => {
-  // ------------------------------------------------------------
-  // State
-  // ------------------------------------------------------------
-  const [menu, setMenu] = useState<
-    Omit<MenuData, "content"> & { content: string[] }
-  >({
+  const router = useRouter();
+
+  // ----- State -----
+  const [loading, setLoading] = useState(true);
+  const [loadingCollections, setLoadingCollections] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // Menu data
+  const [menu, setMenu] = useState({
     name: "",
     description: "",
-    content: [],
-    ctaUrl: "",
-    ctaText: "",
-    type: "Product",
-    location: "Home",
-    display: "List",
-    position: "left",
+    collectionId: "",
+    link: "",
+    location: "Home" as const,
+    display: "List" as const,
+    position: "left" as const,
     columns: 4,
     maxDepth: 2,
     showImages: false,
@@ -87,33 +47,23 @@ const MenuForm = ({ id }: MenuFormProps) => {
     order: 0,
   });
 
-  const [contentOptions, setContentOptions] = useState<
-    { value: string; label: string }[]
-  >([]);
-  const [loadingOptions, setLoadingOptions] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  // Collections for dropdown
+  const [collections, setCollections] = useState<any[]>([]);
 
-  // --- Enhanced content selection states ---
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Filtered options based on search
-  const filteredOptions = filterOptions(contentOptions, searchQuery);
-  const selectedMap = new Map(menu.content.map((id) => [id, true]));
-
-  // --- Background image uploader ---
+  // Background image uploader – we pass an empty array initially, will update later.
   const bgUpload = useFileUploader(
     id || "new-menu",
     menu.backgroundImage ? [menu.backgroundImage] : [],
     "menus/backgrounds",
   );
 
-  // Sync uploaded image URL with menu.backgroundImage
+  // Force re-render of FilesUploader when backgroundImage changes
+  const bgUploadKey = useMemo(
+    () => menu.backgroundImage || "none",
+    [menu.backgroundImage],
+  );
+
+  // Sync uploaded image with menu state
   useEffect(() => {
     const uploadedUrl = bgUpload.files[0] || "";
     if (uploadedUrl !== menu.backgroundImage) {
@@ -124,67 +74,50 @@ const MenuForm = ({ id }: MenuFormProps) => {
     }
   }, [bgUpload.files, menu.backgroundImage]);
 
-  // ---- Custom remove handler for background image ----
-  const handleRemoveBackgroundImage = async (
-    index: number,
-    fileUrl: string,
-  ) => {
-    if (!id) {
-      bgUpload.setFiles([]);
-      setMenu((prev) => ({ ...prev, backgroundImage: "" }));
-      return;
-    }
-
-    try {
-      const result = await deleteMenuBackgroundImage(id);
-      if (!result.success) {
-        throw new Error(result.error || "Failed to remove background image");
-      }
-      bgUpload.setFiles([]);
-      setMenu((prev) => ({ ...prev, backgroundImage: "" }));
-      setSuccess("Background image removed successfully");
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message || "Failed to remove image");
-    }
-  };
-
-  // ------------------------------------------------------------
-  // Fetch existing menu data (if editing)
-  // ------------------------------------------------------------
+  // ----- Fetch data -----
   useEffect(() => {
-    const fetchMenu = async () => {
-      if (!id) {
-        setLoading(false);
-        return;
-      }
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const result = await getMenuById(id);
-        if (result.success && result.data) {
-          const data = result.data;
-          setMenu({
-            name: data.name || "",
-            description: data.description || "",
-            content: data.content?.map((c: any) => c._id || c) || [],
-            ctaUrl: data.ctaUrl || "",
-            ctaText: data.ctaText || "",
-            type: data.type || "Product",
-            location: data.location || "Home",
-            display: data.display || "List",
-            position: data.position || "left",
-            columns: data.columns || 4,
-            maxDepth: data.maxDepth || 2,
-            showImages: data.showImages || false,
-            backgroundColor: data.backgroundColor || "#ffffff",
-            backgroundImage: data.backgroundImage || "",
-            isSticky: data.isSticky || false,
-            sectionTitle: data.sectionTitle || "",
-            order: data.order || 0,
-          });
-          await fetchOptions(data.type);
+
+        // Fetch collections list
+        setLoadingCollections(true);
+        const collRes = await getAllCollections();
+        if (collRes.success) {
+          setCollections(collRes.data || []);
         } else {
-          setError(result.error || "Failed to load menu");
+          setError(collRes.error || "Failed to load collections");
+        }
+        setLoadingCollections(false);
+
+        if (id) {
+          const menuRes = await getMenuById(id);
+          if (menuRes.success && menuRes.data) {
+            const data = menuRes.data;
+            setMenu({
+              name: data.name || "",
+              description: data.description || "",
+              collectionId: data.collectionId || "",
+              link: data.link || "",
+              location: data.location || "Home",
+              display: data.display || "List",
+              position: data.position || "left",
+              columns: data.columns || 4,
+              maxDepth: data.maxDepth || 2,
+              showImages: data.showImages || false,
+              backgroundColor: data.backgroundColor || "#ffffff",
+              backgroundImage: data.backgroundImage || "",
+              isSticky: data.isSticky || false,
+              sectionTitle: data.sectionTitle || "",
+              order: data.order || 0,
+            });
+            // Update background uploader with existing image
+            if (data.backgroundImage) {
+              bgUpload.setFiles([data.backgroundImage]);
+            }
+          } else {
+            setError(menuRes.error || "Failed to load menu");
+          }
         }
       } catch (err: any) {
         setError(err.message || "Unexpected error");
@@ -192,90 +125,41 @@ const MenuForm = ({ id }: MenuFormProps) => {
         setLoading(false);
       }
     };
+    fetchData();
+  }, [id]); // Remove bgUpload from deps to avoid infinite loop
 
-    fetchMenu();
-  }, [id]);
-
-  // ------------------------------------------------------------
-  // Fetch content options
-  // ------------------------------------------------------------
-  const fetchOptions = async (type: MenuType) => {
-    if (!CONTENT_TYPES.includes(type)) {
-      setContentOptions([]);
-      return;
-    }
-    setLoadingOptions(true);
-    try {
-      const options = await getMenuContentOptions(type);
-      setContentOptions(options);
-    } catch (err: any) {
-      setError(err.message || "Failed to load options");
-    } finally {
-      setLoadingOptions(false);
-    }
-  };
-
-  // ------------------------------------------------------------
-  // Handlers
-  // ------------------------------------------------------------
-  const handleMenuTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newType = e.target.value as MenuType;
-    setMenu((prev) => ({
-      ...prev,
-      type: newType,
-      content: [],
-    }));
-    setSearchQuery("");
-    fetchOptions(newType);
-  };
-
-  const handleInputChange = (
+  // ----- Handlers -----
+  const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     >,
   ) => {
     const { name, value, type } = e.target;
-    const val =
-      type === "checkbox" ? (e.target as HTMLInputElement).checked : value;
-    setMenu((prev) => ({ ...prev, [name]: val }));
-  };
-
-  // --- Content selection ---
-  const handleAddContent = (value: string) => {
-    if (!menu.content.includes(value)) {
-      setMenu((prev) => ({
-        ...prev,
-        content: [...prev.content, value],
-      }));
-    }
-    setSearchQuery("");
-    inputRef.current?.focus();
-  };
-
-  const handleRemoveContent = (value: string) => {
     setMenu((prev) => ({
       ...prev,
-      content: prev.content.filter((id) => id !== value),
+      [name]:
+        type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
     }));
   };
 
-  // Close dropdown on click outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const handleRemoveBackground = async (index: number, fileUrl: string) => {
+    if (!id) {
+      bgUpload.setFiles([]);
+      setMenu((prev) => ({ ...prev, backgroundImage: "" }));
+      return;
+    }
+    try {
+      const result = await deleteMenuBackgroundImage(id);
+      if (!result.success) throw new Error(result.error || "Failed to remove");
+      bgUpload.setFiles([]);
+      setMenu((prev) => ({ ...prev, backgroundImage: "" }));
+      setSuccess("Background image removed");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
 
-  // ------------------------------------------------------------
-  // Submit
-  // ------------------------------------------------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -283,23 +167,24 @@ const MenuForm = ({ id }: MenuFormProps) => {
     setSuccess(null);
 
     try {
-      const result = id
-        ? await updateMenu(id, menu)
-        : await createMenu(menu as MenuData);
+      // Validation: at least one of collectionId or link must be set
+      if (!menu.collectionId && !menu.link) {
+        setError("Please select a collection or provide a link.");
+        setSubmitting(false);
+        return;
+      }
+
+      const result = id ? await updateMenu(id, menu) : await createMenu(menu);
 
       if (result.success) {
-        setSuccess(
-          result.message || (id ? "Menu updated" : "Menu created successfully"),
-        );
+        setSuccess(result.message || (id ? "Menu updated" : "Menu created"));
         if (!id) {
           // Reset form after creation
           setMenu({
             name: "",
             description: "",
-            content: [],
-            ctaUrl: "",
-            ctaText: "",
-            type: "Product",
+            collectionId: "",
+            link: "",
             location: "Home",
             display: "List",
             position: "left",
@@ -312,10 +197,13 @@ const MenuForm = ({ id }: MenuFormProps) => {
             sectionTitle: "",
             order: 0,
           });
-          setContentOptions([]);
-          setSearchQuery("");
           bgUpload.clearFiles();
         }
+        // Redirect to list after brief delay
+        setTimeout(() => {
+          router.push("/marketing/content/navigation/menus");
+          router.refresh();
+        }, 1500);
       } else {
         setError(result.error || "Operation failed");
       }
@@ -326,18 +214,13 @@ const MenuForm = ({ id }: MenuFormProps) => {
     }
   };
 
-  // ------------------------------------------------------------
-  // Render
-  // ------------------------------------------------------------
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-64">
+      <div className="flex justify-center items-center h-64">
         <Spinner />
       </div>
     );
   }
-
-  const isContentType = CONTENT_TYPES.includes(menu.type as MenuType);
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-card rounded-lg shadow-md">
@@ -361,30 +244,6 @@ const MenuForm = ({ id }: MenuFormProps) => {
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Menu Type */}
-        <div>
-          <label
-            htmlFor="type"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Menu Type *
-          </label>
-          <select
-            id="type"
-            name="type"
-            value={menu.type}
-            onChange={handleMenuTypeChange}
-            required
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            {Object.values(MENU_TYPES).map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
-
         {/* Name */}
         <div>
           <label
@@ -398,7 +257,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
             id="name"
             name="name"
             value={menu.name}
-            onChange={handleInputChange}
+            onChange={handleChange}
             required
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="e.g., Summer Sale"
@@ -417,148 +276,76 @@ const MenuForm = ({ id }: MenuFormProps) => {
             id="description"
             name="description"
             value={menu.description}
-            onChange={handleInputChange}
+            onChange={handleChange}
             rows={3}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="Brief description"
           />
         </div>
 
-        {/* Enhanced Content Selection */}
-        {isContentType && (
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
-              Select {menu.type}s
-            </label>
-            <div className="relative" ref={dropdownRef}>
-              <div className="flex items-center border border-border rounded-md bg-background focus-within:ring-2 focus-within:ring-primary">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => setIsDropdownOpen(true)}
-                  placeholder={`Search ${menu.type}s...`}
-                  className="flex-1 px-3 py-2 bg-transparent text-foreground outline-none"
-                  disabled={loadingOptions}
-                />
-                {loadingOptions && <Spinner />}
-              </div>
-
-              {isDropdownOpen && (
-                <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {loadingOptions ? (
-                    <div className="p-2 text-center text-muted-foreground">
-                      Loading...
-                    </div>
-                  ) : filteredOptions.length === 0 ? (
-                    <div className="p-2 text-center text-muted-foreground">
-                      {searchQuery
-                        ? "No matching items found"
-                        : "No items available"}
-                    </div>
-                  ) : (
-                    filteredOptions.map((opt) => {
-                      const isSelected = selectedMap.has(opt.value);
-                      return (
-                        <div
-                          key={opt.value}
-                          onClick={() => {
-                            if (!isSelected) {
-                              handleAddContent(opt.value);
-                            }
-                          }}
-                          className={`flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-muted ${
-                            isSelected ? "bg-muted/50 cursor-not-allowed" : ""
-                          }`}
-                        >
-                          <span className="text-foreground">{opt.label}</span>
-                          {isSelected && (
-                            <span className="text-primary text-sm">
-                              ✓ Added
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              )}
-            </div>
-
-            {menu.content.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {menu.content.map((id) => {
-                  const label =
-                    contentOptions.find((opt) => opt.value === id)?.label || id;
-                  return (
-                    <span
-                      key={id}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-full text-sm"
-                    >
-                      {label}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveContent(id)}
-                        className="hover:text-destructive focus:outline-none"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => setMenu((prev) => ({ ...prev, content: [] }))}
-                  className="text-sm text-muted-foreground hover:text-destructive"
-                >
-                  Clear all
-                </button>
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">
-              Type to search, click to add, click × to remove
-            </p>
-          </div>
-        )}
-
-        {/* CTA Text & URL */}
+        {/* Collection Selector */}
         <div>
           <label
-            htmlFor="ctaText"
+            htmlFor="collectionId"
             className="block text-sm font-medium text-foreground mb-1"
           >
-            CTA Text
+            Collection (content source)
           </label>
-          <input
-            type="text"
-            id="ctaText"
-            name="ctaText"
-            value={menu.ctaText || ""}
-            onChange={handleInputChange}
+          <select
+            id="collectionId"
+            name="collectionId"
+            value={menu.collectionId}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="e.g., Shop Now"
-          />
+            disabled={loadingCollections}
+          >
+            <option value="">-- None (use link) --</option>
+            {collections.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name} ({c.targetType})
+              </option>
+            ))}
+          </select>
+          {loadingCollections && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              Loading collections...
+            </div>
+          )}
+          {!loadingCollections && collections.length === 0 && (
+            <p className="text-xs text-amber-600 mt-1">
+              No collections available. Please create a collection first.
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground mt-1">
+            Select a collection to display its items. If none, the link below
+            will be used.
+          </p>
         </div>
+
+        {/* Link (if no collection) */}
         <div>
           <label
-            htmlFor="ctaUrl"
+            htmlFor="link"
             className="block text-sm font-medium text-foreground mb-1"
           >
-            CTA URL
+            Direct Link (URL)
           </label>
           <input
             type="url"
-            id="ctaUrl"
-            name="ctaUrl"
-            value={menu.ctaUrl || ""}
-            onChange={handleInputChange}
+            id="link"
+            name="link"
+            value={menu.link}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="https://example.com/sale"
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            If no collection is selected, this link will be used (e.g., for
+            static pages).
+          </p>
         </div>
 
-        {/* Location, Order, Display */}
+        {/* Location */}
         <div>
           <label
             htmlFor="location"
@@ -570,31 +357,32 @@ const MenuForm = ({ id }: MenuFormProps) => {
             id="location"
             name="location"
             value={menu.location}
-            onChange={handleInputChange}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="Banner">Banner</option>
-            <option value="Header">Header</option>
+            <option value="NavBar">NavBar</option>
+            <option value="SideBar">SideBar</option>
             <option value="Home">Home</option>
             <option value="Section">Section</option>
             <option value="Footer">Footer</option>
           </select>
         </div>
 
-        {/* Order field */}
+        {/* Order */}
         <div>
           <label
             htmlFor="order"
             className="block text-sm font-medium text-foreground mb-1"
           >
-            Order (lower number = higher priority)
+            Order (lower = higher priority)
           </label>
           <input
             type="number"
             id="order"
             name="order"
             value={menu.order}
-            onChange={handleInputChange}
+            onChange={handleChange}
             min={0}
             step={1}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
@@ -606,6 +394,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           </p>
         </div>
 
+        {/* Display */}
         <div>
           <label
             htmlFor="display"
@@ -617,7 +406,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
             id="display"
             name="display"
             value={menu.display}
-            onChange={handleInputChange}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="List">List</option>
@@ -628,18 +417,19 @@ const MenuForm = ({ id }: MenuFormProps) => {
           </select>
         </div>
 
+        {/* Position */}
         <div>
           <label
             htmlFor="position"
             className="block text-sm font-medium text-foreground mb-1"
           >
-            Position
+            Position (alignment)
           </label>
           <select
             id="position"
             name="position"
             value={menu.position}
-            onChange={handleInputChange}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="left">Left</option>
@@ -649,6 +439,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           </select>
         </div>
 
+        {/* Columns (for MegaMenu) */}
         <div>
           <label
             htmlFor="columns"
@@ -661,40 +452,45 @@ const MenuForm = ({ id }: MenuFormProps) => {
             id="columns"
             name="columns"
             value={menu.columns}
-            onChange={handleInputChange}
+            onChange={handleChange}
             min={1}
             max={6}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
 
+        {/* Max Depth */}
         <div>
           <label
             htmlFor="maxDepth"
             className="block text-sm font-medium text-foreground mb-1"
           >
-            Max Depth
+            Max Depth (nesting)
           </label>
           <input
             type="number"
             id="maxDepth"
             name="maxDepth"
             value={menu.maxDepth}
-            onChange={handleInputChange}
+            onChange={handleChange}
             min={1}
             max={5}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            How many levels of nested items to allow (1-5). Only applicable for
+            nested collections.
+          </p>
         </div>
 
-        {/* Show Images Checkbox - Custom Styled */}
+        {/* Show Images */}
         <div className="flex items-center">
           <input
             type="checkbox"
             id="showImages"
             name="showImages"
-            checked={menu.showImages || false}
-            onChange={handleInputChange}
+            checked={menu.showImages}
+            onChange={handleChange}
             className="
               appearance-none
               w-5 h-5
@@ -722,10 +518,11 @@ const MenuForm = ({ id }: MenuFormProps) => {
             htmlFor="showImages"
             className="ml-2 block text-sm text-foreground cursor-pointer"
           >
-            Show Images
+            Show Images in menu
           </label>
         </div>
 
+        {/* Background Color */}
         <div>
           <label
             htmlFor="backgroundColor"
@@ -739,45 +536,46 @@ const MenuForm = ({ id }: MenuFormProps) => {
               id="backgroundColor"
               name="backgroundColor"
               value={menu.backgroundColor}
-              onChange={handleInputChange}
+              onChange={handleChange}
               className="h-10 w-10 rounded border border-border bg-background"
             />
             <input
               type="text"
               name="backgroundColor"
               value={menu.backgroundColor}
-              onChange={handleInputChange}
+              onChange={handleChange}
               className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
         </div>
 
-        {/* Background Image Uploader */}
+        {/* Background Image Upload - with key to force re-render */}
         <div>
           <label className="block text-sm font-medium text-foreground mb-1">
             Background Image
           </label>
           <FilesUploader
+            key={bgUploadKey} // Force re-render when background image changes
             files={bgUpload.files}
             addFiles={bgUpload.addFiles}
-            onRemove={handleRemoveBackgroundImage}
+            onRemove={handleRemoveBackground}
             loading={bgUpload.loading}
             progressByName={bgUpload.progressByName}
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Upload an image to set as the menu background. Only the first image
-            will be used. Click × to remove.
+            Upload a background image. Only the first image will be used. Click
+            × to remove.
           </p>
         </div>
 
-        {/* Sticky Checkbox - Custom Styled */}
+        {/* Sticky */}
         <div className="flex items-center">
           <input
             type="checkbox"
             id="isSticky"
             name="isSticky"
-            checked={menu.isSticky || false}
-            onChange={handleInputChange}
+            checked={menu.isSticky}
+            onChange={handleChange}
             className="
               appearance-none
               w-5 h-5
@@ -809,6 +607,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           </label>
         </div>
 
+        {/* Section Title */}
         <div>
           <label
             htmlFor="sectionTitle"
@@ -820,31 +619,29 @@ const MenuForm = ({ id }: MenuFormProps) => {
             type="text"
             id="sectionTitle"
             name="sectionTitle"
-            value={menu.sectionTitle || ""}
-            onChange={handleInputChange}
+            value={menu.sectionTitle}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="e.g., Featured Products"
           />
         </div>
 
-        <div className="pt-4">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-          >
-            {submitting ? (
-              <span className="flex items-center justify-center">
-                <Spinner />
-                {id ? "Updating..." : "Creating..."}
-              </span>
-            ) : id ? (
-              "Update Menu"
-            ) : (
-              "Create Menu"
-            )}
-          </button>
-        </div>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+        >
+          {submitting ? (
+            <span className="flex items-center justify-center">
+              <Spinner />
+              {id ? "Updating..." : "Creating..."}
+            </span>
+          ) : id ? (
+            "Update Menu"
+          ) : (
+            "Create Menu"
+          )}
+        </button>
       </form>
     </div>
   );

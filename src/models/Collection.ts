@@ -1,4 +1,3 @@
-// models/Collection.ts
 import mongoose, { Schema, Document } from "mongoose";
 
 const ruleSchema = new Schema({
@@ -24,7 +23,7 @@ const CollectionSchema = new Schema(
     },
     targetType: {
       type: String,
-      enum: ["Product", "Collection"],
+      enum: ["Category", "Product", "Brand", "Collection", "Promotion", "Page"],
       default: "Product",
     },
     items: [
@@ -39,16 +38,8 @@ const CollectionSchema = new Schema(
       enum: ["active", "inactive"],
       default: "active",
     },
-    // NEW fields
-    order: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    showName: {
-      type: Boolean,
-      default: true,
-    },
+    order: { type: Number, default: 0, min: 0 },
+    showName: { type: Boolean, default: true },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
@@ -66,7 +57,7 @@ CollectionSchema.index({ name: 1 });
 CollectionSchema.index({ status: 1 });
 CollectionSchema.index({ "rules.attribute": 1 });
 CollectionSchema.index({ targetType: 1 });
-CollectionSchema.index({ order: 1 }); // for sorting
+CollectionSchema.index({ order: 1 });
 
 export const Collection =
   mongoose.models.Collection || mongoose.model("Collection", CollectionSchema);
