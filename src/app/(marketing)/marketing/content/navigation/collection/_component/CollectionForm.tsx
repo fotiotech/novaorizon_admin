@@ -573,7 +573,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
             </button>
             <button
               type="submit"
-              className="bg-blue-600 px-5 py-2.5 rounded-lg text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              className="bg-primary px-5 py-2.5 rounded-lg text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
