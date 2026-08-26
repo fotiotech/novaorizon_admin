@@ -8,7 +8,7 @@ import {
   getCollectionById,
   updateCollection,
   deleteCollectionImage,
-  fetchAvailableItems, // new action
+  fetchAvailableItems,
 } from "@/app/actions/collection";
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
@@ -27,22 +27,21 @@ const CollectionForm = ({ id }: { id?: string }) => {
     { attribute: "", operator: "$eq", value: "", position: 0 },
   ]);
   const [showJson, setShowJson] = useState(false);
-  // State for manual items
   const [items, setItems] = useState<string[]>([]);
   const [availableItems, setAvailableItems] = useState<any[]>([]);
   const [itemSearch, setItemSearch] = useState("");
 
-  // Form state
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     imageUrl: "",
     status: "active",
-    type: "rule", // "rule" | "manual"
-    targetType: "Product", // "Product" | "Collection"
+    type: "rule",
+    targetType: "Product",
+    order: 0,
+    showName: true,
   });
 
-  // Helper to build FormData
   const buildFormData = (
     data: typeof formData,
     rulesData: any[],
@@ -57,10 +56,11 @@ const CollectionForm = ({ id }: { id?: string }) => {
     fd.append("targetType", data.targetType);
     fd.append("rules", JSON.stringify(rulesData));
     fd.append("items", JSON.stringify(itemsData));
+    fd.append("order", data.order.toString());
+    fd.append("showName", data.showName ? "true" : "false");
     return fd;
   };
 
-  // ----- File Uploader -----
   const {
     files,
     loading: fileLoading,
@@ -87,7 +87,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
     }
   };
 
-  // Fetch collections list and data
   useEffect(() => {
     async function fetchCollections() {
       try {
@@ -119,6 +118,8 @@ const CollectionForm = ({ id }: { id?: string }) => {
               status: data.status || "active",
               type: data.type || "rule",
               targetType: data.targetType || "Product",
+              order: data.order || 0,
+              showName: data.showName !== undefined ? data.showName : true,
             });
             setRules(
               data.rules || [
@@ -143,7 +144,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
     fetchData();
   }, [id, setFiles]);
 
-  // Fetch available items when targetType changes (for manual selection)
   useEffect(() => {
     if (formData.type === "manual" && formData.targetType) {
       fetchAvailableItems(formData.targetType, itemSearch)
@@ -161,14 +161,15 @@ const CollectionForm = ({ id }: { id?: string }) => {
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     >,
   ) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
+    const val =
+      type === "checkbox" ? (e.target as HTMLInputElement).checked : value;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: val,
     }));
   };
 
-  // Handle item selection toggle
   const toggleItem = (itemId: string) => {
     setItems((prev) =>
       prev.includes(itemId)
@@ -198,12 +199,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
           setError("Please complete all rule fields");
           return;
         }
-      } else {
-        // manual: at least one item required? Optional: you may allow empty.
-        // if (items.length === 0) {
-        //   setError("Please select at least one item");
-        //   return;
-        // }
       }
 
       const submitFormData = buildFormData(formData, rules, items);
@@ -305,25 +300,62 @@ const CollectionForm = ({ id }: { id?: string }) => {
             </div>
           </div>
 
-          <div>
-            <label className="block mb-2 font-medium text-gray-700">
-              Target *
-            </label>
-            <select
-              name="targetType"
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
-              value={formData.targetType}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block mb-2 font-medium text-gray-700">
+                Target *
+              </label>
+              <select
+                name="targetType"
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+                value={formData.targetType}
+                onChange={handleInputChange}
+                disabled={isSubmitting}
+              >
+                <option value="Product">Products</option>
+                <option value="Collection">Collections</option>
+              </select>
+              <p className="text-sm text-gray-500 mt-1">
+                {formData.targetType === "Product"
+                  ? "Rules/items will apply to products."
+                  : "Rules/items will apply to other collections."}
+              </p>
+            </div>
+
+            {/* Order field */}
+            <div>
+              <label className="block mb-2 font-medium text-gray-700">
+                Order (lower = higher priority)
+              </label>
+              <input
+                type="number"
+                name="order"
+                min={0}
+                step={1}
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+                value={formData.order}
+                onChange={handleInputChange}
+                disabled={isSubmitting}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Collections are sorted by this number (ascending) when
+                displayed.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="showName"
+              name="showName"
+              checked={formData.showName}
               onChange={handleInputChange}
-              disabled={isSubmitting}
-            >
-              <option value="Product">Products</option>
-              <option value="Collection">Collections</option>
-            </select>
-            <p className="text-sm text-gray-500 mt-1">
-              {formData.targetType === "Product"
-                ? "Rules/items will apply to products."
-                : "Rules/items will apply to other collections."}
-            </p>
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="showName" className="font-medium text-gray-700">
+              Show collection name in rendered output
+            </label>
           </div>
 
           <div>
@@ -369,7 +401,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
             </select>
           </div>
 
-          {/* Rules or Manual Items */}
           {formData.type === "rule" ? (
             <div className="py-6">
               <CollectionRuleForm rules={rules} onAddRule={setRules} />
@@ -404,7 +435,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
                         onChange={() => toggleItem(item._id)}
                         className="mr-3"
                       />
-                      <span>{item.name}</span>
+                      <span>{item.name || "Unnamed"}</span>
                       {item.imageUrl && (
                         <img
                           src={item.imageUrl}
@@ -422,7 +453,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
             </div>
           )}
 
-          {/* JSON Preview (optional) */}
           <div className="space-y-4">
             <button
               type="button"
@@ -457,6 +487,8 @@ const CollectionForm = ({ id }: { id?: string }) => {
                       type: formData.type,
                       targetType: formData.targetType,
                       status: formData.status,
+                      order: formData.order,
+                      showName: formData.showName,
                       rules: formData.type === "rule" ? rules : undefined,
                       items: formData.type === "manual" ? items : undefined,
                     },

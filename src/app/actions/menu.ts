@@ -13,7 +13,7 @@ import { Collection } from "@/models/Collection";
 import { deleteS3Object } from "./s3";
 
 // ------------------------------------------------------------
-// Interface matching the new schema
+// Interface matching the new schema (including order)
 // ------------------------------------------------------------
 export interface MenuData {
   name: string;
@@ -32,16 +32,19 @@ export interface MenuData {
   backgroundImage?: string;
   isSticky?: boolean;
   sectionTitle?: string;
+  order?: number; // NEW: for sorting menus within a location
 }
 
 // ------------------------------------------------------------
-// Helper: populate content based on menu type
+// Helper: populate content recursively (supports nested MegaMenu)
 // ------------------------------------------------------------
 async function populateContent(menu: any) {
   if (!menu || !menu.content || menu.content.length === 0) return menu;
 
   const type = menu.type;
   let model: any;
+  let isMenuModel = false;
+
   switch (type) {
     case "Category":
       model = Category;
@@ -58,25 +61,64 @@ async function populateContent(menu: any) {
     case "Collection":
       model = Collection;
       break;
+    case "MegaMenu": // For MegaMenu, content are child Menu IDs
+      model = Menu;
+      isMenuModel = true;
+      break;
     default:
-      // For URL, Search, Page, Home we don't populate (content may be empty)
+      // For URL, Search, Page, we don't populate
       return menu;
   }
 
-  // Fetch the referenced documents
-  const populated = await model.find({ _id: { $in: menu.content } }).lean();
-  // Attach as a virtual property or replace content with populated objects
-  // We'll keep the original content IDs and add a `populatedContent` field for convenience
-  menu.populatedContent = populated.map((doc: any) => ({
-    _id: doc._id.toString(),
-    name: doc.name || doc.title || "Unnamed",
-    // add other fields if needed
-  }));
+  const docs = await model.find({ _id: { $in: menu.content } }).lean();
+
+  if (isMenuModel) {
+    // Recursively populate each child menu
+    const populatedChildren = await Promise.all(
+      docs.map(async (doc: any) => {
+        const childMenu = { ...doc };
+        return populateContent(childMenu);
+      }),
+    );
+    menu.populatedContent = populatedChildren.map((child) => ({
+      _id: child._id.toString(),
+      name: child.name,
+      fullData: child, // store the fully populated child for recursive rendering
+    }));
+  } else {
+    // For other types, just store the populated documents
+    menu.populatedContent = docs.map((doc: any) => ({
+      _id: doc._id.toString(),
+      name: doc.name || doc.title || "Unnamed",
+      image: doc.image || doc.imageUrl || null,
+      // Add other fields if needed
+    }));
+  }
+
   return menu;
 }
 
 // ------------------------------------------------------------
-// CRUD operations
+// Get menus by location (sorted by order)
+// ------------------------------------------------------------
+export async function getMenusByLocation(location: string) {
+  try {
+    await connection();
+    const menus = await Menu.find({ location }).sort({ order: 1 }); // ascending order
+    const populatedMenus = await Promise.all(
+      menus.map(async (menu) => populateContent(menu.toObject())),
+    );
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(populatedMenus)),
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ------------------------------------------------------------
+// CRUD operations (updated to handle order)
 // ------------------------------------------------------------
 export async function getMenuById(id: string) {
   try {
@@ -84,7 +126,6 @@ export async function getMenuById(id: string) {
     const menu = await Menu.findById(id);
     if (!menu) return { success: false, error: "Menu not found" };
 
-    // Populate content based on type
     const populatedMenu = await populateContent(menu.toObject());
 
     return {
@@ -135,9 +176,12 @@ export async function createMenu(menuData: MenuData) {
     const contentIds = (menuData.content || []).map(
       (id) => new mongoose.Types.ObjectId(id),
     );
+
+    // Include order if provided, else default 0
     const newMenu = new Menu({
       ...menuData,
       content: contentIds,
+      order: menuData.order ?? 0, // NEW: handle order
     });
     await newMenu.save();
 
@@ -160,6 +204,10 @@ export async function updateMenu(id: string, menuData: Partial<MenuData>) {
       updateData.content = menuData.content.map(
         (id) => new mongoose.Types.ObjectId(id),
       );
+    }
+    // order is included in spread, but we ensure it's set
+    if (menuData.order !== undefined) {
+      updateData.order = menuData.order;
     }
 
     const menu = await Menu.findByIdAndUpdate(id, updateData, {

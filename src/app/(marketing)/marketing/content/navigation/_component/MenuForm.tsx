@@ -7,9 +7,9 @@ import {
   updateMenu,
   MenuData,
   getMenuContentOptions,
-  deleteMenuBackgroundImage, // new action
+  deleteMenuBackgroundImage,
 } from "@/app/actions/menu";
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import FilesUploader from "@/components/FilesUploader";
@@ -84,6 +84,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
     backgroundImage: "",
     isSticky: false,
     sectionTitle: "",
+    order: 0, // NEW: default order
   });
 
   const [contentOptions, setContentOptions] = useState<
@@ -106,7 +107,6 @@ const MenuForm = ({ id }: MenuFormProps) => {
   const selectedMap = new Map(menu.content.map((id) => [id, true]));
 
   // --- Background image uploader ---
-  // Use the menu id (or a dummy) as productId; subfolder "menus/backgrounds"
   const bgUpload = useFileUploader(
     id || "new-menu",
     menu.backgroundImage ? [menu.backgroundImage] : [],
@@ -129,21 +129,17 @@ const MenuForm = ({ id }: MenuFormProps) => {
     index: number,
     fileUrl: string,
   ) => {
-    // Only allow removal if editing an existing menu
     if (!id) {
-      // Create mode: just remove from local state
       bgUpload.setFiles([]);
       setMenu((prev) => ({ ...prev, backgroundImage: "" }));
       return;
     }
 
-    // Edit mode: call server action
     try {
       const result = await deleteMenuBackgroundImage(id);
       if (!result.success) {
         throw new Error(result.error || "Failed to remove background image");
       }
-      // Update local state
       bgUpload.setFiles([]);
       setMenu((prev) => ({ ...prev, backgroundImage: "" }));
       setSuccess("Background image removed successfully");
@@ -184,8 +180,8 @@ const MenuForm = ({ id }: MenuFormProps) => {
             backgroundImage: data.backgroundImage || "",
             isSticky: data.isSticky || false,
             sectionTitle: data.sectionTitle || "",
+            order: data.order || 0, // NEW: load existing order
           });
-          // After setting menu, fetch options for its type
           await fetchOptions(data.type);
         } else {
           setError(result.error || "Failed to load menu");
@@ -227,7 +223,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
     setMenu((prev) => ({
       ...prev,
       type: newType,
-      content: [], // clear previous selections
+      content: [],
     }));
     setSearchQuery("");
     fetchOptions(newType);
@@ -314,10 +310,10 @@ const MenuForm = ({ id }: MenuFormProps) => {
             backgroundImage: "",
             isSticky: false,
             sectionTitle: "",
+            order: 0, // reset order
           });
           setContentOptions([]);
           setSearchQuery("");
-          // Clear background uploader files
           bgUpload.clearFiles();
         }
       } else {
@@ -435,7 +431,6 @@ const MenuForm = ({ id }: MenuFormProps) => {
               Select {menu.type}s
             </label>
             <div className="relative" ref={dropdownRef}>
-              {/* Search input */}
               <div className="flex items-center border border-border rounded-md bg-background focus-within:ring-2 focus-within:ring-primary">
                 <input
                   ref={inputRef}
@@ -450,7 +445,6 @@ const MenuForm = ({ id }: MenuFormProps) => {
                 {loadingOptions && <Spinner />}
               </div>
 
-              {/* Dropdown list */}
               {isDropdownOpen && (
                 <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
                   {loadingOptions ? (
@@ -492,7 +486,6 @@ const MenuForm = ({ id }: MenuFormProps) => {
               )}
             </div>
 
-            {/* Selected tags */}
             {menu.content.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {menu.content.map((id) => {
@@ -565,7 +558,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           />
         </div>
 
-        {/* Location, Display, etc. */}
+        {/* Location, Order, Display */}
         <div>
           <label
             htmlFor="location"
@@ -586,6 +579,31 @@ const MenuForm = ({ id }: MenuFormProps) => {
             <option value="Section">Section</option>
             <option value="Footer">Footer</option>
           </select>
+        </div>
+
+        {/* NEW: Order field */}
+        <div>
+          <label
+            htmlFor="order"
+            className="block text-sm font-medium text-foreground mb-1"
+          >
+            Order (lower number = higher priority)
+          </label>
+          <input
+            type="number"
+            id="order"
+            name="order"
+            value={menu.order}
+            onChange={handleInputChange}
+            min={0}
+            step={1}
+            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="0"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Menus with the same location are sorted by this number in ascending
+            order.
+          </p>
         </div>
 
         <div>

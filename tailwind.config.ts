@@ -54,7 +54,7 @@ const config: Config = {
           "5": "hsl(var(--chart-5))",
         },
 
-        // ---- Add your custom named colors (optional) ----
+        // ---- Custom named colors (now backed by CSS variables) ----
         white: "hsl(var(--color-white))",
         black: "hsl(var(--color-black))",
         blue: "hsl(var(--color-blue))",

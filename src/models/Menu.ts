@@ -19,6 +19,7 @@ export interface IMenu {
     | "Brand"
     | "Collection"
     | "Promotion"
+    | "MegaMenu"
     | "URL" // Custom external/internal link
     | "Search"
     | "Page"; // Static pages (About, Contact)
@@ -38,7 +39,7 @@ export interface IMenu {
   backgroundImage?: string; // Optional background banner
   isSticky?: boolean; // Pin to top on scroll
   sectionTitle?: string; // Heading for the menu block
-
+  order?: number;
   // --- Timestamps ---
   createdAt: Date;
   updatedAt: Date;
@@ -87,6 +88,7 @@ const MenuSchema: Schema = new Schema(
         "Brand",
         "Collection",
         "Promotion",
+        "MegaMenu",
         "URL",
         "Search",
         "Page",
@@ -144,6 +146,11 @@ const MenuSchema: Schema = new Schema(
       type: String,
       trim: true,
       maxlength: [100, "Section title cannot exceed 100 characters"],
+    },
+    order: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   {

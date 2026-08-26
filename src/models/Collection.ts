@@ -1,3 +1,4 @@
+// models/Collection.ts
 import mongoose, { Schema, Document } from "mongoose";
 
 const ruleSchema = new Schema({
@@ -16,23 +17,20 @@ const CollectionSchema = new Schema(
     name: { type: String, required: true },
     description: { type: String },
     imageUrl: { type: String },
-    // NEW: type of collection
     type: {
       type: String,
       enum: ["rule", "manual"],
       default: "rule",
     },
-    // NEW: target model ("Product" or "Collection")
     targetType: {
       type: String,
       enum: ["Product", "Collection"],
       default: "Product",
     },
-    // NEW: manually selected items (dynamic ref)
     items: [
       {
         type: Schema.Types.ObjectId,
-        refPath: "targetType", // dynamic reference
+        refPath: "targetType",
       },
     ],
     rules: [ruleSchema],
@@ -41,13 +39,22 @@ const CollectionSchema = new Schema(
       enum: ["active", "inactive"],
       default: "active",
     },
+    // NEW fields
+    order: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    showName: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
   },
 );
 
-// Pre-save hook to sort rules
 CollectionSchema.pre("save", function (next) {
   if (this.rules) {
     this.rules.sort((a, b) => a.position - b.position);
@@ -55,11 +62,11 @@ CollectionSchema.pre("save", function (next) {
   next();
 });
 
-// Indexes
 CollectionSchema.index({ name: 1 });
 CollectionSchema.index({ status: 1 });
 CollectionSchema.index({ "rules.attribute": 1 });
 CollectionSchema.index({ targetType: 1 });
+CollectionSchema.index({ order: 1 }); // for sorting
 
 export const Collection =
   mongoose.models.Collection || mongoose.model("Collection", CollectionSchema);

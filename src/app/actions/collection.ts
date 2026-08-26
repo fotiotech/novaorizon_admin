@@ -50,7 +50,6 @@ function buildQueryFromRules(rules: any[], targetModel: string) {
     if (!rule.attribute || !rule.operator) continue;
     const value = parseRuleValue(rule.value, rule.operator);
 
-    // Special handling for category_id if target is Product
     if (targetModel === "Product" && rule.attribute === "category_id") {
       if (Array.isArray(value)) {
         const objectIds = value
@@ -67,7 +66,6 @@ function buildQueryFromRules(rules: any[], targetModel: string) {
         });
       }
     } else {
-      // Generic field query
       query.$and.push({
         [rule.attribute]: { [rule.operator]: value },
       });
@@ -81,7 +79,10 @@ function buildQueryFromRules(rules: any[], targetModel: string) {
 export async function getAllCollections() {
   try {
     await connection();
-    const collections = await Collection.find().sort({ createdAt: -1 });
+    const collections = await Collection.find().sort({
+      order: 1,
+      createdAt: -1,
+    });
     return { success: true, data: JSON.parse(JSON.stringify(collections)) };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -93,8 +94,8 @@ export async function getCollectionsWithProducts() {
   try {
     await connection();
     const collections = await Collection.find({})
-      .populate("items") // dynamic ref
-      .sort({ created_at: -1 })
+      .populate("items")
+      .sort({ order: 1, created_at: -1 })
       .lean();
 
     const results = [];
@@ -116,7 +117,6 @@ export async function getCollectionsWithProducts() {
             .lean();
         }
       } else {
-        // manual: use the stored items (already populated)
         matchingItems = collection.items || [];
       }
 
@@ -131,6 +131,8 @@ export async function getCollectionsWithProducts() {
           rules: collection.rules,
           items: collection.items,
           status: collection.status,
+          order: collection.order,
+          showName: collection.showName,
           created_at: collection.created_at,
           updated_at: collection.updated_at,
         },
@@ -158,9 +160,10 @@ export async function createCollection(formData: FormData) {
     const type = (formData.get("type") as string) || "rule";
     const targetType = (formData.get("targetType") as string) || "Product";
     const rulesJson = formData.get("rules") as string;
-    const itemsJson = formData.get("items") as string; // JSON array of IDs
+    const itemsJson = formData.get("items") as string;
+    const order = parseInt(formData.get("order") as string) || 0;
+    const showName = formData.get("showName") === "true";
 
-    // Validation
     if (!name?.trim()) {
       return { success: false, error: "Name is required" };
     }
@@ -168,12 +171,10 @@ export async function createCollection(formData: FormData) {
     if (!["rule", "manual"].includes(type)) {
       return { success: false, error: "Invalid collection type" };
     }
-
     if (!["Product", "Collection"].includes(targetType)) {
       return { success: false, error: "Invalid target type" };
     }
 
-    // Validate and parse rules if type === 'rule'
     let rules = [];
     if (type === "rule") {
       try {
@@ -206,7 +207,6 @@ export async function createCollection(formData: FormData) {
       }
     }
 
-    // Validate items if type === 'manual'
     let items = [];
     if (type === "manual") {
       try {
@@ -214,7 +214,6 @@ export async function createCollection(formData: FormData) {
         if (!Array.isArray(items)) {
           return { success: false, error: "Items must be an array" };
         }
-        // Validate each ID is a valid ObjectId
         for (const id of items) {
           if (!mongoose.Types.ObjectId.isValid(id)) {
             return { success: false, error: `Invalid item ID: ${id}` };
@@ -225,7 +224,6 @@ export async function createCollection(formData: FormData) {
       }
     }
 
-    // Check for duplicate name (optional)
     const existing = await Collection.findOne({ name: name.trim() });
     if (existing) {
       return {
@@ -243,6 +241,8 @@ export async function createCollection(formData: FormData) {
       targetType,
       rules: type === "rule" ? rules : [],
       items: type === "manual" ? items : [],
+      order,
+      showName,
     });
 
     await collection.save();
@@ -274,8 +274,9 @@ export async function updateCollection(id: string, formData: FormData) {
     const targetType = formData.get("targetType") as string;
     const rulesJson = formData.get("rules") as string;
     const itemsJson = formData.get("items") as string;
+    const order = parseInt(formData.get("order") as string) || 0;
+    const showName = formData.get("showName") === "true";
 
-    // Validations similar to create...
     if (!name?.trim()) return { success: false, error: "Name is required" };
     if (!["rule", "manual"].includes(type)) {
       return { success: false, error: "Invalid collection type" };
@@ -291,7 +292,6 @@ export async function updateCollection(id: string, formData: FormData) {
         if (!Array.isArray(rules)) {
           return { success: false, error: "Rules must be an array" };
         }
-        // ... same validation as create
         for (const [index, rule] of rules.entries()) {
           if (!rule.attribute || !rule.operator) {
             return {
@@ -354,6 +354,8 @@ export async function updateCollection(id: string, formData: FormData) {
       targetType,
       rules: type === "rule" ? rules : [],
       items: type === "manual" ? items : [],
+      order,
+      showName,
       updated_at: new Date(),
     };
 
@@ -386,9 +388,7 @@ export async function getCollectionById(id: string) {
       return { success: false, error: "Invalid collection ID" };
     }
     await connection();
-    const collection = await Collection.findById(id)
-      .populate("items") // populate referenced items
-      .lean();
+    const collection = await Collection.findById(id).populate("items").lean();
     if (!collection) {
       return { success: false, error: "Collection not found" };
     }
@@ -443,20 +443,36 @@ export async function deleteCollectionImage(collectionId: string) {
   }
 }
 
-// ---------- NEW: Fetch items for manual selection ----------
+// ---------- Fetch items for manual selection (status filter skipped) ----------
 export async function fetchAvailableItems(targetType: string, search?: string) {
   try {
     await connection();
     const Model = targetType === "Product" ? Product : Collection;
-    const filter: any = { status: "active" };
+    const filter: any = {};
+
+    // ⛔️ Status filter is SKIPPED for now – all items are shown regardless of status.
+    // If you want to filter by status later, uncomment the next line:
+    // filter.status = "active";
+
     if (search) {
-      filter.name = { $regex: search, $options: "i" };
+      const searchField = targetType === "Product" ? "title" : "name";
+      filter[searchField] = { $regex: search, $options: "i" };
     }
+
     const items = await Model.find(filter)
-      .select("_id name imageUrl") // select fields for display
+      .select(
+        targetType === "Product" ? "_id title imageUrl" : "_id name imageUrl",
+      )
       .limit(50)
       .lean();
-    return { success: true, data: JSON.parse(JSON.stringify(items)) };
+
+    const normalized = items.map((item: any) => ({
+      _id: item._id.toString(),
+      name: targetType === "Product" ? item.title : item.name,
+      imageUrl: item.imageUrl || null,
+    }));
+
+    return { success: true, data: normalized };
   } catch (error) {
     console.error("Error fetching available items:", error);
     return { success: false, error: "Failed to fetch items" };
