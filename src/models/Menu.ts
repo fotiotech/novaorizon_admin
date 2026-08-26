@@ -24,7 +24,7 @@ export interface IMenu {
     | "Search"
     | "Page"; // Static pages (About, Contact)
 
-  location?: "Banner" | "Header" | "Home" | "Section" | "Footer";
+  location?: "Banner" | "NavBar" | "SiderBar" | "Home" | "Section" | "Footer";
 
   // --- Layout & Rendering (Crucial for Ecommerce) ---
   display: "List" | "Grid" | "Carousel" | "Dropdown" | "MegaMenu";
@@ -97,7 +97,7 @@ const MenuSchema: Schema = new Schema(
     },
     location: {
       type: String,
-      enum: ["Banner", "Header", "Home", "Section", "Footer"],
+      enum: ["Banner", "NavBar", "SideBar", "Home", "Section", "Footer"],
     },
     display: {
       type: String,
