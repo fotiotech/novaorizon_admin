@@ -1,19 +1,17 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Select, { MultiValue } from "react-select";
-import MainImageUploader from "./MainImageUploader";
-import GalleryUploader from "./GalleryUploader";
+import FilesUploader from "../FilesUploader";
 import { getBrands } from "@/app/actions/brand";
-import { getCarriers } from "@/app/actions/carrier"; // 👈 new import
+import { getCarriers } from "@/app/actions/carrier";
 import { Brand } from "@/constant/types";
 import RichTextEditorWrapper from "@/components/RichTextEditorWrapper";
+import useFileUploader from "@/hooks/useFileUploader";
 
-// Define a minimal Carrier type (you can import from a shared types file if available)
 interface Carrier {
   _id: string;
   name: string;
-  // other fields are optional for this component
 }
 
 interface FieldProps {
@@ -29,6 +27,78 @@ interface FieldProps {
   isRequired?: boolean;
 }
 
+// ----- Wrapper for main_image (single file) -----
+const MainImageUploaderWrapper: React.FC<{
+  productId: string;
+  field: string | null;
+  code: string;
+  handleAttributeChange: (code: string, value: any) => void;
+}> = ({ productId, field, code, handleAttributeChange }) => {
+  const initialFiles = field ? [field] : [];
+  const { files, addFiles, removeFile, loading, progressByName } =
+    useFileUploader(productId, initialFiles, "main");
+
+  const prevFilesRef = useRef<string[]>(initialFiles);
+
+  // Sync to Redux whenever the local files change
+  useEffect(() => {
+    const newVal = files.length > 0 ? files[0] : null;
+    const prevVal =
+      prevFilesRef.current.length > 0 ? prevFilesRef.current[0] : null;
+    if (newVal !== prevVal) {
+      handleAttributeChange(code, newVal);
+      prevFilesRef.current = files;
+    }
+  }, [files, handleAttributeChange, code]);
+
+  return (
+    <FilesUploader
+      files={files}
+      addFiles={addFiles}
+      onRemove={removeFile}
+      loading={loading}
+      progressByName={progressByName}
+    />
+  );
+};
+
+// ----- Wrapper for gallery (multiple files) -----
+const GalleryUploaderWrapper: React.FC<{
+  productId: string;
+  field: string[];
+  code: string;
+  handleAttributeChange: (code: string, value: any) => void;
+}> = ({ productId, field, code, handleAttributeChange }) => {
+  const initialFiles = Array.isArray(field) ? field : [];
+  const { files, addFiles, removeFile, loading, progressByName } =
+    useFileUploader(productId, initialFiles, "gallery");
+
+  const prevFilesRef = useRef<string[]>(initialFiles);
+
+  // Sync to Redux whenever the local files change
+  useEffect(() => {
+    // Compare arrays (simple shallow comparison is enough because URLs are strings)
+    const changed =
+      files.length !== prevFilesRef.current.length ||
+      files.some((url, i) => url !== prevFilesRef.current[i]);
+    if (changed) {
+      handleAttributeChange(code, files);
+      prevFilesRef.current = files;
+    }
+  }, [files, handleAttributeChange, code]);
+
+  return (
+    <FilesUploader
+      files={files}
+      addFiles={addFiles}
+      onRemove={removeFile}
+      loading={loading}
+      progressByName={progressByName}
+    />
+  );
+};
+
+// ----- Main Fields Component -----
 const Fields: React.FC<FieldProps> = ({
   type,
   code,
@@ -42,7 +112,7 @@ const Fields: React.FC<FieldProps> = ({
   isRequired,
 }) => {
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [carriers, setCarriers] = useState<Carrier[]>([]); // 👈 new state
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch brands and carriers on mount
@@ -122,18 +192,20 @@ const Fields: React.FC<FieldProps> = ({
       case "file":
         if (code === "main_image") {
           return (
-            <MainImageUploader
+            <MainImageUploaderWrapper
               productId={productId || ""}
               field={field}
               code={code}
+              handleAttributeChange={handleAttributeChange}
             />
           );
         } else if (code === "gallery") {
           return (
-            <GalleryUploader
+            <GalleryUploaderWrapper
               productId={productId || ""}
               field={field}
               code={code}
+              handleAttributeChange={handleAttributeChange}
             />
           );
         }
@@ -158,19 +230,10 @@ const Fields: React.FC<FieldProps> = ({
               value={field || ""}
               onChange={(html) => handleAttributeChange(code, html)}
               placeholder={`Enter ${name}`}
+              productId={productId || ""} // 👈 add this line
             />
           );
         }
-        return (
-          <textarea
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors min-h-[100px]"
-            value={field || ""}
-            placeholder={`Enter ${name}`}
-            onChange={(e) => handleAttributeChange(code, e.target.value)}
-            required={isRequired}
-          />
-        );
-
       case "number": {
         const familyId = unitFamily?.id;
         const familyUnits = familyId
@@ -243,7 +306,7 @@ const Fields: React.FC<FieldProps> = ({
       }
 
       case "select": {
-        // ----- Special case: Brand (single select) -----
+        // Brand (single select)
         if (code === "brand") {
           return (
             <Select
@@ -266,14 +329,13 @@ const Fields: React.FC<FieldProps> = ({
           );
         }
 
-        // ----- Special case: Carrier (multi-select) -----
+        // Carrier (multi-select)
         if (code === "carrier") {
           const carrierOptions = carriers.map((c) => ({
             value: c._id,
             label: c.name,
           }));
 
-          // field should be an array of carrier IDs
           const selectedValues = Array.isArray(field)
             ? field
                 .map((id) => {
@@ -312,7 +374,7 @@ const Fields: React.FC<FieldProps> = ({
           );
         }
 
-        // ----- Default multi‑select for other "select" attributes -----
+        // Default multi‑select for other "select" attributes
         return (
           <Select
             isMulti

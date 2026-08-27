@@ -62,14 +62,6 @@ const generateId = () => {
   );
 };
 
-// ============================================================
-// Preview Component
-// ============================================================
-
-// ============================================================
-// Main Component
-// ============================================================
-
 export default function PropertyForm({ propertyId, onSuccess }: Props) {
   const router = useRouter();
 
@@ -96,7 +88,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
   const [groupFilter, setGroupFilter] = useState<Record<string, string>>({});
   const [attrFilter, setAttrFilter] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(false); // NEW
+  const [showPreview, setShowPreview] = useState(false);
 
   // Fetch data
   useEffect(() => {
@@ -348,8 +340,8 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
   if (loadingData) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
-        <span className="ml-3 text-gray-600">Loading data...</span>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <span className="ml-3 text-muted-foreground">Loading data...</span>
       </div>
     );
   }
@@ -360,7 +352,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
 
       <form
         onSubmit={handleSubmit}
-        className="space-y-6 max-w-4xl mx-auto p-6 bg-white rounded-lg shadow"
+        className="space-y-6 max-w-4xl mx-auto p-6 bg-background text-foreground border border-border rounded-lg shadow-sm"
         noValidate
       >
         <h2 className="text-2xl font-bold">
@@ -368,7 +360,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
         </h2>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded">
             {error}
           </div>
         )}
@@ -376,22 +368,22 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
         {/* Code Field */}
         <div>
           <label htmlFor="property-code" className="block font-medium">
-            Code <span className="text-red-500">*</span>
+            Code <span className="text-destructive">*</span>
           </label>
           <input
             id="property-code"
             type="text"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            className={`w-full border rounded p-2 ${
-              fieldErrors.code ? "border-red-500" : "border-gray-300"
-            }`}
+            className={`w-full border rounded p-2 bg-background text-foreground ${
+              fieldErrors.code ? "border-destructive" : "border-border"
+            } focus:ring-2 focus:ring-ring focus:border-transparent`}
             aria-invalid={!!fieldErrors.code}
             aria-describedby={fieldErrors.code ? "code-error" : undefined}
             required
           />
           {fieldErrors.code && (
-            <p id="code-error" className="text-red-500 text-sm mt-1">
+            <p id="code-error" className="text-destructive text-sm mt-1">
               {fieldErrors.code}
             </p>
           )}
@@ -400,22 +392,22 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
         {/* Name Field */}
         <div>
           <label htmlFor="property-name" className="block font-medium">
-            Name <span className="text-red-500">*</span>
+            Name <span className="text-destructive">*</span>
           </label>
           <input
             id="property-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className={`w-full border rounded p-2 ${
-              fieldErrors.name ? "border-red-500" : "border-gray-300"
-            }`}
+            className={`w-full border rounded p-2 bg-background text-foreground ${
+              fieldErrors.name ? "border-destructive" : "border-border"
+            } focus:ring-2 focus:ring-ring focus:border-transparent`}
             aria-invalid={!!fieldErrors.name}
             aria-describedby={fieldErrors.name ? "name-error" : undefined}
             required
           />
           {fieldErrors.name && (
-            <p id="name-error" className="text-red-500 text-sm mt-1">
+            <p id="name-error" className="text-destructive text-sm mt-1">
               {fieldErrors.name}
             </p>
           )}
@@ -430,7 +422,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
             id="property-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full border border-gray-300 rounded p-2"
+            className="w-full border border-border rounded p-2 bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
             rows={3}
           />
         </div>
@@ -442,20 +434,22 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
             <button
               type="button"
               onClick={addMapping}
-              className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors"
+              className="bg-secondary text-secondary-foreground px-3 py-1 rounded hover:bg-secondary/90 transition-colors"
             >
               + Add Set
             </button>
           </div>
 
           {fieldErrors.mappings && (
-            <p id="mappings-error" className="text-red-500 text-sm mt-1">
+            <p id="mappings-error" className="text-destructive text-sm mt-1">
               {fieldErrors.mappings}
             </p>
           )}
 
           {mappings.length === 0 && (
-            <p className="text-gray-500 text-sm mt-2">No sets added yet.</p>
+            <p className="text-muted-foreground text-sm mt-2">
+              No sets added yet.
+            </p>
           )}
 
           {mappings.map((mapping, index) => {
@@ -503,13 +497,13 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
           <button
             type="submit"
             disabled={saving || !isFormValid}
-            className={`bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors flex items-center ${
+            className={`bg-primary text-primary-foreground px-6 py-2 rounded hover:bg-primary/90 transition-colors flex items-center ${
               saving || !isFormValid ? "opacity-50 cursor-not-allowed" : ""
             }`}
           >
             {saving && (
               <svg
-                className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
@@ -534,18 +528,18 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
           <button
             type="button"
             onClick={() => router.push("/catalog/categories/property")}
-            className="bg-gray-300 px-6 py-2 rounded hover:bg-gray-400 transition-colors"
+            className="bg-muted text-muted-foreground px-6 py-2 rounded hover:bg-muted/80 transition-colors"
           >
             Cancel
           </button>
         </div>
 
         {/* Preview Toggle & Preview */}
-        <div className="border-t pt-4 mt-4">
+        <div className="border-t border-border pt-4 mt-4">
           <button
             type="button"
             onClick={() => setShowPreview((prev) => !prev)}
-            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium flex items-center gap-1"
+            className="text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
           >
             {showPreview ? "Hide" : "Show"} Live Preview
             <span className="text-sm">{showPreview ? "▲" : "▼"}</span>

@@ -7,7 +7,7 @@ import Image from "next/image";
 type FilesUploaderProps = {
   files: string[];
   addFiles: (newFiles: File[]) => void;
-  onRemove: (index: number, fileUrl: string) => Promise<void>; // parent handles deletion
+  onRemove: (index: number, fileUrl: string) => Promise<any>; // 👈 returns any, not void
   loading?: boolean;
   progressByName?: Record<string, number>;
 };

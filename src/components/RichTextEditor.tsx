@@ -12,43 +12,47 @@ import BulletList from "@tiptap/extension-bullet-list";
 import OrderedList from "@tiptap/extension-ordered-list";
 import Heading from "@tiptap/extension-heading";
 import { useState, useCallback, useRef, useEffect } from "react";
+import useFileUploader from "@/hooks/useFileUploader";
 
 export interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  productId: string;
 }
 
-export default function RichTextEditor({ value, onChange, placeholder }: RichTextEditorProps) {
-  const [uploading, setUploading] = useState(false);
+export default function RichTextEditor({
+  value,
+  onChange,
+  placeholder,
+  productId,
+}: RichTextEditorProps) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [showImageAltDialog, setShowImageAltDialog] = useState(false);
-  const [pendingImageUrl, setPendingImageUrl] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const pendingFileRef = useRef<File | null>(null);
+  const pendingAltRef = useRef<string>("");
 
-  // Prevent zoom on double-tap (iOS)
-  useEffect(() => {
-    const container = editorContainerRef.current;
-    if (!container) return;
+  // Use the file uploader hook for editor images
+  const { files, addFiles, progressByName } = useFileUploader(
+    productId,
+    [],
+    "editor",
+  );
 
-    const handleTouchStart = (e: TouchEvent) => {
-      // If it's a double-tap, prevent default zoom behavior
-      if (e.touches.length === 1 && e.touches[0].target === container) {
-        // No need to prevent default – we just want to avoid zoom.
-        // We'll rely on touch-action: manipulation to prevent double-tap zoom.
-      }
-    };
-    container.addEventListener("touchstart", handleTouchStart);
-    return () => container.removeEventListener("touchstart", handleTouchStart);
-  }, []);
+  // Track which URLs we've already inserted to avoid duplicates
+  const insertedUrlsRef = useRef<string[]>([]);
 
+  // Define editor first
   const editor = useEditor({
     extensions: [
       StarterKit,
       Image.configure({ inline: false, allowBase64: false }),
-      Placeholder.configure({ placeholder: placeholder || "Write description..." }),
+      Placeholder.configure({
+        placeholder: placeholder || "Write description...",
+      }),
       Link.configure({ openOnClick: false }),
       CodeBlock,
       Blockquote,
@@ -64,32 +68,57 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
       attributes: {
         class:
           "prose max-w-none focus:outline-none min-h-[200px] p-4 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
-        style: "font-size: 16px; touch-action: manipulation;", // Prevent iOS zoom
+        style: "font-size: 16px; touch-action: manipulation;",
       },
     },
   });
 
-  const handleImageUpload = useCallback(async (file: File) => {
-    setUploading(true);
-    try {
-      const { uploadImage } = await import("@/utils/uploadImage" as any);
-      const url = await uploadImage(file);
-      setPendingImageUrl(url);
-      setShowImageAltDialog(true);
-    } catch (error) {
-      console.error("Image upload failed", error);
-    } finally {
-      setUploading(false);
-    }
-  }, []);
-
-  const insertImageWithAlt = useCallback((alt: string) => {
-    if (pendingImageUrl) {
-      editor?.chain().focus().setImage({ src: pendingImageUrl, alt }).run();
-      setPendingImageUrl("");
+  // When files change, insert new ones that aren't inserted yet
+  useEffect(() => {
+    if (!editor) return;
+    const newUrls = files.filter(
+      (url) => !insertedUrlsRef.current.includes(url),
+    );
+    if (newUrls.length > 0) {
+      const url = newUrls[0];
+      const alt = pendingAltRef.current || "";
+      editor.chain().focus().setImage({ src: url, alt }).run();
+      insertedUrlsRef.current = [...insertedUrlsRef.current, url];
+      pendingAltRef.current = "";
       setShowImageAltDialog(false);
     }
-  }, [editor, pendingImageUrl]);
+  }, [files, editor]);
+
+  // Prevent zoom on double‑tap (iOS)
+  useEffect(() => {
+    const container = editorContainerRef.current;
+    if (!container) return;
+    const handleTouchStart = (e: TouchEvent) => {
+      // no‑op
+    };
+    container.addEventListener("touchstart", handleTouchStart);
+    return () => container.removeEventListener("touchstart", handleTouchStart);
+  }, []);
+
+  const handleImageUpload = useCallback((file: File) => {
+    pendingFileRef.current = file;
+    setShowImageAltDialog(true);
+  }, []);
+
+  const handleAltConfirm = useCallback(
+    (alt: string) => {
+      if (pendingFileRef.current) {
+        pendingAltRef.current = alt;
+        addFiles([pendingFileRef.current]);
+        pendingFileRef.current = null;
+        setShowImageAltDialog(false);
+        // The upload proceeds; the effect will insert when done
+      } else {
+        setShowImageAltDialog(false);
+      }
+    },
+    [addFiles],
+  );
 
   const addLink = useCallback(() => {
     if (!editor) return;
@@ -124,14 +153,19 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
       className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 ${
         active ? "bg-gray-300 dark:bg-gray-600" : ""
       }`}
-      style={{ touchAction: "manipulation" }} // Prevent zoom on button tap
+      style={{ touchAction: "manipulation" }}
     >
       {children}
     </button>
   );
 
+  const isUploading = Object.values(progressByName).some((p) => p < 100);
+
   return (
-    <div ref={editorContainerRef} className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+    <div
+      ref={editorContainerRef}
+      className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800"
+    >
       <div className="border-b p-2 flex flex-wrap gap-2 bg-gray-50 dark:bg-gray-700">
         {/* Headings */}
         <select
@@ -139,7 +173,12 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
           onChange={(e) => {
             const level = parseInt(e.target.value);
             if (level === 0) editor.chain().focus().setParagraph().run();
-            else editor.chain().focus().setHeading({ level } as any).run();
+            else
+              editor
+                .chain()
+                .focus()
+                .setHeading({ level } as any)
+                .run();
           }}
           value={(() => {
             if (editor.isActive("heading", { level: 1 })) return "1";
@@ -227,7 +266,10 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
         </ToolbarButton>
 
         {/* Image upload */}
-        <ToolbarButton onClick={() => fileInputRef.current?.click()} title="Insert Image">
+        <ToolbarButton
+          onClick={() => fileInputRef.current?.click()}
+          title="Insert Image"
+        >
           📷
         </ToolbarButton>
         <input
@@ -237,19 +279,30 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleImageUpload(file);
+            if (file) {
+              handleImageUpload(file);
+            }
+            e.target.value = "";
           }}
         />
 
         {/* Undo/Redo */}
-        <ToolbarButton onClick={() => editor.chain().focus().undo().run()} title="Undo (Ctrl+Z)">
+        <ToolbarButton
+          onClick={() => editor.chain().focus().undo().run()}
+          title="Undo (Ctrl+Z)"
+        >
           ↶
         </ToolbarButton>
-        <ToolbarButton onClick={() => editor.chain().focus().redo().run()} title="Redo (Ctrl+Y)">
+        <ToolbarButton
+          onClick={() => editor.chain().focus().redo().run()}
+          title="Redo (Ctrl+Y)"
+        >
           ↷
         </ToolbarButton>
 
-        {uploading && <span className="text-sm text-gray-500">Uploading image...</span>}
+        {isUploading && (
+          <span className="text-sm text-gray-500">Uploading image…</span>
+        )}
       </div>
 
       <EditorContent editor={editor} />
@@ -265,7 +318,7 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
               placeholder="https://example.com"
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
-              style={{ fontSize: "16px" }} // Prevent zoom on input focus
+              style={{ fontSize: "16px" }}
             />
             <div className="flex justify-end gap-2">
               <button
@@ -298,15 +351,12 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
               className="border rounded p-2 w-80 mb-2"
               placeholder="Describe the image (optional)"
               autoFocus
-              style={{ fontSize: "16px" }} // Prevent zoom on input focus
+              style={{ fontSize: "16px" }}
             />
             <div className="flex justify-end gap-2">
               <button
                 className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
-                onClick={() => {
-                  insertImageWithAlt("");
-                  setShowImageAltDialog(false);
-                }}
+                onClick={() => handleAltConfirm("")}
                 style={{ touchAction: "manipulation" }}
               >
                 Skip
@@ -314,8 +364,10 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
               <button
                 className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
                 onClick={() => {
-                  const alt = (document.querySelector("#alt-input") as HTMLInputElement)?.value;
-                  insertImageWithAlt(alt);
+                  const alt = (
+                    document.querySelector("#alt-input") as HTMLInputElement
+                  )?.value;
+                  handleAltConfirm(alt);
                 }}
                 style={{ touchAction: "manipulation" }}
               >

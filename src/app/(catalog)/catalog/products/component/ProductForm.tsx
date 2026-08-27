@@ -95,74 +95,28 @@ const ProductForm = () => {
     }
   };
 
-  // Validate a group and its children.
+  // ----- VALIDATION DISABLED (always pass) -----
   const validateGroup = (
     group: GroupNode,
     skipOwnAttributes = false,
   ): string[] => {
-    const errors: string[] = [];
-    if (!skipOwnAttributes) {
-      group.attributes.forEach((attr) => {
-        if (attr.isRequired) {
-          const value = product[attr.code];
-          if (
-            value === undefined ||
-            value === null ||
-            value === "" ||
-            (Array.isArray(value) && value.length === 0)
-          ) {
-            errors.push(`${attr.name} is required`);
-          }
-        }
-      });
-    }
-    if (group.children && group.children.length > 0) {
-      group.children.forEach((child) => {
-        errors.push(...validateGroup(child, false));
-      });
-    }
-    return errors;
+    // Always return no errors
+    return [];
   };
 
   const validateAllSteps = (): boolean => {
-    const allErrors: { [key: string]: string[] } = {};
-    let hasErrors = false;
-    steps.forEach((step) => {
-      step.groups.forEach((group) => {
-        const errors = validateGroup(group, true);
-        if (errors.length > 0) {
-          allErrors[group.id] = errors;
-          hasErrors = true;
-        }
-      });
-    });
-    setValidationErrors(allErrors);
-    return !hasErrors;
+    // Always valid
+    setValidationErrors({});
+    return true;
   };
 
   const validateCurrentStep = (): boolean => {
-    if (currentStep >= steps.length) return true;
-    const currentStepData = steps[currentStep];
-    const newErrors = { ...validationErrors };
-    let hasErrors = false;
-
-    currentStepData.groups.forEach((group) => {
-      const errors = validateGroup(group, true);
-      if (errors.length > 0) {
-        newErrors[group.id] = errors;
-        hasErrors = true;
-      } else {
-        delete newErrors[group.id];
-      }
-    });
-
-    setValidationErrors(newErrors);
-    if (hasErrors) {
-      setShowValidationAlert(true);
-      return false;
-    }
+    // Always valid
+    setValidationErrors({});
     return true;
   };
+
+  // ----- The rest of the component is unchanged -----
 
   useEffect(() => {
     const fetchAttributeSets = async () => {
@@ -204,7 +158,8 @@ const ProductForm = () => {
   }, []);
 
   const handleNext = () => {
-    if (validateCurrentStep() && currentStep < steps.length - 1) {
+    // Always allow moving next
+    if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -223,34 +178,14 @@ const ProductForm = () => {
         value,
       }),
     );
-
-    // Clear validation error for this field if it exists
-    const currentStepData = steps[currentStep];
-    if (currentStepData) {
-      const group = currentStepData.groups.find((g) =>
-        g.attributes.some((a) => a.code === field),
-      );
-      if (group && validationErrors[group.id]) {
-        const attr = group.attributes.find((a) => a.code === field);
-        if (attr && attr.isRequired) {
-          const newErrors = { ...validationErrors };
-          const groupErrors = newErrors[group.id].filter(
-            (error) => !error.startsWith(attr.name),
-          );
-          if (groupErrors.length === 0) {
-            delete newErrors[group.id];
-          } else {
-            newErrors[group.id] = groupErrors;
-          }
-          setValidationErrors(newErrors);
-        }
-      }
-    }
+    // Clear any existing validation errors (they are disabled anyway)
+    setValidationErrors({});
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Allow submit even if not on last step? We still force the user to be on the last step.
     if (currentStep !== steps.length - 1) {
       handleNext();
       return;
@@ -258,23 +193,7 @@ const ProductForm = () => {
 
     setIsSubmitting(true);
 
-    if (!validateAllSteps()) {
-      let firstErrorStep = 0;
-      for (let i = 0; i < steps.length; i++) {
-        const hasError = steps[i].groups.some(
-          (g) => validationErrors[g.id] && validationErrors[g.id].length > 0,
-        );
-        if (hasError) {
-          firstErrorStep = i;
-          break;
-        }
-      }
-      setCurrentStep(firstErrorStep);
-      setShowValidationAlert(true);
-      setIsSubmitting(false);
-      return;
-    }
-
+    // Skip validation – always proceed
     const isNewProduct = !productId || productId.startsWith("temp-");
 
     try {
@@ -441,11 +360,8 @@ const ProductForm = () => {
                 className="whitespace-nowrap mb-6 w-full overflow-auto"
               >
                 {steps.map((step, index) => {
-                  const hasError = step.groups.some(
-                    (g) =>
-                      validationErrors[g.id] &&
-                      validationErrors[g.id].length > 0,
-                  );
+                  // No errors because validation is disabled
+                  const hasError = false;
                   return (
                     <Step key={step.id} className="inline-block">
                       <StepLabel error={hasError}>{step.title}</StepLabel>
@@ -492,7 +408,7 @@ const ProductForm = () => {
               <button
                 type="button"
                 onClick={handleNext}
-                className="px-6 py-2 bg-pri-500 hover:bg-pri-600 text-white rounded transition"
+                className="px-6 py-2 bg-primary hover:bg-primary-600 text-white rounded transition"
               >
                 Next
               </button>

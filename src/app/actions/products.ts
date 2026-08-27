@@ -347,14 +347,12 @@ export async function createOrUpdateProduct(
       updateData.brand = brandObjectId;
     }
 
-    // Convert related_products.ids
-    if (related_products?.ids?.length) {
-      const validIds = related_products.ids
+    // ---- FIX: always set related_products if field is provided ----
+    if (related_products !== undefined) {
+      const validIds = (related_products.ids || [])
         .map((id: any) => toObjectId(id))
         .filter((id: any) => id !== null);
-      if (validIds.length > 0) {
-        updateData.related_products = { ids: validIds };
-      }
+      updateData.related_products = { ids: validIds };
     }
 
     // Quantity & threshold
@@ -493,5 +491,3 @@ export async function deleteProductImages(
     return { success: false, error: "Failed to delete product images" };
   }
 }
-
-// Also for any other getters (e.g., findProductByCategory, findProductsForSitemap) – add them if needed

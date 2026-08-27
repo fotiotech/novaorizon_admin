@@ -3,15 +3,15 @@
 import dynamic from "next/dynamic";
 import { ComponentType } from "react";
 
-// ✅ No type import from the editor file – we define the props locally
 interface RichTextEditorWrapperProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  productId: string; // 👈 new required prop
 }
 
 const RichTextEditor = dynamic(() => import("./RichTextEditor" as any), {
-  ssr: false,                     // ✅ Never render on the server
+  ssr: false,
   loading: () => (
     <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
       Loading editor...
@@ -19,6 +19,8 @@ const RichTextEditor = dynamic(() => import("./RichTextEditor" as any), {
   ),
 }) as ComponentType<RichTextEditorWrapperProps>;
 
-export default function RichTextEditorWrapper(props: RichTextEditorWrapperProps) {
+export default function RichTextEditorWrapper(
+  props: RichTextEditorWrapperProps,
+) {
   return <RichTextEditor {...props} />;
 }

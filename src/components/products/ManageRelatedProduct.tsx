@@ -2,7 +2,7 @@
 
 import { findProducts } from "@/app/actions/products";
 import Image from "next/image";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { addProduct } from "@/app/store/slices/productSlice";
 import { useAppDispatch } from "@/app/hooks";
 import Select from "react-select";
@@ -28,6 +28,9 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const isFirstRender = useRef(true); // For guarding sync dispatch
+  const isInitializing = useRef(true); // For guarding initial dispatch
+
   // Find attributes from the group
   const relatedAttr = attribute.find((a) => a.code === "related_products");
   const relationTypeAttr = attribute.find((a) => a.code === "relation_type");
@@ -41,26 +44,45 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     fetchProducts();
   }, []);
 
-  // Initialize relatedProducts from product data
+  // Reset local state when product ID changes (new product)
   useEffect(() => {
-    if (product?.related_products) {
-      if (Array.isArray(product.related_products)) {
-        setRelatedProducts(product.related_products);
-      } else if (
-        product.related_products.ids &&
-        product.related_products.relationship_type
-      ) {
-        const newRelatedProducts = product.related_products.ids.map(
-          (id: string) => ({
-            id,
-            relationship_type: product.related_products.relationship_type,
-          }),
-        );
-        setRelatedProducts(newRelatedProducts);
-        handleChange("related_products", newRelatedProducts);
-      }
+    setRelatedProducts([]);
+    setSearchTerm("");
+    isInitializing.current = true;
+    isFirstRender.current = true;
+  }, [id]);
+
+  // Initialize relatedProducts from product data (without dispatching)
+  useEffect(() => {
+    if (!product?.related_products) {
+      setRelatedProducts([]);
+      isInitializing.current = false;
+      return;
     }
+
+    let initial: RelatedProduct[] = [];
+    if (Array.isArray(product.related_products)) {
+      initial = product.related_products;
+    } else if (product.related_products.ids) {
+      const defaultType = product.related_products.relationship_type || "";
+      initial = product.related_products.ids.map((pid: string) => ({
+        id: pid,
+        relationship_type: defaultType,
+      }));
+    }
+    setRelatedProducts(initial);
+    isInitializing.current = false;
   }, [product?.related_products]);
+
+  // Sync local changes to Redux (skip initial render and initialization)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (isInitializing.current) return;
+    handleChange("related_products", relatedProducts);
+  }, [relatedProducts]);
 
   const handleChange = (field: string, value: any) => {
     dispatch(
@@ -88,7 +110,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
       ];
     }
     setRelatedProducts(updated);
-    handleChange("related_products", updated);
+    // No need to dispatch here – the sync effect will do it
   };
 
   const handleRelationshipChange = (productId: string, value: string) => {
@@ -96,13 +118,11 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
       rp.id === productId ? { ...rp, relationship_type: value } : rp,
     );
     setRelatedProducts(updated);
-    handleChange("related_products", updated);
   };
 
   const handleRemoveProduct = (productId: string) => {
     const updated = relatedProducts.filter((rp) => rp.id !== productId);
     setRelatedProducts(updated);
-    handleChange("related_products", updated);
   };
 
   // Filter products by search term
@@ -111,6 +131,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     const term = searchTerm.toLowerCase().trim();
     return products.filter(
       (p) =>
+        p.name?.toLowerCase().includes(term) ||
         p.title?.toLowerCase().includes(term) ||
         p.sku?.toLowerCase().includes(term),
     );
@@ -192,14 +213,14 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                   <div className="w-12 h-12 relative flex-shrink-0">
                     <Image
                       src={item.main_image || "/placeholder.png"}
-                      alt={item.title || "Product"}
+                      alt={item.name || item.title || "Product"}
                       fill
                       className="object-cover rounded-lg"
                     />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-medium text-gray-800 truncate">
-                      {item.title || "Untitled Product"}
+                      {item.name || item.title || "Untitled Product"}
                     </h3>
                     {item.sku && (
                       <p className="text-xs text-gray-500 truncate">

@@ -51,7 +51,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
   const [variants, setVariants] = useState<Variant[]>([]);
 
   const isInitializing = useRef(true);
-  const initialized = useRef(false); // ✅ NEW: prevents re‑init on product changes
+  const initialized = useRef(false);
 
   const updateProductField = useCallback(
     (field: string, value: any) => {
@@ -60,9 +60,18 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
     [dispatch, productId],
   );
 
-  // ----- 1. INITIALIZATION (runs only once) -----
+  // ----- RESET when productId changes -----
   useEffect(() => {
-    // Skip if already initialised or product is not yet available
+    initialized.current = false;
+    isInitializing.current = true;
+    // Clear local state to avoid stale data
+    setSelectedThemeCodes([]);
+    setThemeValues({});
+    setVariants([]);
+  }, [productId]);
+
+  // ----- 1. INITIALIZATION (runs once per product) -----
+  useEffect(() => {
     if (initialized.current || !product) return;
 
     const savedThemes = product.variant_themes || [];
@@ -82,9 +91,9 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
 
     initialized.current = true;
     isInitializing.current = false;
-  }, [product, attributes]); // ✅ product is included, but ref prevents re‑run
+  }, [product, attributes]);
 
-  // ----- 2. GENERATE VARIANTS -----
+  // ----- 2. GENERATE VARIANTS (without dispatching directly) -----
   const fieldKey = useMemo(
     () => variantFields.map((f) => f.code).join(","),
     [variantFields],
@@ -101,7 +110,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
       valueArrays.some((arr) => arr.length === 0)
     ) {
       setVariants([]);
-      updateProductField("variants", []);
       return;
     }
 
@@ -120,10 +128,17 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
     });
 
     setVariants(newVariants);
-    updateProductField("variants", newVariants);
-  }, [selectedThemeCodes, themeValues, fieldKey, updateProductField]);
+    // Do NOT dispatch here – sync effect will handle it
+  }, [selectedThemeCodes, themeValues, fieldKey]);
 
-  // ----- 3. HANDLERS (MEMOIZED) -----
+  // ----- 3. SYNC variants to Redux (skip initial load) -----
+  useEffect(() => {
+    if (!isInitializing.current) {
+      updateProductField("variants", variants);
+    }
+  }, [variants, updateProductField]);
+
+  // ----- 4. HANDLERS -----
   const handleThemeSelect = useCallback(
     (selectedOptions: any) => {
       const selectedCodes = selectedOptions
@@ -150,7 +165,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
     [updateProductField],
   );
 
-  // ✅ Stable handler for variant changes – functional update, no deps
   const handleVariantChange = useCallback(
     (index: number, field: string, value: any) => {
       setVariants((prevVariants) => {
@@ -163,14 +177,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
     [],
   );
 
-  // ✅ Sync variants to Redux when they change (after initial load)
-  useEffect(() => {
-    if (!isInitializing.current) {
-      updateProductField("variants", variants);
-    }
-  }, [variants, updateProductField]);
-
-  // ----- 4. RENDER -----
+  // ----- 5. RENDER -----
   const renderFieldInput = useCallback(
     (field: Attribute, variant: Variant, index: number) => {
       const value = variant[field.code] ?? "";
@@ -228,7 +235,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
           );
       }
     },
-    [handleVariantChange],
+    [handleVariantChange, productId],
   );
 
   const themeOptions = attributes.map((attr) => ({
@@ -320,20 +327,26 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {variants.map((variant, index) => (
-                  <tr key={index}>
-                    {selectedThemeCodes.map((code) => (
-                      <td key={code} className="border p-2">
-                        {variant[code] as string}
-                      </td>
-                    ))}
-                    {variantFields.map((field) => (
-                      <td key={field.code} className="border p-2">
-                        {renderFieldInput(field, variant, index)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {variants.map((variant, index) => {
+                  // Create a stable key from the theme values
+                  const key = selectedThemeCodes
+                    .map((code) => variant[code] as string)
+                    .join("|");
+                  return (
+                    <tr key={`${key}-${index}`}>
+                      {selectedThemeCodes.map((code) => (
+                        <td key={code} className="border p-2">
+                          {variant[code] as string}
+                        </td>
+                      ))}
+                      {variantFields.map((field) => (
+                        <td key={field.code} className="border p-2">
+                          {renderFieldInput(field, variant, index)}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

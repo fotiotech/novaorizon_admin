@@ -20,6 +20,20 @@ export const useFileUploader = (
     {},
   );
   const mountedRef = useRef(true);
+  const prevInitialFilesRef = useRef<string[]>(initialFiles);
+
+  // ----- NEW: Sync external initialFiles changes -----
+  useEffect(() => {
+    const prev = prevInitialFilesRef.current;
+    // Compare arrays (shallow comparison is enough since URLs are strings)
+    if (
+      initialFiles.length !== prev.length ||
+      initialFiles.some((url, i) => url !== prev[i])
+    ) {
+      setFiles(initialFiles);
+      prevInitialFilesRef.current = initialFiles;
+    }
+  }, [initialFiles]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -170,7 +184,6 @@ export const useFileUploader = (
     [files, uploadFiles],
   );
 
-  // Only deletes from S3 – no database update; use FilesUploader's onRemove for that
   const removeFile = useCallback(
     async (index: number) => {
       if (index < 0 || index >= files.length) {
@@ -226,7 +239,7 @@ export const useFileUploader = (
     setFiles,
     listFiles,
     updateFile,
-    removeFile, // kept for backward compatibility (S3 only)
+    removeFile,
     removeMultipleFiles,
     clearFiles,
   };

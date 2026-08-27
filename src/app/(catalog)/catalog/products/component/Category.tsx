@@ -288,7 +288,7 @@ const Category = () => {
           className={`px-6 py-2 rounded-md font-medium transition-all duration-200 flex items-center gap-2
             ${
               selectedCategoryId
-                ? "bg-pri-500 hover:bg-pri-600 text-white shadow-md hover:shadow-lg"
+                ? "bg-primary hover:bg-primary-600 text-white shadow-md hover:shadow-lg"
                 : "bg-muted text-muted-foreground cursor-not-allowed"
             }
           `}
