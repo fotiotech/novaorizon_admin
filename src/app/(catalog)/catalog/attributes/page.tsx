@@ -173,7 +173,7 @@ const Attributes = () => {
         <div className="flex gap-2">
           <button
             onClick={handleNewAttribute}
-            className="p-2 font-semibold text-sm bg-pri-500 text-white rounded hover:bg-pri-600 transition-colors"
+            className="p-2 font-semibold text-sm bg-primary hover:bg-primary-600 text-white rounded transition-colors"
           >
             + Attribute
           </button>

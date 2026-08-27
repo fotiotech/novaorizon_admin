@@ -380,7 +380,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
           </button>
           <button
             type="submit"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
+            className="px-4 py-2 bg-primary hover:bg-primary-600 text-white rounded transition disabled:bg-gray-400"
             disabled={isLoading}
           >
             {isLoading ? (

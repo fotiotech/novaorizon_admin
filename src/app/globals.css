@@ -4,185 +4,255 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Base overrides ===== */
 * {
-  border: 0 solid transparent; /* optional, Tailwind already does this */
+  border: 0 solid transparent;
 }
 
+/* ===== Form elements (using @apply) ===== */
 label {
   @apply text-sm font-medium block mb-1;
 }
-
-input {
+input,
+select,
+textarea {
   @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
-    rounded-lg border-2 border-border 
-    focus:border-accent my-2 p-2;
+    rounded-lg border-2 border-border focus:border-accent my-2 p-2 w-full;
 }
-
-select {
-  @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
-    rounded-lg border-2 border-border 
-    focus:border-accent my-2 p-2;
-}
-
 option {
   @apply capitalize bg-transparent text-foreground;
 }
-
-textarea {
-  @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
-    rounded-lg border-2 border-border 
-    focus:border-accent my-2 p-2;
-}
-
-.btn {
-  @apply bg-primary text-primary-foreground p-2 rounded-lg 
-    hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:outline-none;
-}
-
 th,
 td {
   @apply border border-border p-2;
 }
 
+/* ===== Custom component classes ===== */
+.btn {
+  @apply bg-primary text-primary-foreground p-2 rounded-lg 
+    hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:outline-none;
+}
 .activeLink {
   @apply dark:bg-secondary mx-2 text-foreground rounded-lg py-1 px-4 flex gap-3 
-  items-center hover:bg-accent dark:text-primary;
+    items-center hover:bg-accent dark:text-primary;
 }
-
 .inactiveLink {
   @apply text-muted-foreground mx-2 rounded-lg py-1 px-4 flex gap-3 
-  items-center hover:bg-accent;
+    items-center hover:bg-accent;
 }
 
+/* ===== CSS Variables (Light & Dark) ===== */
 @layer base {
   :root {
-    /* ---- shadcn/ui semantic variables (HSL) ---- */
-    --background: 0 0% 100%; /* white */
-    --foreground: 0 0% 14.5%; /* ~black */
+    /* ---- Primary (Blue) ---- */
+    --primary-50: 210 100% 97%;
+    --primary-100: 210 100% 92%;
+    --primary-200: 210 100% 82%;
+    --primary-300: 210 100% 70%;
+    --primary-400: 210 100% 60%;
+    --primary-500: 210 100% 50%; /* default primary */
+    --primary-600: 210 100% 40%;
+    --primary-700: 210 100% 30%;
+    --primary-800: 210 100% 20%;
+    --primary-900: 210 100% 10%;
+    --primary: var(--primary-500);
+    --primary-foreground: 0 0% 100%;
 
-    --primary: 0 0% 20.5%; /* dark gray/blue */
-    --primary-foreground: 0 0% 98.5%; /* white */
+    /* ---- Secondary (Green) ---- */
+    --secondary-50: 142 100% 97%;
+    --secondary-100: 142 100% 92%;
+    --secondary-200: 142 100% 82%;
+    --secondary-300: 142 100% 70%;
+    --secondary-400: 142 100% 55%;
+    --secondary-500: 142 70% 45%;
+    --secondary-600: 142 80% 35%;
+    --secondary-700: 142 85% 25%;
+    --secondary-800: 142 90% 18%;
+    --secondary-900: 142 95% 10%;
+    --secondary: var(--secondary-500);
+    --secondary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 97%; /* light gray (orange-ish) */
-    --secondary-foreground: 0 0% 20.5%;
+    /* ---- Accent (Orange) ---- */
+    --accent-50: 25 100% 97%;
+    --accent-100: 25 100% 92%;
+    --accent-200: 25 100% 82%;
+    --accent-300: 25 100% 70%;
+    --accent-400: 25 100% 60%;
+    --accent-500: 25 100% 50%;
+    --accent-600: 25 100% 40%;
+    --accent-700: 25 100% 30%;
+    --accent-800: 25 100% 20%;
+    --accent-900: 25 100% 10%;
+    --accent: var(--accent-500);
+    --accent-foreground: 0 0% 100%;
 
-    --accent: 0 0% 97%; /* light gray (green-ish) */
-    --accent-foreground: 0 0% 20.5%;
+    /* ---- Neutral (Grayscale) ---- */
+    --neutral-50: 0 0% 98%;
+    --neutral-100: 0 0% 96%;
+    --neutral-200: 0 0% 90%;
+    --neutral-300: 0 0% 83%;
+    --neutral-400: 0 0% 64%;
+    --neutral-500: 0 0% 45%;
+    --neutral-600: 0 0% 32%;
+    --neutral-700: 0 0% 25%;
+    --neutral-800: 0 0% 15%;
+    --neutral-900: 0 0% 9%;
 
-    --muted: 0 0% 97%;
-    --muted-foreground: 0 0% 55.6%;
+    /* ---- shadcn/ui semantic tokens (light) ---- */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 14.5%;
 
     --card: 0 0% 100%;
     --card-foreground: 0 0% 14.5%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 14.5%;
 
-    --destructive: 0 72.2% 50.6%; /* red */
+    --muted: 0 0% 97%;
+    --muted-foreground: 0 0% 55.6%;
+
+    --destructive: 0 72.2% 50.6%;
     --destructive-foreground: 0 0% 100%;
+
+    --warning: 45 100% 50%;
+    --warning-foreground: 0 0% 100%;
 
     --border: 0 0% 92.2%;
     --input: 0 0% 92.2%;
-    --ring: 0 0% 70.8%; /* blue-ish */
+    --ring: 210 100% 50%;
 
     --radius: 0.625rem;
 
-    /* chart & sidebar */
-    --chart-1: 0 0% 87%;
-    --chart-2: 0 0% 55.6%;
-    --chart-3: 0 0% 43.9%;
-    --chart-4: 0 0% 37.1%;
-    --chart-5: 0 0% 26.9%;
+    /* ---- Chart & Sidebar (light) ---- */
+    --chart-1: 210 100% 50%;
+    --chart-2: 142 70% 45%;
+    --chart-3: 25 100% 50%;
+    --chart-4: 0 72% 50%;
+    --chart-5: 45 100% 50%;
+
     --sidebar: 0 0% 98.5%;
     --sidebar-foreground: 0 0% 14.5%;
-    --sidebar-primary: 0 0% 20.5%;
-    --sidebar-primary-foreground: 0 0% 98.5%;
-    --sidebar-accent: 0 0% 97%;
-    --sidebar-accent-foreground: 0 0% 20.5%;
+    --sidebar-primary: 210 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 96.1%;
+    --sidebar-accent-foreground: 0 0% 14.5%;
     --sidebar-border: 0 0% 92.2%;
-    --sidebar-ring: 0 0% 70.8%;
+    --sidebar-ring: 210 100% 50%;
 
-    /* ---- Custom named colors (HSL) ---- */
+    /* ---- Direct named colors (light) ---- */
     --color-white: 0 0% 100%;
     --color-black: 0 0% 0%;
     --color-blue: 210 100% 50%;
     --color-orange: 25 100% 50%;
-    --color-green: 120 100% 30%;
+    --color-green: 142 70% 45%;
   }
 
   .dark {
-    /* Deep navy background – now true navy using HSL */
-    --background: 220 20% 15%; /* navy */
-    --foreground: 0 0% 98.5%; /* white */
+    /* ---- Dark background = shade of primary (deep blue) ---- */
+    --background: var(--primary-900); /* 210 100% 10% → very dark blue */
+    --foreground: 0 0% 98.5%; /* near white */
 
-    --primary: 0 0% 92.2%; /* light gray */
-    --primary-foreground: 0 0% 20.5%;
+    /* Primary shades are inverted for better contrast */
+    --primary-50: 210 100% 90%;
+    --primary-100: 210 100% 80%;
+    --primary-200: 210 100% 70%;
+    --primary-300: 210 100% 60%;
+    --primary-400: 210 100% 50%;
+    --primary-500: 210 100% 40%;
+    --primary-600: 210 100% 30%;
+    --primary-700: 210 100% 20%;
+    --primary-800: 210 100% 15%;
+    --primary-900: 210 100% 10%; /* same as background */
+    --primary: var(--primary-500);
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 26.9%; /* medium gray */
-    --secondary-foreground: 0 0% 98.5%;
+    /* Secondary (Green) – darkened for dark mode */
+    --secondary-50: 142 100% 90%;
+    --secondary-100: 142 100% 80%;
+    --secondary-200: 142 100% 70%;
+    --secondary-300: 142 100% 60%;
+    --secondary-400: 142 100% 50%;
+    --secondary-500: 142 70% 40%;
+    --secondary-600: 142 80% 30%;
+    --secondary-700: 142 85% 22%;
+    --secondary-800: 142 90% 15%;
+    --secondary-900: 142 95% 8%;
+    --secondary: var(--secondary-500);
+    --secondary-foreground: 0 0% 100%;
 
-    --accent: 0 0% 26.9%;
-    --accent-foreground: 0 0% 98.5%;
+    /* Accent (Orange) – darkened */
+    --accent-50: 25 100% 90%;
+    --accent-100: 25 100% 80%;
+    --accent-200: 25 100% 70%;
+    --accent-300: 25 100% 60%;
+    --accent-400: 25 100% 50%;
+    --accent-500: 25 100% 40%;
+    --accent-600: 25 100% 30%;
+    --accent-700: 25 100% 20%;
+    --accent-800: 25 100% 15%;
+    --accent-900: 25 100% 10%;
+    --accent: var(--accent-500);
+    --accent-foreground: 0 0% 100%;
+
+    /* Neutral – inverted (dark background → light text) */
+    --neutral-50: 0 0% 20%;
+    --neutral-100: 0 0% 25%;
+    --neutral-200: 0 0% 32%;
+    --neutral-300: 0 0% 45%;
+    --neutral-400: 0 0% 60%;
+    --neutral-500: 0 0% 70%;
+    --neutral-600: 0 0% 80%;
+    --neutral-700: 0 0% 88%;
+    --neutral-800: 0 0% 94%;
+    --neutral-900: 0 0% 98%;
+
+    /* ---- shadcn/ui semantic tokens (dark) ---- */
+    --card: 0 0% 18.5%; /* slightly lighter than background */
+    --card-foreground: 0 0% 98.5%;
+    --popover: 0 0% 18.5%;
+    --popover-foreground: 0 0% 98.5%;
 
     --muted: 0 0% 26.9%;
     --muted-foreground: 0 0% 70.8%;
 
-    --card: 0 0% 20.5%;
-    --card-foreground: 0 0% 98.5%;
-    --popover: 0 0% 20.5%;
-    --popover-foreground: 0 0% 98.5%;
-
-    --destructive: 0 62.8% 30.6%; /* darker red */
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Better visible border in dark mode */
+    --warning: 45 100% 45%;
+    --warning-foreground: 0 0% 100%;
+
     --border: 0 0% 40% / 50%; /* semi-transparent light gray */
     --input: 0 0% 100% / 15%;
-    --ring: 0 0% 55.6%;
+    --ring: 210 100% 60%;
 
-    --chart-1: 0 0% 87%;
-    --chart-2: 0 0% 55.6%;
-    --chart-3: 0 0% 43.9%;
-    --chart-4: 0 0% 37.1%;
-    --chart-5: 0 0% 26.9%;
+    /* ---- Chart & Sidebar (dark) ---- */
+    --chart-1: 210 100% 60%;
+    --chart-2: 142 70% 50%;
+    --chart-3: 25 100% 55%;
+    --chart-4: 0 72% 40%;
+    --chart-5: 45 100% 50%;
 
-    --sidebar: 0 0% 20.5%;
+    --sidebar: 0 0% 18.5%;
     --sidebar-foreground: 0 0% 98.5%;
-    --sidebar-primary: 220 100% 60%; /* bright blue for sidebar primary */
-    --sidebar-primary-foreground: 0 0% 98.5%;
+    --sidebar-primary: 210 100% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 26.9%;
     --sidebar-accent-foreground: 0 0% 98.5%;
     --sidebar-border: 0 0% 100% / 10%;
-    --sidebar-ring: 0 0% 55.6%;
+    --sidebar-ring: 210 100% 60%;
 
-    /* Custom colors in dark mode (adjust as needed) */
+    /* ---- Direct named colors (dark) ---- */
     --color-white: 0 0% 100%;
     --color-black: 0 0% 0%;
     --color-blue: 210 100% 60%;
     --color-orange: 25 100% 60%;
-    --color-green: 120 100% 40%;
+    --color-green: 142 70% 50%;
   }
 
-  .theme {
-    --font-heading: var(--font-sans);
-    --font-sans: var(--font-sans);
-  }
-
+  /* Base styles */
   body {
     @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
   }
   * {
     @apply border-border outline-ring/50;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }

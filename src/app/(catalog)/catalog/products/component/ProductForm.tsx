@@ -501,7 +501,7 @@ const ProductForm = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={isLoading || redirecting || isSubmitting}
-                className="px-6 py-2 bg-pri-500 hover:bg-pri-600 text-white rounded transition disabled:bg-muted disabled:text-muted-foreground"
+                className="px-6 py-2 bg-primary hover:bg-primary-600 text-white rounded transition disabled:bg-muted disabled:text-muted-foreground"
               >
                 {isLoading || isSubmitting ? "Saving..." : "Save Product"}
               </button>
