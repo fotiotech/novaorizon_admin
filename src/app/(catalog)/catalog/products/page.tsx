@@ -373,7 +373,7 @@ export default function ProductsPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         <Link
-                          href={`/catalog/products/edit?id=${product._id}`}
+                          href={`/catalog/products/edit/${product._id}`}
                           className="text-pri-500 hover:text-pri-600"
                         >
                           Edit

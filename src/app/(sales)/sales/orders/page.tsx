@@ -45,8 +45,12 @@ const AllOrderPage = () => {
           search: currentFilters.search || undefined,
           orderStatus: currentFilters.orderStatus || undefined,
           paymentStatus: currentFilters.paymentStatus || undefined,
-          dateFrom: currentFilters.dateFrom ? new Date(currentFilters.dateFrom) : undefined,
-          dateTo: currentFilters.dateTo ? new Date(currentFilters.dateTo) : undefined,
+          dateFrom: currentFilters.dateFrom
+            ? new Date(currentFilters.dateFrom)
+            : undefined,
+          dateTo: currentFilters.dateTo
+            ? new Date(currentFilters.dateTo)
+            : undefined,
           page: currentPage,
           limit,
         });
@@ -76,7 +80,9 @@ const AllOrderPage = () => {
   };
 
   const handleDelete = async (orderNumber: string) => {
-    if (!window.confirm(`Are you sure you want to delete order #${orderNumber}?`)) {
+    if (
+      !window.confirm(`Are you sure you want to delete order #${orderNumber}?`)
+    ) {
       return;
     }
     setDeletingId(orderNumber);
@@ -97,7 +103,8 @@ const AllOrderPage = () => {
   };
 
   const getStatusBadgeClass = (status: string) => {
-    const base = "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
+    const base =
+      "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
     switch (status?.toLowerCase()) {
       case "completed":
         return `${base} bg-green/20 text-green-700 dark:text-green-400`;
@@ -115,7 +122,8 @@ const AllOrderPage = () => {
   };
 
   const getPaymentBadgeClass = (status: string) => {
-    const base = "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
+    const base =
+      "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
     switch (status?.toLowerCase()) {
       case "paid":
         return `${base} bg-green/20 text-green-700 dark:text-green-400`;
@@ -143,7 +151,10 @@ const AllOrderPage = () => {
       </div>
 
       {/* Search & Filter */}
-      <SearchFilter onFilterChange={handleFilterChange} initialFilters={filters} />
+      <SearchFilter
+        onFilterChange={handleFilterChange}
+        initialFilters={filters}
+      />
 
       {/* Orders Table */}
       <div className="bg-card p-6 rounded-lg shadow-md border border-border mt-6">
@@ -151,7 +162,9 @@ const AllOrderPage = () => {
           <h3 className="text-xl font-semibold text-foreground">
             Orders {totalOrders > 0 && `(${totalOrders})`}
           </h3>
-          {loading && <span className="text-sm text-muted-foreground">Loading...</span>}
+          {loading && (
+            <span className="text-sm text-muted-foreground">Loading...</span>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -184,12 +197,15 @@ const AllOrderPage = () => {
             <tbody className="bg-card divide-y divide-border">
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-muted-foreground">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-4 text-center text-muted-foreground"
+                  >
                     No orders found.
                   </td>
                 </tr>
               ) : (
-                orders.map((order:any) => (
+                orders.map((order: any) => (
                   <tr key={order._id}>
                     <td className="px-6 py-4 whitespace-nowrap text-foreground font-medium">
                       #{order.orderNumber}
@@ -197,13 +213,17 @@ const AllOrderPage = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-foreground">
                       {order.firstName} {order.lastName}
                       <br />
-                      <span className="text-xs text-muted-foreground">{order.email}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {order.email}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-foreground">
                       CFA {order.total?.toFixed(2) || "0.00"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={getPaymentBadgeClass(order.paymentStatus)}>
+                      <span
+                        className={getPaymentBadgeClass(order.paymentStatus)}
+                      >
                         {order.paymentStatus || "pending"}
                       </span>
                     </td>

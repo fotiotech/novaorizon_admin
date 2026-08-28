@@ -17,8 +17,6 @@ import "@/models/User";
 // ---------- Helper: Deep Serialize ----------
 function serialize(obj: any): any {
   if (obj === null || obj === undefined) return obj;
-
-  // Handle Mongoose ObjectId
   if (
     obj instanceof mongoose.Types.ObjectId ||
     obj._bsontype === "ObjectId" ||
@@ -26,18 +24,12 @@ function serialize(obj: any): any {
   ) {
     return obj.toString();
   }
-
-  // Handle Date
   if (obj instanceof Date) {
     return obj.toISOString();
   }
-
-  // Handle arrays
   if (Array.isArray(obj)) {
     return obj.map(serialize);
   }
-
-  // Handle plain objects
   if (typeof obj === "object") {
     const result: any = {};
     for (const key of Object.keys(obj)) {
@@ -45,8 +37,6 @@ function serialize(obj: any): any {
     }
     return result;
   }
-
-  // Primitives
   return obj;
 }
 
@@ -56,7 +46,7 @@ export interface CreateProductForm {
   brand: string;
   name?: string;
   department?: string;
-  related_products?: { ids: string[] };
+  related_products?: { id: string; relationship_type: string }[]; // updated
   [key: string]: any;
 }
 
@@ -126,7 +116,7 @@ export async function findProducts(id?: string) {
           options: { strictPopulate: false },
         })
         .populate({
-          path: "related_products.ids",
+          path: "related_products.id", // populate the product details
           select: "name list_price main_image slug",
           options: { strictPopulate: false },
         })
@@ -137,11 +127,9 @@ export async function findProducts(id?: string) {
         return { success: false, error: "Product not found" };
       }
 
-      // Serialize everything recursively
       return serialize(product);
     }
 
-    // For multiple products (no id)
     const products = await Product.find()
       .populate({
         path: "brand",
@@ -200,10 +188,12 @@ export async function createProduct(
       updatedAt: new Date(),
     };
 
-    if (related_products?.ids) {
-      updateData.related_products = {
-        ids: related_products.ids.map((id) => new mongoose.Types.ObjectId(id)),
-      };
+    if (related_products) {
+      // Convert each id to ObjectId and keep relationship_type
+      updateData.related_products = related_products.map((rp) => ({
+        id: new mongoose.Types.ObjectId(rp.id),
+        relationship_type: rp.relationship_type || "",
+      }));
     }
 
     await Product.findOneAndUpdate(
@@ -267,11 +257,10 @@ export async function updateProduct(
       updateData.brand = new mongoose.Types.ObjectId(brand);
     }
     if (related_products) {
-      updateData.related_products = {
-        ids: related_products.ids?.map(
-          (id: string) => new mongoose.Types.ObjectId(id),
-        ),
-      };
+      updateData.related_products = related_products.map((rp: any) => ({
+        id: new mongoose.Types.ObjectId(rp.id),
+        relationship_type: rp.relationship_type || "",
+      }));
     }
     if (quantity !== undefined) {
       updateData.quantity = Number(quantity);
@@ -298,7 +287,6 @@ export async function updateProduct(
     }
 
     revalidatePath("/products");
-    // Return serialized version
     return { success: true, data: serialize(updatedProduct.toObject()) };
   } catch (error) {
     console.error("Error updating product:", error);
@@ -322,40 +310,42 @@ export async function createOrUpdateProduct(
       ...attributes
     } = productData;
 
-    // Clean the attributes – remove null/undefined/empty strings
     const cleanedAttributes = cleanObject(attributes);
-
-    // Exclude system fields that should not be updated
     const { createdAt, updatedAt, __v, dsin, ...safeAttributes } =
       cleanedAttributes;
 
-    // Build update data
     const updateData: any = {
       ...safeAttributes,
-      updatedAt: new Date(), // always set updatedAt
+      updatedAt: new Date(),
     };
 
-    // Convert category_id
     const categoryObjectId = toObjectId(category_id);
     if (categoryObjectId) {
       updateData.category_id = categoryObjectId;
     }
 
-    // Convert brand
     const brandObjectId = toObjectId(brand);
     if (brandObjectId) {
       updateData.brand = brandObjectId;
     }
 
-    // ---- FIX: always set related_products if field is provided ----
+    // Handle related_products – now expects array of objects
     if (related_products !== undefined) {
-      const validIds = (related_products.ids || [])
-        .map((id: any) => toObjectId(id))
-        .filter((id: any) => id !== null);
-      updateData.related_products = { ids: validIds };
+      if (Array.isArray(related_products)) {
+        updateData.related_products = related_products.map((rp: any) => ({
+          id: toObjectId(rp.id),
+          relationship_type: rp.relationship_type || "",
+        }));
+      } else {
+        // fallback for old format (just in case)
+        const ids = related_products.ids || [];
+        updateData.related_products = ids.map((id: any) => ({
+          id: toObjectId(id),
+          relationship_type: related_products.relationship_type || "",
+        }));
+      }
     }
 
-    // Quantity & threshold
     if (quantity !== undefined) {
       updateData.quantity = Number(quantity);
     }
@@ -363,7 +353,6 @@ export async function createOrUpdateProduct(
       updateData.lowStockThreshold = Number(lowStockThreshold);
     }
 
-    // Regenerate slug if name changed
     if (safeAttributes.name) {
       updateData.slug = generateSlug(
         safeAttributes.name,
@@ -374,12 +363,10 @@ export async function createOrUpdateProduct(
     let product;
     let isNew = false;
 
-    // Check if we have a valid _id and it exists in DB
     const existingId = toObjectId(_id);
     if (existingId) {
       const existing = await Product.findById(existingId);
       if (existing) {
-        // UPDATE
         product = await Product.findOneAndUpdate(
           { _id: existingId },
           { $set: updateData },
@@ -395,7 +382,6 @@ export async function createOrUpdateProduct(
       isNew = true;
     }
 
-    // CREATE
     if (isNew) {
       const createData = {
         ...updateData,
@@ -411,7 +397,6 @@ export async function createOrUpdateProduct(
 
     revalidatePath("/products");
 
-    // Convert to plain object and serialize
     const result = product.toObject ? product.toObject() : product;
     return { success: true, data: serialize(result) };
   } catch (error) {
@@ -477,7 +462,6 @@ export async function deleteProductImages(
           (url: string) => url !== imageUrl,
         );
         await product.save();
-        // Return serialized product
         return { success: true, data: serialize(product.toObject()) };
       }
     } else if (imageUrl) {

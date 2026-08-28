@@ -3,14 +3,13 @@
 import { findProducts } from "@/app/actions/products";
 import Image from "next/image";
 import React, { useEffect, useState, useMemo, useRef } from "react";
-import { addProduct } from "@/app/store/slices/productSlice";
-import { useAppDispatch } from "@/app/hooks";
 import Select from "react-select";
 
 interface ManageRelatedProductProps {
   id: string;
   product?: any;
   attribute?: any[];
+  onUpdate: (field: string, value: any) => void; // callback to parent
 }
 
 interface RelatedProduct {
@@ -22,14 +21,14 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   id,
   product,
   attribute = [],
+  onUpdate,
 }) => {
-  const dispatch = useAppDispatch();
   const [products, setProducts] = useState<any[]>([]);
   const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const isFirstRender = useRef(true); // For guarding sync dispatch
-  const isInitializing = useRef(true); // For guarding initial dispatch
+  const isFirstRender = useRef(true);
+  const isInitializing = useRef(true);
 
   // Find attributes from the group
   const relatedAttr = attribute.find((a) => a.code === "related_products");
@@ -52,7 +51,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     isFirstRender.current = true;
   }, [id]);
 
-  // Initialize relatedProducts from product data (without dispatching)
+  // Initialize relatedProducts from product data
   useEffect(() => {
     if (!product?.related_products) {
       setRelatedProducts([]);
@@ -74,26 +73,17 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     isInitializing.current = false;
   }, [product?.related_products]);
 
-  // Sync local changes to Redux (skip initial render and initialization)
+  // Sync local changes to parent (skip initial render and initialization)
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
     if (isInitializing.current) return;
-    handleChange("related_products", relatedProducts);
-  }, [relatedProducts]);
+    onUpdate("related_products", relatedProducts);
+  }, [relatedProducts, onUpdate]);
 
-  const handleChange = (field: string, value: any) => {
-    dispatch(
-      addProduct({
-        _id: id,
-        field,
-        value,
-      }),
-    );
-  };
-
+  // Handlers
   const handleProductSelect = (productId: string) => {
     const existingIndex = relatedProducts.findIndex(
       (rp) => rp.id === productId,
@@ -110,7 +100,6 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
       ];
     }
     setRelatedProducts(updated);
-    // No need to dispatch here – the sync effect will do it
   };
 
   const handleRelationshipChange = (productId: string, value: string) => {

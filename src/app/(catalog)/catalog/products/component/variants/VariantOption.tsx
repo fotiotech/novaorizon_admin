@@ -7,8 +7,6 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-import { useDispatch } from "react-redux";
-import { addProduct } from "@/app/store/slices/productSlice";
 import VariantImageUploader from "../VariantImageUpload";
 import Select from "react-select";
 
@@ -31,6 +29,7 @@ interface VariantsManagerProps {
   product?: any;
   attributes?: Attribute[];
   variantFields?: Attribute[];
+  onUpdate: (field: string, value: any) => void;
 }
 
 const cartesian = (arrays: string[][]): string[][] =>
@@ -44,33 +43,31 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
   product,
   attributes = [],
   variantFields = [],
+  onUpdate,
 }) => {
-  const dispatch = useDispatch();
   const [selectedThemeCodes, setSelectedThemeCodes] = useState<string[]>([]);
   const [themeValues, setThemeValues] = useState<Record<string, string[]>>({});
   const [variants, setVariants] = useState<Variant[]>([]);
 
   const isInitializing = useRef(true);
   const initialized = useRef(false);
+  const prevProductId = useRef<string | null>(null);
+  const isFirstRender = useRef(true);
 
-  const updateProductField = useCallback(
-    (field: string, value: any) => {
-      dispatch(addProduct({ _id: productId, field, value }));
-    },
-    [dispatch, productId],
-  );
-
-  // ----- RESET when productId changes -----
+  // ---- Reset when productId changes ----
   useEffect(() => {
-    initialized.current = false;
-    isInitializing.current = true;
-    // Clear local state to avoid stale data
-    setSelectedThemeCodes([]);
-    setThemeValues({});
-    setVariants([]);
+    if (prevProductId.current !== productId) {
+      prevProductId.current = productId;
+      initialized.current = false;
+      isInitializing.current = true;
+      isFirstRender.current = true;
+      setSelectedThemeCodes([]);
+      setThemeValues({});
+      setVariants([]);
+    }
   }, [productId]);
 
-  // ----- 1. INITIALIZATION (runs once per product) -----
+  // ---- Initialize from product data ----
   useEffect(() => {
     if (initialized.current || !product) return;
 
@@ -87,13 +84,18 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
     });
     setThemeValues(initialValues);
 
-    setVariants(product.variants || []);
+    // Always ensure variants is an array
+    const initialVariants = Array.isArray(product.variants)
+      ? product.variants
+      : [];
+    setVariants(initialVariants);
 
     initialized.current = true;
     isInitializing.current = false;
+    isFirstRender.current = false;
   }, [product, attributes]);
 
-  // ----- 2. GENERATE VARIANTS (without dispatching directly) -----
+  // ---- Generate variants when themes or values change ----
   const fieldKey = useMemo(
     () => variantFields.map((f) => f.code).join(","),
     [variantFields],
@@ -109,45 +111,74 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
       themeCodes.length === 0 ||
       valueArrays.some((arr) => arr.length === 0)
     ) {
-      setVariants([]);
+      // If no combinations, clear variants but keep any existing (should be empty)
+      if (variants.length > 0) {
+        setVariants([]);
+      }
       return;
     }
 
     const combinations = cartesian(valueArrays);
+    const existingMap = new Map<string, Variant>();
+    variants.forEach((v) => {
+      const key = themeCodes.map((code) => v[code] as string).join("|");
+      existingMap.set(key, v);
+    });
+
     const newVariants = combinations.map((combo) => {
-      const variant: any = { sku: "", price: 0 };
+      const variant: any = {};
       themeCodes.forEach((code, i) => {
         variant[code] = combo[i];
       });
-      variantFields.forEach((field) => {
-        if (field.type === "number") variant[field.code] = 0;
-        else if (field.type === "file") variant[field.code] = [];
-        else variant[field.code] = "";
-      });
+      const key = combo.join("|");
+      const existing = existingMap.get(key);
+      if (existing) {
+        const themeSet = new Set(themeCodes);
+        Object.keys(existing).forEach((field) => {
+          if (!themeSet.has(field)) {
+            variant[field] = existing[field];
+          }
+        });
+      } else {
+        variantFields.forEach((field) => {
+          if (field.type === "number") variant[field.code] = null;
+          else if (field.type === "file") variant[field.code] = [];
+          else variant[field.code] = "";
+        });
+      }
       return variant;
     });
 
-    setVariants(newVariants);
-    // Do NOT dispatch here – sync effect will handle it
-  }, [selectedThemeCodes, themeValues, fieldKey]);
+    // Only update if the array actually changed
+    const hasChanged =
+      newVariants.length !== variants.length ||
+      newVariants.some(
+        (v, i) => JSON.stringify(v) !== JSON.stringify(variants[i]),
+      );
 
-  // ----- 3. SYNC variants to Redux (skip initial load) -----
-  useEffect(() => {
-    if (!isInitializing.current) {
-      updateProductField("variants", variants);
+    if (hasChanged) {
+      setVariants(newVariants);
+      // Immediately sync to parent to ensure latest data
+      onUpdate("variants", newVariants);
     }
-  }, [variants, updateProductField]);
+  }, [selectedThemeCodes, themeValues, fieldKey, variantFields]);
 
-  // ----- 4. HANDLERS -----
+  // ---- Sync variants to parent on every change (skip initial) ----
+  useEffect(() => {
+    if (isInitializing.current || isFirstRender.current) return;
+    onUpdate("variants", variants);
+  }, [variants, onUpdate]);
+
+  // ---- Handlers ----
   const handleThemeSelect = useCallback(
     (selectedOptions: any) => {
       const selectedCodes = selectedOptions
         ? selectedOptions.map((opt: any) => opt.value)
         : [];
       setSelectedThemeCodes(selectedCodes);
-      updateProductField("variant_themes", selectedCodes);
+      onUpdate("variant_themes", selectedCodes);
     },
-    [updateProductField],
+    [onUpdate],
   );
 
   const handleThemeValuesChange = useCallback(
@@ -158,26 +189,28 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
         .filter(Boolean);
       setThemeValues((prev) => {
         const newThemeValues = { ...prev, [themeCode]: values };
-        updateProductField("variant_values", newThemeValues);
+        onUpdate("variant_values", newThemeValues);
         return newThemeValues;
       });
     },
-    [updateProductField],
+    [onUpdate],
   );
 
   const handleVariantChange = useCallback(
     (index: number, field: string, value: any) => {
-      setVariants((prevVariants) => {
-        const updated = prevVariants.map((variant, i) =>
-          i === index ? { ...variant, [field]: value } : variant,
+      setVariants((prev) => {
+        const updated = prev.map((v, i) =>
+          i === index ? { ...v, [field]: value } : v,
         );
+        // Sync immediately to parent for this change
+        onUpdate("variants", updated);
         return updated;
       });
     },
-    [],
+    [onUpdate],
   );
 
-  // ----- 5. RENDER -----
+  // ---- Render input ----
   const renderFieldInput = useCallback(
     (field: Attribute, variant: Variant, index: number) => {
       const value = variant[field.code] ?? "";
@@ -192,9 +225,14 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
             <input
               type="number"
               {...commonProps}
-              onChange={(e) =>
-                handleVariantChange(index, field.code, Number(e.target.value))
-              }
+              onChange={(e) => {
+                const val = e.target.value;
+                handleVariantChange(
+                  index,
+                  field.code,
+                  val === "" ? null : Number(val),
+                );
+              }}
             />
           );
         case "select":
@@ -257,7 +295,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
 
   return (
     <div className="flex flex-col gap-4 w-full overflow-auto">
-      {/* Theme selection */}
       <div>
         <label className="block text-sm font-medium mb-1">
           Select themes to use for variants
@@ -273,7 +310,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
         />
       </div>
 
-      {/* Theme values inputs */}
       {selectedThemeCodes.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {selectedThemeCodes.map((code) => {
@@ -304,7 +340,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
         </div>
       )}
 
-      {/* Variant table */}
       {variants.length > 0 && (
         <>
           <div className="overflow-x-auto mt-4">
@@ -328,12 +363,11 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
               </thead>
               <tbody>
                 {variants.map((variant, index) => {
-                  // Create a stable key from the theme values
-                  const key = selectedThemeCodes
+                  const rowKey = selectedThemeCodes
                     .map((code) => variant[code] as string)
                     .join("|");
                   return (
-                    <tr key={`${key}-${index}`}>
+                    <tr key={`${rowKey}-${index}`}>
                       {selectedThemeCodes.map((code) => (
                         <td key={code} className="border p-2">
                           {variant[code] as string}
@@ -351,7 +385,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
             </table>
           </div>
 
-          {/* Variant summary */}
           <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-200">
             <div className="text-sm font-medium text-gray-700">
               Variant Summary

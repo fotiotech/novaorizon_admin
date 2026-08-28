@@ -1,22 +1,17 @@
+// app/catalog/products/create/page.tsx
 "use client";
 
-import React from "react";
-import ProductForm from "../component/ProductForm";
-import { useAppSelector } from "@/app/hooks";
-import { RootState } from "@/app/store/store";
-import Category from "../component/Category";
+import { useState } from "react";
+import CategorySelector from "@/app/(catalog)/catalog/products/component/CategorySelector";
+import ProductForm from "@/app/(catalog)/catalog/products/component/ProductForm";
 
-const CreateProduct = () => {
-  const products = useAppSelector((state: RootState) => state.product);
-  const _id = products.allIds[0];
-  const product = products.byId[_id] || {};
+export default function CreateProductPage() {
+  const [categoryId, setCategoryId] = useState<string | null>(null);
 
-  if (!product.category_id) return <Category />;
-  return (
-    <div>
-      <ProductForm />
-    </div>
-  );
-};
+  if (!categoryId) {
+    return <CategorySelector onSelect={setCategoryId} />;
+  }
 
-export default CreateProduct;
+  // pass the selected category as initialCategoryId
+  return <ProductForm initialCategoryId={categoryId} />;
+}

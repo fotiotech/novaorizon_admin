@@ -45,6 +45,12 @@ function generateSlug(name: string) {
   return slugify(name, { lower: true });
 }
 
+export async function getCategories() {
+  await connection();
+  const categories = await Category.find().populate("property").lean();
+  return serialize(categories);
+}
+
 // ---------- Helper: Compute full slug for a category (recursive) ----------
 async function getFullSlugForCategory(categoryId: string): Promise<string> {
   const category = await Category.findById(categoryId).select(
@@ -662,12 +668,9 @@ export async function getCategoryAttributeSets(
   categoryId: string,
 ): Promise<AttributeSetResult[]> {
   await connection();
-  const category: any = await Category.findById(categoryId)
-    .populate<{ property: ICategoryProperty }>("property")
-    .lean();
-  if (!category) return [];
-  if (!category.property || !category.property.mappings) return [];
-  return buildAttributeSetsFromMappings(category.property.mappings);
+  const { mappings } = await collectAncestorProperties(categoryId);
+  if (!mappings || mappings.length === 0) return [];
+  return buildAttributeSetsFromMappings(mappings);
 }
 
 export async function getAllAttributeSets() {
