@@ -34,6 +34,8 @@ const MenuForm = ({ id }: MenuFormProps) => {
     description: "",
     collectionId: "",
     link: "",
+    ctaText: "",
+    ctaLink: "",
     location: "Home" as const,
     display: "List" as const,
     position: "left" as const,
@@ -99,6 +101,8 @@ const MenuForm = ({ id }: MenuFormProps) => {
               description: data.description || "",
               collectionId: data.collectionId || "",
               link: data.link || "",
+              ctaText: data.ctaText || "",
+              ctaLink: data.ctaLink || "",
               location: data.location || "Home",
               display: data.display || "List",
               position: data.position || "left",
@@ -185,6 +189,8 @@ const MenuForm = ({ id }: MenuFormProps) => {
             description: "",
             collectionId: "",
             link: "",
+            ctaText: "",
+            ctaLink: "",
             location: "Home",
             display: "List",
             position: "left",
@@ -342,6 +348,50 @@ const MenuForm = ({ id }: MenuFormProps) => {
           <p className="text-xs text-muted-foreground mt-1">
             If no collection is selected, this link will be used (e.g., for
             static pages).
+          </p>
+        </div>
+
+        {/* CTA Text */}
+        <div>
+          <label
+            htmlFor="ctaText"
+            className="block text-sm font-medium text-foreground mb-1"
+          >
+            CTA Text (optional)
+          </label>
+          <input
+            type="text"
+            id="ctaText"
+            name="ctaText"
+            value={menu.ctaText}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="e.g., View All"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Text for the call-to-action button (e.g., "See More").
+          </p>
+        </div>
+
+        {/* CTA Link */}
+        <div>
+          <label
+            htmlFor="ctaLink"
+            className="block text-sm font-medium text-foreground mb-1"
+          >
+            CTA Link (optional)
+          </label>
+          <input
+            type="url"
+            id="ctaLink"
+            name="ctaLink"
+            value={menu.ctaLink}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="https://example.com/all"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Destination URL for the CTA button.
           </p>
         </div>
 

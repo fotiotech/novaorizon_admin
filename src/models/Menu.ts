@@ -8,7 +8,8 @@ export interface IMenu {
   collectionId?: mongoose.Types.ObjectId;
   // Optional direct link (for static pages, external URLs, etc.)
   link?: string;
-
+  ctaText?: string; // new
+  ctaLink?: string;
   // --- Display & Layout ---
   location?: "Banner" | "NavBar" | "SideBar" | "Home" | "Section" | "Footer";
   display: "List" | "Grid" | "Carousel" | "Dropdown" | "MegaMenu";
@@ -49,6 +50,15 @@ const MenuSchema: Schema = new Schema(
       ref: "Collection",
     },
     link: {
+      type: String,
+      trim: true,
+    },
+    ctaText: {
+      type: String,
+      trim: true,
+      maxlength: [50, "CTA text cannot exceed 50 characters"],
+    },
+    ctaLink: {
       type: String,
       trim: true,
     },
