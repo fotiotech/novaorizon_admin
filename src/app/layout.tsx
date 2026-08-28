@@ -4,11 +4,11 @@ import "./globals.css";
 import Providers from "./providers";
 import Script from "next/script";
 import { Inter, Geist } from "next/font/google";
-import { AdminLayout } from "@/components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
+import AdminLayout from "@/components/AdminLayout";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export default function RootLayout({
   children,

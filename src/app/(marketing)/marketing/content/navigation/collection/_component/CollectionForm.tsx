@@ -13,7 +13,7 @@ import {
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
-import CollectionRuleForm from "@/components/collections/RuleEditor";
+import CollectionRuleForm from "./RuleEditor";
 import { getAllCollections } from "@/app/actions/collection";
 
 const CollectionForm = ({ id }: { id?: string }) => {

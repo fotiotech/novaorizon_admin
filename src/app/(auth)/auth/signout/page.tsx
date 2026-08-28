@@ -1,4 +1,4 @@
-import { SignOut } from "@/components/auth/SignInButton";
+import { SignOut } from "@/app/(auth)/components/SignInButton";
 import React from "react";
 
 const page = () => {
@@ -6,12 +6,11 @@ const page = () => {
     <div className="p-3 mx-auto space-y-10 w-full">
       <h2>Sign Out</h2>
       <div className="flex flex-col gap-3">
-       <p>Are you sure you want to sign out?</p>
-      <div>
-        <SignOut />
-      </div> 
+        <p>Are you sure you want to sign out?</p>
+        <div>
+          <SignOut />
+        </div>
       </div>
-      
     </div>
   );
 };

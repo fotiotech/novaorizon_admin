@@ -28,7 +28,6 @@ const CategorySchema = new Schema<ICategory>({
   },
   name: {
     type: String,
-    unique: true,
     required: [true, "Category name is required"],
   },
 
@@ -51,7 +50,7 @@ const CategorySchema = new Schema<ICategory>({
     type: Schema.Types.ObjectId,
     ref: "CategoryProperty",
   },
-inheritProperty: {
+  inheritProperty: {
     type: Boolean,
     default: false,
   },

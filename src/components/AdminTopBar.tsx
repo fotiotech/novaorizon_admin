@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import { useSession } from "next-auth/react";
-import { SignIn } from "./auth/SignInButton";
+import { SignIn } from "../app/(auth)/components/SignInButton";
 import { useUnreadMessages } from "@/app/(customers)/customers/chat/_component/useUnreadMessages";
 import axios from "axios";
 import { ThemeToggle } from "./theme-toggle";

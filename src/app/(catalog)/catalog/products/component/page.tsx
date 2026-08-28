@@ -2,9 +2,8 @@
 
 import User from "@/models/User";
 import { connection } from "@/utils/connection";
-import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { SignIn } from "../../components/auth/SignInButton";
+import { SignIn } from "../../../../(auth)/components/SignInButton";
 
 interface VerifyPageProps {
   searchParams: Promise<{ token?: string }>;

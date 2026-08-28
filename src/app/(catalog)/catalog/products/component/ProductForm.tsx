@@ -21,9 +21,9 @@ import {
   StepLabel,
   Snackbar,
 } from "@mui/material";
-import { AttributeField } from "@/components/products/AttributeFields";
-import ManageRelatedProduct from "../../../../../components/products/ManageRelatedProduct";
-import VariantsManager from "@/components/products/variants/VariantOption";
+import { AttributeField } from "@/app/(catalog)/catalog/products/component/AttributeFields";
+import ManageRelatedProduct from "./ManageRelatedProduct";
+import VariantsManager from "@/app/(catalog)/catalog/products/component/variants/VariantOption";
 import { isValidBarcode } from "@/app/lib/barcode"; // 👈 new import
 
 // ------------------------------------------------------------------

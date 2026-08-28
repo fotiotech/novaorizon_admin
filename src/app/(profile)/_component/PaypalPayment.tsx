@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import PayPalButton from "@/components/payments/PaypalButton";
+import PayPalButton from "@/app/(profile)/_component/PaypalButton";
 
 const PaypalPayment = () => {
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
@@ -7,7 +7,7 @@ const PaypalPayment = () => {
   const handleSuccess = (details: any) => {
     setPaymentStatus(
       "Payment successful! Transaction completed by " +
-        details.payer.name.given_name
+        details.payer.name.given_name,
     );
   };
 

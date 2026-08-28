@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import Select, { MultiValue } from "react-select";
-import FilesUploader from "../FilesUploader";
+import FilesUploader from "../../../../../components/FilesUploader";
 import { getBrands } from "@/app/actions/brand";
 import { getCarriers } from "@/app/actions/carrier";
 import { Brand } from "@/constant/types";
