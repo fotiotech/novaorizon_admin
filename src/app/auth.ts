@@ -28,11 +28,11 @@ const providers: Provider[] = [
           throw new Error("Invalid credentials");
         }
 
-        if (!user.isVerified) {
-          throw new Error(
-            "Your email address is unverified. Please check your inbox for the activation link.",
-          );
-        }
+        // if (!user.isVerified) {
+        //   throw new Error(
+        //     "Your email address is unverified. Please check your inbox for the activation link.",
+        //   );
+        // }
 
         return {
           id: user._id.toString(),

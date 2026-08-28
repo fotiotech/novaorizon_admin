@@ -24,6 +24,7 @@ import {
 import { AttributeField } from "@/components/products/AttributeFields";
 import ManageRelatedProduct from "../../../../../components/products/ManageRelatedProduct";
 import VariantsManager from "@/components/products/variants/VariantOption";
+import { isValidBarcode } from "@/app/lib/barcode"; // 👈 new import
 
 // ------------------------------------------------------------------
 // Types (unchanged)
@@ -95,29 +96,104 @@ const ProductForm = () => {
     }
   };
 
-  // ----- VALIDATION DISABLED (always pass) -----
+  // Helper: check if a value is "empty"
+  const isEmptyValue = (value: any): boolean => {
+    if (value === undefined || value === null) return true;
+    if (typeof value === "string") return value.trim() === "";
+    if (Array.isArray(value)) return value.length === 0;
+    if (typeof value === "object") return Object.keys(value).length === 0;
+    return false;
+  };
+
+  // ----- GROUP‑SPECIFIC VALIDATION -----
   const validateGroup = (
     group: GroupNode,
-    skipOwnAttributes = false,
+    _skipOwnAttributes = false,
   ): string[] => {
-    // Always return no errors
-    return [];
+    const errors: string[] = [];
+
+    // Only validate the "product_code" group
+    if (group.code !== "product_code") {
+      return errors; // all other groups are skipped
+    }
+
+    // Find the relevant attributes
+    const typeAttr = group.attributes.find((a) => a.code === "code_type");
+    const valueAttr = group.attributes.find((a) => a.code === "code_value");
+
+    if (!typeAttr || !valueAttr) return errors;
+
+    const codeType = product["code_type"];
+    const codeValue = product["code_value"];
+
+    // If code_type is empty, we optionally require it
+    if (isEmptyValue(codeType)) {
+      if (typeAttr.isRequired) {
+        errors.push(`${typeAttr.name} is required`);
+      }
+      return errors;
+    }
+
+    // Now code_type is selected; validate code_value
+    if (isEmptyValue(codeValue)) {
+      if (valueAttr.isRequired) {
+        errors.push(`${valueAttr.name} is required`);
+      }
+      return errors;
+    }
+
+    // Validate barcode format using the selected type
+    const valid = isValidBarcode(codeValue, codeType);
+    if (!valid) {
+      errors.push(
+        `${valueAttr.name} is not a valid ${codeType} barcode. Please check the format and checksum.`,
+      );
+    }
+
+    return errors;
   };
 
   const validateAllSteps = (): boolean => {
-    // Always valid
-    setValidationErrors({});
-    return true;
+    const allErrors: { [key: string]: string[] } = {};
+    let hasErrors = false;
+    steps.forEach((step) => {
+      step.groups.forEach((group) => {
+        const errors = validateGroup(group, false);
+        if (errors.length > 0) {
+          allErrors[group.id] = errors;
+          hasErrors = true;
+        }
+      });
+    });
+    setValidationErrors(allErrors);
+    return !hasErrors;
   };
 
   const validateCurrentStep = (): boolean => {
-    // Always valid
-    setValidationErrors({});
+    if (currentStep >= steps.length) return true;
+    const currentStepData = steps[currentStep];
+    const newErrors = { ...validationErrors };
+    let hasErrors = false;
+
+    currentStepData.groups.forEach((group) => {
+      const errors = validateGroup(group, false);
+      if (errors.length > 0) {
+        newErrors[group.id] = errors;
+        hasErrors = true;
+      } else {
+        delete newErrors[group.id];
+      }
+    });
+
+    setValidationErrors(newErrors);
+    if (hasErrors) {
+      setShowValidationAlert(true);
+      return false;
+    }
     return true;
   };
 
-  // ----- The rest of the component is unchanged -----
-
+  // ----- Fetch attribute sets and units -----
   useEffect(() => {
     const fetchAttributeSets = async () => {
       if (!product.category_id) {
@@ -157,9 +233,9 @@ const ProductForm = () => {
     fetchUnits();
   }, []);
 
+  // ----- Navigation and change handlers -----
   const handleNext = () => {
-    // Always allow moving next
-    if (currentStep < steps.length - 1) {
+    if (validateCurrentStep() && currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -178,14 +254,26 @@ const ProductForm = () => {
         value,
       }),
     );
-    // Clear any existing validation errors (they are disabled anyway)
-    setValidationErrors({});
+
+    // Clear validation errors for the affected group
+    const currentStepData = steps[currentStep];
+    if (currentStepData) {
+      const group = currentStepData.groups.find((g) =>
+        g.attributes.some((a) => a.code === field),
+      );
+      if (group && validationErrors[group.id]) {
+        // Clear this group's errors; will revalidate on next step change
+        const newErrors = { ...validationErrors };
+        delete newErrors[group.id];
+        setValidationErrors(newErrors);
+      }
+    }
   };
 
+  // ----- Submit handler -----
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Allow submit even if not on last step? We still force the user to be on the last step.
     if (currentStep !== steps.length - 1) {
       handleNext();
       return;
@@ -193,7 +281,23 @@ const ProductForm = () => {
 
     setIsSubmitting(true);
 
-    // Skip validation – always proceed
+    if (!validateAllSteps()) {
+      let firstErrorStep = 0;
+      for (let i = 0; i < steps.length; i++) {
+        const hasError = steps[i].groups.some(
+          (g) => validationErrors[g.id] && validationErrors[g.id].length > 0,
+        );
+        if (hasError) {
+          firstErrorStep = i;
+          break;
+        }
+      }
+      setCurrentStep(firstErrorStep);
+      setShowValidationAlert(true);
+      setIsSubmitting(false);
+      return;
+    }
+
     const isNewProduct = !productId || productId.startsWith("temp-");
 
     try {
@@ -224,6 +328,7 @@ const ProductForm = () => {
     }
   };
 
+  // ----- Memoized variant fields -----
   const allVariantFields = useMemo(() => {
     for (const step of steps) {
       const group = step.groups.find((g) => g.code === "variant_fields");
@@ -232,19 +337,7 @@ const ProductForm = () => {
     return [];
   }, [steps]);
 
-  if (isLoading || redirecting) {
-    return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="64px"
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
-
+  // ----- Render group helper -----
   function renderGroup(group: GroupNode, isChild = false) {
     const { id, code, name, attributes, children } = group;
     const groupErrors = validationErrors[id] || [];
@@ -327,6 +420,20 @@ const ProductForm = () => {
     );
   }
 
+  // ----- Early exits -----
+  if (isLoading || redirecting) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="64px"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   if (!product.category_id) {
     return (
       <div className="flex flex-col max-w-3xl bg-card text-card-foreground mx-auto p-4 rounded-lg">
@@ -337,6 +444,7 @@ const ProductForm = () => {
     );
   }
 
+  // ----- Main render -----
   return (
     <>
       <form className="flex flex-col max-w-4xl bg-card text-card-foreground mx-auto p-4 rounded-lg shadow-md">
@@ -360,8 +468,11 @@ const ProductForm = () => {
                 className="whitespace-nowrap mb-6 w-full overflow-auto"
               >
                 {steps.map((step, index) => {
-                  // No errors because validation is disabled
-                  const hasError = false;
+                  const hasError = step.groups.some(
+                    (g) =>
+                      validationErrors[g.id] &&
+                      validationErrors[g.id].length > 0,
+                  );
                   return (
                     <Step key={step.id} className="inline-block">
                       <StepLabel error={hasError}>{step.title}</StepLabel>
@@ -434,7 +545,7 @@ const ProductForm = () => {
         open={showValidationAlert}
         autoHideDuration={6000}
         onClose={() => setShowValidationAlert(false)}
-        message="Please fill in all required fields before proceeding"
+        message="Please fix the validation errors before proceeding"
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
     </>
