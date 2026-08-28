@@ -1,10 +1,13 @@
 "use server";
 
 import { FormState, SignupFormSchema } from "./definitions";
-import { redirect } from "next/navigation";
 import User from "@/models/User";
 import { connection } from "@/utils/connection";
-import { signIn } from "@/app/auth";
+import crypto from "crypto";
+import { Resend } from "resend";
+import { VerificationTemplate } from "../(auth)/components/VerificationTemplate";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function signup(state: FormState, formData: FormData) {
   // Validate form fields
@@ -26,20 +29,26 @@ export async function signup(state: FormState, formData: FormData) {
   // 2. Prepare data for insertion into database
   const { name, email, password } = validatedFields.data;
 
-  await connection();
+  try {
+    await connection();
 
-  const data = await User.findOne({ email });
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return { error: "Email is already registered." };
+    }
+    // 2. Hash password and generate token
+    const token = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 3600000); // 1 hour expiry
 
-  if (data) {
-    return redirect("/auth/login");
-  } else {
     // 3. Insert the user into the database or call an Auth Library's API
     const newUser = new User({
-      username: name,
+      name: name,
       email: email,
       password: password,
-      role: "user",
-      status: "active",
+      verificationToken: token,
+      tokenExpiry: expires,
+      role: "customer",
+      status: "inactive",
     });
 
     const user = await newUser.save();
@@ -50,6 +59,19 @@ export async function signup(state: FormState, formData: FormData) {
       };
     }
 
-    return signIn();
+    // 4. Send the verification link
+    const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify?token=${token}`;
+
+    await resend.emails.send({
+      from: "Novaorizon <fotiodev1g@gmail.com>",
+      to: email,
+      subject: "Verify your email address",
+      react: VerificationTemplate({ verificationUrl }),
+    });
+
+    return { success: "Verification email sent! Please check your inbox." };
+  } catch (error: any) {
+    console.error(error);
+    return { error: "Registration failed. Try again." };
   }
 }
