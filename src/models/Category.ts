@@ -24,7 +24,6 @@ const CategorySchema = new Schema<ICategory>({
     type: String,
     unique: true,
     required: [true, "URL slug is required"],
-    match: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
   },
   name: {
     type: String,

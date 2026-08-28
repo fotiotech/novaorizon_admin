@@ -187,7 +187,7 @@ const Category = () => {
                   key={idx}
                   role="option"
                   aria-selected={isSelected}
-                  className={`flex justify-between items-center p-3 rounded-lg transition-all duration-200 cursor-pointer
+                  className={`flex justify-between items-start gap-3 p-3 rounded-lg transition-all duration-200 cursor-pointer
                     ${
                       isSelected
                         ? "bg-pri-500/10 border-2 border-pri-500"
@@ -199,10 +199,20 @@ const Category = () => {
                   onClick={() => handleSelectCategory(categoryData._id)}
                   onMouseEnter={() => setFocusedIndex(index)}
                 >
-                  <span className="font-medium text-foreground">
-                    {categoryData.name}
-                  </span>
-                  <div className="flex items-center gap-2">
+                  {/* Left side: name + slug */}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-foreground">
+                      {categoryData.name}
+                    </div>
+                    {categoryData.url_slug && (
+                      <div className="text-xs text-gray-400 dark:text-gray-500 line-clamp-1 break-all">
+                        {categoryData.url_slug}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right side: checkmark and action button */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {isSelected && (
                       <svg
                         className="w-5 h-5 text-pri-500"

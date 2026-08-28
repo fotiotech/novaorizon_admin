@@ -6,6 +6,9 @@ import { Category as Cat } from "@/constant/types";
 import CategoryForm from "./_component/CategoryForm";
 import CategoryList from "./_component/CategoryList";
 import Link from "next/link";
+import { Modal } from "@/components/ux/Modal";
+import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import { Toaster, toast } from "sonner";
 
 const Categories = () => {
   const [categories, setCategories] = useState<Cat[]>([]);
@@ -13,6 +16,8 @@ const Categories = () => {
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Cat | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -27,29 +32,38 @@ const Categories = () => {
     } catch (err) {
       console.error("Error fetching categories:", err);
       setError("Failed to load categories");
+      toast.error("Failed to load categories");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (
-      confirm(
-        "Are you sure you want to delete this category? This action cannot be undone.",
-      )
-    ) {
-      try {
-        const result = await deleteCategory(id);
-        if (result.success) {
-          setCategories(categories.filter((cat) => cat._id !== id));
-        } else {
-          setError(result.error || "Failed to delete category");
-        }
-      } catch (err) {
-        console.error("Error deleting category:", err);
-        setError("Failed to delete category");
+    try {
+      const result = await deleteCategory(id);
+      if (result.success) {
+        setCategories(categories.filter((cat) => cat._id !== id));
+        toast.success("Category deleted successfully");
+      } else {
+        toast.error(result.error || "Failed to delete category");
       }
+    } catch (err) {
+      console.error("Error deleting category:", err);
+      toast.error("Failed to delete category");
     }
+  };
+
+  const handleDeleteClick = (category: Cat) => {
+    setDeleteTarget(category);
+    setIsDeleteOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (deleteTarget) {
+      handleDelete(deleteTarget._id as string);
+    }
+    setIsDeleteOpen(false);
+    setDeleteTarget(null);
   };
 
   const handleEditClick = (category: Cat) => {
@@ -71,6 +85,7 @@ const Categories = () => {
     fetchCategories();
     setEditId(null);
     setShowForm(false);
+    toast.success(editId ? "Category updated" : "Category created");
   };
 
   const getSubcategoriesForParent = (parentId: string) => {
@@ -83,7 +98,9 @@ const Categories = () => {
   }));
 
   return (
-    <div className=" lg:p-8 space-y-6">
+    <div className="lg:p-8 space-y-6">
+      <Toaster position="top-right" richColors />
+
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
         <div>
@@ -110,7 +127,7 @@ const Categories = () => {
         </div>
       </div>
 
-      {/* Error Display */}
+      {/* Error Display (fallback) */}
       {error && (
         <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg">
           <strong className="font-bold">Error:</strong>
@@ -124,40 +141,54 @@ const Categories = () => {
         </div>
       )}
 
-      {/* Loading State */}
+      {/* Loading State (skeleton can be added later) */}
       {loading && (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pri-500"></div>
         </div>
       )}
 
-      {/* Category Form */}
-      {(showForm || editId) && (
-        <div className="bg-card text-card-foreground rounded-xl shadow-lg p-6">
-          <CategoryForm
-            categoryId={editId || undefined}
-            categories={categories}
-            onSuccess={handleSuccess}
-            onCancel={handleCancelEdit}
-            mode={editId ? "edit" : "create"}
-          />
-        </div>
-      )}
+      {/* Category Form in Modal */}
+      <Modal
+        isOpen={showForm || !!editId}
+        onClose={handleCancelEdit}
+        title={editId ? "Edit Category" : "Create Category"}
+        size="xl"
+      >
+        <CategoryForm
+          categoryId={editId || undefined}
+          categories={categories}
+          onSuccess={handleSuccess}
+          onCancel={handleCancelEdit}
+          mode={editId ? "edit" : "create"}
+        />
+      </Modal>
 
-      {/* Categories Table */}
-      {!showForm && !editId && (
-        <div className="space-y-6">
-          <CategoryList
-            categories={categoriesWithSubcategories as any[]}
-            title="All Categories"
-            emptyMessage="No categories found. Create your first category!"
-            onEditCategory={handleEditClick}
-            onDeleteCategory={handleDelete}
-            showFilter={true}
-            filterPlaceholder="Search categories..."
-          />
-        </div>
-      )}
+      {/* Category List (always visible, below the modal) */}
+      <CategoryList
+        categories={categoriesWithSubcategories as any[]}
+        title="All Categories"
+        emptyMessage="No categories found. Create your first category!"
+        onEditCategory={handleEditClick as any}
+        onDeleteCategory={handleDeleteClick as any}
+        showFilter={true}
+        filterPlaceholder="Search categories..."
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        onConfirm={confirmDelete}
+        title="Delete Category"
+        message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.${
+          (deleteTarget as any)?.subcategories?.length
+            ? ` It has ${(deleteTarget as any).subcategories.length} subcategory(ies) that will also be removed.`
+            : ""
+        }`}
+        confirmLabel="Delete"
+        danger={true}
+      />
     </div>
   );
 };

@@ -17,8 +17,6 @@ import { deleteS3Object } from "./s3";
 // ---------- Helper: Deep Serialize ----------
 function serialize(obj: any): any {
   if (obj === null || obj === undefined) return obj;
-
-  // Handle Mongoose ObjectId
   if (
     obj instanceof mongoose.Types.ObjectId ||
     obj._bsontype === "ObjectId" ||
@@ -26,18 +24,12 @@ function serialize(obj: any): any {
   ) {
     return obj.toString();
   }
-
-  // Handle Date
   if (obj instanceof Date) {
     return obj.toISOString();
   }
-
-  // Handle arrays
   if (Array.isArray(obj)) {
     return obj.map(serialize);
   }
-
-  // Handle plain objects
   if (typeof obj === "object") {
     const result: any = {};
     for (const key of Object.keys(obj)) {
@@ -45,14 +37,30 @@ function serialize(obj: any): any {
     }
     return result;
   }
-
-  // Primitives (string, number, boolean, etc.)
   return obj;
 }
 
 // ---------- Helper: Slug ----------
 function generateSlug(name: string) {
   return slugify(name, { lower: true });
+}
+
+// ---------- Helper: Compute full slug for a category (recursive) ----------
+async function getFullSlugForCategory(categoryId: string): Promise<string> {
+  const category = await Category.findById(categoryId).select(
+    "url_slug parent_id name",
+  );
+  if (!category) return "";
+  // If the category already has a full slug, return it (for performance)
+  if (category.url_slug) return category.url_slug;
+  // Otherwise, build from parent
+  if (!category.parent_id) {
+    return generateSlug(category.name);
+  }
+  const parentSlug = await getFullSlugForCategory(
+    category.parent_id.toString(),
+  );
+  return parentSlug + ">" + generateSlug(category.name);
 }
 
 // ---------- Category Property CRUD ----------
@@ -86,7 +94,6 @@ export async function createCategoryPropertyWithMappings(data: {
   await connection();
   const { code, name, description, mappings } = data;
 
-  // Validate all referenced IDs exist
   for (const m of mappings) {
     const setExists = await AttributeSet.findById(m.set);
     if (!setExists) return { error: `Set ${m.set} not found` };
@@ -138,7 +145,6 @@ export async function createCategoryPropertyWithMappings(data: {
   revalidatePath("/catalog/categories/property");
 
   const plain = property.toObject();
-  // Convert to plain object (already has ObjectId and Date), then serialize
   return { success: true, property: serialize(plain) };
 }
 
@@ -356,16 +362,40 @@ export async function createCategory(
       propertyId,
       inheritProperty,
     } = formData;
-    const url_slug = generateSlug(name + (description || ""));
     await connection();
 
-    let categoryId: string | null = null;
+    // ---------- Generate full URL slug ----------
+    let url_slug: string;
+    if (parent_id) {
+      const parent = await Category.findById(parent_id).select("url_slug name");
+      if (parent) {
+        // Use parent's slug if it exists; otherwise compute it
+        let parentSlug = parent.url_slug;
+        if (!parentSlug) {
+          // Fallback: compute full slug from parent's ancestors
+          parentSlug = await getFullSlugForCategory(parent._id.toString());
+        }
+        // If still empty (shouldn't happen), use slugified parent name
+        if (!parentSlug) {
+          parentSlug = generateSlug(parent.name);
+        }
+        url_slug = parentSlug + ">" + generateSlug(name || "");
+      } else {
+        // Parent not found – treat as root
+        url_slug = generateSlug(name || "");
+      }
+    } else {
+      url_slug = generateSlug(name || "");
+    }
 
+    // ---------- Create or update category ----------
+    let categoryId: string | null = null;
     const existingCategory = id ? await Category.findById(id) : null;
 
     if (existingCategory) {
+      // Update: we keep the existing url_slug unless you want to regenerate on name change.
+      // For this implementation, we only set the slug on creation.
       const updateData: any = {
-        url_slug,
         name,
         parent_id: parent_id || null,
         description,
@@ -381,7 +411,7 @@ export async function createCategory(
       categoryId = existingCategory._id.toString();
     } else {
       const newCategory = new Category({
-        url_slug,
+        url_slug, // set the full hierarchical slug
         name,
         parent_id: parent_id || null,
         description,
@@ -392,6 +422,7 @@ export async function createCategory(
       categoryId = saved._id.toString();
     }
 
+    // ---------- Inherited property logic (unchanged) ----------
     console.log("[createCategory] Category saved with ID:", categoryId);
     console.log("[createCategory] inheritProperty:", inheritProperty);
 
@@ -503,10 +534,6 @@ interface AttributeSetResult {
   groups: GroupNode[];
 }
 
-/**
- * Build a hierarchical tree of groups and their selected attributes
- * from the mappings of a CategoryProperty.
- */
 async function buildAttributeSetsFromMappings(
   mappings: {
     set: string;
@@ -522,26 +549,21 @@ async function buildAttributeSetsFromMappings(
   const result: AttributeSetResult[] = [];
 
   for (const mapping of mappings) {
-    // 1. Get the AttributeSet details (title, code)
     const set = await AttributeSet.findById(mapping.set).lean();
     if (!set) continue;
 
-    // 2. Collect all group IDs from this mapping
     const groupIds = mapping.groups.map((g) => g.group);
     if (groupIds.length === 0) continue;
 
-    // 3. Fetch all groups in one query
     const groups = await AttributeGroup.find({
       _id: { $in: groupIds },
     }).lean();
 
-    // Build a map for quick lookup
     const groupMap: Record<string, any> = {};
     for (const g of groups) {
       groupMap[(g._id ?? "").toString()] = g;
     }
 
-    // 4. Collect all attribute IDs from all groups in this mapping
     const attrIds: string[] = [];
     const attrRequiredMap: Record<string, boolean> = {};
     for (const gm of mapping.groups) {
@@ -551,7 +573,6 @@ async function buildAttributeSetsFromMappings(
       }
     }
 
-    // 5. Fetch all attributes in one query
     const attributes = await Attribute.find({
       _id: { $in: attrIds },
     })
@@ -563,7 +584,6 @@ async function buildAttributeSetsFromMappings(
       attrMap[(a._id ?? "").toString()] = a;
     }
 
-    // 6. Build a lookup for groups to their attributes (selected ones)
     const groupAttrMap: Record<string, MappedAttribute[]> = {};
     for (const gm of mapping.groups) {
       const groupId = gm.group;
@@ -591,7 +611,6 @@ async function buildAttributeSetsFromMappings(
       groupAttrMap[groupId] = selectedAttrs;
     }
 
-    // 7. Build tree recursively using the fetched groups
     const buildTree = (
       parentId: string | null = null,
       visited: Set<string> = new Set(),
@@ -600,7 +619,6 @@ async function buildAttributeSetsFromMappings(
       if (visited.has(parentKey)) return [];
       visited.add(parentKey);
 
-      // Find child groups (those whose parent_id matches parentId)
       const children = groups
         .filter((g) => {
           const gParent = g.parent_id?.toString() || null;
@@ -627,7 +645,6 @@ async function buildAttributeSetsFromMappings(
       return children as any;
     };
 
-    // Build the full tree starting from root (null parent)
     const tree = buildTree(null);
 
     result.push({
@@ -653,7 +670,6 @@ export async function getCategoryAttributeSets(
   return buildAttributeSetsFromMappings(category.property.mappings);
 }
 
-// ---------- Additional helpers ----------
 export async function getAllAttributeSets() {
   await connection();
   const sets = await AttributeSet.find().select("_id title code").lean();
@@ -672,10 +688,6 @@ export async function getAllAttributes() {
   return serialize(attrs);
 }
 
-/**
- * Delete a specific image URL from a category's imageUrl array
- * and remove the file from S3.
- */
 export async function deleteCategoryImage(
   categoryId: string,
   imageUrl: string,
@@ -687,27 +699,23 @@ export async function deleteCategoryImage(
       return { success: false, error: "Invalid category ID" };
     }
 
-    // Find the category
     const category = await Category.findById(categoryId);
     if (!category) {
       return { success: false, error: "Category not found" };
     }
 
-    // Ensure imageUrl is in the array
     if (!category.imageUrl?.includes(imageUrl)) {
       return { success: false, error: "Image not found in category" };
     }
 
-    // Delete from S3
     await deleteS3Object(imageUrl);
 
-    // Remove from the array
     category.imageUrl = category.imageUrl.filter(
       (url: string) => url !== imageUrl,
     );
     await category.save();
 
-    revalidatePath("/categories"); // adjust path as needed
+    revalidatePath("/categories");
 
     return { success: true, data: category.imageUrl };
   } catch (error) {

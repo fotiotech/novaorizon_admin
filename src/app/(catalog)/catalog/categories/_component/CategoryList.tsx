@@ -1,355 +1,227 @@
-// components/category/CategoryList.tsx
-import React, { useState, useMemo } from "react";
-import { Category as Cat } from "@/constant/types";
+"use client";
 
-// Extended interface to include subcategories and property
-interface CategoryWithSubcategories extends Cat {
-  subcategories?: Cat[];
-  property?: "" | { _id: string; name: string };
+import React, { useState, useMemo } from "react";
+
+interface CategoryNode {
+  _id: string;
+  name: string;
+  url_slug?: string;
+  description?: string;
+  parent_id?: string | null;
+  imageUrl?: string[];
+  subcategories: CategoryNode[];
 }
 
 interface CategoryListProps {
-  categories: CategoryWithSubcategories[];
-  title: string;
+  categories: CategoryNode[];
+  title?: string;
   emptyMessage?: string;
-  onCategoryClick?: (id: string) => void;
-  onEditCategory?: (category: Cat) => void;
-  onDeleteCategory?: (id: string) => void;
-  selectedCategoryId?: string | null;
+  onEditCategory: (category: CategoryNode) => void;
+  onDeleteCategory: (category: CategoryNode) => void;
   showFilter?: boolean;
   filterPlaceholder?: string;
 }
 
 const CategoryList: React.FC<CategoryListProps> = ({
   categories,
-  title,
+  title = "Categories",
   emptyMessage = "No categories found",
-  onCategoryClick,
   onEditCategory,
   onDeleteCategory,
-  selectedCategoryId,
   showFilter = true,
-  filterPlaceholder = "Filter categories...",
+  filterPlaceholder = "Search categories...",
 }) => {
   const [filter, setFilter] = useState("");
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(),
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Recursive filter by name (case‑insensitive)
+  const filterTree = (nodes: CategoryNode[], query: string): CategoryNode[] => {
+    if (!query.trim()) return nodes;
+    const lower = query.toLowerCase();
+    return nodes
+      ?.map((node) => {
+        const matches = node.name.toLowerCase().includes(lower);
+        const filteredChildren = filterTree(node.subcategories, query);
+        if (matches || filteredChildren?.length > 0) {
+          return {
+            ...node,
+            subcategories: filteredChildren,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean) as CategoryNode[];
+  };
+
+  const filteredCategories = useMemo(
+    () => filterTree(categories, filter),
+    [categories, filter],
   );
 
-  const filteredCategories = useMemo(() => {
-    if (!filter.trim()) return categories;
-    const searchTerm = filter.toLowerCase();
-    return categories.filter(
-      (cat) =>
-        cat.name?.toLowerCase().includes(searchTerm) ||
-        cat.description?.toLowerCase().includes(searchTerm) ||
-        cat.seo_title?.toLowerCase().includes(searchTerm) ||
-        cat.keywords?.toLowerCase().includes(searchTerm),
-    );
-  }, [categories, filter]);
-
-  const handleClearFilter = () => setFilter("");
-
-  const toggleExpandCategory = (categoryId: string) => {
-    const newExpanded = new Set(expandedCategories);
-    if (newExpanded.has(categoryId)) newExpanded.delete(categoryId);
-    else newExpanded.add(categoryId);
-    setExpandedCategories(newExpanded);
-  };
-
-  const formatDate = (date: Date | string | undefined) => {
-    if (!date) return "-";
-    return new Date(date).toLocaleDateString();
-  };
-
-  const getStatusBadge = (status: string) => {
-    const baseClasses = "px-2 py-1 rounded-full text-xs font-medium";
-    if (status === "active") {
-      return `${baseClasses} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200`;
+  // Flatten tree into rows with level and visibility info
+  const flattenTree = (
+    nodes: CategoryNode[],
+    level: number = 0,
+    parentExpanded: boolean = true,
+  ): Array<CategoryNode & { level: number; visible: boolean }> => {
+    let rows: Array<CategoryNode & { level: number; visible: boolean }> = [];
+    for (const node of nodes) {
+      const isExpanded = expanded.has(node._id);
+      const visible = parentExpanded;
+      rows.push({ ...node, level, visible });
+      if (node.subcategories && node.subcategories.length > 0 && isExpanded) {
+        rows = rows.concat(flattenTree(node.subcategories, level + 1, true));
+      }
     }
-    return `${baseClasses} bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200`;
+    return rows;
   };
+
+  const flattenedRows = useMemo(
+    () => flattenTree(filteredCategories, 0, true),
+    [filteredCategories, expanded],
+  );
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-4">
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-4">
-        <h3 className="font-semibold text-lg text-gray-800 dark:text-gray-100 mb-2 lg:mb-0">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 space-y-4">
+      {title && (
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
           {title}
         </h3>
-        <div className="flex items-center gap-4">
-          {filteredCategories.length > 0 && (
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              Showing {filteredCategories.length} of {categories.length}
-            </span>
-          )}
-          {showFilter && categories.length > 0 && (
-            <div className="relative w-full lg:w-64">
-              <input
-                type="text"
-                placeholder={filterPlaceholder}
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="w-full p-2 pl-3 pr-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              {filter && (
-                <button
-                  onClick={handleClearFilter}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
-      {filteredCategories.length === 0 ? (
+      {showFilter && (
+        <div className="relative">
+          <input
+            type="text"
+            placeholder={filterPlaceholder}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="w-full p-2 pl-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <svg
+            className="absolute left-2 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
+      )}
+
+      {flattenedRows.length === 0 ? (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          {filter.trim() ? "No categories match your search" : emptyMessage}
-          {filter.trim() && (
-            <button
-              onClick={handleClearFilter}
-              className="ml-1 text-blue-500 hover:text-blue-600 underline"
-            >
-              Clear filter
-            </button>
-          )}
+          {emptyMessage}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-gray-200 dark:border-gray-700">
-                <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
-                  Name & Description
+        <div className="overflow-auto max-h-[600px]">
+          <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+            <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0">
+              <tr>
+                <th scope="col" className="px-4 py-3 min-w-[200px]">
+                  Category
                 </th>
-                <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
-                  Property
-                </th>
-                <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
+                <th scope="col" className="px-4 py-3 text-center w-32">
                   Subcategories
                 </th>
-                <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300 hidden md:table-cell">
-                  Status
-                </th>
-                <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300 hidden lg:table-cell">
-                  Sort Order
-                </th>
-                <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300 hidden xl:table-cell">
-                  SEO
-                </th>
-                <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300 hidden 2xl:table-cell">
-                  Created
-                </th>
-                <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
+                <th scope="col" className="px-4 py-3 text-right w-24">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody>
-              {filteredCategories.map((cat) => {
-                const hasSubcategories =
-                  cat.subcategories && cat.subcategories.length > 0;
-                const isExpanded = expandedCategories.has(cat._id as string);
+              {flattenedRows.map((row) => {
+                const hasChildren =
+                  row.subcategories && row.subcategories.length > 0;
+                const isExpanded = expanded.has(row._id);
 
                 return (
-                  <React.Fragment key={cat._id}>
-                    <tr
-                      className={`border-b border-gray-100 dark:border-gray-800 transition ${
-                        selectedCategoryId === cat._id
-                          ? "bg-blue-50 dark:bg-blue-900/20"
-                          : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                      }`}
+                  <tr
+                    key={row._id}
+                    className={`border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition ${
+                      row.visible ? "" : "hidden"
+                    }`}
+                  >
+                    {/* Category name + slug (stacked) with indent */}
+                    <td
+                      className="px-4 py-2"
+                      style={{ paddingLeft: `${row.level * 1.5 + 1}rem` }}
                     >
-                      <td className="py-3 px-2">
-                        <div className="group">
-                          <div
-                            className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 cursor-pointer"
-                            onClick={() => onCategoryClick?.(cat._id as string)}
+                      <div className="flex items-start gap-1">
+                        {hasChildren ? (
+                          <button
+                            onClick={() => toggleExpand(row._id)}
+                            className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition mt-0.5"
+                            aria-label={isExpanded ? "Collapse" : "Expand"}
                           >
-                            {cat.name}
+                            {isExpanded ? "▼" : "▶"}
+                          </button>
+                        ) : (
+                          <span className="w-5 inline-block" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-800 dark:text-gray-200">
+                            {row.name}
                           </div>
-                          {cat.description && (
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-1">
-                              {cat.description}
+                          {row.url_slug && (
+                            <div className="text-xs text-gray-400 dark:text-gray-500 line-clamp-1 break-all">
+                              {row.url_slug}
                             </div>
                           )}
-                          <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                            Slug: {cat.url_slug}
-                          </div>
-                          <div className="md:hidden mt-2">
-                            <span className={getStatusBadge(cat.status || "")}>
-                              {cat.status}
-                            </span>
-                          </div>
                         </div>
-                      </td>
+                      </div>
+                    </td>
 
-                      {/* Property Column */}
-                      <td className="py-3 px-2">
-                        <span className="text-sm text-gray-700 dark:text-gray-300">
-                          {cat.property ? cat.property?.name : "—"}
+                    {/* Subcategory count */}
+                    <td className="px-4 py-2 text-center">
+                      {hasChildren ? (
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-600 text-gray-800 dark:text-gray-200">
+                          {row.subcategories.length}
                         </span>
-                      </td>
-
-                      <td className="py-3 px-2">
-                        <div className="flex items-center gap-2">
-                          {hasSubcategories ? (
-                            <button
-                              onClick={() =>
-                                toggleExpandCategory(cat._id as string)
-                              }
-                              className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                            >
-                              <span
-                                className={`transform transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                              >
-                                ▶
-                              </span>
-                              <span>
-                                {cat.subcategories!.length} subcategories
-                              </span>
-                            </button>
-                          ) : (
-                            <span className="text-sm text-gray-500 dark:text-gray-400">
-                              -
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="py-3 px-2 hidden md:table-cell">
-                        <span className={getStatusBadge(cat.status || "")}>
-                          {cat.status}
+                      ) : (
+                        <span className="text-gray-300 dark:text-gray-600">
+                          0
                         </span>
-                      </td>
-                      <td className="py-3 px-2 hidden lg:table-cell">
-                        <span className="text-gray-700 dark:text-gray-300 font-mono">
-                          {cat.sort_order || 0}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 hidden xl:table-cell">
-                        <div className="space-y-1">
-                          {cat.seo_title && (
-                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-1">
-                              {cat.seo_title}
-                            </div>
-                          )}
-                          {cat.seo_desc && (
-                            <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                              {cat.seo_desc}
-                            </div>
-                          )}
-                          {cat.keywords && (
-                            <div className="text-xs text-gray-500 dark:text-gray-500 line-clamp-1">
-                              {cat.keywords}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 px-2 hidden 2xl:table-cell">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {formatDate(cat.created_at)}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-500">
-                          Updated: {formatDate(cat.updated_at)}
-                        </div>
-                      </td>
-                      <td className="py-3 px-2">
-                        <div className="flex gap-2">
-                          {onEditCategory && (
-                            <button
-                              onClick={() => onEditCategory(cat as Cat)}
-                              className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                            >
-                              Edit
-                            </button>
-                          )}
-                          {onDeleteCategory && (
-                            <button
-                              onClick={() =>
-                                onDeleteCategory(cat._id as string)
-                              }
-                              className="px-3 py-1 text-sm border border-red-300 dark:border-red-700 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                      )}
+                    </td>
 
-                    {/* Subcategories rows (unchanged) */}
-                    {isExpanded && hasSubcategories && (
-                      <>
-                        {cat.subcategories!.map((subcat) => (
-                          <tr
-                            key={subcat._id}
-                            className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800"
-                          >
-                            <td className="py-2 px-2 pl-8">
-                              <div className="flex items-center">
-                                <span className="text-gray-400 mr-2">↳</span>
-                                <div>
-                                  <div className="font-medium text-gray-700 dark:text-gray-300">
-                                    {subcat.name}
-                                  </div>
-                                  {subcat.description && (
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                                      {subcat.description}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-2 px-2">—</td>
-                            <td className="py-2 px-2">
-                              <span className="text-sm text-gray-400">
-                                Subcategory
-                              </span>
-                            </td>
-                            <td className="py-2 px-2 hidden md:table-cell">
-                              <span
-                                className={getStatusBadge(subcat.status || "")}
-                              >
-                                {subcat.status}
-                              </span>
-                            </td>
-                            <td className="py-2 px-2 hidden lg:table-cell">
-                              <span className="text-gray-700 dark:text-gray-300 font-mono">
-                                {subcat.sort_order || 0}
-                              </span>
-                            </td>
-                            <td className="py-2 px-2 hidden xl:table-cell"></td>
-                            <td className="py-2 px-2 hidden 2xl:table-cell"></td>
-                            <td className="py-2 px-2">
-                              <div className="flex gap-2">
-                                {onEditCategory && (
-                                  <button
-                                    onClick={() => onEditCategory(subcat)}
-                                    className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                                  >
-                                    Edit
-                                  </button>
-                                )}
-                                {onDeleteCategory && (
-                                  <button
-                                    onClick={() =>
-                                      onDeleteCategory(subcat._id as string)
-                                    }
-                                    className="px-2 py-1 text-xs border border-red-300 dark:border-red-700 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                  >
-                                    Delete
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </>
-                    )}
-                  </React.Fragment>
+                    {/* Actions */}
+                    <td className="px-4 py-2 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => onEditCategory(row)}
+                          className="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition"
+                          aria-label={`Edit ${row.name}`}
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => onDeleteCategory(row)}
+                          className="p-1 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition"
+                          aria-label={`Delete ${row.name}`}
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>
