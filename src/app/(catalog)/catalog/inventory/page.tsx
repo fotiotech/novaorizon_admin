@@ -174,16 +174,31 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  // Theme-aware stock status helper
+  const getStockStatusClass = (quantity: number, threshold: number) => {
+    if (quantity <= 0) return "text-destructive font-medium";
+    if (quantity <= threshold) return "text-accent font-medium";
+    return "text-secondary font-medium";
+  };
+
+  const getStockLabel = (status: ProductRow["stockStatus"]) => {
+    switch (status) {
+      case "in_stock":
+        return "In Stock";
+      case "low_stock":
+        return "Low Stock";
+      case "out_of_stock":
+        return "Out of Stock";
+      default:
+        return status;
+    }
+  };
+
   if (loading) {
     return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="64px"
-      >
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center items-center min-h-[200px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
     );
   }
 
@@ -203,56 +218,50 @@ const InventoryPage: React.FC = () => {
         <Alert
           onClose={handleCloseSnackbar}
           severity={snackbar.severity}
-          sx={{ width: "100%" }}
+          className="w-full"
         >
           {snackbar.message}
         </Alert>
       </Snackbar>
 
       {error && (
-        <Alert severity="error" className="mb-4">
-          {error}
-        </Alert>
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg">
+          <strong>Error:</strong> {error}
+        </div>
       )}
 
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="bg-card text-card-foreground">
+          <Card className="bg-card text-card-foreground shadow-md border border-border">
             <CardContent>
               <Typography variant="h6" className="text-foreground">
                 In Stock
               </Typography>
-              <Typography variant="h4" className="text-foreground">
+              <Typography variant="h4" className="text-foreground font-bold">
                 {stats.in_stock.count}
               </Typography>
-              <Typography
-                color="textSecondary"
-                className="text-muted-foreground"
-              >
+              <Typography variant="body2" className="text-muted-foreground">
                 Total Items: {stats.in_stock.totalStock}
               </Typography>
             </CardContent>
           </Card>
-          <Card className="bg-card text-card-foreground">
+          <Card className="bg-card text-card-foreground shadow-md border border-border">
             <CardContent>
               <Typography
                 variant="h6"
                 className="flex items-center text-foreground"
               >
-                Low Stock <Warning className="ml-2 text-sec-500" />
+                Low Stock <Warning className="ml-2 text-accent" />
               </Typography>
-              <Typography variant="h4" className="text-foreground">
+              <Typography variant="h4" className="text-foreground font-bold">
                 {stats.low_stock.count}
               </Typography>
-              <Typography
-                color="textSecondary"
-                className="text-muted-foreground"
-              >
+              <Typography variant="body2" className="text-muted-foreground">
                 Items Need Attention
               </Typography>
             </CardContent>
           </Card>
-          <Card className="bg-card text-card-foreground">
+          <Card className="bg-card text-card-foreground shadow-md border border-border">
             <CardContent>
               <Typography
                 variant="h6"
@@ -260,13 +269,10 @@ const InventoryPage: React.FC = () => {
               >
                 Out of Stock <Warning className="ml-2 text-destructive" />
               </Typography>
-              <Typography variant="h4" className="text-foreground">
+              <Typography variant="h4" className="text-foreground font-bold">
                 {stats.out_of_stock.count}
               </Typography>
-              <Typography
-                color="textSecondary"
-                className="text-muted-foreground"
-              >
+              <Typography variant="body2" className="text-muted-foreground">
                 Need Replenishment
               </Typography>
             </CardContent>
@@ -275,10 +281,10 @@ const InventoryPage: React.FC = () => {
       )}
 
       {stats && stats.lowStockProducts.length > 0 && (
-        <Alert severity="warning" className="mb-6">
+        <div className="bg-accent/10 border border-accent/20 text-accent px-4 py-3 rounded-lg mb-6">
           <Typography
             variant="subtitle1"
-            className="font-bold mb-2 text-foreground"
+            className="font-bold mb-2 text-accent"
           >
             Low Stock Alerts
           </Typography>
@@ -294,10 +300,10 @@ const InventoryPage: React.FC = () => {
               </div>
             ))}
           </div>
-        </Alert>
+        </div>
       )}
 
-      <div className="bg-card text-card-foreground shadow rounded-lg overflow-auto">
+      <div className="bg-card text-card-foreground shadow-md rounded-lg border border-border overflow-auto">
         <table className="min-w-full divide-y divide-border">
           <thead className="bg-muted">
             <tr>
@@ -311,7 +317,7 @@ const InventoryPage: React.FC = () => {
                 Stock Level
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Low Stock Threshold
+                Threshold
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Status
@@ -353,17 +359,20 @@ const InventoryPage: React.FC = () => {
                       }
                       size="small"
                       disabled={saving}
+                      className="w-20"
+                      inputProps={{
+                        className: "text-foreground bg-background",
+                      }}
                     />
                   ) : (
-                    <Typography
-                      variant="body2"
-                      className={getStockStatus(
+                    <span
+                      className={getStockStatusClass(
                         prod.stockQuantity,
                         prod.lowStockThreshold,
                       )}
                     >
                       {prod.stockQuantity}
-                    </Typography>
+                    </span>
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -382,30 +391,26 @@ const InventoryPage: React.FC = () => {
                       }
                       size="small"
                       disabled={saving}
+                      className="w-20"
+                      inputProps={{
+                        className: "text-foreground bg-background",
+                      }}
                     />
                   ) : (
-                    <Typography
-                      variant="body2"
-                      className="text-muted-foreground"
-                    >
+                    <span className="text-muted-foreground">
                       {prod.lowStockThreshold}
-                    </Typography>
+                    </span>
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <Typography
-                    variant="body2"
-                    className={getStockStatus(
+                  <span
+                    className={getStockStatusClass(
                       prod.stockQuantity,
                       prod.lowStockThreshold,
                     )}
                   >
-                    {prod.stockStatus === "out_of_stock"
-                      ? "Out of Stock"
-                      : prod.stockStatus === "low_stock"
-                        ? "Low Stock"
-                        : "In Stock"}
-                  </Typography>
+                    {getStockLabel(prod.stockStatus)}
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <Typography variant="body2" className="text-muted-foreground">
@@ -415,31 +420,28 @@ const InventoryPage: React.FC = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   {editingProduct === prod._id ? (
                     <div className="flex space-x-2">
-                      <Tooltip title="Save changes">
-                        <IconButton
-                          onClick={() => handleSave(prod._id)}
-                          size="small"
-                          disabled={saving}
-                        >
-                          <Typography variant="button">
-                            {saving ? "Saving..." : "Save"}
-                          </Typography>
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Cancel editing">
-                        <IconButton
-                          onClick={() => setEditingProduct(null)}
-                          size="small"
-                          disabled={saving}
-                        >
-                          <Typography variant="button">Cancel</Typography>
-                        </IconButton>
-                      </Tooltip>
+                      <button
+                        onClick={() => handleSave(prod._id)}
+                        disabled={saving}
+                        className="px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/80 transition-colors disabled:opacity-50"
+                      >
+                        {saving ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        onClick={() => setEditingProduct(null)}
+                        disabled={saving}
+                        className="px-2 py-1 text-xs font-medium bg-muted text-muted-foreground rounded hover:bg-muted/80 transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   ) : (
                     <Tooltip title="Edit inventory">
                       <IconButton onClick={() => handleEdit(prod)} size="small">
-                        <Edit fontSize="small" />
+                        <Edit
+                          fontSize="small"
+                          className="text-primary hover:text-primary/80"
+                        />
                       </IconButton>
                     </Tooltip>
                   )}
@@ -454,9 +456,3 @@ const InventoryPage: React.FC = () => {
 };
 
 export default InventoryPage;
-
-function getStockStatus(q: number, t: number) {
-  if (q <= 0) return "text-destructive font-medium";
-  if (q <= t) return "text-sec-500 font-medium";
-  return "text-thir-500 font-medium";
-}

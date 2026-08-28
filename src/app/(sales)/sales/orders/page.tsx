@@ -2,7 +2,6 @@
 "use client";
 
 import { deleteOrder, findOrders } from "@/app/actions/order";
-
 import { Prices } from "@/components/Prices";
 import { Delete } from "@mui/icons-material";
 import Link from "next/link";
@@ -76,7 +75,7 @@ const AllOrderPage = () => {
 
   const handleFilterChange = (newFilters: FilterOptions) => {
     setFilters(newFilters);
-    setPage(1); // reset to first page when filters change
+    setPage(1);
   };
 
   const handleDelete = async (orderNumber: string) => {
@@ -88,7 +87,6 @@ const AllOrderPage = () => {
     setDeletingId(orderNumber);
     const result = await deleteOrder(orderNumber);
     if (result) {
-      // Refetch current page after deletion
       fetchOrders(page, filters);
     } else {
       console.log("Failed to delete order or order not found.");
@@ -102,20 +100,20 @@ const AllOrderPage = () => {
     }
   };
 
+  // Theme-aware badge classes
   const getStatusBadgeClass = (status: string) => {
     const base =
       "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
     switch (status?.toLowerCase()) {
       case "completed":
-        return `${base} bg-green/20 text-green-700 dark:text-green-400`;
+        return `${base} bg-secondary/20 text-secondary-foreground dark:text-secondary`;
       case "processing":
-        return `${base} bg-blue/20 text-blue-700 dark:text-blue-400`;
       case "shipped":
-        return `${base} bg-blue/20 text-blue-700 dark:text-blue-400`;
+        return `${base} bg-primary/20 text-primary-foreground dark:text-primary`;
       case "in transit":
-        return `${base} bg-orange/20 text-orange-700 dark:text-orange-400`;
+        return `${base} bg-accent/20 text-accent-foreground dark:text-accent`;
       case "cancelled":
-        return `${base} bg-destructive/20 text-destructive`;
+        return `${base} bg-destructive/20 text-destructive-foreground dark:text-destructive`;
       default:
         return `${base} bg-muted text-muted-foreground`;
     }
@@ -126,12 +124,12 @@ const AllOrderPage = () => {
       "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
     switch (status?.toLowerCase()) {
       case "paid":
-        return `${base} bg-green/20 text-green-700 dark:text-green-400`;
+        return `${base} bg-secondary/20 text-secondary-foreground dark:text-secondary`;
       case "refunded":
-        return `${base} bg-orange/20 text-orange-700 dark:text-orange-400`;
+        return `${base} bg-accent/20 text-accent-foreground dark:text-accent`;
       case "failed":
       case "cancelled":
-        return `${base} bg-destructive/20 text-destructive`;
+        return `${base} bg-destructive/20 text-destructive-foreground dark:text-destructive`;
       default:
         return `${base} bg-muted text-muted-foreground`;
     }
@@ -157,7 +155,7 @@ const AllOrderPage = () => {
       />
 
       {/* Orders Table */}
-      <div className="bg-card p-6 rounded-lg shadow-md border border-border mt-6">
+      <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border mt-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold text-foreground">
             Orders {totalOrders > 0 && `(${totalOrders})`}

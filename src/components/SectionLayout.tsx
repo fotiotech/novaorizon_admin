@@ -25,15 +25,13 @@ const SectionLayout: React.FC<SectionLayoutProps> = ({
   const pathname = usePathname();
 
   return (
-    <div className="">
+    <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
-          {title}
-        </h1>
+        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
 
         {/* Sub‑navigation (tabs) */}
         {links.length > 0 && (
-          <nav className="mt-4 flex flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700">
+          <nav className="mt-4 flex flex-wrap gap-1 border-b border-border">
             {links.map((link) => {
               const isActive =
                 pathname === link.href || pathname.startsWith(link.href + "/");
@@ -43,8 +41,8 @@ const SectionLayout: React.FC<SectionLayoutProps> = ({
                   href={link.href}
                   className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
                     isActive
-                      ? "bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600"
-                      : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      ? "bg-card text-primary border-b-2 border-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   }`}
                 >
                   {link.icon && (
@@ -58,7 +56,8 @@ const SectionLayout: React.FC<SectionLayoutProps> = ({
         )}
       </div>
 
-      <div className=" dark:bg-gray-900 rounded-lg shadow-sm p-2 lg:p-6">
+      {/* Content container */}
+      <div className="bg-card text-card-foreground rounded-lg shadow-md p-2 lg:p-6 border border-border">
         {children}
       </div>
     </div>

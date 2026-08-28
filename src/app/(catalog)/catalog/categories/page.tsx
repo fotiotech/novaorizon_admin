@@ -114,14 +114,11 @@ const Categories = () => {
         <div className="flex flex-wrap gap-2">
           <Link
             href="/catalog/categories/property"
-            className="px-4 py-2 font-semibold bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg transition-colors"
+            className="px-4 py-2 font-semibold bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded-lg transition-colors"
           >
             + Property
           </Link>
-          <button
-            onClick={handleNewCategory}
-            className="px-4 py-2 font-semibold bg-primary hover:bg-primary-600 text-white rounded-lg transition-colors"
-          >
+          <button onClick={handleNewCategory} className="btn">
             + New Category
           </button>
         </div>
@@ -135,16 +132,33 @@ const Categories = () => {
           <button
             onClick={() => setError(null)}
             className="float-right text-destructive hover:text-destructive/80"
+            aria-label="Dismiss error"
           >
             ✕
           </button>
         </div>
       )}
 
-      {/* Loading State (skeleton can be added later) */}
+      {/* Loading State with Skeleton */}
       {loading && (
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pri-500"></div>
+        <div className="space-y-4">
+          <div className="bg-card p-6 rounded-lg shadow-md border border-border">
+            <div className="flex items-center justify-between mb-4">
+              <div className="h-6 w-32 bg-muted animate-pulse rounded"></div>
+              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+            </div>
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center space-x-4">
+                  <div className="h-4 w-32 bg-muted animate-pulse rounded"></div>
+                  <div className="h-4 w-24 bg-muted animate-pulse rounded"></div>
+                  <div className="h-4 w-16 bg-muted animate-pulse rounded"></div>
+                  <div className="flex-1"></div>
+                  <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -165,15 +179,17 @@ const Categories = () => {
       </Modal>
 
       {/* Category List (always visible, below the modal) */}
-      <CategoryList
-        categories={categoriesWithSubcategories as any[]}
-        title="All Categories"
-        emptyMessage="No categories found. Create your first category!"
-        onEditCategory={handleEditClick as any}
-        onDeleteCategory={handleDeleteClick as any}
-        showFilter={true}
-        filterPlaceholder="Search categories..."
-      />
+      {!loading && (
+        <CategoryList
+          categories={categoriesWithSubcategories as any[]}
+          title="All Categories"
+          emptyMessage="No categories found. Create your first category!"
+          onEditCategory={handleEditClick as any}
+          onDeleteCategory={handleDeleteClick as any}
+          showFilter={true}
+          filterPlaceholder="Search categories..."
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       <ConfirmDialog

@@ -206,9 +206,12 @@ td {
     --neutral-900: 0 0% 98%;
 
     /* ---- shadcn/ui semantic tokens (dark) ---- */
-    --card: 0 0% 18.5%; /* slightly lighter than background */
+    /* Card & Popover now use primary shades instead of generic gray */
+    --card: var(
+      --primary-800
+    ); /* 210 100% 15% – slightly lighter than background */
     --card-foreground: 0 0% 98.5%;
-    --popover: 0 0% 18.5%;
+    --popover: var(--primary-800);
     --popover-foreground: 0 0% 98.5%;
 
     --muted: 0 0% 26.9%;
@@ -231,7 +234,7 @@ td {
     --chart-4: 0 72% 40%;
     --chart-5: 45 100% 50%;
 
-    --sidebar: 0 0% 18.5%;
+    --sidebar: 0 0% 18.5%; /* keeping sidebar neutral for contrast, but can also be primary */
     --sidebar-foreground: 0 0% 98.5%;
     --sidebar-primary: 210 100% 60%;
     --sidebar-primary-foreground: 0 0% 100%;

@@ -11,7 +11,6 @@ export default function AttributesLayout({
 }) {
   const pathname = usePathname();
 
-  // Sub‑navigation links for attribute management
   const subNavLinks = [
     { name: "Attributes", href: "/catalog/attributes" },
     { name: "Sets", href: "/catalog/attributes/sets" },
@@ -22,7 +21,7 @@ export default function AttributesLayout({
   return (
     <div>
       {/* Secondary horizontal navigation (pill style) */}
-      <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+      <div className="mb-6 border-b border-border">
         <nav className="flex flex-wrap gap-2 py-2">
           {subNavLinks.map((link) => {
             const isActive =
@@ -31,10 +30,10 @@ export default function AttributesLayout({
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
-                    : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                    ? "bg-primary/10 text-primary hover:bg-primary/20 dark:bg-primary/20 dark:text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 {link.name}
@@ -45,7 +44,7 @@ export default function AttributesLayout({
       </div>
 
       {/* Page content */}
-      <div className="">{children}</div>
+      <div>{children}</div>
     </div>
   );
 }

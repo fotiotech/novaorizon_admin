@@ -152,7 +152,7 @@ export default function AdminOverview() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pri-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto"></div>
           <p className="mt-4 text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
@@ -192,7 +192,7 @@ export default function AdminOverview() {
               </h2>
               <Link
                 href="/users"
-                className="text-pri-500 hover:text-pri-600 text-sm font-medium"
+                className="text-primary-500 hover:text-primary-600 text-sm font-medium"
               >
                 View All
               </Link>
@@ -205,7 +205,7 @@ export default function AdminOverview() {
                 <p className="text-sm text-muted-foreground mt-1">
                   {overviewData?.users.active || 0} active users
                 </p>
-                <p className="text-sm text-thir-600 mt-1">
+                <p className="text-sm text-accent-600 mt-1">
                   +{overviewData?.users.newThisMonth || 0} this month
                 </p>
               </div>
@@ -223,7 +223,7 @@ export default function AdminOverview() {
               </h2>
               <Link
                 href="/products"
-                className="text-pri-500 hover:text-pri-600 text-sm font-medium"
+                className="text-primary-500 hover:text-primary-600 text-sm font-medium"
               >
                 View All
               </Link>
@@ -254,7 +254,7 @@ export default function AdminOverview() {
               </h2>
               <Link
                 href="/orders"
-                className="text-pri-500 hover:text-pri-600 text-sm font-medium"
+                className="text-primary-500 hover:text-primary-600 text-sm font-medium"
               >
                 View All
               </Link>
@@ -268,7 +268,7 @@ export default function AdminOverview() {
                   CFA {overviewData?.orders.revenue?.toFixed(2) || "0.00"}{" "}
                   revenue
                 </p>
-                <p className="text-sm text-thir-600 mt-1">
+                <p className="text-sm text-accent-600 mt-1">
                   CFA{" "}
                   {overviewData?.orders.averageOrderValue?.toFixed(2) || "0.00"}{" "}
                   avg. order
@@ -293,10 +293,10 @@ export default function AdminOverview() {
                 <div
                   className={`rounded-full p-2 mr-4 ${
                     activity.type === "user"
-                      ? "bg-pri-500/10 text-pri-500"
+                      ? "bg-primary-500/10 text-primary-500"
                       : activity.type === "product"
-                        ? "bg-thir-500/10 text-thir-500"
-                        : "bg-sec-500/10 text-sec-500"
+                        ? "bg-accent-500/10 text-accent-500"
+                        : "bg-secondary-500/10 text-secondary-500"
                   }`}
                 >
                   {activity.type === "user" && (
@@ -371,7 +371,7 @@ export default function AdminOverview() {
             className="bg-card text-card-foreground p-6 rounded-lg shadow-md border-border hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center">
-              <div className="rounded-full bg-pri-500/10 text-pri-500 p-3 mr-4">
+              <div className="rounded-full bg-primary-500/10 text-primary-500 p-3 mr-4">
                 <svg
                   className="w-6 h-6"
                   fill="none"
@@ -401,7 +401,7 @@ export default function AdminOverview() {
             className="bg-card text-card-foreground p-6 rounded-lg shadow-md border-border hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center">
-              <div className="rounded-full bg-thir-500/10 text-thir-500 p-3 mr-4">
+              <div className="rounded-full bg-accent-500/10 text-accent-500 p-3 mr-4">
                 <svg
                   className="w-6 h-6"
                   fill="none"
@@ -433,7 +433,7 @@ export default function AdminOverview() {
             className="bg-card text-card-foreground p-6 rounded-lg shadow-md border-border hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center">
-              <div className="rounded-full bg-sec-500/10 text-sec-500 p-3 mr-4">
+              <div className="rounded-full bg-secondary-500/10 text-secondary-500 p-3 mr-4">
                 <svg
                   className="w-6 h-6"
                   fill="none"
