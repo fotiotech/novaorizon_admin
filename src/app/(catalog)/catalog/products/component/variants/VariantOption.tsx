@@ -53,6 +53,9 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
   const initialized = useRef(false);
   const prevProductId = useRef<string | null>(null);
   const isFirstRender = useRef(true);
+  // Ref to prevent sync loops
+  const isSyncing = useRef(false);
+  const previousProduct = useRef<any>(null);
 
   // ---- Reset when productId changes ----
   useEffect(() => {
@@ -93,7 +96,41 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
     initialized.current = true;
     isInitializing.current = false;
     isFirstRender.current = false;
+    previousProduct.current = product;
   }, [product, attributes]);
+
+  // ---- Sync: main product attribute changes → theme values (first combination) ----
+  useEffect(() => {
+    if (isInitializing.current || !product || isSyncing.current) return;
+
+    // Check if any of the selected themes have changed in the main product
+    let changed = false;
+    const newThemeValues = { ...themeValues };
+    selectedThemeCodes.forEach((code) => {
+      const productValue = product[code];
+      const currentValues = themeValues[code] || [];
+      if (
+        productValue !== undefined &&
+        productValue !== null &&
+        productValue !== ""
+      ) {
+        const stringValue = String(productValue);
+        if (!currentValues.includes(stringValue)) {
+          // Add it to the front so that the first combination uses this value
+          newThemeValues[code] = [stringValue, ...currentValues];
+          changed = true;
+        }
+      }
+    });
+    if (changed) {
+      isSyncing.current = true;
+      setThemeValues(newThemeValues);
+      onUpdate("variant_values", newThemeValues);
+      setTimeout(() => {
+        isSyncing.current = false;
+      }, 0);
+    }
+  }, [product, selectedThemeCodes, themeValues, onUpdate]);
 
   // ---- Generate variants when themes or values change ----
   const fieldKey = useMemo(
@@ -111,7 +148,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
       themeCodes.length === 0 ||
       valueArrays.some((arr) => arr.length === 0)
     ) {
-      // If no combinations, clear variants but keep any existing (should be empty)
       if (variants.length > 0) {
         setVariants([]);
       }
@@ -149,7 +185,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
       return variant;
     });
 
-    // Only update if the array actually changed
     const hasChanged =
       newVariants.length !== variants.length ||
       newVariants.some(
@@ -158,7 +193,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
 
     if (hasChanged) {
       setVariants(newVariants);
-      // Immediately sync to parent to ensure latest data
       onUpdate("variants", newVariants);
     }
   }, [selectedThemeCodes, themeValues, fieldKey, variantFields]);
@@ -177,8 +211,31 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
         : [];
       setSelectedThemeCodes(selectedCodes);
       onUpdate("variant_themes", selectedCodes);
+
+      // For each newly selected theme, pre‑fill with the product's current value
+      const newThemeValues = { ...themeValues };
+      let updated = false;
+      selectedCodes.forEach((code: any) => {
+        const productValue = product?.[code];
+        if (
+          productValue !== undefined &&
+          productValue !== null &&
+          productValue !== ""
+        ) {
+          const stringValue = String(productValue);
+          const existing = newThemeValues[code] || [];
+          if (!existing.includes(stringValue)) {
+            newThemeValues[code] = [stringValue, ...existing];
+            updated = true;
+          }
+        }
+      });
+      if (updated) {
+        setThemeValues(newThemeValues);
+        onUpdate("variant_values", newThemeValues);
+      }
     },
-    [onUpdate],
+    [onUpdate, themeValues, product],
   );
 
   const handleThemeValuesChange = useCallback(
@@ -198,16 +255,25 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
 
   const handleVariantChange = useCallback(
     (index: number, field: string, value: any) => {
+      // Update the variants array
       setVariants((prev) => {
         const updated = prev.map((v, i) =>
           i === index ? { ...v, [field]: value } : v,
         );
-        // Sync immediately to parent for this change
         onUpdate("variants", updated);
         return updated;
       });
+
+      // If this is the first variant and the field is a theme attribute, sync to main product
+      if (index === 0 && selectedThemeCodes.includes(field)) {
+        isSyncing.current = true;
+        onUpdate(field, value);
+        setTimeout(() => {
+          isSyncing.current = false;
+        }, 0);
+      }
     },
-    [onUpdate],
+    [onUpdate, selectedThemeCodes],
   );
 
   // ---- Render input ----

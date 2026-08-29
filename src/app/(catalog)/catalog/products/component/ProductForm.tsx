@@ -188,7 +188,31 @@ const ProductForm: React.FC<ProductFormProps> = ({
     fetchUnits();
   }, []);
 
-  // ---------- Validation (unchanged) ----------
+  // ============================================================
+  // NEW: Compute visible steps based on has_variants
+  // ============================================================
+  const visibleSteps = useMemo(() => {
+    const variantStepIndex = steps.findIndex((step) =>
+      step.groups.some(
+        (g) => g.code === "variant_themes" || g.code === "variant_fields",
+      ),
+    );
+    // If no variant step exists, or has_variants is truthy, show all
+    if (variantStepIndex === -1 || productData.has_variants) {
+      return steps;
+    }
+    // Otherwise, filter out the variant step
+    return steps.filter((_, index) => index !== variantStepIndex);
+  }, [steps, productData.has_variants]);
+
+  // Sync currentStep when visibleSteps changes
+  useEffect(() => {
+    if (currentStep >= visibleSteps.length) {
+      setCurrentStep(Math.max(0, visibleSteps.length - 1));
+    }
+  }, [visibleSteps, currentStep]);
+
+  // ---------- Validation (unchanged, but now uses visibleSteps) ----------
   const validateGroup = (group: GroupNode): string[] => {
     const errors: string[] = [];
     group.attributes.forEach((attr) => {
@@ -224,7 +248,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     if (variants.length === 0) return errors;
 
     let variantFields: AttributeDetail[] = [];
-    for (const step of steps) {
+    // Use visibleSteps
+    for (const step of visibleSteps) {
       const group = step.groups.find((g) => g.code === "variant_fields");
       if (group) {
         variantFields = group.attributes || [];
@@ -248,7 +273,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const validateAllSteps = (): boolean => {
     const allErrors: { [key: string]: string[] } = {};
     let hasErrors = false;
-    steps.forEach((step) => {
+    visibleSteps.forEach((step) => {
       step.groups.forEach((group) => {
         const errors = validateGroup(group);
         if (errors.length > 0) {
@@ -257,18 +282,26 @@ const ProductForm: React.FC<ProductFormProps> = ({
         }
       });
     });
-    const variantErrors = validateVariants();
-    if (variantErrors.length > 0) {
-      allErrors["variants"] = variantErrors;
-      hasErrors = true;
+    // Only validate variants if a variant step exists in visibleSteps
+    const hasVariantStep = visibleSteps.some((step) =>
+      step.groups.some(
+        (g) => g.code === "variant_themes" || g.code === "variant_fields",
+      ),
+    );
+    if (hasVariantStep) {
+      const variantErrors = validateVariants();
+      if (variantErrors.length > 0) {
+        allErrors["variants"] = variantErrors;
+        hasErrors = true;
+      }
     }
     setValidationErrors(allErrors);
     return !hasErrors;
   };
 
   const validateCurrentStep = (): boolean => {
-    if (currentStep >= steps.length) return true;
-    const currentStepData = steps[currentStep];
+    if (currentStep >= visibleSteps.length) return true;
+    const currentStepData = visibleSteps[currentStep];
     const newErrors = { ...validationErrors };
     let hasErrors = false;
 
@@ -305,7 +338,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   // ---------- Navigation ----------
   const handleNext = () => {
-    if (validateCurrentStep() && currentStep < steps.length - 1) {
+    if (validateCurrentStep() && currentStep < visibleSteps.length - 1) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -321,7 +354,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     (field: string, value: any) => {
       setProductData((prev) => ({ ...prev, [field]: value }));
 
-      const currentStepData = steps[currentStep];
+      // Use visibleSteps to find the current group
+      const currentStepData = visibleSteps[currentStep];
       if (currentStepData) {
         const group = currentStepData.groups.find((g) =>
           g.attributes.some((a) => a.code === field),
@@ -342,14 +376,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
         });
       }
     },
-    [steps, currentStep],
+    [visibleSteps, currentStep],
   );
 
   // ---------- Submit ----------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (currentStep !== steps.length - 1) {
+    if (currentStep !== visibleSteps.length - 1) {
       handleNext();
       return;
     }
@@ -358,8 +392,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
     if (!validateAllSteps()) {
       let firstErrorStep = 0;
-      for (let i = 0; i < steps.length; i++) {
-        const hasError = steps[i].groups.some(
+      for (let i = 0; i < visibleSteps.length; i++) {
+        const hasError = visibleSteps[i].groups.some(
           (g) => validationErrors[g.id] && validationErrors[g.id].length > 0,
         );
         if (hasError) {
@@ -409,17 +443,18 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   // ---------- Memoized values ----------
   const allVariantFields = useMemo(() => {
-    for (const step of steps) {
+    for (const step of visibleSteps) {
       const group = step.groups.find((g) => g.code === "variant_fields");
       if (group) return group.attributes || [];
     }
     return [];
-  }, [steps]);
+  }, [visibleSteps]);
 
   const currentStepGroups = useMemo(() => {
-    if (steps.length === 0 || currentStep >= steps.length) return [];
-    return steps[currentStep].groups;
-  }, [steps, currentStep]);
+    if (visibleSteps.length === 0 || currentStep >= visibleSteps.length)
+      return [];
+    return visibleSteps[currentStep].groups;
+  }, [visibleSteps, currentStep]);
 
   // ---------- Render group ----------
   const renderGroup = useCallback(
@@ -571,13 +606,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
             >
               <CircularProgress />
             </Box>
-          ) : steps.length > 0 ? (
+          ) : visibleSteps.length > 0 ? (
             <>
               <Stepper
                 activeStep={currentStep}
                 className="whitespace-nowrap mb-6 w-full overflow-auto"
               >
-                {steps.map((step, index) => {
+                {visibleSteps.map((step, index) => {
                   const hasError = step.groups.some(
                     (g) =>
                       validationErrors[g.id] &&
@@ -623,7 +658,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
           </div>
 
           <div>
-            {currentStep < steps.length - 1 ? (
+            {currentStep < visibleSteps.length - 1 ? (
               <button
                 type="button"
                 onClick={handleNext}
@@ -645,7 +680,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         </div>
 
         <div className="mt-4 text-center text-sm text-muted-foreground">
-          Step {currentStep + 1} of {steps.length}
+          Step {currentStep + 1} of {visibleSteps.length}
         </div>
       </form>
 

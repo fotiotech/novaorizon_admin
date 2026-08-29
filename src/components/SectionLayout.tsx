@@ -57,9 +57,7 @@ const SectionLayout: React.FC<SectionLayoutProps> = ({
       </div>
 
       {/* Content container */}
-      <div className="bg-card text-card-foreground rounded-lg shadow-md p-2 lg:p-6 border border-border">
-        {children}
-      </div>
+      <div className="text-card-foreground">{children}</div>
     </div>
   );
 };
