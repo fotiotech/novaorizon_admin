@@ -53,9 +53,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
   const initialized = useRef(false);
   const prevProductId = useRef<string | null>(null);
   const isFirstRender = useRef(true);
-  // Ref to prevent sync loops
   const isSyncing = useRef(false);
-  const previousProduct = useRef<any>(null);
 
   // ---- Reset when productId changes ----
   useEffect(() => {
@@ -87,7 +85,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
     });
     setThemeValues(initialValues);
 
-    // Always ensure variants is an array
     const initialVariants = Array.isArray(product.variants)
       ? product.variants
       : [];
@@ -96,32 +93,31 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
     initialized.current = true;
     isInitializing.current = false;
     isFirstRender.current = false;
-    previousProduct.current = product;
   }, [product, attributes]);
 
-  // ---- Sync: main product attribute changes → theme values (first combination) ----
+  // ---- Sync: main product attribute changes → theme values & first variant ----
   useEffect(() => {
     if (isInitializing.current || !product || isSyncing.current) return;
 
-    // Check if any of the selected themes have changed in the main product
     let changed = false;
     const newThemeValues = { ...themeValues };
+
     selectedThemeCodes.forEach((code) => {
       const productValue = product[code];
-      const currentValues = themeValues[code] || [];
       if (
         productValue !== undefined &&
         productValue !== null &&
         productValue !== ""
       ) {
         const stringValue = String(productValue);
-        if (!currentValues.includes(stringValue)) {
-          // Add it to the front so that the first combination uses this value
-          newThemeValues[code] = [stringValue, ...currentValues];
-          changed = true;
-        }
+        const currentValues = themeValues[code] || [];
+        // Remove any existing occurrence and put the product value at the front
+        const filtered = currentValues.filter((v) => v !== stringValue);
+        newThemeValues[code] = [stringValue, ...filtered];
+        changed = true;
       }
     });
+
     if (changed) {
       isSyncing.current = true;
       setThemeValues(newThemeValues);
@@ -212,10 +208,9 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
       setSelectedThemeCodes(selectedCodes);
       onUpdate("variant_themes", selectedCodes);
 
-      // For each newly selected theme, pre‑fill with the product's current value
       const newThemeValues = { ...themeValues };
       let updated = false;
-      selectedCodes.forEach((code: any) => {
+      selectedCodes.forEach((code) => {
         const productValue = product?.[code];
         if (
           productValue !== undefined &&
@@ -255,7 +250,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = ({
 
   const handleVariantChange = useCallback(
     (index: number, field: string, value: any) => {
-      // Update the variants array
       setVariants((prev) => {
         const updated = prev.map((v, i) =>
           i === index ? { ...v, [field]: value } : v,
