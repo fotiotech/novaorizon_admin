@@ -51,7 +51,7 @@ const CategorySchema = new Schema<ICategory>({
   },
   inheritProperty: {
     type: Boolean,
-    default: false,
+    default: true,
   },
   seo_title: { type: String, maxLength: 60 },
   seo_desc: { type: String, maxLength: 160 },
