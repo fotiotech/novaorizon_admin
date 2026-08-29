@@ -57,7 +57,9 @@ async function getFullSlugForCategory(categoryId: string): Promise<string> {
     "url_slug parent_id name",
   );
   if (!category) return "";
+  // If the category already has a full slug, return it (for performance)
   if (category.url_slug) return category.url_slug;
+  // Otherwise, build from parent
   if (!category.parent_id) {
     return generateSlug(category.name);
   }
@@ -251,35 +253,27 @@ export async function getCategory(
 
 /**
  * Collect all property mappings from a category and its ancestors.
- * Optionally exclude the current category's own property.
+ * Returns merged mappings and the list of property IDs.
  */
-async function collectAncestorProperties(
-  categoryId: string,
-  options: { excludeSelf?: boolean } = {},
-): Promise<{
+async function collectAncestorProperties(categoryId: string): Promise<{
   mappings: any[];
   propertyIds: string[];
 }> {
   await connection();
-  const { excludeSelf = false } = options;
   const propertyIds: string[] = [];
   let current: any = await Category.findById(categoryId)
     .populate("property")
     .lean();
   let depth = 0;
-  let isFirst = true;
   while (current && depth < 10) {
-    if (!excludeSelf || !isFirst) {
-      if (current.property) {
-        propertyIds.push(current.property._id.toString());
-      }
+    if (current.property) {
+      propertyIds.push(current.property._id.toString());
     }
     if (!current.parent_id) break;
     current = await Category.findById(current.parent_id)
       .populate("property")
       .lean();
     depth++;
-    isFirst = false;
   }
 
   if (propertyIds.length === 0) {
@@ -353,6 +347,70 @@ function generatePropertyCode(name: string): string {
     .replace(/\s+/g, "_");
 }
 
+// ---------- Helper: Ensure category property from mappings ----------
+async function ensureCategoryPropertyFromMappings(
+  categoryId: string,
+  mappings: any[],
+): Promise<string | null> {
+  const category = await Category.findById(categoryId).select("name");
+  if (!category) return null;
+
+  if (mappings.length === 0) {
+    // No mappings – clear the property reference
+    await Category.findByIdAndUpdate(categoryId, { $set: { property: null } });
+    return null;
+  }
+
+  const baseCode = generatePropertyCode(category.name) + "_inherited";
+  const propertyName = `${category.name} (Inherited)`;
+  const propertyDescription = `Auto-generated inherited property for ${category.name}`;
+
+  // Try to find an existing property with this code
+  let property = await CategoryProperty.findOne({ code: baseCode });
+
+  if (property) {
+    // Update existing property with new mappings
+    property.name = propertyName;
+    property.description = propertyDescription;
+    property.mappings = mappings.map((m) => ({
+      set: new mongoose.Types.ObjectId(m.set),
+      groups: m.groups.map((g: any) => ({
+        group: new mongoose.Types.ObjectId(g.group),
+        attributes: g.attributes.map((a: any) => ({
+          attribute: new mongoose.Types.ObjectId(a.attribute),
+          isRequired: a.isRequired,
+        })),
+      })),
+    }));
+    await property.save();
+  } else {
+    // Create new property
+    property = new CategoryProperty({
+      code: baseCode,
+      name: propertyName,
+      description: propertyDescription,
+      mappings: mappings.map((m) => ({
+        set: new mongoose.Types.ObjectId(m.set),
+        groups: m.groups.map((g: any) => ({
+          group: new mongoose.Types.ObjectId(g.group),
+          attributes: g.attributes.map((a: any) => ({
+            attribute: new mongoose.Types.ObjectId(a.attribute),
+            isRequired: a.isRequired,
+          })),
+        })),
+      })),
+    });
+    await property.save();
+  }
+
+  // Link the property to the category
+  await Category.findByIdAndUpdate(categoryId, {
+    $set: { property: property._id },
+  });
+
+  return property._id.toString();
+}
+
 export async function createCategory(
   formData: {
     _id?: string;
@@ -372,10 +430,11 @@ export async function createCategory(
       description,
       imageUrl,
       propertyId,
-      inheritProperty = false, // default to false
+      inheritProperty,
     } = formData;
     await connection();
 
+    // ---------- Generate full URL slug ----------
     let url_slug: string;
     if (parent_id) {
       const parent = await Category.findById(parent_id).select("url_slug name");
@@ -395,20 +454,24 @@ export async function createCategory(
       url_slug = generateSlug(name || "");
     }
 
+    // ---------- Create or update category ----------
     let categoryId: string | null = null;
     const existingCategory = id ? await Category.findById(id) : null;
 
     if (existingCategory) {
-      // Update existing category
+      // Update: include inheritProperty if provided
       const updateData: any = {
         name,
         parent_id: parent_id || null,
         description,
         imageUrl: imageUrl || [],
-        inheritProperty, // store the flag
       };
       if (propertyId !== undefined) {
         updateData.property = propertyId || null;
+      }
+      // Store inheritProperty flag
+      if (inheritProperty !== undefined) {
+        updateData.inheritProperty = inheritProperty;
       }
       await Category.findOneAndUpdate(
         { _id: existingCategory._id },
@@ -416,7 +479,6 @@ export async function createCategory(
       );
       categoryId = existingCategory._id.toString();
     } else {
-      // Create new category
       const newCategory = new Category({
         url_slug,
         name,
@@ -424,23 +486,31 @@ export async function createCategory(
         description,
         imageUrl: imageUrl || [],
         property: propertyId || null,
-        inheritProperty, // store the flag
+        inheritProperty: inheritProperty ?? false, // default false
       });
       const saved = await newCategory.save();
       categoryId = saved._id.toString();
     }
 
-    // If inheritProperty is true, create the inherited property from ancestors
+    // ---------- Inherited property logic (if inheritProperty is true) ----------
+    console.log("[createCategory] Category saved with ID:", categoryId);
+    console.log("[createCategory] inheritProperty:", inheritProperty);
+
     if (inheritProperty && categoryId) {
-      const { mappings, propertyIds } = await collectAncestorProperties(
-        categoryId,
-        { excludeSelf: true },
-      );
+      const { mappings, propertyIds } =
+        await collectAncestorProperties(categoryId);
+
+      console.log("[createCategory] Found ancestor property IDs:", propertyIds);
+      console.log("[createCategory] Merged mappings count:", mappings.length);
 
       if (mappings.length === 0) {
         console.warn(
-          "[createCategory] No ancestor properties found to inherit.",
+          "[createCategory] No mappings found in ancestors. Cannot create inherited property.",
         );
+        // Clear any existing property reference
+        await Category.findByIdAndUpdate(categoryId, {
+          $set: { property: null },
+        });
         return {
           success: true,
           warning: "No ancestor properties found to inherit.",
@@ -466,6 +536,11 @@ export async function createCategory(
       }
 
       const newProperty = result.property;
+      console.log(
+        "[createCategory] Created new property ID:",
+        newProperty._id.toString(),
+      );
+
       await Category.findByIdAndUpdate(categoryId, {
         $set: { property: newProperty._id },
       });
@@ -557,6 +632,11 @@ async function buildAttributeSetsFromMappings(
     const groups = await AttributeGroup.find({
       _id: { $in: groupIds },
     }).lean();
+
+    const groupMap: Record<string, any> = {};
+    for (const g of groups) {
+      groupMap[(g._id ?? "").toString()] = g;
+    }
 
     const attrIds: string[] = [];
     const attrRequiredMap: Record<string, boolean> = {};
@@ -652,66 +732,51 @@ async function buildAttributeSetsFromMappings(
   return result;
 }
 
-/**
- * Get attribute sets for a category.
- * - If `inheritProperty` is true: create/update a dedicated property from ancestors,
- *   assign it to the category, and return attribute sets based on that merged property.
- * - If `inheritProperty` is false or missing: return the merged result from the category
- *   and all its ancestors (original behavior) WITHOUT creating/updating any property.
- */
 export async function getCategoryAttributeSets(
   categoryId: string,
 ): Promise<AttributeSetResult[]> {
   await connection();
-  const category: any = await Category.findById(categoryId).lean();
+
+  // Fetch the category with its inheritProperty flag and property reference
+  const category: any = await Category.findById(categoryId)
+    .select("inheritProperty property")
+    .lean();
   if (!category) return [];
 
-  let mappings: any[] = [];
-
+  // If inheritProperty is true, recompute and update the property from ancestors
   if (category.inheritProperty === true) {
-    // Inheritance on: build from ancestors excluding self and create/update property
-    const ancestorResult = await collectAncestorProperties(categoryId, {
-      excludeSelf: true,
-    });
-    if (ancestorResult.mappings.length === 0) {
+    const { mappings } = await collectAncestorProperties(categoryId);
+
+    if (mappings.length === 0) {
+      // No ancestor properties – clear the category's property
+      await Category.findByIdAndUpdate(categoryId, {
+        $set: { property: null },
+      });
       return [];
     }
 
-    const propertyCode = `inherited_${categoryId}`;
-    const propertyName = `${category.name} (inherited)`;
-    const propertyDescription = `Auto-generated inherited property for category "${category.name}"`;
+    // Ensure the category has a property reflecting the merged mappings
+    const propId = await ensureCategoryPropertyFromMappings(
+      categoryId,
+      mappings,
+    );
+    if (!propId) return [];
 
-    const result = await createCategoryPropertyWithMappings({
-      code: propertyCode,
-      name: propertyName,
-      description: propertyDescription,
-      mappings: ancestorResult.mappings,
-    });
+    // Fetch the (now updated) property
+    const property: any = await CategoryProperty.findById(propId).lean();
+    if (!property) return [];
 
-    if (!result.success) {
-      console.error(
-        "[getCategoryAttributeSets] Failed to create inherited property:",
-        result.error,
-      );
-      return [];
-    }
-
-    await Category.findByIdAndUpdate(categoryId, {
-      $set: { property: result.property._id },
-    });
-
-    mappings = ancestorResult.mappings;
+    // Build attribute sets from this property's mappings
+    return buildAttributeSetsFromMappings(property.mappings);
   } else {
-    // Inheritance off: original behavior – merge all ancestors including self,
-    // but do NOT update the category's property.
-    const result = await collectAncestorProperties(categoryId, {
-      excludeSelf: false,
-    });
-    mappings = result.mappings;
+    // Not inherited – use the category's own property if it exists
+    if (!category.property) return [];
+    const property: any = await CategoryProperty.findById(
+      category.property,
+    ).lean();
+    if (!property) return [];
+    return buildAttributeSetsFromMappings(property.mappings);
   }
-
-  if (!mappings || mappings.length === 0) return [];
-  return buildAttributeSetsFromMappings(mappings);
 }
 
 export async function getAllAttributeSets() {
