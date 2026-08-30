@@ -8,22 +8,24 @@ export const AttributeField: React.FC<{
   field: any;
   handleAttributeChange: (field: string, value: any) => void;
   units: any[];
-}> = ({ productId, attribute, field, handleAttributeChange, units }) => {
-  if (!attribute || !attribute.code) return null;
-  const { code, name, type, options, isRequired, unitFamily } = attribute;
+}> = React.memo(
+  ({ productId, attribute, field, handleAttributeChange, units }) => {
+    if (!attribute || !attribute.code) return null;
+    const { code, name, type, options, isRequired, unitFamily } = attribute;
 
-  return (
-    <Fields
-      isRequired={isRequired}
-      type={type}
-      code={code}
-      name={name}
-      field={field}
-      option={options}
-      handleAttributeChange={handleAttributeChange}
-      productId={productId}
-      unitFamily={unitFamily as any}
-      units={units}
-    />
-  );
-};
+    return (
+      <Fields
+        isRequired={isRequired}
+        type={type}
+        code={code}
+        name={name}
+        field={field}
+        option={options}
+        handleAttributeChange={handleAttributeChange}
+        productId={productId}
+        unitFamily={unitFamily as any}
+        units={units}
+      />
+    );
+  },
+);

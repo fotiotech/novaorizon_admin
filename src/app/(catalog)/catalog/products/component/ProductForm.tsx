@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  memo,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
@@ -70,6 +77,156 @@ const isEmptyValue = (value: any): boolean => {
 };
 
 // ------------------------------------------------------------------
+// Memoized GroupRenderer component (extracted from renderGroup)
+// ------------------------------------------------------------------
+interface GroupRendererProps {
+  group: GroupNode;
+  productId: string;
+  productData: Record<string, any>;
+  validationErrors: { [key: string]: string[] };
+  handleChange: (field: string, value: any) => void;
+  units: any[];
+  allVariantFields: AttributeDetail[];
+}
+
+const GroupRenderer = memo(
+  ({
+    group,
+    productId,
+    productData,
+    validationErrors,
+    handleChange,
+    units,
+    allVariantFields,
+  }: GroupRendererProps) => {
+    const { id, code, name, attributes, children } = group;
+    const groupErrors = validationErrors[id] || [];
+
+    const isSpecialGroup =
+      code === "variant_themes" ||
+      code === "product_relationships" ||
+      code === "variant_fields" ||
+      code === "variants";
+
+    if (isSpecialGroup) {
+      if (code === "variant_themes") {
+        return (
+          <section key={id} className="mb-2">
+            <h2 className="text-sm font-semibold text-muted-foreground pb-2">
+              {name}
+            </h2>
+            <VariantsManager
+              productId={productId}
+              product={productData}
+              attributes={attributes}
+              variantFields={allVariantFields}
+              onUpdate={handleChange}
+            />
+            {validationErrors["variants"] && (
+              <Alert severity="error" className="mt-4">
+                <ul className="list-disc pl-4">
+                  {validationErrors["variants"].map((err, idx) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                </ul>
+              </Alert>
+            )}
+            {children?.length > 0 &&
+              children.map((child) => (
+                <GroupRenderer
+                  key={child.id}
+                  group={child}
+                  productId={productId}
+                  productData={productData}
+                  validationErrors={validationErrors}
+                  handleChange={handleChange}
+                  units={units}
+                  allVariantFields={allVariantFields}
+                />
+              ))}
+          </section>
+        );
+      }
+      if (code === "product_relationships") {
+        return (
+          <section key={id} className="mb-2">
+            <h2 className="text-sm font-semibold text-muted-foreground pb-2">
+              {name}
+            </h2>
+            <ManageRelatedProduct
+              id={productId}
+              product={productData}
+              attribute={attributes}
+              onUpdate={handleChange}
+            />
+            {children?.length > 0 &&
+              children.map((child) => (
+                <GroupRenderer
+                  key={child.id}
+                  group={child}
+                  productId={productId}
+                  productData={productData}
+                  validationErrors={validationErrors}
+                  handleChange={handleChange}
+                  units={units}
+                  allVariantFields={allVariantFields}
+                />
+              ))}
+          </section>
+        );
+      }
+      if (code === "variants" || code === "variant_fields") {
+        return null;
+      }
+    }
+
+    return (
+      <section key={id} className="mb-2">
+        <h2 className="text-sm font-semibold text-muted-foreground pb-2">
+          {name}
+        </h2>
+        <div className="flex flex-col gap-4">
+          {attributes.map((a) => (
+            <div key={a.id}>
+              <AttributeField
+                productId={productId}
+                attribute={a}
+                field={productData[a.code]}
+                handleAttributeChange={handleChange}
+                units={units}
+              />
+            </div>
+          ))}
+          {groupErrors.length > 0 && (
+            <Alert severity="error" className="mt-4">
+              <ul className="list-disc pl-4">
+                {groupErrors.map((error, index) => (
+                  <li key={index}>{error}</li>
+                ))}
+              </ul>
+            </Alert>
+          )}
+          {children?.length > 0 &&
+            children.map((child) => (
+              <GroupRenderer
+                key={child.id}
+                group={child}
+                productId={productId}
+                productData={productData}
+                validationErrors={validationErrors}
+                handleChange={handleChange}
+                units={units}
+                allVariantFields={allVariantFields}
+              />
+            ))}
+        </div>
+      </section>
+    );
+  },
+);
+GroupRenderer.displayName = "GroupRenderer";
+
+// ------------------------------------------------------------------
 // Main Component
 // ------------------------------------------------------------------
 interface ProductFormProps {
@@ -97,6 +254,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [units, setUnits] = useState<any[]>([]);
+
+  // Ref to track current step without causing re-renders in callbacks
+  const currentStepRef = useRef(currentStep);
 
   // ---------- Draft (server) ----------
   useEffect(() => {
@@ -189,7 +349,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
   }, []);
 
   // ============================================================
-  // NEW: Compute visible steps based on has_variants
+  // Compute visible steps based on has_variants
   // ============================================================
   const visibleSteps = useMemo(() => {
     const variantStepIndex = steps.findIndex((step) =>
@@ -210,7 +370,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
     if (currentStep >= visibleSteps.length) {
       setCurrentStep(Math.max(0, visibleSteps.length - 1));
     }
+    // Update ref as well
+    currentStepRef.current = Math.max(0, visibleSteps.length - 1);
   }, [visibleSteps, currentStep]);
+
+  // Keep the ref in sync with currentStep state
+  useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
 
   // ---------- Validation (unchanged, but now uses visibleSteps) ----------
   const validateGroup = (group: GroupNode): string[] => {
@@ -248,7 +415,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
     if (variants.length === 0) return errors;
 
     let variantFields: AttributeDetail[] = [];
-    // Use visibleSteps
     for (const step of visibleSteps) {
       const group = step.groups.find((g) => g.code === "variant_fields");
       if (group) {
@@ -282,7 +448,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
         }
       });
     });
-    // Only validate variants if a variant step exists in visibleSteps
     const hasVariantStep = visibleSteps.some((step) =>
       step.groups.some(
         (g) => g.code === "variant_themes" || g.code === "variant_fields",
@@ -349,15 +514,16 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
-  // ---------- Change handler ----------
+  // ---------- Change handler (stabilized using ref for currentStep) ----------
   const handleChange = useCallback(
     (field: string, value: any) => {
       setProductData((prev) => ({ ...prev, [field]: value }));
 
-      // Use visibleSteps to find the current group
-      const currentStepData = visibleSteps[currentStep];
-      if (currentStepData) {
-        const group = currentStepData.groups.find((g) =>
+      // Use the ref to get the current step without re-creating the callback
+      const stepIndex = currentStepRef.current;
+      const stepData = visibleSteps[stepIndex];
+      if (stepData) {
+        const group = stepData.groups.find((g) =>
           g.attributes.some((a) => a.code === field),
         );
         if (group) {
@@ -376,7 +542,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         });
       }
     },
-    [visibleSteps, currentStep],
+    [visibleSteps], // only depends on visibleSteps, not currentStep
   );
 
   // ---------- Submit ----------
@@ -456,110 +622,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
     return visibleSteps[currentStep].groups;
   }, [visibleSteps, currentStep]);
 
-  // ---------- Render group ----------
-  const renderGroup = useCallback(
-    (group: GroupNode, isChild = false) => {
-      const { id, code, name, attributes, children } = group;
-      const groupErrors = validationErrors[id] || [];
-
-      const isSpecialGroup =
-        code === "variant_themes" ||
-        code === "product_relationships" ||
-        code === "variant_fields" ||
-        code === "variants";
-
-      if (isSpecialGroup) {
-        if (code === "variant_themes") {
-          return (
-            <section key={id} className="mb-2">
-              <h2 className="text-sm font-semibold text-muted-foreground pb-2">
-                {name}
-              </h2>
-              <VariantsManager
-                productId={productId}
-                product={productData}
-                attributes={attributes}
-                variantFields={allVariantFields}
-                onUpdate={handleChange}
-              />
-              {validationErrors["variants"] && (
-                <Alert severity="error" className="mt-4">
-                  <ul className="list-disc pl-4">
-                    {validationErrors["variants"].map((err, idx) => (
-                      <li key={idx}>{err}</li>
-                    ))}
-                  </ul>
-                </Alert>
-              )}
-              {children?.length > 0 &&
-                children.map((child) => renderGroup(child, true))}
-            </section>
-          );
-        }
-        if (code === "product_relationships") {
-          return (
-            <section key={id} className="mb-2">
-              <h2 className="text-sm font-semibold text-muted-foreground pb-2">
-                {name}
-              </h2>
-              <ManageRelatedProduct
-                id={productId}
-                product={productData}
-                attribute={attributes}
-                onUpdate={handleChange}
-              />
-              {children?.length > 0 &&
-                children.map((child) => renderGroup(child, true))}
-            </section>
-          );
-        }
-        if (code === "variants" || code === "variant_fields") {
-          return null;
-        }
-      }
-
-      return (
-        <section key={id} className="mb-2">
-          <h2 className="text-sm font-semibold text-muted-foreground pb-2">
-            {name}
-          </h2>
-          <div className="flex flex-col gap-4">
-            {attributes.map((a) => (
-              <div key={a.id}>
-                <AttributeField
-                  productId={productId}
-                  attribute={a}
-                  field={productData[a.code]}
-                  handleAttributeChange={handleChange}
-                  units={units}
-                />
-              </div>
-            ))}
-            {groupErrors.length > 0 && (
-              <Alert severity="error" className="mt-4">
-                <ul className="list-disc pl-4">
-                  {groupErrors.map((error, index) => (
-                    <li key={index}>{error}</li>
-                  ))}
-                </ul>
-              </Alert>
-            )}
-            {children?.length > 0 &&
-              children.map((child) => renderGroup(child, true))}
-          </div>
-        </section>
-      );
-    },
-    [
-      productData,
-      validationErrors,
-      handleChange,
-      units,
-      allVariantFields,
-      productId,
-    ],
-  );
-
   // ---------- Early exits ----------
   if (loading || redirecting) {
     return (
@@ -627,7 +689,18 @@ const ProductForm: React.FC<ProductFormProps> = ({
               </Stepper>
 
               <div>
-                {currentStepGroups.map((group) => renderGroup(group, false))}
+                {currentStepGroups.map((group) => (
+                  <GroupRenderer
+                    key={group.id}
+                    group={group}
+                    productId={productId}
+                    productData={productData}
+                    validationErrors={validationErrors}
+                    handleChange={handleChange}
+                    units={units}
+                    allVariantFields={allVariantFields}
+                  />
+                ))}
               </div>
             </>
           ) : (
@@ -695,4 +768,4 @@ const ProductForm: React.FC<ProductFormProps> = ({
   );
 };
 
-export default ProductForm;
+export default memo(ProductForm);

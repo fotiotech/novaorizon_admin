@@ -302,4 +302,4 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   );
 };
 
-export default ManageRelatedProduct;
+export default React.memo(ManageRelatedProduct);

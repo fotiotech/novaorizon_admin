@@ -132,7 +132,7 @@ async function resolveCollectionItems(collectionId: string) {
     return rawItems.map((item: any) => ({
       _id: item._id.toString(),
       name: item.title || item.name || "Unnamed",
-      image: item.main_image || item.image || item.imageUrl || null,
+      image: item.main_image[0] || item.image || item.imageUrl || null,
       contentType: "Product",
     }));
   }
@@ -162,7 +162,7 @@ async function resolveCollectionItems(collectionId: string) {
     let image: string | null = null;
 
     if (targetType === "Product") {
-      image = item.main_image || item.image || item.imageUrl || null;
+      image = item.main_image[0] || item.image || item.imageUrl || null;
     } else if (targetType === "Collection") {
       image = item.imageUrl || item.image || null;
     } else {
