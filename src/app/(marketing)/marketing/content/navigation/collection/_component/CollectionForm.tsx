@@ -40,6 +40,8 @@ const CollectionForm = ({ id }: { id?: string }) => {
     targetType: "Product",
     order: 0,
     showName: true,
+    recommendationType: "", // NEW
+    recommendationLimit: 10, // NEW
   });
 
   // Determine if rule mode is allowed based on targetType
@@ -69,10 +71,13 @@ const CollectionForm = ({ id }: { id?: string }) => {
     fd.append("items", JSON.stringify(itemsData));
     fd.append("order", data.order.toString());
     fd.append("showName", data.showName ? "true" : "false");
+    // NEW fields
+    fd.append("recommendationType", data.recommendationType);
+    fd.append("recommendationLimit", data.recommendationLimit.toString());
     return fd;
   };
 
-  // Use "collections" as subfolder to keep images organized
+  // Use "collections" as subfolder
   const {
     files,
     loading: fileLoading,
@@ -84,7 +89,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
     "collections",
   );
 
-  // Sync the first uploaded file URL to formData.imageUrl
   useEffect(() => {
     const uploadedUrl = files[0] || "";
     if (uploadedUrl !== formData.imageUrl) {
@@ -143,20 +147,19 @@ const CollectionForm = ({ id }: { id?: string }) => {
               targetType: data.targetType || "Product",
               order: data.order || 0,
               showName: data.showName !== undefined ? data.showName : true,
+              recommendationType: data.recommendationType || "",
+              recommendationLimit: data.recommendationLimit || 10,
             });
             setRules(
               data.rules || [
                 { attribute: "", operator: "$eq", value: "", position: 0 },
               ],
             );
-            // ✅ FIX: Extract IDs from populated items
             const itemIds = data.items
               ? data.items.map((item: any) => {
-                  // If item is an object with _id, return the string version
                   if (item && typeof item === "object" && item._id) {
                     return item._id.toString();
                   }
-                  // Otherwise return the item itself (should be string)
                   return item;
                 })
               : [];
@@ -178,7 +181,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
     fetchData();
   }, [id, setFiles]);
 
-  // Fetch available items when manual mode and target type changes
+  // Fetch available items for manual selection
   useEffect(() => {
     if (formData.type === "manual" && formData.targetType) {
       fetchAvailableItems(formData.targetType, itemSearch)
@@ -219,7 +222,13 @@ const CollectionForm = ({ id }: { id?: string }) => {
     setError(null);
 
     try {
-      const { name, type, targetType } = formData;
+      const {
+        name,
+        type,
+        targetType,
+        recommendationType,
+        recommendationLimit,
+      } = formData;
 
       if (!name.trim()) {
         setError("Name is required");
@@ -238,6 +247,17 @@ const CollectionForm = ({ id }: { id?: string }) => {
         );
         if (invalidRules) {
           setError("Please complete all rule fields");
+          return;
+        }
+      }
+
+      if (type === "recommendation") {
+        if (!recommendationType) {
+          setError("Please select a recommendation type");
+          return;
+        }
+        if (recommendationLimit < 1) {
+          setError("Recommendation limit must be at least 1");
           return;
         }
       }
@@ -301,7 +321,8 @@ const CollectionForm = ({ id }: { id?: string }) => {
           {id ? "Edit" : "Create"} Collection
         </h1>
         <p className="text-gray-600 mt-1">
-          {id ? "Update" : "Create a new"} collection – rule‑based or manual
+          {id ? "Update" : "Create a new"} collection – rule‑based, manual, or
+          recommendation
         </p>
       </div>
 
@@ -333,12 +354,13 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
                 value={formData.type}
                 onChange={handleInputChange}
-                disabled={isSubmitting || !isRuleAllowed}
+                disabled={isSubmitting}
               >
                 <option value="rule" disabled={!isRuleAllowed}>
                   Rule‑based {!isRuleAllowed && "(not allowed for this target)"}
                 </option>
                 <option value="manual">Manual selection</option>
+                <option value="recommendation">Recommendation</option>
               </select>
               {!isRuleAllowed && (
                 <p className="text-sm text-amber-600 mt-1">
@@ -348,6 +370,49 @@ const CollectionForm = ({ id }: { id?: string }) => {
               )}
             </div>
           </div>
+
+          {/* Recommendation configuration */}
+          {formData.type === "recommendation" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border border-blue-200 rounded-lg bg-blue-50">
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">
+                  Recommendation Type *
+                </label>
+                <select
+                  name="recommendationType"
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+                  value={formData.recommendationType}
+                  onChange={handleInputChange}
+                  disabled={isSubmitting}
+                >
+                  <option value="">Select type</option>
+                  <option value="trending">Trending (global)</option>
+                  <option value="personalized">
+                    Personalized (user-based)
+                  </option>
+                  <option value="recentlyViewed">Recently Viewed</option>
+                </select>
+              </div>
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">
+                  Max Items
+                </label>
+                <input
+                  type="number"
+                  name="recommendationLimit"
+                  min={1}
+                  max={100}
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+                  value={formData.recommendationLimit}
+                  onChange={handleInputChange}
+                  disabled={isSubmitting}
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Number of items to return (default 10)
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -359,7 +424,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
                 value={formData.targetType}
                 onChange={handleInputChange}
-                disabled={isSubmitting}
+                disabled={isSubmitting || formData.type === "recommendation"} // Disable for recommendation (enforce Product internally)
               >
                 <option value="Category">Category</option>
                 <option value="Product">Product</option>
@@ -369,10 +434,12 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 <option value="Page">Page</option>
               </select>
               <p className="text-sm text-gray-500 mt-1">
-                {formData.targetType === "Product" ||
-                formData.targetType === "Collection"
-                  ? "Rules/items will apply to this target type."
-                  : "Only manual selection is available for this target type."}
+                {formData.type === "recommendation"
+                  ? "Recommendation collections always target Products."
+                  : formData.targetType === "Product" ||
+                      formData.targetType === "Collection"
+                    ? "Rules/items will apply to this target type."
+                    : "Only manual selection is available for this target type."}
               </p>
             </div>
 
@@ -482,7 +549,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 targetType={formData.targetType as "Product" | "Collection"}
               />
             </div>
-          ) : (
+          ) : formData.type === "manual" ? (
             <div className="py-4 border rounded-lg p-4">
               <h3 className="text-lg font-semibold mb-3">
                 Select {formData.targetType}s
@@ -541,7 +608,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 {items.length} selected
               </div>
             </div>
-          )}
+          ) : null}
 
           <div className="space-y-4">
             <button
@@ -579,8 +646,12 @@ const CollectionForm = ({ id }: { id?: string }) => {
                       status: formData.status,
                       order: formData.order,
                       showName: formData.showName,
-                      rules: formData.type === "rule" ? rules : undefined,
-                      items: formData.type === "manual" ? items : undefined,
+                      ...(formData.type === "rule" && { rules }),
+                      ...(formData.type === "manual" && { items }),
+                      ...(formData.type === "recommendation" && {
+                        recommendationType: formData.recommendationType,
+                        recommendationLimit: formData.recommendationLimit,
+                      }),
                     },
                     null,
                     2,

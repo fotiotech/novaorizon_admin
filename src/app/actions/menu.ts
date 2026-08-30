@@ -7,10 +7,15 @@ import Product from "@/models/Product";
 import Category from "@/models/Category";
 import Brand from "@/models/Brand";
 import Promotion from "@/models/Promotion";
-import Page from "@/models/Page"; // if you have a Page model
+import Page from "@/models/Page";
 import { revalidatePath } from "next/cache";
 import mongoose from "mongoose";
 import { deleteS3Object } from "./s3";
+import {
+  getTrendingItems,
+  getRecommendations,
+  getRecentlyViewed,
+} from "./events";
 
 // ---------- Helper: get model by target type ----------
 function getModelForTargetType(targetType: string) {
@@ -100,32 +105,78 @@ function buildQueryFromRules(rules: any[], targetType: string) {
   return query.$and.length > 0 ? query : {};
 }
 
-// ---------- Resolve items from a collection ----------
+// ---------- Resolve items from a collection (returns normalized items) ----------
 async function resolveCollectionItems(collectionId: string) {
   const collection: any = await Collection.findById(collectionId).lean();
   if (!collection) return [];
 
+  let rawItems: any[] = [];
+
+  // ---------- RECOMMENDATION TYPE ----------
+  if (collection.type === "recommendation") {
+    const limit = collection.recommendationLimit || 10;
+    switch (collection.recommendationType) {
+      case "trending":
+        rawItems = await getTrendingItems(limit);
+        break;
+      case "personalized":
+        rawItems = await getRecommendations(limit);
+        break;
+      case "recentlyViewed":
+        rawItems = await getRecentlyViewed(limit);
+        break;
+      default:
+        rawItems = [];
+    }
+    // Normalise – all recommendation functions return Product documents
+    return rawItems.map((item: any) => ({
+      _id: item._id.toString(),
+      name: item.title || item.name || "Unnamed",
+      image: item.main_image || item.image || item.imageUrl || null,
+      contentType: "Product",
+    }));
+  }
+
+  // ---------- RULE & MANUAL ----------
+  const targetType = collection.targetType;
+  const Model = getModelForTargetType(targetType);
+  if (!Model) return [];
+
   if (collection.type === "rule") {
-    const Model = getModelForTargetType(collection.targetType);
-    if (!Model) return [];
-    const query = buildQueryFromRules(collection.rules, collection.targetType);
+    const query = buildQueryFromRules(collection.rules, targetType);
     if (Object.keys(query).length === 0) return [];
-    const items = await (Model as mongoose.Model<any>)
+    rawItems = await (Model as mongoose.Model<any>)
       .find(query)
       .limit(50)
       .lean();
-    return items;
   } else {
-    // manual – items are stored as ObjectIds, we need to populate them
-    const Model = getModelForTargetType(collection.targetType);
-    if (!Model) return [];
-    const items = await (Model as mongoose.Model<any>)
-      .find({
-        _id: { $in: collection.items },
-      })
+    // manual
+    rawItems = await (Model as mongoose.Model<any>)
+      .find({ _id: { $in: collection.items } })
       .lean();
-    return items;
   }
+
+  // Normalise items consistently
+  return rawItems.map((item: any) => {
+    const name = item.name || item.title || "Unnamed";
+    let image: string | null = null;
+
+    if (targetType === "Product") {
+      image = item.main_image || item.image || item.imageUrl || null;
+    } else if (targetType === "Collection") {
+      image = item.imageUrl || item.image || null;
+    } else {
+      // Category, Brand, Promotion, Page
+      image = item.image || item.imageUrl || item.backgroundImage || null;
+    }
+
+    return {
+      _id: item._id.toString(),
+      name,
+      image,
+      contentType: targetType,
+    };
+  });
 }
 
 // ---------- Get menus by location (with items) ----------
@@ -141,7 +192,7 @@ export async function getMenusByLocation(location: string) {
         }
         return {
           ...menu,
-          items, // attached for rendering
+          items,
         };
       }),
     );
@@ -151,7 +202,7 @@ export async function getMenusByLocation(location: string) {
   }
 }
 
-// ---------- Get single menu by ID ----------
+// ---------- Get single menu by ID (with items) ----------
 export async function getMenuById(id: string) {
   try {
     await connection();
@@ -173,12 +224,11 @@ export async function getMenuById(id: string) {
 }
 
 // ---------- Get all menus (without items, for listing) ----------
-// ---------- Get all menus (without items, for listing) ----------
 export async function getAllMenus() {
   try {
     await connection();
     const menus = await Menu.find()
-      .populate("collectionId", "name") // Populate collection name
+      .populate("collectionId", "name") // show collection name in admin list
       .sort({ createdAt: -1 })
       .lean();
     return { success: true, data: JSON.parse(JSON.stringify(menus)) };
@@ -187,7 +237,7 @@ export async function getAllMenus() {
   }
 }
 
-// ---------- Create a new menu ----------
+// ---------- Create a new menu (admin) ----------
 export async function createMenu(menuData: any) {
   try {
     await connection();
@@ -223,7 +273,7 @@ export async function createMenu(menuData: any) {
   }
 }
 
-// ---------- Update an existing menu ----------
+// ---------- Update an existing menu (admin) ----------
 export async function updateMenu(id: string, menuData: any) {
   try {
     await connection();
@@ -279,7 +329,7 @@ export async function deleteMenu(id: string) {
   }
 }
 
-// ---------- Delete background image from a menu ----------
+// ---------- Delete background image from a menu (admin) ----------
 export async function deleteMenuBackgroundImage(menuId: string) {
   try {
     await connection();

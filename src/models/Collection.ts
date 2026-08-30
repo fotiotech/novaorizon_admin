@@ -18,8 +18,16 @@ const CollectionSchema = new Schema(
     imageUrl: { type: String },
     type: {
       type: String,
-      enum: ["rule", "manual"],
+      enum: ["rule", "manual", "recommendation"],
       default: "rule",
+    },
+    recommendationType: {
+      type: String,
+      enum: ["trending", "personalized", "recentlyViewed"],
+    },
+    recommendationLimit: {
+      type: Number,
+      default: 10,
     },
     targetType: {
       type: String,

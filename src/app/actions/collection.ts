@@ -7,7 +7,7 @@ import Product from "@/models/Product";
 import Category from "@/models/Category";
 import Brand from "@/models/Brand";
 import Promotion from "@/models/Promotion";
-import Page from "@/models/Page"; // assuming you have a Page model
+import Page from "@/models/Page";
 import { Collection } from "@/models/Collection";
 import { deleteS3Object } from "./s3";
 
@@ -113,7 +113,7 @@ export async function getAllCollections() {
   }
 }
 
-// ---------- Get collections with resolved items ----------
+// ---------- Get collections with resolved items (for admin preview) ----------
 export async function getCollectionsWithProducts() {
   try {
     await connection();
@@ -137,8 +137,13 @@ export async function getCollectionsWithProducts() {
         if (Object.keys(query).length > 0) {
           matchingItems = await (Model as any).find(query).limit(50).lean();
         }
-      } else {
+      } else if (collection.type === "manual") {
         matchingItems = collection.items || [];
+      } else if (collection.type === "recommendation") {
+        // Recommendation collections are dynamic; we don't pre-fetch items for admin preview.
+        // You could optionally call the recommendation functions here with a default user,
+        // but it's usually unnecessary in the admin.
+        matchingItems = [];
       }
 
       results.push({
@@ -154,6 +159,8 @@ export async function getCollectionsWithProducts() {
           status: collection.status,
           order: collection.order,
           showName: collection.showName,
+          recommendationType: collection.recommendationType,
+          recommendationLimit: collection.recommendationLimit,
           created_at: collection.created_at,
           updated_at: collection.updated_at,
         },
@@ -185,11 +192,18 @@ export async function createCollection(formData: FormData) {
     const order = parseInt(formData.get("order") as string) || 0;
     const showName = formData.get("showName") === "true";
 
+    // --- Recommendation fields ---
+    const recommendationType =
+      (formData.get("recommendationType") as string) || "";
+    const recommendationLimit =
+      parseInt(formData.get("recommendationLimit") as string) || 10;
+
+    // --- Validation ---
     if (!name?.trim()) {
       return { success: false, error: "Name is required" };
     }
 
-    if (!["rule", "manual"].includes(type)) {
+    if (!["rule", "manual", "recommendation"].includes(type)) {
       return { success: false, error: "Invalid collection type" };
     }
     const validTargets = [
@@ -204,7 +218,31 @@ export async function createCollection(formData: FormData) {
       return { success: false, error: "Invalid target type" };
     }
 
+    // Validate recommendation config
+    if (type === "recommendation") {
+      if (
+        !["trending", "personalized", "recentlyViewed"].includes(
+          recommendationType,
+        )
+      ) {
+        return { success: false, error: "Invalid recommendation type" };
+      }
+      if (recommendationLimit < 1) {
+        return {
+          success: false,
+          error: "Recommendation limit must be at least 1",
+        };
+      }
+      // (Optional) Enforce targetType = Product because our recommendation functions return products
+      // if (targetType !== "Product") {
+      //   return { success: false, error: "Recommendation collections only support Product target type" };
+      // }
+    }
+
+    // Parse rules / items only for relevant types
     let rules = [];
+    let items = [];
+
     if (type === "rule") {
       try {
         rules = rulesJson ? JSON.parse(rulesJson) : [];
@@ -234,10 +272,7 @@ export async function createCollection(formData: FormData) {
       } catch (e) {
         return { success: false, error: "Invalid rules format" };
       }
-    }
-
-    let items = [];
-    if (type === "manual") {
+    } else if (type === "manual") {
       try {
         items = itemsJson ? JSON.parse(itemsJson) : [];
         if (!Array.isArray(items)) {
@@ -253,6 +288,7 @@ export async function createCollection(formData: FormData) {
       }
     }
 
+    // Check duplicate name
     const existing = await Collection.findOne({ name: name.trim() });
     if (existing) {
       return {
@@ -272,6 +308,10 @@ export async function createCollection(formData: FormData) {
       items: type === "manual" ? items : [],
       order,
       showName,
+      recommendationType:
+        type === "recommendation" ? recommendationType : undefined,
+      recommendationLimit:
+        type === "recommendation" ? recommendationLimit : undefined,
     });
 
     await collection.save();
@@ -306,8 +346,13 @@ export async function updateCollection(id: string, formData: FormData) {
     const order = parseInt(formData.get("order") as string) || 0;
     const showName = formData.get("showName") === "true";
 
+    const recommendationType =
+      (formData.get("recommendationType") as string) || "";
+    const recommendationLimit =
+      parseInt(formData.get("recommendationLimit") as string) || 10;
+
     if (!name?.trim()) return { success: false, error: "Name is required" };
-    if (!["rule", "manual"].includes(type)) {
+    if (!["rule", "manual", "recommendation"].includes(type)) {
       return { success: false, error: "Invalid collection type" };
     }
     const validTargets = [
@@ -320,6 +365,22 @@ export async function updateCollection(id: string, formData: FormData) {
     ];
     if (!validTargets.includes(targetType)) {
       return { success: false, error: "Invalid target type" };
+    }
+
+    if (type === "recommendation") {
+      if (
+        !["trending", "personalized", "recentlyViewed"].includes(
+          recommendationType,
+        )
+      ) {
+        return { success: false, error: "Invalid recommendation type" };
+      }
+      if (recommendationLimit < 1) {
+        return {
+          success: false,
+          error: "Recommendation limit must be at least 1",
+        };
+      }
     }
 
     let rules = [];
@@ -393,6 +454,10 @@ export async function updateCollection(id: string, formData: FormData) {
       items: type === "manual" ? items : [],
       order,
       showName,
+      recommendationType:
+        type === "recommendation" ? recommendationType : undefined,
+      recommendationLimit:
+        type === "recommendation" ? recommendationLimit : undefined,
       updated_at: new Date(),
     };
 
