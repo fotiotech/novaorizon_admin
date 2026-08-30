@@ -15,6 +15,7 @@ import {
   getTrendingItems,
   getRecommendations,
   getRecentlyViewed,
+  getRelatedProducts,
 } from "./events";
 
 // ---------- Helper: get model by target type ----------
@@ -106,7 +107,10 @@ function buildQueryFromRules(rules: any[], targetType: string) {
 }
 
 // ---------- Resolve items from a collection (returns normalized items) ----------
-async function resolveCollectionItems(collectionId: string) {
+async function resolveCollectionItems(
+  collectionId: string,
+  context?: { productId?: string },
+) {
   const collection: any = await Collection.findById(collectionId).lean();
   if (!collection) return [];
 
@@ -128,11 +132,36 @@ async function resolveCollectionItems(collectionId: string) {
       default:
         rawItems = [];
     }
-    // Normalise – all recommendation functions return Product documents
+
+    // Normalise – explicitly extract main_image
+    return rawItems.map((item: any) => {
+      // Explicitly check for main_image first
+      const image = item.main_image || item.image || item.imageUrl || null;
+
+      return {
+        _id: item._id.toString(),
+        name: item.title || item.name || "Unnamed",
+        image: image,
+        price: item.sale_price || item.price || null,
+        contentType: "Product",
+      };
+    });
+  }
+
+  // ---------- RELATED (new) ----------
+  else if (collection.type === "related") {
+    if (!context?.productId) {
+      // If no product context, return empty (or you could return trending fallback)
+      return [];
+    }
+    const limit = collection.recommendationLimit || 10;
+    rawItems = await getRelatedProducts(context.productId, limit);
+    // Normalise to the shape the frontend expects
     return rawItems.map((item: any) => ({
       _id: item._id.toString(),
       name: item.title || item.name || "Unnamed",
-      image: item.main_image[0] || item.image || item.imageUrl || null,
+      image: item.main_image || item.image || item.imageUrl || null,
+      price: item.sale_price || item.price || null,
       contentType: "Product",
     }));
   }
@@ -159,10 +188,13 @@ async function resolveCollectionItems(collectionId: string) {
   // Normalise items consistently
   return rawItems.map((item: any) => {
     const name = item.name || item.title || "Unnamed";
+
     let image: string | null = null;
+    let price: number | null = null;
 
     if (targetType === "Product") {
-      image = item.main_image[0] || item.image || item.imageUrl || null;
+      image = item.main_image || item.image || item.imageUrl || null;
+      price = item.sale_price || null;
     } else if (targetType === "Collection") {
       image = item.imageUrl || item.image || null;
     } else {
@@ -175,12 +207,13 @@ async function resolveCollectionItems(collectionId: string) {
       name,
       image,
       contentType: targetType,
+      price,
     };
   });
 }
 
 // ---------- Get menus by location (with items) ----------
-export async function getMenusByLocation(location: string) {
+export async function getMenusByLocation(location: string, context?: any) {
   try {
     await connection();
     const menus = await Menu.find({ location }).sort({ order: 1 }).lean();
@@ -188,7 +221,10 @@ export async function getMenusByLocation(location: string) {
       menus.map(async (menu) => {
         let items: any[] = [];
         if (menu.collectionId) {
-          items = await resolveCollectionItems(menu.collectionId.toString());
+          items = await resolveCollectionItems(
+            menu.collectionId.toString(),
+            context,
+          );
         }
         return {
           ...menu,
@@ -203,7 +239,7 @@ export async function getMenusByLocation(location: string) {
 }
 
 // ---------- Get single menu by ID (with items) ----------
-export async function getMenuById(id: string) {
+export async function getMenuById(id: string, context?: any) {
   try {
     await connection();
     const menu = await Menu.findById(id).lean();
@@ -211,7 +247,10 @@ export async function getMenuById(id: string) {
 
     let items: any[] = [];
     if (menu.collectionId) {
-      items = await resolveCollectionItems(menu.collectionId.toString());
+      items = await resolveCollectionItems(
+        menu.collectionId.toString(),
+        context,
+      );
     }
 
     return {
@@ -222,7 +261,6 @@ export async function getMenuById(id: string) {
     return { success: false, error: error.message };
   }
 }
-
 // ---------- Get all menus (without items, for listing) ----------
 export async function getAllMenus() {
   try {

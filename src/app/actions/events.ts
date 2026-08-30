@@ -3,7 +3,7 @@
 import { connection } from "@/utils/connection";
 import { Event, IEvent } from "@/models/Event";
 import { revalidatePath } from "next/cache";
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import Product from "@/models/Product";
 
 type EventType = IEvent["eventType"];
@@ -183,4 +183,53 @@ export async function mergeGuestEvents(guestId: string, newUserId: string) {
   await connection();
   await Event.updateMany({ userId: guestId }, { $set: { userId: newUserId } });
   // Optionally, you can also delete the guest events or leave them – your call.
+}
+
+export async function getRelatedProducts(
+  productId: string,
+  limit: number = 10,
+) {
+  await connection();
+  if (!mongoose.Types.ObjectId.isValid(productId)) {
+    return [];
+  }
+
+  // Fetch the product's related_products and fallback data
+  const product: any = await Product.findById(productId)
+    .select("related_products category_id brand")
+    .lean();
+  if (!product) return [];
+
+  let relatedIds = product.related_products || [];
+
+  // Handle both formats: array of IDs or array of { id, relationship_type }
+  if (Array.isArray(relatedIds) && relatedIds.length > 0) {
+    if (typeof relatedIds[0] === "object" && relatedIds[0].id) {
+      relatedIds = relatedIds.map((r: any) => r.id);
+    }
+  }
+
+  let products: any[] = [];
+
+  // If manual relations exist, use them
+  if (relatedIds.length > 0) {
+    products = await Product.find({ _id: { $in: relatedIds } })
+      .limit(limit)
+      .lean();
+  }
+
+  // Fallback: if no related products, use same category or brand
+  if (products.length === 0) {
+    const fallbackQuery: any = {
+      _id: { $ne: new mongoose.Types.ObjectId(productId) },
+    };
+    if (product.category_id) {
+      fallbackQuery.category_id = product.category_id;
+    } else if (product.brand) {
+      fallbackQuery.brand = product.brand;
+    }
+    products = await Product.find(fallbackQuery).limit(limit).lean();
+  }
+
+  return products;
 }

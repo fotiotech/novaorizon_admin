@@ -77,7 +77,29 @@ const isEmptyValue = (value: any): boolean => {
 };
 
 // ------------------------------------------------------------------
-// Memoized GroupRenderer component (extracted from renderGroup)
+// Helper: get all relevant keys for a group (including children)
+// for custom memo comparison
+// ------------------------------------------------------------------
+function getGroupRelevantKeys(group: GroupNode): string[] {
+  const keys: string[] = [];
+  // Add own attribute codes
+  group.attributes.forEach((attr) => keys.push(attr.code));
+  // Recursively add children's attribute codes
+  group.children.forEach((child) => {
+    keys.push(...getGroupRelevantKeys(child));
+  });
+  // Special groups need additional top‑level product fields
+  if (group.code === "variant_themes") {
+    keys.push("variant_themes", "variant_values", "variants");
+  }
+  if (group.code === "product_relationships") {
+    keys.push("related_products");
+  }
+  return keys;
+}
+
+// ------------------------------------------------------------------
+// Memoized GroupRenderer component with custom comparator
 // ------------------------------------------------------------------
 interface GroupRendererProps {
   group: GroupNode;
@@ -223,7 +245,45 @@ const GroupRenderer = memo(
       </section>
     );
   },
+  (prevProps, nextProps) => {
+    // Custom comparator: only re‑render if relevant data changed
+    // 1. Quick checks for stable props
+    if (prevProps.productId !== nextProps.productId) return false;
+    if (prevProps.units !== nextProps.units) return false;
+    if (prevProps.allVariantFields !== nextProps.allVariantFields) return false;
+    if (prevProps.handleChange !== nextProps.handleChange) return false;
+    if (prevProps.group.id !== nextProps.group.id) return false;
+
+    // 2. Compare relevant productData fields
+    const relevantKeys = getGroupRelevantKeys(prevProps.group);
+    for (const key of relevantKeys) {
+      if (prevProps.productData[key] !== nextProps.productData[key]) {
+        return false;
+      }
+    }
+
+    // 3. Compare validation errors for this group
+    const prevGroupErrors =
+      prevProps.validationErrors[prevProps.group.id] || [];
+    const nextGroupErrors =
+      nextProps.validationErrors[nextProps.group.id] || [];
+    if (prevGroupErrors.length !== nextGroupErrors.length) return false;
+    if (prevGroupErrors.some((e, i) => e !== nextGroupErrors[i])) return false;
+
+    // 4. If group is variant_themes, also compare variants validation errors
+    if (prevProps.group.code === "variant_themes") {
+      const prevVariantErrors = prevProps.validationErrors["variants"] || [];
+      const nextVariantErrors = nextProps.validationErrors["variants"] || [];
+      if (prevVariantErrors.length !== nextVariantErrors.length) return false;
+      if (prevVariantErrors.some((e, i) => e !== nextVariantErrors[i]))
+        return false;
+    }
+
+    // All checks passed → skip re‑render
+    return true;
+  },
 );
+
 GroupRenderer.displayName = "GroupRenderer";
 
 // ------------------------------------------------------------------
@@ -255,7 +315,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [units, setUnits] = useState<any[]>([]);
 
-  // Ref to track current step without causing re-renders in callbacks
+  // Ref to track current step without causing re‑renders in callbacks
   const currentStepRef = useRef(currentStep);
 
   // ---------- Draft (server) ----------
@@ -379,7 +439,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     currentStepRef.current = currentStep;
   }, [currentStep]);
 
-  // ---------- Validation (unchanged, but now uses visibleSteps) ----------
+  // ---------- Validation (unchanged) ----------
   const validateGroup = (group: GroupNode): string[] => {
     const errors: string[] = [];
     group.attributes.forEach((attr) => {
@@ -519,7 +579,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     (field: string, value: any) => {
       setProductData((prev) => ({ ...prev, [field]: value }));
 
-      // Use the ref to get the current step without re-creating the callback
+      // Use the ref to get the current step without re‑creating the callback
       const stepIndex = currentStepRef.current;
       const stepData = visibleSteps[stepIndex];
       if (stepData) {
@@ -542,7 +602,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         });
       }
     },
-    [visibleSteps], // only depends on visibleSteps, not currentStep
+    [visibleSteps],
   );
 
   // ---------- Submit ----------

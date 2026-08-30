@@ -40,8 +40,8 @@ const CollectionForm = ({ id }: { id?: string }) => {
     targetType: "Product",
     order: 0,
     showName: true,
-    recommendationType: "", // NEW
-    recommendationLimit: 10, // NEW
+    recommendationType: "",
+    recommendationLimit: 10,
   });
 
   // Determine if rule mode is allowed based on targetType
@@ -71,7 +71,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
     fd.append("items", JSON.stringify(itemsData));
     fd.append("order", data.order.toString());
     fd.append("showName", data.showName ? "true" : "false");
-    // NEW fields
     fd.append("recommendationType", data.recommendationType);
     fd.append("recommendationLimit", data.recommendationLimit.toString());
     return fd;
@@ -251,13 +250,14 @@ const CollectionForm = ({ id }: { id?: string }) => {
         }
       }
 
-      if (type === "recommendation") {
-        if (!recommendationType) {
+      // Validate recommendation and related types
+      if (type === "recommendation" || type === "related") {
+        if (type === "recommendation" && !recommendationType) {
           setError("Please select a recommendation type");
           return;
         }
         if (recommendationLimit < 1) {
-          setError("Recommendation limit must be at least 1");
+          setError("Item limit must be at least 1");
           return;
         }
       }
@@ -321,8 +321,8 @@ const CollectionForm = ({ id }: { id?: string }) => {
           {id ? "Edit" : "Create"} Collection
         </h1>
         <p className="text-gray-600 mt-1">
-          {id ? "Update" : "Create a new"} collection – rule‑based, manual, or
-          recommendation
+          {id ? "Update" : "Create a new"} collection – rule‑based, manual,
+          recommendation, or related
         </p>
       </div>
 
@@ -361,6 +361,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 </option>
                 <option value="manual">Manual selection</option>
                 <option value="recommendation">Recommendation</option>
+                <option value="related">Related (product context)</option>
               </select>
               {!isRuleAllowed && (
                 <p className="text-sm text-amber-600 mt-1">
@@ -414,6 +415,37 @@ const CollectionForm = ({ id }: { id?: string }) => {
             </div>
           )}
 
+          {/* Related configuration (product context) */}
+          {formData.type === "related" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border border-green-200 rounded-lg bg-green-50">
+              <div className="col-span-2">
+                <p className="text-sm text-gray-600 mb-2">
+                  This collection will show products related to the current
+                  product (based on the product's <code>related_products</code>{" "}
+                  field or fallback to same category/brand).
+                </p>
+              </div>
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">
+                  Max Items
+                </label>
+                <input
+                  type="number"
+                  name="recommendationLimit"
+                  min={1}
+                  max={100}
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+                  value={formData.recommendationLimit}
+                  onChange={handleInputChange}
+                  disabled={isSubmitting}
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Number of related products to return (default 10)
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block mb-2 font-medium text-gray-700">
@@ -424,7 +456,11 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
                 value={formData.targetType}
                 onChange={handleInputChange}
-                disabled={isSubmitting || formData.type === "recommendation"} // Disable for recommendation (enforce Product internally)
+                disabled={
+                  isSubmitting ||
+                  formData.type === "recommendation" ||
+                  formData.type === "related"
+                } // Disable for recommendation and related
               >
                 <option value="Category">Category</option>
                 <option value="Product">Product</option>
@@ -434,8 +470,9 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 <option value="Page">Page</option>
               </select>
               <p className="text-sm text-gray-500 mt-1">
-                {formData.type === "recommendation"
-                  ? "Recommendation collections always target Products."
+                {formData.type === "recommendation" ||
+                formData.type === "related"
+                  ? "This type always targets Products."
                   : formData.targetType === "Product" ||
                       formData.targetType === "Collection"
                     ? "Rules/items will apply to this target type."
@@ -650,6 +687,9 @@ const CollectionForm = ({ id }: { id?: string }) => {
                       ...(formData.type === "manual" && { items }),
                       ...(formData.type === "recommendation" && {
                         recommendationType: formData.recommendationType,
+                        recommendationLimit: formData.recommendationLimit,
+                      }),
+                      ...(formData.type === "related" && {
                         recommendationLimit: formData.recommendationLimit,
                       }),
                     },
