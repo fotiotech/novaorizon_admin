@@ -125,20 +125,28 @@ export default function ProductsPage() {
   }, [filters]);
 
   // Delete product handler
-  const handleDelete = async (productId: string) => {
-    if (!window.confirm("Are you sure you want to delete this product?"))
-      return;
+  const handleDelete = async (productId: string, recreate = false) => {
+    const actionLabel = recreate ? "delete and recreate" : "delete";
+    const confirmMessage = recreate
+      ? "This will delete the current product and create a fresh draft copy. Continue?"
+      : "Are you sure you want to delete this product?";
+
+    if (!window.confirm(confirmMessage)) return;
 
     try {
-      const result = await deleteProduct(productId);
+      const result = await deleteProduct(productId, { recreate });
       if (result.success) {
         await fetchAllProducts();
+        const message = recreate
+          ? "Product deleted and recreated successfully."
+          : "Product deleted successfully.";
+        alert(message);
       } else {
-        alert(result.error || "Failed to delete product.");
+        alert(result.error || `Failed to ${actionLabel} product.`);
       }
     } catch (err) {
       console.error("Delete error:", err);
-      alert("An error occurred while deleting the product.");
+      alert(`An error occurred while trying to ${actionLabel} the product.`);
     }
   };
 
@@ -431,9 +439,18 @@ export default function ProductsPage() {
                           Edit
                         </Link>
                         <button
+                          onClick={() => handleDelete(product._id, true)}
+                          className="text-amber-600 hover:text-amber-500 transition-colors"
+                          aria-label="Delete and recreate product"
+                          title="Delete and recreate"
+                        >
+                          Recreate
+                        </button>
+                        <button
                           onClick={() => handleDelete(product._id)}
                           className="text-destructive hover:text-destructive/80 transition-colors"
                           aria-label="Delete product"
+                          title="Delete product"
                         >
                           <Delete fontSize="small" />
                         </button>

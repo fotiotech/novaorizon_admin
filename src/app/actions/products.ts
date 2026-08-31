@@ -57,6 +57,10 @@ interface ProductResponse {
   error?: string;
 }
 
+interface DeleteProductOptions {
+  recreate?: boolean;
+}
+
 // ---------- Helper Functions ----------
 function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
   if (!obj || typeof obj !== "object") return {};
@@ -72,12 +76,15 @@ function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
 }
 
 function normalizeProductStatus(
-  status?: string,
+  status?: unknown,
 ): "draft" | "active" | "inactive" {
-  const current = (status || "draft").toLowerCase();
+  const value = typeof status === "string" ? status : String(status ?? "draft");
+  const current = value.toLowerCase();
+
   if (current === "active" || current === "inactive" || current === "draft") {
     return current;
   }
+
   return "draft";
 }
 
@@ -224,7 +231,14 @@ export async function createProduct(
 ): Promise<ProductResponse> {
   try {
     await connection();
-    const { category_id, brand, related_products, ...attributes } = formData;
+    const {
+      category_id,
+      brand,
+      related_products,
+      quantity,
+      lowStockThreshold,
+      ...attributes
+    } = formData;
 
     if (!category_id) {
       return { success: false, error: "Valid category_id is required" };
@@ -239,7 +253,12 @@ export async function createProduct(
     }
 
     try {
-      await validateRequiredCategoryAttributes(category_id, cleanedAttributes);
+      await validateRequiredCategoryAttributes(category_id, {
+        ...cleanedAttributes,
+        ...(brand ? { brand } : {}),
+        ...(quantity !== undefined ? { quantity } : {}),
+        ...(lowStockThreshold !== undefined ? { lowStockThreshold } : {}),
+      });
     } catch (error: any) {
       return {
         success: false,
@@ -324,6 +343,7 @@ export async function updateProduct(
       try {
         await validateRequiredCategoryAttributes(category_id, {
           ...cleanedAttributes,
+          ...(brand ? { brand } : {}),
           ...(quantity !== undefined ? { quantity } : {}),
           ...(lowStockThreshold !== undefined ? { lowStockThreshold } : {}),
         });
@@ -403,7 +423,12 @@ export async function createOrUpdateProduct(
 
     if (category_id) {
       try {
-        await validateRequiredCategoryAttributes(category_id, safeAttributes);
+        await validateRequiredCategoryAttributes(category_id, {
+          ...safeAttributes,
+          ...(brand ? { brand } : {}),
+          ...(quantity !== undefined ? { quantity } : {}),
+          ...(lowStockThreshold !== undefined ? { lowStockThreshold } : {}),
+        });
       } catch (error: any) {
         return {
           success: false,
@@ -419,29 +444,45 @@ export async function createOrUpdateProduct(
     };
 
     const categoryObjectId = toObjectId(category_id);
-    if (categoryObjectId) {
-      updateData.category_id = categoryObjectId;
+    if (!categoryObjectId) {
+      return { success: false, error: "Invalid category selected." };
     }
+    updateData.category_id = categoryObjectId;
 
     const brandObjectId = toObjectId(brand);
-    if (brandObjectId) {
-      updateData.brand = brandObjectId;
+    if (!brandObjectId) {
+      return { success: false, error: "Invalid brand selected." };
     }
+    updateData.brand = brandObjectId;
 
     // Handle related_products – now expects array of objects
     if (related_products !== undefined) {
       if (Array.isArray(related_products)) {
-        updateData.related_products = related_products.map((rp: any) => ({
-          id: toObjectId(rp.id),
-          relationship_type: rp.relationship_type || "",
-        }));
+        const validRelatedProducts = related_products
+          .filter((rp: any) => rp && rp.id)
+          .map((rp: any) => ({
+            id: toObjectId(rp.id),
+            relationship_type: rp.relationship_type || "",
+          }))
+          .filter((rp: any) => rp.id);
+
+        if (validRelatedProducts.length > 0) {
+          updateData.related_products = validRelatedProducts;
+        }
       } else {
         // fallback for old format (just in case)
         const ids = related_products.ids || [];
-        updateData.related_products = ids.map((id: any) => ({
-          id: toObjectId(id),
-          relationship_type: related_products.relationship_type || "",
-        }));
+        const validRelatedProducts = ids
+          .filter((id: any) => id)
+          .map((id: any) => ({
+            id: toObjectId(id),
+            relationship_type: related_products.relationship_type || "",
+          }))
+          .filter((rp: any) => rp.id);
+
+        if (validRelatedProducts.length > 0) {
+          updateData.related_products = validRelatedProducts;
+        }
       }
     }
 
@@ -499,17 +540,59 @@ export async function createOrUpdateProduct(
     const result = product.toObject ? product.toObject() : product;
     return { success: true, data: serialize(result) };
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown server error";
     console.error("Error in createOrUpdateProduct:", error);
-    return { success: false, error: "Failed to save product" };
+    return {
+      success: false,
+      error: message || "Failed to save product",
+    };
   }
 }
 
-export async function deleteProduct(id: string): Promise<ProductResponse> {
+export async function deleteProduct(
+  id: string,
+  options: DeleteProductOptions = {},
+): Promise<ProductResponse> {
   try {
     await connection();
     if (!id) {
       return { success: false, error: "Product ID is required" };
     }
+
+    const existingProduct = await Product.findById(id);
+    if (!existingProduct) {
+      return { success: false, error: "Product not found" };
+    }
+
+    if (options.recreate) {
+      const clone = existingProduct.toObject
+        ? existingProduct.toObject()
+        : existingProduct;
+      const { _id, __v, createdAt, updatedAt, dsin, ...rest } = clone;
+
+      const recreatedProduct = new Product({
+        ...rest,
+        status: "draft",
+        dsin: generateDsin(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const savedProduct = await recreatedProduct.save();
+      await Product.findByIdAndDelete(id);
+
+      revalidatePath("/products");
+      return {
+        success: true,
+        data: {
+          deletedId: id,
+          recreatedId: savedProduct._id.toString(),
+          product: serialize(savedProduct.toObject()),
+        },
+      };
+    }
+
     const deletedProduct = await Product.findByIdAndDelete(id);
     if (!deletedProduct) {
       return { success: false, error: "Product not found" };
