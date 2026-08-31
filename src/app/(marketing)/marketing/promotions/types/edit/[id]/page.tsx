@@ -1,8 +1,14 @@
 // app/promotion-types/edit/[id]/page.tsx
 
-import { PromotionTypeForm } from '@/app/(marketing)/components/PromotionTypeForm';
-import { getPromotionType, listPromotionTypeProperties, updatePromotionType } from '@/app/actions/promotionType';
-import { notFound } from 'next/navigation';
+import { PromotionTypeForm } from "@/app/(marketing)/components/PromotionTypeForm";
+import {
+  getPromotionType,
+  listPromotionTypeProperties,
+  updatePromotionType,
+} from "@/app/actions/promotionType";
+import { notFound } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 interface EditPageProps {
   params: Promise<{ id: string }>;
@@ -10,28 +16,37 @@ interface EditPageProps {
 
 export default async function EditPromotionTypePage(props: EditPageProps) {
   const params = await props.params;
-  const [promotionType, propertiesData]:any = await Promise.all([
-    getPromotionType(params.id, true), // populate properties
-    listPromotionTypeProperties({}, { limit: 100 }),
-  ]);
+  let promotionType: any = null;
+  let properties: any[] = [];
+
+  try {
+    [promotionType, properties] = await Promise.all([
+      getPromotionType(params.id, true),
+      listPromotionTypeProperties({}, { limit: 100 }).then(
+        (result) => result?.data ?? [],
+      ),
+    ]);
+  } catch (error) {
+    console.error("Failed to load promotion type data:", error);
+  }
 
   if (!promotionType) {
     notFound();
   }
 
-  const availableProperties = propertiesData.data.map((p:any) => ({
+  const availableProperties = properties.map((p: any) => ({
     label: `${p.name} (${p.code})`,
     value: p._id.toString(),
   }));
 
-  // Map the selected properties to their IDs
   const initialValues = {
     ...promotionType,
-    properties: promotionType.properties?.map((p: any) => p._id.toString()) || [],
+    properties:
+      promotionType.properties?.map((p: any) => p._id.toString()) || [],
   };
 
   async function handleUpdate(data: any) {
-    'use server';
+    "use server";
     await updatePromotionType(params.id, data);
   }
 

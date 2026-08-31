@@ -13,6 +13,7 @@ import "@/models/Attribute";
 import "@/models/Category";
 import "@/models/Brand";
 import "@/models/User";
+import { getCategoryAttributeSets } from "@/app/actions/category";
 
 // ---------- Helper: Deep Serialize ----------
 function serialize(obj: any): any {
@@ -68,6 +69,67 @@ function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
     }
     return acc;
   }, {});
+}
+
+function normalizeProductStatus(
+  status?: string,
+): "draft" | "active" | "inactive" {
+  const current = (status || "draft").toLowerCase();
+  if (current === "active" || current === "inactive" || current === "draft") {
+    return current;
+  }
+  return "draft";
+}
+
+async function validateRequiredCategoryAttributes(
+  categoryId: string,
+  productData: Record<string, any>,
+) {
+  if (!categoryId) return;
+
+  try {
+    const attributeSets = await getCategoryAttributeSets(categoryId);
+    const requiredCodes = new Set<string>();
+
+    for (const set of attributeSets) {
+      for (const group of set.groups ?? []) {
+        for (const attribute of group.attributes ?? []) {
+          if (attribute.isRequired && attribute.code) {
+            requiredCodes.add(attribute.code);
+          }
+        }
+      }
+    }
+
+    if (requiredCodes.size === 0) return;
+
+    const missing: string[] = [];
+    for (const code of requiredCodes) {
+      const value = productData[code];
+      if (
+        value === undefined ||
+        value === null ||
+        (typeof value === "string" && !value.trim()) ||
+        (Array.isArray(value) && value.length === 0)
+      ) {
+        missing.push(code);
+      }
+    }
+
+    if (missing.length > 0) {
+      throw new Error(
+        `Required product fields missing for this category: ${missing.join(", ")}`,
+      );
+    }
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("Required product fields")
+    ) {
+      throw error;
+    }
+    // Ignore category metadata lookup failures so existing product flows remain compatible
+  }
 }
 
 function generateSlug(name: string, department: string | null): string {
@@ -176,11 +238,21 @@ export async function createProduct(
       return { success: false, error: "At least one attribute is required" };
     }
 
+    try {
+      await validateRequiredCategoryAttributes(category_id, cleanedAttributes);
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || "Category-required fields are missing.",
+      };
+    }
+
     const dsin = generateDsin();
     const updateData: any = {
       category_id: new mongoose.Types.ObjectId(category_id),
       brand: new mongoose.Types.ObjectId(brand),
       ...cleanedAttributes,
+      status: normalizeProductStatus(cleanedAttributes.status as string),
       slug: attributes.name
         ? generateSlug(attributes.name, attributes.department ?? null)
         : undefined,
@@ -246,6 +318,21 @@ export async function updateProduct(
       lowStockThreshold === undefined
     ) {
       return { success: false, error: "No valid attributes provided" };
+    }
+
+    if (category_id) {
+      try {
+        await validateRequiredCategoryAttributes(category_id, {
+          ...cleanedAttributes,
+          ...(quantity !== undefined ? { quantity } : {}),
+          ...(lowStockThreshold !== undefined ? { lowStockThreshold } : {}),
+        });
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error.message || "Category-required fields are missing.",
+        };
+      }
     }
 
     const updateData: any = { ...cleanedAttributes, updatedAt: new Date() };
@@ -314,8 +401,20 @@ export async function createOrUpdateProduct(
     const { createdAt, updatedAt, __v, dsin, ...safeAttributes } =
       cleanedAttributes;
 
+    if (category_id) {
+      try {
+        await validateRequiredCategoryAttributes(category_id, safeAttributes);
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error.message || "Category-required fields are missing.",
+        };
+      }
+    }
+
     const updateData: any = {
       ...safeAttributes,
+      status: normalizeProductStatus(safeAttributes.status as string),
       updatedAt: new Date(),
     };
 

@@ -97,8 +97,8 @@ export async function getUserAnalytics(): Promise<UserAnalytics> {
             previousMonthSignups) *
           100
         : currentMonthSignups > 0
-        ? 100
-        : 0;
+          ? 100
+          : 0;
 
     return {
       totalUsers,
@@ -117,7 +117,7 @@ export async function getUserAnalytics(): Promise<UserAnalytics> {
             lastActive: user.updated_at
               ? user.updated_at.toISOString().split("T")[0]
               : "Never",
-          } as any)
+          }) as any,
       ),
     };
   } catch (error) {
@@ -288,7 +288,7 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
       .sort({ createdAt: -1 })
       .limit(10)
       .select(
-        "title model sku sale_price list_price stock_status main_image status category_id"
+        "title model sku sale_price list_price stock_status main_image status category_id",
       )
       .lean();
 
@@ -307,12 +307,113 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
             _id: product._id?.toString(),
             category: product.category_id?.name || "Uncategorized",
             createdAt: product.createdAt?.toISOString().split("T")[0],
-          } as any)
+          }) as any,
       ),
     };
   } catch (error) {
     console.error("Failed to fetch product analytics:", error);
     throw new Error("Failed to fetch product analytics");
+  }
+}
+
+export async function getFacebookAdsAnalytics() {
+  try {
+    await connection();
+    const FacebookAdsSettings = require("@/models/FacebookAdsSettings").default;
+
+    const settings = await FacebookAdsSettings.findOne().lean();
+    if (!settings || !settings.accessToken) {
+      return {
+        totalSpend: 0,
+        totalImpressions: 0,
+        totalClicks: 0,
+        avgCPC: 0,
+        totalConversions: 0,
+        roi: 0,
+        campaignCount: 0,
+        isConfigured: false,
+      };
+    }
+
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/${settings.apiVersion || "v20.0"}/${settings.adAccountId}/insights?fields=spend,impressions,clicks,actions&access_token=${encodeURIComponent(settings.accessToken)}`,
+        { method: "GET" },
+      );
+
+      if (!response.ok) {
+        return {
+          totalSpend: 0,
+          totalImpressions: 0,
+          totalClicks: 0,
+          avgCPC: 0,
+          totalConversions: 0,
+          roi: 0,
+          campaignCount: 0,
+          isConfigured: true,
+          error: "Unable to fetch Meta insights",
+        };
+      }
+
+      const payload = await response.json();
+      const data = Array.isArray(payload.data) ? payload.data[0] : null;
+
+      if (!data) {
+        return {
+          totalSpend: 0,
+          totalImpressions: 0,
+          totalClicks: 0,
+          avgCPC: 0,
+          totalConversions: 0,
+          roi: 0,
+          campaignCount: 0,
+          isConfigured: true,
+        };
+      }
+
+      const spend = parseFloat(data.spend || "0");
+      const impressions = parseInt(data.impressions || "0");
+      const clicks = parseInt(data.clicks || "0");
+      const conversions =
+        data.actions?.find((a: any) => a.action_type === "omni_purchase")
+          ?.value || 0;
+
+      return {
+        totalSpend: spend,
+        totalImpressions: impressions,
+        totalClicks: clicks,
+        avgCPC: clicks > 0 ? spend / clicks : 0,
+        totalConversions: conversions,
+        roi: spend > 0 ? ((conversions * 50 - spend) / spend) * 100 : 0,
+        campaignCount: 0,
+        isConfigured: true,
+      };
+    } catch (error) {
+      console.error("Meta API error:", error);
+      return {
+        totalSpend: 0,
+        totalImpressions: 0,
+        totalClicks: 0,
+        avgCPC: 0,
+        totalConversions: 0,
+        roi: 0,
+        campaignCount: 0,
+        isConfigured: true,
+        error: "Meta API connection failed",
+      };
+    }
+  } catch (error) {
+    console.error("Facebook Ads analytics error:", error);
+    return {
+      totalSpend: 0,
+      totalImpressions: 0,
+      totalClicks: 0,
+      avgCPC: 0,
+      totalConversions: 0,
+      roi: 0,
+      campaignCount: 0,
+      isConfigured: false,
+    };
   }
 }
 

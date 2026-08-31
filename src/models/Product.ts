@@ -2,9 +2,37 @@ import { esClient } from "@/app/lib/es";
 import mongoose, { Schema } from "mongoose";
 const ES_INDEX = process.env.ELASTIC_INDEX || "";
 
-// Product Schema with flat field structure
+// Product Schema with a stable base contract while still allowing category-driven dynamic fields.
 const ProductSchema = new Schema(
   {
+    name: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    title: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    sku: {
+      type: String,
+      trim: true,
+      index: true,
+      default: "",
+    },
+    slug: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ["draft", "active", "inactive"],
+      default: "draft",
+      index: true,
+    },
     category_id: {
       type: Schema.Types.ObjectId,
       ref: "Category",
@@ -15,7 +43,46 @@ const ProductSchema = new Schema(
       ref: "Brand",
       required: true,
     },
-    // Add related_products field definition
+    quantity: {
+      type: Number,
+      default: 0,
+    },
+    lowStockThreshold: {
+      type: Number,
+      default: 5,
+    },
+    stock_status: {
+      type: [String],
+      default: ["Out of Stock"],
+    },
+    list_price: {
+      type: Number,
+      default: 0,
+    },
+    sale_price: {
+      type: Number,
+      default: 0,
+    },
+    price: {
+      type: Number,
+      default: 0,
+    },
+    main_image: {
+      type: String,
+      default: "",
+    },
+    images: {
+      type: [String],
+      default: [],
+    },
+    description: {
+      type: String,
+      default: "",
+    },
+    short_description: {
+      type: String,
+      default: "",
+    },
     related_products: {
       ids: [
         {
@@ -27,13 +94,20 @@ const ProductSchema = new Schema(
       relationship_type: {
         type: String,
       },
-      // You can add other fields like 'title', 'position', etc. if needed
+    },
+    dsin: {
+      type: String,
+      index: true,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
     },
   },
   {
-    timestamps: true, // createdAt, updatedAt
-    strict: false, // Allow dynamic fields
-  }
+    timestamps: true,
+    strict: false,
+  },
 );
 
 async function indexToES(doc: any) {
