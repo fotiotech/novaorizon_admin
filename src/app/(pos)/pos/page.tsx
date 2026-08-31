@@ -152,9 +152,9 @@ export default function Pos() {
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden lg:flex-row">
+    <div className="flex h-[100dvh] flex-col overflow-y-auto lg:h-screen lg:flex-row lg:overflow-hidden">
       {/* Left: Product Catalog */}
-      <div className="flex w-full flex-col py-3 sm:py-4 lg:w-2/3">
+      <div className="flex min-h-0 w-full flex-col py-3 sm:py-4 lg:w-2/3">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
           <h2 className="text-xl font-bold sm:text-2xl">Products</h2>
           <input
@@ -169,7 +169,7 @@ export default function Pos() {
           <p className="text-sm text-muted-foreground">Loading products...</p>
         )}
         {posError && <p className="text-sm text-destructive">{posError}</p>}
-        <div className="grid flex-1 grid-cols-1 gap-4 overflow-y-auto content-start sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto content-start sm:grid-cols-2 xl:grid-cols-3">
           {filteredProducts.map((product) => (
             <div
               key={product._id}
@@ -208,7 +208,7 @@ export default function Pos() {
       </div>
 
       {/* Right: Cart */}
-      <div className="flex w-full flex-col border-t border-border bg-muted/30 p-3 sm:p-4 lg:w-1/3 lg:border-l lg:border-t-0">
+      <div className="flex min-h-0 w-full flex-col border-t border-border bg-muted/30 p-3 sm:p-4 lg:w-1/3 lg:border-l lg:border-t-0">
         <h2 className="mb-4 text-xl font-bold sm:text-2xl">Cart</h2>
         {isLoading && (
           <p className="text-sm text-muted-foreground">Loading cart...</p>
@@ -218,7 +218,7 @@ export default function Pos() {
             {posError}
           </p>
         )}
-        <ul className="flex-1 space-y-2 overflow-y-auto">
+        <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto">
           {items.map((item: any) => (
             <li
               key={item._id}
