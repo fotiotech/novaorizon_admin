@@ -218,14 +218,16 @@ export default function Pos() {
             {posError}
           </p>
         )}
-        <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+        <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto max-h-[38vh] sm:max-h-[45vh] lg:max-h-none">
           {items.map((item: any) => (
             <li
               key={item._id}
-              className="flex justify-between items-center bg-white p-2 rounded shadow"
+              className="flex items-center justify-between gap-2 rounded bg-white p-2 shadow"
             >
-              <div className="flex-1">
-                <p className="font-medium">{item.name || item.productId}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">
+                  {item.name || item.productId}
+                </p>
                 <p className="text-sm text-gray-600">
                   ${item.price.toFixed(2)} × {item.quantity}
                 </p>
@@ -235,7 +237,7 @@ export default function Pos() {
                   onClick={() =>
                     handleUpdateQuantity(item._id, item.quantity - 1)
                   }
-                  className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                  className="rounded bg-gray-200 px-2 py-1 hover:bg-gray-300"
                 >
                   -
                 </button>
@@ -244,13 +246,13 @@ export default function Pos() {
                   onClick={() =>
                     handleUpdateQuantity(item._id, item.quantity + 1)
                   }
-                  className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                  className="rounded bg-gray-200 px-2 py-1 hover:bg-gray-300"
                 >
                   +
                 </button>
                 <button
                   onClick={() => removeItem(item._id)}
-                  className="ml-2 text-red-500 hover:text-red-700"
+                  className="ml-1 text-red-500 hover:text-red-700"
                 >
                   ×
                 </button>
@@ -261,7 +263,7 @@ export default function Pos() {
 
         {/* Cart totals */}
         {items.length > 0 && (
-          <div className="border-t pt-4 mt-auto">
+          <div className="mt-auto border-t pt-4">
             <div className="flex justify-between">
               <span>Subtotal</span>
               <span>${subtotal.toFixed(2)}</span>
@@ -276,20 +278,20 @@ export default function Pos() {
                 <span>-${discount.toFixed(2)}</span>
               </div>
             )}
-            <div className="flex justify-between font-bold text-lg">
+            <div className="flex justify-between text-lg font-bold">
               <span>Total</span>
               <span>${total.toFixed(2)}</span>
             </div>
             <button
               onClick={handleCheckout}
-              className="w-full mt-4 bg-primary text-white py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50"
+              className="mt-4 w-full rounded-lg bg-primary py-2 text-white transition hover:bg-green-700 disabled:opacity-50"
               disabled={items.length === 0 || isLoading}
             >
               Complete Sale
             </button>
             <button
               onClick={() => clear()}
-              className="w-full mt-2 text-sm text-red-500 hover:underline"
+              className="mt-2 w-full text-sm text-red-500 hover:underline"
             >
               Clear Cart
             </button>

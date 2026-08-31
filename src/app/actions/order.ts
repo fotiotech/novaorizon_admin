@@ -239,9 +239,22 @@ export async function completePOSOrder(
     lastName?: string;
     paymentMethod?: string;
     notes?: string;
+    country?: string;
+    city?: string;
+    region?: string;
+    street?: string;
+    address?: string;
   },
 ): Promise<{ success: boolean; order?: any; error?: string }> {
   await connection();
+
+  const fallbackAddress = {
+    street: customer?.street || "Walk-in customer",
+    city: customer?.city || "N/A",
+    region: customer?.region || "N/A",
+    address: customer?.address || "Walk-in customer",
+    country: customer?.country || "CMR",
+  };
 
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) {
@@ -300,18 +313,10 @@ export async function completePOSOrder(
       paymentStatus: "paid",
       paymentMethod: customer?.paymentMethod || "cash",
       billingAddress: {
-        street: "",
-        city: "",
-        region: "",
-        address: "",
-        country: "",
+        ...fallbackAddress,
       },
       shippingAddress: {
-        street: "",
-        city: "",
-        region: "",
-        address: "",
-        country: "",
+        ...fallbackAddress,
         carrier: "POS",
       },
       shippingStatus: "pending",
