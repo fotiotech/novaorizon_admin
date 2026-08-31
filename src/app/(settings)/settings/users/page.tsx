@@ -160,10 +160,12 @@ export default function UserDashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-100 p-6 flex items-center justify-center">
+      <div className="flex min-h-[50vh] items-center justify-center p-4 sm:p-6">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading user data...</p>
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-primary"></div>
+          <p className="mt-4 text-sm text-muted-foreground">
+            Loading user data...
+          </p>
         </div>
       </div>
     );
@@ -171,30 +173,28 @@ export default function UserDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 p-6 flex items-center justify-center">
-        <div className="text-center">
-          <div className="bg-red-100 text-red-700 p-4 rounded-lg">
-            <p className="font-semibold">Error</p>
-            <p>{error}</p>
-          </div>
+      <div className="flex min-h-[50vh] items-center justify-center p-4 sm:p-6">
+        <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-center text-destructive">
+          <p className="font-semibold">Error</p>
+          <p>{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 lg:p-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">
+    <div className="p-3 sm:p-6">
+      <div className="mx-auto max-w-7xl">
+        <h1 className="mb-2 text-2xl font-bold sm:text-3xl">
           User Management Dashboard
         </h1>
-        <p className="text-gray-600 mb-8">
+        <p className="mb-6 text-sm text-muted-foreground sm:mb-8">
           Monitor and manage your user base effectively
         </p>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center">
               <div className="rounded-full bg-blue-100 p-3">
                 <svg

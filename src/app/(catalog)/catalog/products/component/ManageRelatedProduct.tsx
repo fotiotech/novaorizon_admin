@@ -205,6 +205,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                       alt={item.name || item.title || "Product"}
                       fill
                       className="object-cover rounded-lg"
+                      sizes="48px" // 👈 add this line
                     />
                   </div>
                   <div className="flex-1 min-w-0">

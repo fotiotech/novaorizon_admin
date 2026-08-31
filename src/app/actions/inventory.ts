@@ -4,6 +4,18 @@ import { connection } from "@/utils/connection";
 import Product from "@/models/Product";
 import { revalidatePath } from "next/cache";
 
+function getProductQuantity(product: any) {
+  return Number(
+    product?.quantity ?? product?.stock_quantity ?? product?.stockQuantity ?? 0,
+  );
+}
+
+function getLowStockThreshold(product: any) {
+  return Number(
+    product?.lowStockThreshold ?? product?.low_stock_threshold ?? 10,
+  );
+}
+
 export async function getInventory() {
   await connection();
   try {
@@ -17,10 +29,10 @@ export async function getInventory() {
         low_stock_threshold: 1,
         stock_status: 1,
         last_inventory_update: 1,
-      }
+      },
     ).lean();
 
-    return inventoryData.map((item:any) => ({
+    return inventoryData.map((item: any) => ({
       product_id: item?._id?.toString(),
       productName: item.title,
       sku: item.sku,
@@ -40,7 +52,7 @@ export async function updateInventory(
   updates: {
     quantity: number;
     lowStockThreshold?: number;
-  }
+  },
 ) {
   await connection();
   try {
@@ -49,30 +61,37 @@ export async function updateInventory(
       throw new Error("Product not found");
     }
 
-    // Update stock quantity
-    product.stockQuantity = updates.quantity;
+    const nextQuantity = Number(updates.quantity);
+    const nextThreshold =
+      updates.lowStockThreshold !== undefined
+        ? Number(updates.lowStockThreshold)
+        : getLowStockThreshold(product);
 
-    // Update low stock threshold if provided
-    if (updates.lowStockThreshold !== undefined) {
-      product.lowStockThreshold = updates.lowStockThreshold;
-    }
+    product.quantity = nextQuantity;
+    product.stock_quantity = nextQuantity;
+    product.stockQuantity = nextQuantity;
 
-    // Update stock status based on quantity
-    if (updates.quantity <= 0) {
+    product.lowStockThreshold = nextThreshold;
+    product.low_stock_threshold = nextThreshold;
+
+    if (nextQuantity <= 0) {
       product.stockStatus = "out_of_stock";
-    } else if (updates.quantity <= (product.lowStockThreshold || 10)) {
+      product.stock_status = "out_of_stock";
+    } else if (nextQuantity <= nextThreshold) {
       product.stockStatus = "low_stock";
+      product.stock_status = "low_stock";
     } else {
       product.stockStatus = "in_stock";
+      product.stock_status = "in_stock";
     }
 
-    // Update last inventory update timestamp
     product.lastInventoryUpdate = new Date();
+    product.last_inventory_update = product.lastInventoryUpdate;
 
     await product.save();
 
-    // Revalidate the inventory page
     revalidatePath("/inventory");
+    revalidatePath("/pos");
 
     return {
       message: "Success",
@@ -107,13 +126,13 @@ export async function getInventoryStats() {
         sku: 1,
         stockQuantity: 1,
         lowStockThreshold: 1,
-      }
+      },
     )
       .limit(5)
       .lean();
 
     return {
-      stats: stats.reduce((acc: any, curr:any) => {
+      stats: stats.reduce((acc: any, curr: any) => {
         acc[curr._id] = {
           count: curr.count,
           totalStock: curr.totalStock,

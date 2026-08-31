@@ -31,22 +31,22 @@ export const ConfirmDialog = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
       <div className="mt-2">
-        <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>
+        <p className="text-sm text-muted-foreground">{message}</p>
       </div>
-      <div className="mt-4 flex justify-end gap-2">
+      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button
           type="button"
-          className="inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="inline-flex justify-center rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/20"
           onClick={onClose}
         >
           {cancelLabel}
         </button>
         <button
           type="button"
-          className={`inline-flex justify-center rounded-md border border-transparent px-4 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+          className={`inline-flex justify-center rounded-xl border border-transparent px-4 py-2.5 text-sm font-medium text-white transition focus:outline-none focus:ring-2 focus:ring-offset-2 ${
             danger
-              ? "bg-red-600 hover:bg-red-700 focus:ring-red-500"
-              : "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+              ? "bg-destructive hover:bg-destructive/90 focus:ring-destructive/30"
+              : "bg-primary hover:bg-primary/90 focus:ring-primary/30"
           }`}
           onClick={handleConfirm}
         >

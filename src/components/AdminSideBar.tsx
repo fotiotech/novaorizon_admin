@@ -208,16 +208,18 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           transform transition-transform duration-300 ease-in-out
           ${shouldShow ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
-          w-3/4 lg:w-64 h-full overflow-y-auto
-          bg-background text-foreground border-r border-border shadow-lg
-          flex flex-col justify-between
+          w-3/4 lg:w-72 h-full overflow-y-auto
+          bg-background/95 text-foreground border-r border-border shadow-[0_18px_45px_rgba(15,23,42,0.12)]
+          flex flex-col justify-between backdrop-blur-md
         `}
       >
         <div>
-          <div className="p-4 flex items-center justify-between border-b border-border">
-            <Link href="/" className="flex items-center">
-              <Image src="/logo.png" alt="logo" width={60} height={40} />
-              <span className="ml-2 text-xl font-bold text-foreground">
+          <div className="flex items-center justify-between border-b border-border bg-card/40 p-4">
+            <Link href="/" className="flex items-center gap-3">
+              <div className="rounded-xl bg-primary/10 p-2">
+                <Image src="/logo.png" alt="logo" width={42} height={28} />
+              </div>
+              <span className="text-lg font-bold text-foreground">
                 Admin Panel
               </span>
             </Link>
@@ -226,7 +228,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                 title="Close sidebar"
                 type="button"
                 onClick={handleClose}
-                className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -273,11 +275,11 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                           <Link
                             href={link.href}
                             onClick={handleClose}
-                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 ${
+                            className={`flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all duration-200 ${
                               pathname === link.href ||
                               pathname?.startsWith(link.href)
-                                ? "bg-primary/10 text-primary"
-                                : "text-foreground hover:bg-muted"
+                                ? "border-primary/20 bg-primary/10 text-primary shadow-sm"
+                                : "border-transparent text-foreground hover:border-border hover:bg-muted/70"
                             }`}
                           >
                             <div className="flex items-center gap-3">

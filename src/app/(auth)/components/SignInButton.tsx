@@ -1,11 +1,30 @@
-"use client"
-import { signIn, signOut} from "next-auth/react"
- 
+"use client";
+
+import { signIn, signOut } from "next-auth/react";
+import { Button } from "@/components/ui/button";
+
 export function SignIn() {
-  return <button onClick={() => signIn()}>Sign In</button>
+  return (
+    <Button
+      variant="default"
+      size="sm"
+      onClick={() => signIn()}
+      className="rounded-xl px-4"
+    >
+      Sign In
+    </Button>
+  );
 }
 
- 
 export function SignOut() {
-  return <button onClick={() => signOut()} className="p-2 px-4 bg-red-500 rounded-lg">Sign Out</button>
-} 
+  return (
+    <Button
+      variant="destructive"
+      size="sm"
+      onClick={() => signOut()}
+      className="rounded-xl px-4"
+    >
+      Sign Out
+    </Button>
+  );
+}

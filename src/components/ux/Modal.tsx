@@ -52,12 +52,12 @@ export const Modal = ({
               leaveTo="opacity-0 scale-95"
             >
               <Dialog.Panel
-                className={`w-full ${sizeClasses[size]} transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all`}
+                className={`w-full ${sizeClasses[size]} transform overflow-hidden rounded-2xl border border-border bg-card p-4 text-left align-middle shadow-xl transition-all sm:p-6`}
               >
                 {title && (
                   <Dialog.Title
                     as="h3"
-                    className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100 mb-4"
+                    className="mb-4 text-lg font-semibold leading-6 text-foreground"
                   >
                     {title}
                   </Dialog.Title>

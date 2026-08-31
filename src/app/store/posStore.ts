@@ -68,7 +68,12 @@ export const usePOSStore = create<POSState>()(
       error: null,
 
       loadCart: async (identifier) => {
-        set({ isLoading: true, error: null });
+        set({
+          isLoading: true,
+          error: null,
+          userId: identifier.userId,
+          sessionId: identifier.sessionId,
+        });
         try {
           const cart: any = await getCart(identifier);
           if (cart) {
@@ -85,8 +90,8 @@ export const usePOSStore = create<POSState>()(
               total: cart.total,
               currency: cart.currency,
               appliedCoupon: cart.appliedCoupon,
-              userId: cart.userId,
-              sessionId: cart.sessionId,
+              userId: cart.userId || identifier.userId,
+              sessionId: cart.sessionId || identifier.sessionId,
             });
           }
         } catch (error: any) {

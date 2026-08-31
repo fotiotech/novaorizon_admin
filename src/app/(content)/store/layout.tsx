@@ -93,12 +93,12 @@ export default function ContentLayout({
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
 
-      <main className="flex-1 p-6 box-border min-w-0">
-        <header className="flex justify-between items-center mb-5 pb-3 border-b border-border">
+      <main className="min-w-0 flex-1 p-3 box-border sm:p-5 lg:p-6">
+        <header className="mb-5 flex flex-col items-start justify-between gap-3 border-b border-border pb-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3">
             <button
               onClick={toggleSidebar}
-              className="p-1 rounded-md hover:bg-muted transition-colors"
+              className="rounded-md p-1.5 transition-colors hover:bg-muted"
               aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
             >
               <svg
@@ -124,11 +124,13 @@ export default function ContentLayout({
                 )}
               </svg>
             </button>
-            <h1 className="text-xl font-semibold m-0">Content Management</h1>
+            <h1 className="m-0 text-lg font-semibold sm:text-xl">
+              Content Management
+            </h1>
           </div>
-          <div className="text-muted-foreground">Admin</div>
+          <div className="text-sm text-muted-foreground">Admin</div>
         </header>
-        <section className="bg-card rounded-lg p-4 shadow-sm border border-border">
+        <section className="rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
           {children}
         </section>
       </main>

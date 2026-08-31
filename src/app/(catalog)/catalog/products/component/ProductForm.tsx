@@ -708,14 +708,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   // ---------- Main render ----------
   return (
-    <>
-      <form className="flex flex-col max-w-4xl bg-card text-card-foreground mx-auto p-4 rounded-lg shadow-md">
+    <div>
+      <form className="flex flex-col max-w-4xl bg-card text-card-foreground p-2 lg:p-4 rounded-lg ">
         <div className="flex-1">
           {error && !success && <Alert severity="error">{error}</Alert>}
           {success && !error && <Alert severity="success">{success}</Alert>}
           {!error && !success && (
             <div className="text-xs text-gray-400 mb-2">
-              💾 Draft auto-saved to server
+              💾 Draft auto-saved
             </div>
           )}
 
@@ -824,7 +824,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         message="Please fix the validation errors before proceeding"
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
-    </>
+    </div>
   );
 };
 

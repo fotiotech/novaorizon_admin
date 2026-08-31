@@ -48,23 +48,22 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   }
 
   return (
-    // Removed hardcoded bg-gray-*; using theme variables
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+    <div className="admin-shell">
       <AdminSideBar
         sideBarToggle={sideBarToggle}
         setSideBarToggle={setSideBarToggle}
         screenSize={screenSize}
       />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden">
         <AdminTopBar
           sideBarToggle={sideBarToggle}
           setSideBarToggle={setSideBarToggle}
           screenSize={screenSize}
         />
 
-        <main className="flex-1 overflow-auto p-2 md:p-6 m-2 rounded-lg">
-          {children}
+        <main className="admin-page-shell flex-1 overflow-auto">
+          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
         </main>
       </div>
     </div>

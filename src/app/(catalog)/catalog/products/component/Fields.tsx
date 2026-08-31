@@ -38,22 +38,14 @@ const MainImageUploaderWrapper: React.FC<{
   const { files, addFiles, removeFile, loading, progressByName } =
     useFileUploader(productId, initialFiles, "main");
 
-  const prevFilesRef = useRef<string[]>(initialFiles);
-  const isInitialMount = useRef(true);
-
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
+    const currentValue = field || null;
+    const nextValue = files.length > 0 ? files[0] : null;
+
+    if (nextValue !== currentValue) {
+      handleAttributeChange(code, nextValue);
     }
-    const newVal = files.length > 0 ? files[0] : null;
-    const prevVal =
-      prevFilesRef.current.length > 0 ? prevFilesRef.current[0] : null;
-    if (newVal !== prevVal) {
-      handleAttributeChange(code, newVal);
-      prevFilesRef.current = files;
-    }
-  }, [files, handleAttributeChange, code]);
+  }, [files, field, handleAttributeChange, code]);
 
   return (
     <FilesUploader
@@ -78,22 +70,17 @@ const GalleryUploaderWrapper: React.FC<{
   const { files, addFiles, removeFile, loading, progressByName } =
     useFileUploader(productId, initialFiles, "gallery");
 
-  const prevFilesRef = useRef<string[]>(initialFiles);
-  const isInitialMount = useRef(true);
-
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
+    const currentValue = Array.isArray(field) ? field : [];
+    const nextValue = files;
+
+    if (
+      nextValue.length !== currentValue.length ||
+      nextValue.some((url, index) => url !== currentValue[index])
+    ) {
+      handleAttributeChange(code, nextValue);
     }
-    const changed =
-      files.length !== prevFilesRef.current.length ||
-      files.some((url, i) => url !== prevFilesRef.current[i]);
-    if (changed) {
-      handleAttributeChange(code, files);
-      prevFilesRef.current = files;
-    }
-  }, [files, handleAttributeChange, code]);
+  }, [files, field, handleAttributeChange, code]);
 
   return (
     <FilesUploader
@@ -128,26 +115,35 @@ const Fields: React.FC<FieldProps> = React.memo(
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-      Promise.all([
-        getBrands().catch((err) => {
-          console.error("Brand fetch error:", err);
-          setError("Failed to fetch brands. Please refresh.");
-          return [];
-        }),
-        getCarriers().catch((err) => {
-          console.error("Carrier fetch error:", err);
-          setError("Failed to fetch carriers. Please refresh.");
-          return [];
-        }),
-      ])
-        .then(([brandsData, carriersData]) => {
-          setBrands(brandsData);
-          setCarriers(carriersData);
-        })
-        .catch(() => {
-          setError("Failed to fetch data. Please refresh.");
-        });
-    }, []);
+      let isActive = true;
+
+      const loadOptions = async () => {
+        try {
+          if (code === "brand") {
+            const brandsData = await getBrands();
+            if (isActive) setBrands(brandsData);
+          }
+
+          if (code === "carrier") {
+            const carriersData = await getCarriers();
+            if (isActive) setCarriers(carriersData);
+          }
+        } catch (err) {
+          console.error(`Failed to load ${code} options:`, err);
+          if (isActive) {
+            setError("Failed to fetch options. Please refresh.");
+          }
+        }
+      };
+
+      if (code === "brand" || code === "carrier") {
+        void loadOptions();
+      }
+
+      return () => {
+        isActive = false;
+      };
+    }, [code]);
 
     const customSelectStyles = {
       control: (provided: any, state: any) => ({
@@ -206,7 +202,6 @@ const Fields: React.FC<FieldProps> = React.memo(
           if (code === "main_image") {
             return (
               <MainImageUploaderWrapper
-                key={field || "main-empty"}
                 productId={productId || ""}
                 field={field}
                 code={code}
@@ -214,10 +209,8 @@ const Fields: React.FC<FieldProps> = React.memo(
               />
             );
           } else if (code === "gallery") {
-            const galleryKey = Array.isArray(field) ? field.join(",") : "empty";
             return (
               <GalleryUploaderWrapper
-                key={galleryKey}
                 productId={productId || ""}
                 field={field}
                 code={code}
@@ -336,16 +329,22 @@ const Fields: React.FC<FieldProps> = React.memo(
 
         case "select": {
           if (code === "brand") {
+            const brandOptions = brands.map((brand) => ({
+              value: brand._id.toString(),
+              label: brand.name,
+            }));
+            const selectedBrandId =
+              typeof field === "object" && field !== null
+                ? (field._id || field.id || "").toString()
+                : (field || "").toString();
+
             return (
               <Select
-                options={brands.map((v) => ({ value: v._id, label: v.name }))}
+                options={brandOptions}
                 value={
-                  field
-                    ? brands
-                        .filter((v) => v._id === field)
-                        .map((v) => ({ value: v._id, label: v.name }))[0] ||
-                      null
-                    : null
+                  brandOptions.find(
+                    (option) => option.value === selectedBrandId,
+                  ) || null
                 }
                 onChange={(opt: { value: string; label: string } | null) =>
                   handleAttributeChange(code, opt ? opt.value : null)

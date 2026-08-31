@@ -4,13 +4,6 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
-import Link from "@tiptap/extension-link";
-import CodeBlock from "@tiptap/extension-code-block";
-import Blockquote from "@tiptap/extension-blockquote";
-import ListItem from "@tiptap/extension-list-item";
-import BulletList from "@tiptap/extension-bullet-list";
-import OrderedList from "@tiptap/extension-ordered-list";
-import Heading from "@tiptap/extension-heading";
 import { useState, useCallback, useRef, useEffect, memo } from "react";
 import useFileUploader from "@/hooks/useFileUploader";
 
@@ -21,20 +14,16 @@ export interface RichTextEditorProps {
   productId: string;
 }
 
-// ---- Moved outside to prevent re-creation on each render ----
+// ---- Extensions: StarterKit contains all basic extensions, we only add Image & Placeholder ----
 const extensions = [
-  StarterKit,
+  StarterKit.configure({
+    heading: { levels: [1, 2, 3] }, // restrict heading levels
+    link: { openOnClick: false }, // custom link behaviour
+  }),
   Image.configure({ inline: false, allowBase64: false }),
   Placeholder.configure({
-    placeholder: "Write description...", // default, will be overridden by prop if passed
+    placeholder: "Write description...", // default, overridden by prop later
   }),
-  Link.configure({ openOnClick: false }),
-  CodeBlock,
-  Blockquote,
-  BulletList,
-  OrderedList,
-  ListItem,
-  Heading.configure({ levels: [1, 2, 3] }),
 ];
 
 const RichTextEditor: React.FC<RichTextEditorProps> = memo(
@@ -46,6 +35,10 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
     const editorContainerRef = useRef<HTMLDivElement>(null);
     const pendingFileRef = useRef<File | null>(null);
     const pendingAltRef = useRef<string>("");
+    const onChangeRef = useRef(onChange);
+    const changeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pendingHtmlRef = useRef<string | null>(null);
+    const lastEmittedHtmlRef = useRef(value);
 
     const { files, addFiles, progressByName } = useFileUploader(
       productId,
@@ -54,6 +47,48 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
     );
 
     const insertedUrlsRef = useRef<string[]>([]);
+
+    useEffect(() => {
+      onChangeRef.current = onChange;
+    }, [onChange]);
+
+    const emitChange = useCallback((html: string) => {
+      if (html === lastEmittedHtmlRef.current) return;
+
+      pendingHtmlRef.current = html;
+      if (changeTimerRef.current) {
+        clearTimeout(changeTimerRef.current);
+      }
+
+      changeTimerRef.current = setTimeout(() => {
+        const pendingHtml = pendingHtmlRef.current;
+        if (
+          pendingHtml !== null &&
+          pendingHtml !== lastEmittedHtmlRef.current
+        ) {
+          lastEmittedHtmlRef.current = pendingHtml;
+          onChangeRef.current(pendingHtml);
+        }
+        changeTimerRef.current = null;
+      }, 250);
+    }, []);
+
+    useEffect(() => {
+      return () => {
+        if (changeTimerRef.current) {
+          clearTimeout(changeTimerRef.current);
+        }
+
+        const pendingHtml = pendingHtmlRef.current;
+        if (
+          pendingHtml !== null &&
+          pendingHtml !== lastEmittedHtmlRef.current
+        ) {
+          lastEmittedHtmlRef.current = pendingHtml;
+          onChangeRef.current(pendingHtml);
+        }
+      };
+    }, []);
 
     // ---- Editor instance ----
     const editor = useEditor({
@@ -67,7 +102,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
         return ext;
       }),
       content: value,
-      onUpdate: ({ editor }) => onChange(editor.getHTML()),
+      onUpdate: ({ editor }) => emitChange(editor.getHTML()),
       immediatelyRender: false,
       editorProps: {
         attributes: {

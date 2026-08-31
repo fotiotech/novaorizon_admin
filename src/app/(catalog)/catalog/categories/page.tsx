@@ -98,7 +98,7 @@ const Categories = () => {
   }));
 
   return (
-    <div className="lg:p-8 space-y-6">
+    <div className=" space-y-6">
       <Toaster position="top-right" richColors />
 
       {/* Header */}

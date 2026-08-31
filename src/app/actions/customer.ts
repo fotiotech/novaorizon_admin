@@ -1,4 +1,5 @@
-"use server";import { connection } from "@/utils/connection";
+"use server";
+import { connection } from "@/utils/connection";
 
 import Customer from "@/models/Customer";
 import { redirect } from "next/navigation";
@@ -87,7 +88,7 @@ export async function updateBillingAddresses(_id: string, formData: FormData) {
 export async function updateShippingInfos(
   userId: string,
   useBillingAsShipping: boolean,
-  formData?: FormData
+  formData?: FormData,
 ) {
   if (!userId || !formData) {
     return null;
@@ -128,7 +129,7 @@ export async function updateShippingInfos(
     const response = await Customer.findOneAndUpdate(
       { userId },
       { $set: { shippingAddress } },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!response) {
@@ -136,6 +137,155 @@ export async function updateShippingInfos(
     }
   } catch (error: any) {
     console.error("Error updating shipping address:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ---------- Get all customers with pagination ----------
+export async function getAllCustomers(options?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}) {
+  try {
+    await connection();
+    const page = options?.page || 1;
+    const limit = options?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    let query: any = {};
+
+    if (options?.search) {
+      query = {
+        $or: [
+          {
+            "billingAddress.firstName": {
+              $regex: options.search,
+              $options: "i",
+            },
+          },
+          {
+            "billingAddress.lastName": {
+              $regex: options.search,
+              $options: "i",
+            },
+          },
+          { "billingAddress.email": { $regex: options.search, $options: "i" } },
+        ],
+      };
+    }
+
+    const total = await Customer.countDocuments(query);
+    const customers = await Customer.find(query)
+      .populate("userId", "email phone")
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 });
+
+    return {
+      success: true,
+      customers: customers.map((c) => ({
+        ...c.toObject(),
+        _id: c._id.toString(),
+        userId: c.userId?._id?.toString(),
+      })),
+      total,
+      pages: Math.ceil(total / limit),
+      currentPage: page,
+    };
+  } catch (error: any) {
+    console.error("Error fetching customers:", error);
+    return {
+      success: false,
+      error: error.message,
+      customers: [],
+      total: 0,
+      pages: 0,
+    };
+  }
+}
+
+// ---------- Delete customer ----------
+export async function deleteCustomer(customerId: string) {
+  try {
+    await connection();
+    await Customer.findByIdAndDelete(customerId);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error deleting customer:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ---------- Get all reviews ----------
+export async function getReviews(options?: {
+  page?: number;
+  limit?: number;
+  rating?: number;
+  status?: string;
+}) {
+  try {
+    await connection();
+    const page = options?.page || 1;
+    const limit = options?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    let query: any = {};
+    if (options?.rating) query.rating = options.rating;
+
+    const total =
+      (await (global as any).mongoose?.models?.Review?.countDocuments(query)) ||
+      0;
+
+    // Import Review dynamically to avoid circular dependencies
+    const Review = (global as any).mongoose?.models?.Review;
+    if (!Review) {
+      return { success: true, reviews: [], total: 0, pages: 0 };
+    }
+
+    const reviews = await Review.find(query)
+      .populate("userId", "email firstName lastName")
+      .populate("productId", "name")
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 });
+
+    return {
+      success: true,
+      reviews: reviews.map((r: any) => ({
+        ...r.toObject(),
+        _id: r._id.toString(),
+        userId: r.userId?._id?.toString(),
+        productId: r.productId?._id?.toString(),
+      })),
+      total,
+      pages: Math.ceil(total / limit),
+      currentPage: page,
+    };
+  } catch (error: any) {
+    console.error("Error fetching reviews:", error);
+    return {
+      success: false,
+      error: error.message,
+      reviews: [],
+      total: 0,
+      pages: 0,
+    };
+  }
+}
+
+// ---------- Delete review ----------
+export async function deleteReview(reviewId: string) {
+  try {
+    await connection();
+    const Review = (global as any).mongoose?.models?.Review;
+    if (!Review) {
+      return { success: false, error: "Review model not found" };
+    }
+    await Review.findByIdAndDelete(reviewId);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error deleting review:", error);
     return { success: false, error: error.message };
   }
 }

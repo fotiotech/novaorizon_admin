@@ -11,7 +11,14 @@ export interface IMenu {
   ctaText?: string; // new
   ctaLink?: string;
   // --- Display & Layout ---
-  location?: "Banner" | "NavBar" | "SideBar" | "Home" | "Section" | "Footer";
+  location?:
+    | "Banner"
+    | "NavBar"
+    | "SideBar"
+    | "Home"
+    | "Section"
+    | "Footer"
+    | "product_related";
   display: "List" | "Grid" | "Carousel" | "Dropdown" | "MegaMenu";
   position?: "left" | "center" | "right" | "full";
   columns?: number;
@@ -65,7 +72,15 @@ const MenuSchema: Schema = new Schema(
     // --- Location ---
     location: {
       type: String,
-      enum: ["Banner", "NavBar", "SideBar", "Home", "Section", "Footer"],
+      enum: [
+        "Banner",
+        "NavBar",
+        "SideBar",
+        "Home",
+        "Section",
+        "Footer",
+        "product_related",
+      ],
     },
     // --- Display ---
     display: {

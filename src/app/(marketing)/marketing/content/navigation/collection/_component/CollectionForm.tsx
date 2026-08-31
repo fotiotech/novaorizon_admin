@@ -49,11 +49,21 @@ const CollectionForm = ({ id }: { id?: string }) => {
 
   // When targetType changes, reset type to manual if rule not allowed
   useEffect(() => {
+    if (
+      ["recommendation", "related"].includes(formData.type) &&
+      formData.targetType !== "Product"
+    ) {
+      setFormData((prev) => ({ ...prev, targetType: "Product" }));
+      setRules([]);
+      setItems([]);
+      return;
+    }
+
     if (!isRuleAllowed && formData.type === "rule") {
       setFormData((prev) => ({ ...prev, type: "manual" }));
       setRules([]);
     }
-  }, [formData.targetType, isRuleAllowed]);
+  }, [formData.targetType, formData.type, isRuleAllowed]);
 
   const buildFormData = (
     data: typeof formData,

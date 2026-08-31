@@ -26,6 +26,10 @@ export interface OrderDocument extends Document {
     | "failed"
     | "cancelled"
     | "refunded";
+  refundAmount?: number;
+  returnReason?: string;
+  returnRequestedAt?: Date;
+  refundedAt?: Date;
   paymentMethod: string;
   transaction_id?: string;
   billingAddressId?: mongoose.Types.ObjectId;
@@ -49,7 +53,15 @@ export interface OrderDocument extends Document {
   shippingStatus: "pending" | "shipped" | "delivered";
   shippingDate?: Date;
   deliveryDate?: Date;
-  orderStatus: "pending" | "processing" | "shipped" | "in transit" | "completed" | "cancelled" |"returned";
+  orderStatus:
+    | "pending"
+    | "processing"
+    | "shipped"
+    | "in transit"
+    | "completed"
+    | "return_requested"
+    | "cancelled"
+    | "returned";
   createdAt?: Date;
   updatedAt?: Date;
   notes?: string;
@@ -138,9 +150,22 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
     deliveryDate: { type: Date },
     orderStatus: {
       type: String,
-      enum: ["pending", "processing", "shipped", "in transit", "completed", "returned", "cancelled"],
+      enum: [
+        "pending",
+        "processing",
+        "shipped",
+        "in transit",
+        "completed",
+        "return_requested",
+        "returned",
+        "cancelled",
+      ],
       default: "processing",
     },
+    refundAmount: { type: Number, default: 0 },
+    returnReason: { type: String },
+    returnRequestedAt: { type: Date },
+    refundedAt: { type: Date },
     notes: { type: String },
     couponCode: { type: String },
     discount: { type: Number, default: 0 },

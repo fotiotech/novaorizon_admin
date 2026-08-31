@@ -86,18 +86,18 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
           return (
             <div
               key={index}
-              className="relative flex-shrink-0 w-44 h-44 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-200"
+              className="relative flex-shrink-0 w-44 h-44 overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-all duration-200 hover:shadow-md"
               style={{ scrollSnapAlign: "start" }}
             >
               {isUploading ? (
-                <div className="flex flex-col items-center justify-center w-full h-full p-4 bg-gray-100">
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                <div className="flex h-full w-full flex-col items-center justify-center bg-muted p-4">
+                  <div className="mb-2 h-2.5 w-full overflow-hidden rounded-full bg-border">
                     <div
-                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                      className="h-full rounded-full bg-primary transition-all duration-300"
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-muted-foreground">
                     {uploadProgress}%
                   </span>
                 </div>
@@ -107,13 +107,13 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
                   alt={`Uploaded image ${index + 1}`}
                   width={176}
                   height={176}
-                  className="w-full h-full object-cover"
+                  className="h-full w-full object-cover"
                 />
               )}
               <button
                 type="button"
                 onClick={(e) => handleRemove(e, index)}
-                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors"
+                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-xs font-semibold text-destructive-foreground shadow-md transition-transform hover:scale-105"
                 aria-label="Remove image"
                 disabled={isUploading}
               >
@@ -125,20 +125,27 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
 
         <div
           {...getRootProps()}
-          className={`flex-shrink-0 w-44 h-44 border-2 border-dashed rounded-md cursor-pointer transition-colors bg-white flex items-center justify-center
-            ${isDragActive ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"}`}
+          className={`flex h-44 w-44 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed bg-card/60 text-center transition-all duration-200 ${
+            isDragActive
+              ? "border-primary bg-primary/5 shadow-md"
+              : "border-border hover:border-primary/60 hover:bg-primary/5"
+          }`}
           onClick={open}
         >
           <input {...getInputProps()} />
-          <div className="text-center px-2">
-            <div className="p-3 rounded-full bg-blue-100 text-blue-600 mb-3 inline-flex">
+          <div className="px-2">
+            <div className="mb-3 inline-flex rounded-full bg-primary/10 p-3 text-primary">
               <Add className="text-2xl" />
             </div>
-            <p className="text-sm text-gray-600 font-medium">
+            <p className="text-sm font-medium text-foreground">
               {isDragActive ? "Drop images here" : "Click to select images"}
             </p>
-            <p className="text-xs text-gray-500 mt-1">or drag and drop</p>
-            <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              or drag and drop
+            </p>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              JPEG, PNG, GIF
+            </p>
           </div>
         </div>
       </div>

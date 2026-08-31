@@ -22,6 +22,16 @@ const getTargetTypeLabel = (targetType: string) => {
   return labels[targetType] || targetType;
 };
 
+const getCollectionTypeLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    rule: "Rule-based",
+    manual: "Manual",
+    recommendation: "Recommendation",
+    related: "Related products",
+  };
+  return labels[type] || type;
+};
+
 // Helper to get item display name
 const getItemName = (item: any) => {
   return item.title || item.name || "Unnamed";
@@ -192,9 +202,10 @@ const ProductCollectionPage = () => {
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
-            {collections.map(({ collection, items, itemCount }) => (
-              <div key={collection._id} className="p-4 md:p-6">
-                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            {collections.map(
+              ({ collection, items, itemCount, requiresProductContext }) => (
+                <div key={collection._id} className="p-4 md:p-6">
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-start justify-between flex-wrap gap-2">
                       <div>
@@ -225,21 +236,27 @@ const ProductCollectionPage = () => {
                     <div className="mt-3 flex flex-wrap gap-2">
                       {/* Collection Type Badge */}
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                        {collection.type === "rule" ? "Rule‑based" : "Manual"}
+                        {getCollectionTypeLabel(collection.type)}
                       </span>
                       {/* Target Type Badge */}
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                         {getTargetTypeLabel(collection.targetType)}
                       </span>
                       {/* Item count */}
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {itemCount}{" "}
-                        {itemCount === 1
-                          ? collection.targetType.toLowerCase()
-                          : getTargetTypeLabel(
-                              collection.targetType,
-                            ).toLowerCase()}
-                      </span>
+                      {requiresProductContext ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                          Requires product context
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {itemCount}{" "}
+                          {itemCount === 1
+                            ? collection.targetType.toLowerCase()
+                            : getTargetTypeLabel(
+                                collection.targetType,
+                              ).toLowerCase()}
+                        </span>
+                      )}
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                         Updated {formatDate(collection.updated_at)}
                       </span>
@@ -339,9 +356,10 @@ const ProductCollectionPage = () => {
                       )}
                     </button>
                   </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ),
+            )}
           </div>
         )}
       </div>

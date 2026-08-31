@@ -1,6 +1,7 @@
 "use client";
 
 import { Prices } from "@/components/Prices";
+import InvoiceDisplay from "@/components/InvoiceDisplay";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -165,6 +166,11 @@ export default function OrderDetailsClient({ order }: OrderDetailsClientProps) {
           </span>
         </div>
       </div>
+
+      {/* Invoice */}
+      {order.paymentStatus === "paid" && (
+        <InvoiceDisplay orderNumber={order.orderNumber} />
+      )}
 
       {/* Actions */}
       <div className="flex gap-4">

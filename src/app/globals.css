@@ -9,18 +9,100 @@
   border: 0 solid transparent;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply min-h-screen bg-background text-foreground antialiased;
+  background-image:
+    radial-gradient(
+      circle at top left,
+      hsl(var(--primary) / 0.12),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      hsl(var(--secondary) / 0.1),
+      transparent 28%
+    ),
+    linear-gradient(to bottom, hsl(var(--background)), hsl(var(--background)));
+}
+
+.bg-white {
+  background-color: hsl(var(--card)) !important;
+}
+
+.bg-gray-50 {
+  background-color: hsl(var(--muted)) !important;
+}
+
+.bg-gray-100 {
+  background-color: hsl(var(--muted)) !important;
+}
+
+.bg-gray-200,
+.bg-gray-300 {
+  background-color: hsl(var(--border)) !important;
+}
+
+.text-gray-900,
+.text-gray-800,
+.text-gray-700,
+.text-gray-600,
+.text-gray-500,
+.text-gray-400,
+.text-gray-300 {
+  color: hsl(var(--foreground)) !important;
+}
+
+.text-gray-600,
+.text-gray-500,
+.text-gray-400 {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.border-gray-200,
+.border-gray-300,
+.border-gray-100,
+.border-gray-50 {
+  border-color: hsl(var(--border)) !important;
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.2);
+}
+
+html,
+body,
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 /* ===== Form elements (using @apply) ===== */
 label {
-  @apply text-sm font-medium block mb-1;
+  @apply text-sm font-medium block mb-1 text-foreground;
 }
 input,
 select,
 textarea {
-  @apply appearance-none bg-transparent block px-3 shadow focus:outline-none 
-    rounded-lg border-2 border-border focus:border-accent my-2 p-2 w-full;
+  @apply appearance-none bg-transparent block px-3 shadow-sm focus:outline-none rounded-xl border-2 border-border focus:border-primary my-2 p-2.5 w-full text-foreground transition-all duration-200;
+}
+input::placeholder,
+textarea::placeholder {
+  @apply text-muted-foreground;
 }
 option {
-  @apply capitalize bg-transparent text-foreground;
+  @apply capitalize bg-popover text-popover-foreground;
 }
 th,
 td {
@@ -29,16 +111,97 @@ td {
 
 /* ===== Custom component classes ===== */
 .btn {
-  @apply bg-primary text-primary-foreground p-2 rounded-lg 
-    hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:outline-none;
+  @apply inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background;
 }
 .activeLink {
-  @apply dark:bg-secondary mx-2 text-foreground rounded-lg py-1 px-4 flex gap-3 
-    items-center hover:bg-accent dark:text-primary;
+  @apply dark:bg-secondary/10 mx-2 text-foreground rounded-xl py-2 px-3 flex gap-3 items-center hover:bg-accent/10 dark:text-primary;
 }
 .inactiveLink {
-  @apply text-muted-foreground mx-2 rounded-lg py-1 px-4 flex gap-3 
-    items-center hover:bg-accent;
+  @apply text-muted-foreground mx-2 rounded-xl py-2 px-3 flex gap-3 items-center hover:bg-accent/10 hover:text-foreground;
+}
+
+@layer components {
+  .admin-shell {
+    @apply flex h-screen overflow-hidden bg-background text-foreground;
+  }
+
+  .admin-surface {
+    @apply rounded-2xl border border-border bg-card/85 text-card-foreground shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm;
+  }
+
+  .admin-panel {
+    @apply admin-surface p-4 md:p-6;
+  }
+
+  .admin-input {
+    @apply w-full rounded-xl border border-border bg-background/80 px-3 py-2.5 text-sm text-foreground shadow-sm transition-all duration-200 placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+
+  .admin-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .admin-button-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+
+  .admin-badge {
+    @apply inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary;
+  }
+}
+
+@layer utilities {
+  .admin-page-shell {
+    padding: 0.75rem;
+  }
+
+  .admin-page-section {
+    padding: 0.75rem;
+  }
+
+  .admin-card-shell {
+    padding: 0.75rem;
+  }
+
+  .admin-page-gap {
+    gap: 0.75rem;
+  }
+
+  @media (min-width: 640px) {
+    .admin-page-shell {
+      padding: 1rem;
+    }
+
+    .admin-page-section {
+      padding: 1rem;
+    }
+
+    .admin-card-shell {
+      padding: 1rem;
+    }
+
+    .admin-page-gap {
+      gap: 1rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .admin-page-shell {
+      padding: 1.5rem;
+    }
+
+    .admin-page-section {
+      padding: 1.25rem;
+    }
+
+    .admin-card-shell {
+      padding: 1.25rem;
+    }
+
+    .admin-page-gap {
+      gap: 1.5rem;
+    }
+  }
 }
 
 /* ===== CSS Variables (Light & Dark) ===== */

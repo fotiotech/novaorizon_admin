@@ -6,6 +6,7 @@ import { usePOSStore } from "@/app/store/posStore";
 import { useSession } from "next-auth/react";
 import { v4 as uuidv4 } from "uuid";
 import { findProducts } from "@/app/actions/products";
+import { completePOSOrder } from "@/app/actions/order";
 import Image from "next/image";
 
 interface Product {
@@ -35,6 +36,7 @@ export default function Pos() {
     discount,
     total,
     isLoading,
+    error: posError,
     loadCart,
     addItem,
     updateItem,
@@ -85,50 +87,95 @@ export default function Pos() {
     p.title?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  // Add to cart handler
-  const handleAddToCart = (productId: string) => {
-    const identifier = session?.user?.id
-      ? { userId: session.user.id }
-      : { sessionId };
-    // Default quantity 1; you could also prompt for quantity
-    addItem(productId, undefined, 1);
+  const handleAddToCart = async (productId: string) => {
+    const product = products.find((item) => item._id === productId);
+    const currentInCart =
+      items.find((item) => item.productId === productId)?.quantity || 0;
+    const availableQty = Number(product?.quantity ?? 0);
+
+    if (product && availableQty <= 0) {
+      alert("This product is out of stock.");
+      return;
+    }
+
+    if (product && currentInCart >= availableQty) {
+      alert(
+        `Only ${availableQty} unit${availableQty > 1 ? "s" : ""} available in stock.`,
+      );
+      return;
+    }
+
+    await addItem(productId, undefined, 1);
   };
 
-  // Update quantity in cart
-  const handleUpdateQuantity = (itemId: string, newQty: number) => {
-    updateItem(itemId, newQty);
+  const handleUpdateQuantity = async (itemId: string, newQty: number) => {
+    const item = items.find((entry) => entry._id === itemId);
+    if (!item) return;
+
+    const product = products.find((entry) => entry._id === item.productId);
+    const stockQty = Number(product?.quantity ?? 0);
+
+    if (newQty > 0 && product && newQty > stockQty) {
+      alert(
+        `Only ${stockQty} unit${stockQty > 1 ? "s" : ""} available in stock.`,
+      );
+      return;
+    }
+
+    await updateItem(itemId, newQty);
   };
 
-  // Checkout (placeholder)
   const handleCheckout = async () => {
-    // TODO: Implement order creation using createOrUpdateOrder
-    alert("Checkout logic goes here");
+    try {
+      const result = await completePOSOrder(
+        session?.user?.id ? { userId: session.user.id } : { sessionId },
+        {
+          email: session?.user?.email || "pos@local",
+          firstName: session?.user?.name?.split(" ")[0] || "POS",
+          lastName:
+            session?.user?.name?.split(" ").slice(1).join(" ") || "Customer",
+          paymentMethod: "cash",
+          notes: "POS checkout",
+        },
+      );
+
+      if (!result.success) {
+        alert(result.error || "Unable to complete sale.");
+        return;
+      }
+
+      await clear();
+      alert("Sale completed and inventory updated.");
+    } catch (error: any) {
+      alert(error.message || "Unable to complete sale.");
+    }
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden lg:flex-row">
       {/* Left: Product Catalog */}
-      <div className="w-2/3 p-4 flex flex-col">
-        <div className="flex items-center gap-4 mb-4">
-          <h2 className="text-2xl font-bold">Products</h2>
+      <div className="flex w-full flex-col py-3 sm:py-4 lg:w-2/3">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <h2 className="text-xl font-bold sm:text-2xl">Products</h2>
           <input
             type="text"
             placeholder="Search by name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full flex-1 rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
-          {/* Barcode scanner could listen to keyboard events here */}
         </div>
-        {loading && <p className="text-gray-500">Loading products...</p>}
-        {error && <p className="text-red-500">{error}</p>}
-        <div className="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 content-start">
+        {loading && (
+          <p className="text-sm text-muted-foreground">Loading products...</p>
+        )}
+        {posError && <p className="text-sm text-destructive">{posError}</p>}
+        <div className="grid flex-1 grid-cols-1 gap-4 overflow-y-auto content-start sm:grid-cols-2 xl:grid-cols-3">
           {filteredProducts.map((product) => (
             <div
               key={product._id}
-              className="border rounded-lg p-3 shadow hover:shadow-md transition flex flex-col items-center"
+              className="flex flex-col items-center rounded-xl border border-border bg-card p-3 shadow-sm transition hover:shadow-md"
             >
-              <div className="w-full h-32 relative bg-gray-100 rounded">
+              <div className="relative h-32 w-full overflow-hidden rounded-lg bg-muted">
                 {product.main_image ? (
                   <Image
                     src={product.main_image}
@@ -137,20 +184,20 @@ export default function Pos() {
                     className="object-contain"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                  <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
                     No image
                   </div>
                 )}
               </div>
-              <h3 className="font-semibold mt-2 text-center text-sm line-clamp-2">
+              <h3 className="mt-2 text-center text-sm font-semibold line-clamp-2">
                 {product.title}
               </h3>
-              <p className="text-blue-600 font-bold">
+              <p className="font-bold text-primary">
                 cfa{product.list_price?.toFixed(2) || "0.00"}
               </p>
               <button
                 onClick={() => handleAddToCart(product._id)}
-                className="mt-2 w-full bg-blue-600 text-white py-1 rounded hover:bg-blue-700 transition disabled:bg-gray-400"
+                className="mt-2 w-full rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
                 disabled={product.quantity <= 0}
               >
                 {product.quantity > 0 ? "Add to Cart" : "Out of Stock"}
@@ -161,10 +208,17 @@ export default function Pos() {
       </div>
 
       {/* Right: Cart */}
-      <div className="w-1/3 p-4 bg-gray-100 flex flex-col border-l">
-        <h2 className="text-2xl font-bold mb-4">Cart</h2>
-        {isLoading && <p className="text-gray-500">Loading cart...</p>}
-        <ul className="flex-1 overflow-y-auto space-y-2">
+      <div className="flex w-full flex-col border-t border-border bg-muted/30 p-3 sm:p-4 lg:w-1/3 lg:border-l lg:border-t-0">
+        <h2 className="mb-4 text-xl font-bold sm:text-2xl">Cart</h2>
+        {isLoading && (
+          <p className="text-sm text-muted-foreground">Loading cart...</p>
+        )}
+        {posError && (
+          <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {posError}
+          </p>
+        )}
+        <ul className="flex-1 space-y-2 overflow-y-auto">
           {items.map((item: any) => (
             <li
               key={item._id}
@@ -228,7 +282,7 @@ export default function Pos() {
             </div>
             <button
               onClick={handleCheckout}
-              className="w-full mt-4 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50"
+              className="w-full mt-4 bg-primary text-white py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50"
               disabled={items.length === 0 || isLoading}
             >
               Complete Sale

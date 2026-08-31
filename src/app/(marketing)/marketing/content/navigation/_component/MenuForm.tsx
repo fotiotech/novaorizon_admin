@@ -308,7 +308,10 @@ const MenuForm = ({ id }: MenuFormProps) => {
             <option value="">-- None (use link) --</option>
             {collections.map((c) => (
               <option key={c._id} value={c._id}>
-                {c.name} ({c.targetType})
+                {c.name}{" "}
+                {c.type === "related"
+                  ? "(related: product page only)"
+                  : `(${c.targetType})`}
               </option>
             ))}
           </select>
@@ -326,6 +329,12 @@ const MenuForm = ({ id }: MenuFormProps) => {
             Select a collection to display its items. If none, the link below
             will be used.
           </p>
+          {collections.find((c) => c._id === menu.collectionId)?.type ===
+            "related" && (
+            <p className="mt-1 text-xs text-amber-600">
+              Related collections render only where a product ID is provided.
+            </p>
+          )}
         </div>
 
         {/* Link (if no collection) */}
@@ -416,6 +425,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
             <option value="Home">Home</option>
             <option value="Section">Section</option>
             <option value="Footer">Footer</option>
+            <option value="product_related">Product Related</option>
           </select>
         </div>
 
