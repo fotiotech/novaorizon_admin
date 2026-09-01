@@ -145,50 +145,56 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
   // Validation
   const validateField = useCallback(
     (field: "code" | "name" | "mappings") => {
-      const newErrors = { ...fieldErrors };
-      if (field === "code") {
-        if (!code.trim()) {
-          newErrors.code = "Code is required";
-        } else {
-          delete newErrors.code;
-        }
-      }
-      if (field === "name") {
-        if (!name.trim()) {
-          newErrors.name = "Name is required";
-        } else {
-          delete newErrors.name;
-        }
-      }
-      if (field === "mappings") {
-        let hasError = false;
-        for (const m of mappings) {
-          if (!m.set) {
-            newErrors.mappings = "Each mapping must have a set selected.";
-            hasError = true;
-            break;
+      setFieldErrors((prev) => {
+        const newErrors = { ...prev };
+
+        if (field === "code") {
+          if (!code.trim()) {
+            newErrors.code = "Code is required";
+          } else {
+            delete newErrors.code;
           }
-          if (m.groups.length === 0) {
-            newErrors.mappings = `Set "${m.set}" must have at least one group selected.`;
-            hasError = true;
-            break;
+        }
+
+        if (field === "name") {
+          if (!name.trim()) {
+            newErrors.name = "Name is required";
+          } else {
+            delete newErrors.name;
           }
-          for (const g of m.groups) {
-            if (g.attributes.length === 0) {
-              newErrors.mappings = `Group "${g.group}" must have at least one attribute selected.`;
+        }
+
+        if (field === "mappings") {
+          let hasError = false;
+          for (const m of mappings) {
+            if (!m.set) {
+              newErrors.mappings = "Each mapping must have a set selected.";
               hasError = true;
               break;
             }
+            if (m.groups.length === 0) {
+              newErrors.mappings = `Set "${m.set}" must have at least one group selected.`;
+              hasError = true;
+              break;
+            }
+            for (const g of m.groups) {
+              if (g.attributes.length === 0) {
+                newErrors.mappings = `Group "${g.group}" must have at least one attribute selected.`;
+                hasError = true;
+                break;
+              }
+            }
+            if (hasError) break;
           }
-          if (hasError) break;
+          if (!hasError) {
+            delete newErrors.mappings;
+          }
         }
-        if (!hasError) {
-          delete newErrors.mappings;
-        }
-      }
-      setFieldErrors(newErrors);
+
+        return newErrors;
+      });
     },
-    [code, name, mappings, fieldErrors],
+    [code, name, mappings],
   );
 
   useEffect(() => validateField("code"), [code, validateField]);

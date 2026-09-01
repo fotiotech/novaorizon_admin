@@ -23,9 +23,15 @@ const VariantImageUploader: React.FC<VariantImageUploaderProps> = React.memo(
     const { files, loading, addFiles, removeFile, progressByName } =
       useFileUploader(productId, initialFiles, subfolder);
 
-    // Whenever files change, update the variant's field
+    // Whenever files change, update the variant's field.
+    // For mainImage we store a single string path, not an array.
     useEffect(() => {
-      handleVariantChange(index, fieldCode, files);
+      const nextValue =
+        fieldCode.toLowerCase().includes("image") &&
+        !fieldCode.toLowerCase().includes("images")
+          ? files[0] || ""
+          : files;
+      handleVariantChange(index, fieldCode, nextValue);
     }, [files, index, fieldCode, handleVariantChange]);
 
     // Wrap removeFile to match onRemove signature

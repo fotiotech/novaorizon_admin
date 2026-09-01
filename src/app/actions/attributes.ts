@@ -27,27 +27,72 @@ interface AttributeUpdateParams {
   type: string;
 }
 
+function normalizeUnitFamilyId(value: any): string | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    return mongoose.Types.ObjectId.isValid(value) ? value : null;
+  }
+  if (value instanceof mongoose.Types.ObjectId) {
+    return value.toString();
+  }
+  if (typeof value === "object" && value._id) {
+    return normalizeUnitFamilyId(value._id);
+  }
+  return null;
+}
+
 export async function findAttributesAndValues(id?: string) {
   try {
     await connection();
 
-    let query;
-    if (id) {
-      // Fetch a single attribute (for editing)
-      query = Attribute.findById(id).populate("unitFamily");
-    } else {
-      // Fetch all attributes
-      query = Attribute.find()
-        .populate("unitFamily")
-        .sort({ sortOrder: 1, name: 1 });
-    }
+    const query = id
+      ? Attribute.findById(id)
+      : Attribute.find().sort({ sortOrder: 1, name: 1 });
+    const docs = await query.lean();
+    const items = Array.isArray(docs) ? docs : docs ? [docs] : [];
 
-    const response = await query.lean();
+    const validIds = Array.from(
+      new Set(
+        items
+          .map((item) => normalizeUnitFamilyId(item.unitFamily))
+          .filter((unitFamilyId): unitFamilyId is string =>
+            Boolean(unitFamilyId),
+          ),
+      ),
+    );
 
-    // If id is provided and no attribute found, return null
-    if (id && !response) return null;
+    const unitFamilies = validIds.length
+      ? (await mongoose.models.UnitFamily?.find)
+        ? await mongoose.models.UnitFamily.find({
+            _id: {
+              $in: validIds.map(
+                (unitId) => new mongoose.Types.ObjectId(unitId),
+              ),
+            },
+          })
+            .select("_id name")
+            .lean()
+        : []
+      : [];
 
-    return response;
+    const unitFamilyMap = new Map(
+      (unitFamilies as any[]).map((unitFamily) => [
+        unitFamily._id.toString(),
+        unitFamily,
+      ]),
+    );
+
+    const response = items.map((item) => {
+      const normalizedItem = { ...item };
+      const unitFamilyId = normalizeUnitFamilyId(normalizedItem.unitFamily);
+      normalizedItem.unitFamily = unitFamilyId
+        ? (unitFamilyMap.get(unitFamilyId) ?? null)
+        : null;
+      return normalizedItem;
+    });
+
+    if (id && response.length === 0) return null;
+    return id ? response[0] : response;
   } catch (error) {
     console.error("Error in findAttributesAndValues:", error);
     throw new Error("Failed to fetch attributes");

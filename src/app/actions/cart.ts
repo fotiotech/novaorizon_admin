@@ -97,14 +97,12 @@ export async function addToCart(
   }
 
   const product: any = await Product.findById(input.productId)
-    .select(
-      "list_price title quantity stock_quantity stockQuantity lowStockThreshold low_stock_threshold",
-    )
+    .select("listPrice name quantity stockQuantity lowStockThreshold")
     .lean();
   if (!product) throw new Error("Product not found");
 
   const availableQty = getProductQuantity(product);
-  const price = product.list_price;
+  const price = product.listPrice ?? product.list_price ?? 0;
 
   let cart: any = await Cart.findOne({
     ...(userId ? { userId } : { sessionId }),

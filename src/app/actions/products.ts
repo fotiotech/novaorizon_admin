@@ -9,9 +9,9 @@ import { ref, deleteObject } from "firebase/storage";
 import { storage } from "@/utils/firebaseConfig";
 import mongoose from "mongoose";
 import Product from "@/models/Product";
+import Brand from "@/models/Brand";
+import Category from "@/models/Category";
 import "@/models/Attribute";
-import "@/models/Category";
-import "@/models/Brand";
 import "@/models/User";
 import { getCategoryAttributeSets } from "@/app/actions/category";
 import {
@@ -56,6 +56,42 @@ function serialize(obj: any): any {
     return result;
   }
   return obj;
+}
+
+function addLegacyProductAliases(product: any): any {
+  if (!product || typeof product !== "object") return product;
+
+  const result = { ...product };
+  result.title ??= result.name ?? "";
+  result.name ??= result.title ?? "";
+  result.model ??=
+    Array.isArray(result.productCode) && result.productCode.length
+      ? (result.productCode[0]?.value ?? "")
+      : "";
+  result.category_id ??= result.categoryId ?? null;
+  result.categoryId ??= result.category_id ?? null;
+  result.main_image ??= result.mainImage ?? "";
+  result.mainImage ??= result.main_image ?? "";
+  result.list_price ??= result.listPrice ?? 0;
+  result.listPrice ??= result.list_price ?? 0;
+  result.sale_price ??= result.salePrice ?? result.listPrice ?? 0;
+  result.salePrice ??= result.sale_price ?? result.listPrice ?? 0;
+  result.related_products ??= result.relatedProducts ?? [];
+  result.relatedProducts ??= result.related_products ?? [];
+  result.short_description ??= result.shortDescription ?? "";
+  result.shortDescription ??= result.short_description ?? "";
+  result.short_desc ??= result.shortDescription ?? "";
+  result.low_stock_threshold ??= result.lowStockThreshold ?? 0;
+  result.lowStockThreshold ??= result.low_stock_threshold ?? 0;
+  result.stock_status ??= result.status ? [result.status] : [];
+  result.status ??=
+    Array.isArray(result.stock_status) && result.stock_status.length
+      ? result.stock_status[0]
+      : "draft";
+  result.stockQuantity ??= result.quantity ?? 0;
+  result.quantity ??= result.stockQuantity ?? 0;
+  result.image ??= result.mainImage ?? result.main_image ?? "";
+  return result;
 }
 
 // ---------- Types ----------
@@ -127,8 +163,11 @@ async function validateRequiredCategoryAttributes(
 
     if (requiredCodes.size === 0) return;
 
+    const ignoredRequiredCodes = new Set(["sale_price", "salePrice"]);
     const missing: string[] = [];
     for (const code of requiredCodes) {
+      if (ignoredRequiredCodes.has(code)) continue;
+
       const value = productData[code];
       if (
         value === undefined ||
@@ -162,16 +201,144 @@ function generateSlug(name: string, department: string | null): string {
   });
 }
 
-function toObjectId(value: any): mongoose.Types.ObjectId | null {
+function extractIdCandidate(value: any): any {
   if (!value) return null;
-  if (value instanceof mongoose.Types.ObjectId) return value;
-  if (typeof value === "object" && value._id) {
-    return toObjectId(value._id);
-  }
-  if (typeof value === "string" && mongoose.Types.ObjectId.isValid(value)) {
-    return new mongoose.Types.ObjectId(value);
+  if (typeof value === "string" || typeof value === "number") return value;
+  if (Array.isArray(value)) return extractIdCandidate(value[0]);
+  if (typeof value === "object") {
+    if (value instanceof mongoose.Types.ObjectId) return value.toString();
+    if (
+      typeof value.toHexString === "function" &&
+      value.constructor?.name === "ObjectId"
+    ) {
+      return value.toString();
+    }
+
+    for (const key of [
+      "_id",
+      "id",
+      "value",
+      "categoryId",
+      "category_id",
+      "brand",
+      "brandId",
+    ]) {
+      if (Object.prototype.hasOwnProperty.call(value, key)) {
+        const nested = extractIdCandidate(value[key]);
+        if (nested !== null && nested !== undefined) return nested;
+      }
+    }
+
+    for (const key of Object.keys(value)) {
+      if (["name", "label", "slug", "url_slug"].includes(key)) continue;
+      const nested = extractIdCandidate(value[key]);
+      if (nested !== null && nested !== undefined) return nested;
+    }
   }
   return null;
+}
+
+function toObjectId(value: any): mongoose.Types.ObjectId | null {
+  const candidate = extractIdCandidate(value);
+  if (candidate === null || candidate === undefined || candidate === "") {
+    return null;
+  }
+
+  const stringValue =
+    typeof candidate === "string" ? candidate.trim() : String(candidate);
+  if (mongoose.Types.ObjectId.isValid(stringValue)) {
+    return new mongoose.Types.ObjectId(stringValue);
+  }
+  return null;
+}
+
+function normalizeReferenceId(value: any): string | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    return mongoose.Types.ObjectId.isValid(value) ? value : null;
+  }
+  if (value instanceof mongoose.Types.ObjectId) {
+    return value.toString();
+  }
+  if (typeof value === "object") {
+    if (value._id) return normalizeReferenceId(value._id);
+    if (value.toString && value.toString() !== "[object Object]") {
+      const stringValue = value.toString();
+      return mongoose.Types.ObjectId.isValid(stringValue) ? stringValue : null;
+    }
+  }
+  return null;
+}
+
+async function hydrateProductReferences<T extends Record<string, any>>(
+  products: T[],
+) {
+  const brandIds = Array.from(
+    new Set(
+      products
+        .map((product) => normalizeReferenceId((product as any).brand))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  const categoryIds = Array.from(
+    new Set(
+      products
+        .map((product) => normalizeReferenceId((product as any).categoryId))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  const [brandDocs, categoryDocs] = await Promise.all([
+    brandIds.length
+      ? Brand.find({
+          _id: { $in: brandIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        })
+          .select("_id name")
+          .lean()
+          .exec()
+      : [],
+    categoryIds.length
+      ? Category.find({
+          _id: {
+            $in: categoryIds.map((id) => new mongoose.Types.ObjectId(id)),
+          },
+        })
+          .select("_id name")
+          .lean()
+          .exec()
+      : [],
+  ]);
+
+  const brandMap = new Map(
+    (brandDocs as any[]).map((brand) => [
+      brand._id.toString(),
+      { _id: brand._id.toString(), name: brand.name },
+    ]),
+  );
+  const categoryMap = new Map(
+    (categoryDocs as any[]).map((category) => [
+      category._id.toString(),
+      { _id: category._id.toString(), name: category.name },
+    ]),
+  );
+
+  return products.map((product) => {
+    const productWithRefs: Record<string, any> = { ...product };
+
+    const brandRaw = (product as any).brand;
+    const brandId = normalizeReferenceId(brandRaw);
+    productWithRefs.brand = brandId
+      ? (brandMap.get(brandId) ?? brandRaw)
+      : null;
+
+    const categoryRaw = (product as any).categoryId;
+    const categoryId = normalizeReferenceId(categoryRaw);
+    productWithRefs.categoryId = categoryId
+      ? (categoryMap.get(categoryId) ?? categoryRaw)
+      : null;
+
+    return productWithRefs as T;
+  });
 }
 
 // ---------- Server Actions ----------
@@ -180,53 +347,29 @@ export async function findProducts(id?: string) {
     await connection();
 
     if (id) {
-      const product = await Product.findById(id)
-        .populate({
-          path: "brand",
-          select: "name",
-          options: { strictPopulate: false },
-        })
-        .populate({
-          path: "category_id",
-          select: "_id name",
-          options: { strictPopulate: false },
-        })
-        .populate({
-          path: "related_products.id", // populate the product details
-          select: "name list_price main_image slug",
-          options: { strictPopulate: false },
-        })
-        .lean()
-        .exec();
+      const product = await Product.findById(id).lean().exec();
 
       if (!product) {
         return { success: false, error: "Product not found" };
       }
 
-      return serialize(product);
+      const hydratedProduct = (await hydrateProductReferences([product]))[0];
+      return addLegacyProductAliases(serialize(hydratedProduct));
     }
 
-    const products = await Product.find()
-      .populate({
-        path: "brand",
-        select: "name",
-        options: { strictPopulate: false },
-      })
-      .populate({
-        path: "category_id",
-        select: "_id name",
-        options: { strictPopulate: false },
-      })
-      .sort({ createdAt: -1 })
-      .lean()
-      .exec();
+    const products = await Product.find().sort({ createdAt: -1 }).lean().exec();
 
     if (!products) {
       console.error("No products found");
       return [];
     }
 
-    return serialize(products);
+    const hydratedProducts = await hydrateProductReferences(products);
+    console.log(
+      `Fetched ${hydratedProducts.length} products from the database.`,
+    );
+
+    return (serialize(hydratedProducts) as any[]).map(addLegacyProductAliases);
   } catch (error) {
     console.error("Error finding products:", error);
     return { success: false, error: "Failed to fetch products" };
@@ -239,11 +382,11 @@ export async function createProduct(
   try {
     await connection();
 
-    // Convert snake_case keys to camelCase if needed
-    const transformedData = transformSnakeToCamel(formData);
+    const normalizedIncoming = normalizeProductPayloadForValidation(formData);
+    const transformedData = transformSnakeToCamel(normalizedIncoming);
+    const canonicalData = finalizeCanonicalProductData(transformedData);
 
-    // Validate with Zod schema
-    const validationResult = safeValidateProductCreate(transformedData);
+    const validationResult = safeValidateProductCreate(canonicalData);
     if (!validationResult.success) {
       return {
         success: false,
@@ -330,11 +473,48 @@ export async function updateProduct(
   try {
     await connection();
 
-    // Convert snake_case keys to camelCase if needed
-    const transformedData = transformSnakeToCamel(formData);
+    const normalizedIncoming = normalizeProductPayloadForValidation(formData);
+    const rawKeys = Object.keys(normalizedIncoming ?? {});
+    const categoryOnlyUpdate =
+      rawKeys.length > 0 &&
+      rawKeys.every(
+        (key) => key === "categoryId" || key === "category_id" || key === "_id",
+      );
+
+    const transformedData = transformSnakeToCamel(normalizedIncoming);
+    const canonicalData = finalizeCanonicalProductData(transformedData);
+
+    if (categoryOnlyUpdate) {
+      const categoryId = canonicalData.categoryId ?? canonicalData.category_id;
+
+      if (!productId) {
+        return { success: false, error: "Valid product ID is required" };
+      }
+      if (!categoryId) {
+        return { success: false, error: "Category is required" };
+      }
+
+      const updateData: any = {
+        categoryId: new mongoose.Types.ObjectId(categoryId),
+        updatedAt: new Date(),
+      };
+
+      const updatedProduct = await Product.findOneAndUpdate(
+        { _id: new mongoose.Types.ObjectId(productId) },
+        updateData,
+        { new: true, runValidators: true },
+      );
+
+      if (!updatedProduct) {
+        return { success: false, error: "Product not found" };
+      }
+
+      revalidatePath("/products");
+      return { success: true, data: serialize(updatedProduct.toObject()) };
+    }
 
     // Validate with Zod schema
-    const validationResult = safeValidateProductUpdate(transformedData);
+    const validationResult = safeValidateProductUpdate(canonicalData);
     if (!validationResult.success) {
       return {
         success: false,
@@ -349,7 +529,7 @@ export async function updateProduct(
       quantity,
       lowStockThreshold,
       ...attributes
-    } = validationResult.data || transformedData;
+    } = validationResult.data || canonicalData;
 
     if (!productId) {
       return { success: false, error: "Valid product ID is required" };
@@ -437,17 +617,156 @@ export async function updateProduct(
   }
 }
 
+function toScalarId(value: any): string | null {
+  const candidate = extractIdCandidate(value);
+  if (candidate === null || candidate === undefined || candidate === "") {
+    return null;
+  }
+
+  const stringValue =
+    typeof candidate === "string" ? candidate.trim() : String(candidate);
+  return stringValue && stringValue !== "[object Object]" ? stringValue : null;
+}
+
+function normalizeProductPayloadForValidation(value: any): any {
+  if (!value || typeof value !== "object") return value;
+
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeProductPayloadForValidation(item));
+  }
+
+  const normalized = { ...value };
+
+  const refKeys = ["categoryId", "brand", "carrier"];
+  for (const key of refKeys) {
+    if (normalized[key] !== undefined) {
+      const scalarValue = toScalarId(normalized[key]);
+      if (scalarValue) {
+        normalized[key] = scalarValue;
+      } else {
+        delete normalized[key];
+      }
+    }
+  }
+
+  if (typeof normalized.status === "string") {
+    const statusValue = normalized.status.trim();
+    normalized.status = statusValue.toLowerCase();
+  } else if (Array.isArray(normalized.status)) {
+    normalized.status = normalized.status[0] || "draft";
+    normalized.status = String(normalized.status).trim().toLowerCase();
+  }
+
+  if (Array.isArray(normalized.variants)) {
+    normalized.variants = normalized.variants.map((variant: any) => {
+      if (!variant || typeof variant !== "object") return variant;
+      const nextVariant = { ...variant };
+      if (Array.isArray(nextVariant.mainImage)) {
+        nextVariant.mainImage = nextVariant.mainImage[0] || "";
+      }
+      if (Array.isArray(nextVariant.images)) {
+        nextVariant.images = nextVariant.images.filter(Boolean);
+      }
+      return nextVariant;
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeKeyValueCollection(value: any): any[] {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return null;
+
+        const key = entry.k ?? entry.key ?? entry.name ?? "";
+        const normalizedKey =
+          typeof key === "string" ? key.trim() : String(key ?? "").trim();
+
+        if (!normalizedKey) return null;
+
+        const normalizedEntry: Record<string, any> = {
+          k: normalizedKey,
+          v: entry.v ?? entry.value ?? entry.values ?? "",
+        };
+
+        if (entry.unit) normalizedEntry.unit = entry.unit;
+        return normalizedEntry;
+      })
+      .filter(Boolean);
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, val]) => {
+        const normalizedKey = String(key).trim();
+        if (!normalizedKey) return null;
+        return { k: normalizedKey, v: val ?? "" };
+      })
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function finalizeCanonicalProductData(data: Record<string, any>) {
+  const canonicalData = { ...data };
+
+  for (const key of ["categoryId", "brand"]) {
+    if (canonicalData[key] === null || canonicalData[key] === undefined) {
+      delete canonicalData[key];
+      continue;
+    }
+    const scalar = toScalarId(canonicalData[key]);
+    if (scalar) {
+      canonicalData[key] = scalar;
+    } else {
+      delete canonicalData[key];
+    }
+  }
+
+  if (Array.isArray(canonicalData.carrier)) {
+    const carrier = toScalarId(canonicalData.carrier);
+    if (carrier) {
+      canonicalData.carrier = carrier;
+    } else {
+      delete canonicalData.carrier;
+    }
+  }
+
+  if (canonicalData.variantValues !== undefined) {
+    canonicalData.variantValues = normalizeKeyValueCollection(
+      canonicalData.variantValues,
+    );
+  }
+  if (canonicalData.keyFeatures !== undefined) {
+    canonicalData.keyFeatures = normalizeKeyValueCollection(
+      canonicalData.keyFeatures,
+    );
+  }
+
+  if (typeof canonicalData.status === "string") {
+    canonicalData.status = canonicalData.status.trim().toLowerCase();
+  }
+
+  return canonicalData;
+}
+
 export async function createOrUpdateProduct(
   productData: any,
 ): Promise<ProductResponse> {
   try {
     await connection();
 
-    // Convert snake_case keys to camelCase if needed
-    const transformedData = transformSnakeToCamel(productData);
+    const normalizedIncoming =
+      normalizeProductPayloadForValidation(productData);
+    const transformedData = transformSnakeToCamel(normalizedIncoming);
+    const canonicalData = finalizeCanonicalProductData(transformedData);
 
-    // Validate with Zod schema
-    const validationResult = safeValidateProductCreateOrUpdate(transformedData);
+    const validationResult = safeValidateProductCreateOrUpdate(canonicalData);
     if (!validationResult.success) {
       return {
         success: false,
@@ -463,7 +782,7 @@ export async function createOrUpdateProduct(
       quantity,
       lowStockThreshold,
       ...attributes
-    } = validationResult.data || transformedData;
+    } = validationResult.data || canonicalData;
 
     const cleanedAttributes = cleanObject(attributes);
     const { createdAt, updatedAt, __v, ...safeAttributes } = cleanedAttributes;

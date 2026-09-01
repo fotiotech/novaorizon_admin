@@ -8,7 +8,9 @@ const envFile = fs.existsSync(envFilePath)
   : "";
 
 for (const line of envFile.split(/\r?\n/)) {
-  const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+  const match = line.match(
+    /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/,
+  );
   if (!match) continue;
   const [, key, rawValue] = match;
   const value = rawValue.replace(/^['"]|['"]$/g, "");
@@ -95,11 +97,127 @@ function transformSnakeToCamel(obj: AnyObject): AnyObject {
   return transformed;
 }
 
+function normalizeProductDocument(product: AnyObject): AnyObject {
+  const normalized = { ...product };
+
+  if (!normalized.name && typeof normalized.title === "string") {
+    normalized.name = normalized.title;
+  }
+
+  if (
+    !normalized.productCode &&
+    (normalized.code_type || normalized.code_value || normalized.model)
+  ) {
+    const type = normalized.code_type || "MODEL";
+    const value = normalized.code_value || normalized.model || "";
+    if (value) {
+      normalized.productCode = [
+        { type: String(type).toUpperCase(), value: String(value) },
+      ];
+    }
+  }
+
+  if (!normalized.mainImage && normalized.main_image) {
+    normalized.mainImage = normalized.main_image;
+  }
+
+  if (Array.isArray(normalized.gallery) && !Array.isArray(normalized.images)) {
+    normalized.images = normalized.gallery;
+  }
+
+  if (normalized.list_price != null && normalized.listPrice == null) {
+    normalized.listPrice = normalized.list_price;
+  }
+
+  if (normalized.sale_price != null && normalized.price == null) {
+    normalized.price = normalized.sale_price;
+  }
+
+  if (
+    normalized.low_stock_threshold != null &&
+    normalized.lowStockThreshold == null
+  ) {
+    normalized.lowStockThreshold = normalized.low_stock_threshold;
+  }
+
+  if (normalized.short_desc != null && normalized.shortDescription == null) {
+    normalized.shortDescription = normalized.short_desc;
+  }
+
+  if (
+    Array.isArray(normalized.related_products) &&
+    !Array.isArray(normalized.relatedProducts)
+  ) {
+    normalized.relatedProducts = normalized.related_products.map(
+      (item: any) => ({
+        id: item?.id || item?._id || item,
+        relationshipType:
+          item?.relationshipType || item?.relationship_type || "Related",
+      }),
+    );
+  }
+
+  if (Array.isArray(normalized.relatedProducts)) {
+    normalized.relatedProducts = normalized.relatedProducts.map(
+      (item: any) => ({
+        id: item?.id || item?._id || item,
+        relationshipType:
+          item?.relationshipType || item?.relationship_type || "Related",
+      }),
+    );
+  }
+
+  if (normalized.stock_status && !normalized.status) {
+    const status = String(normalized.stock_status).toLowerCase();
+    normalized.status = ["draft", "active", "inactive"].includes(status)
+      ? status
+      : "draft";
+  }
+
+  // Remove legacy keys after normalization
+  const legacyKeys = [
+    "category_id",
+    "brand_id",
+    "product_id",
+    "list_price",
+    "sale_price",
+    "main_image",
+    "gallery",
+    "low_stock_threshold",
+    "short_desc",
+    "key_features",
+    "code_type",
+    "code_value",
+    "related_products",
+    "variant_themes",
+    "stock_quantity",
+    "image_url",
+    "image_urls",
+    "hero_image",
+    "attribute_set_id",
+    "attribute_set",
+    "variant_name",
+    "product_code",
+    "sort_order",
+    "parent_id",
+    "model",
+    "msrp",
+    "condition",
+    "stock_status",
+  ];
+
+  for (const key of legacyKeys) {
+    delete normalized[key];
+  }
+
+  return normalized;
+}
+
 async function migrateProducts() {
   try {
     console.log("🔄 Connecting to MongoDB...");
-    await mongoose.connect(mongoUri);
-    console.log("✅ Connected to MongoDB");
+    await mongoose.connect(mongoUri, { dbName: "fotiodb" });
+    console.log("✅ Connected to MongoDB (fotiodb)");
 
     const db = mongoose.connection.db;
     if (!db) {
@@ -112,6 +230,42 @@ async function migrateProducts() {
     const attributeGroupsCollection = db.collection("attributegroups");
     const attributeSetsCollection = db.collection("attributesets");
 
+    const legacyFieldNames = [
+      "category_id",
+      "brand_id",
+      "product_id",
+      "list_price",
+      "sale_price",
+      "main_image",
+      "gallery",
+      "low_stock_threshold",
+      "short_desc",
+      "key_features",
+      "code_type",
+      "code_value",
+      "related_products",
+      "variant_themes",
+      "stock_quantity",
+      "image_url",
+      "image_urls",
+      "hero_image",
+      "attribute_set_id",
+      "attribute_set",
+      "variant_name",
+      "product_code",
+      "sort_order",
+      "parent_id",
+      "model",
+      "msrp",
+      "condition",
+      "stock_status",
+      "dsin",
+    ];
+
+    const legacyUnset = Object.fromEntries(
+      legacyFieldNames.map((field) => [field, ""]),
+    );
+
     // Migrate products
     console.log("🔄 Migrating products...");
     const products = await productsCollection.find({}).toArray();
@@ -123,14 +277,15 @@ async function migrateProducts() {
     for (const product of products) {
       try {
         const transformed = transformSnakeToCamel(product);
+        const normalized = normalizeProductDocument(transformed);
 
         // Remove deprecated fields
-        const updateData: AnyObject = { ...transformed };
+        const updateData: AnyObject = { ...normalized };
         delete updateData.dsin;
 
         await productsCollection.updateOne(
           { _id: product._id },
-          { $set: updateData, $unset: { dsin: "" } },
+          { $set: updateData, $unset: legacyUnset },
         );
 
         productsUpdated++;

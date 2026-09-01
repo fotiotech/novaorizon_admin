@@ -33,6 +33,19 @@ interface VariantsManagerProps {
   onUpdate: (field: string, value: any) => void;
 }
 
+const normalizeCode = (code?: string): string => {
+  if (!code) return "";
+  return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
+};
+
+const readProductValue = (obj: any, ...keys: string[]) => {
+  if (!obj) return undefined;
+  for (const key of keys) {
+    if (obj[key] !== undefined) return obj[key];
+  }
+  return undefined;
+};
+
 const cartesian = (arrays: string[][]): string[][] =>
   arrays.reduce<string[][]>(
     (acc, curr) => acc.flatMap((a) => curr.map((c) => [...a, c])),
@@ -72,16 +85,20 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
     useEffect(() => {
       if (initialized.current || !product) return;
 
-      const savedThemes = product.variant_themes || [];
+      const savedThemes =
+        readProductValue(product, "variantThemes", "variant_themes") || [];
       const validThemes = savedThemes.filter((code: string) =>
-        attributes.some((a) => a.code === code),
+        attributes.some((a) => normalizeCode(a.code) === normalizeCode(code)),
       );
       setSelectedThemeCodes(validThemes);
 
-      const savedValues = product.variant_values || {};
+      const savedValues =
+        readProductValue(product, "variantValues", "variant_values") || {};
       const initialValues: Record<string, string[]> = {};
       attributes.forEach((attr) => {
-        initialValues[attr.code] = savedValues[attr.code] || [];
+        const normalizedAttrCode = normalizeCode(attr.code);
+        initialValues[normalizedAttrCode] =
+          savedValues[normalizedAttrCode] || [];
       });
       setThemeValues(initialValues);
 
@@ -91,7 +108,8 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       setVariants(initialVariants);
 
       validThemes.forEach((code: string) => {
-        prevProductValues.current[code] = product[code] ?? "";
+        prevProductValues.current[normalizeCode(code)] =
+          product[normalizeCode(code)] ?? "";
       });
 
       initialized.current = true;
@@ -109,8 +127,9 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       const newThemeValues = { ...themeValues };
 
       selectedThemeCodes.forEach((code) => {
-        const productValue = product[code];
-        const prevValue = prevProductValues.current[code];
+        const normalizedCode = normalizeCode(code);
+        const productValue = product[normalizedCode];
+        const prevValue = prevProductValues.current[normalizedCode];
 
         if (
           productValue !== undefined &&
@@ -118,17 +137,17 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
           productValue !== ""
         ) {
           const stringValue = String(productValue);
-          const currentValues = themeValues[code] || [];
+          const currentValues = themeValues[normalizedCode] || [];
 
           if (stringValue !== prevValue || currentValues[0] !== stringValue) {
             const filtered = currentValues.filter((v) => v !== stringValue);
-            newThemeValues[code] = [stringValue, ...filtered];
+            newThemeValues[normalizedCode] = [stringValue, ...filtered];
             changed = true;
-            prevProductValues.current[code] = stringValue;
+            prevProductValues.current[normalizedCode] = stringValue;
           }
         } else {
           if (prevValue !== undefined && prevValue !== "") {
-            prevProductValues.current[code] = "";
+            prevProductValues.current[normalizedCode] = "";
           }
         }
       });
@@ -136,7 +155,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       if (changed) {
         isSyncing.current = true;
         setThemeValues(newThemeValues);
-        onUpdate("variant_values", newThemeValues);
+        onUpdate("variantValues", newThemeValues);
         setTimeout(() => {
           isSyncing.current = false;
         }, 0);
@@ -152,7 +171,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
     useEffect(() => {
       if (isInitializing.current) return;
 
-      const themeCodes = selectedThemeCodes;
+      const themeCodes = selectedThemeCodes.map((code) => normalizeCode(code));
       const valueArrays = themeCodes.map((code) => themeValues[code] || []);
 
       if (
@@ -225,10 +244,10 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
     const handleThemeSelect = useCallback(
       (selectedOptions: any) => {
         const selectedCodes = selectedOptions
-          ? selectedOptions.map((opt: any) => opt.value)
+          ? selectedOptions.map((opt: any) => normalizeCode(opt.value))
           : [];
         setSelectedThemeCodes(selectedCodes);
-        onUpdate("variant_themes", selectedCodes);
+        onUpdate("variantThemes", selectedCodes);
 
         const newThemeValues = { ...themeValues };
         let updated = false;
@@ -249,7 +268,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
         });
         if (updated) {
           setThemeValues(newThemeValues);
-          onUpdate("variant_values", newThemeValues);
+          onUpdate("variantValues", newThemeValues);
         }
       },
       [onUpdate, themeValues, product],
@@ -257,13 +276,14 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
 
     const handleThemeValuesChange = useCallback(
       (themeCode: string, valuesString: string) => {
+        const normalizedThemeCode = normalizeCode(themeCode);
         const values = valuesString
           .split(",")
           .map((v) => v.trim())
           .filter(Boolean);
         setThemeValues((prev) => {
-          const newThemeValues = { ...prev, [themeCode]: values };
-          onUpdate("variant_values", newThemeValues);
+          const newThemeValues = { ...prev, [normalizedThemeCode]: values };
+          onUpdate("variantValues", newThemeValues);
           return newThemeValues;
         });
       },
@@ -272,18 +292,19 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
 
     const handleVariantChange = useCallback(
       (index: number, field: string, value: any) => {
+        const normalizedField = normalizeCode(field);
         setVariants((prev) => {
           const updated = prev.map((v, i) =>
-            i === index ? { ...v, [field]: value } : v,
+            i === index ? { ...v, [normalizedField]: value } : v,
           );
           onUpdate("variants", updated);
           return updated;
         });
 
-        if (index === 0 && selectedThemeCodes.includes(field)) {
+        if (index === 0 && selectedThemeCodes.includes(normalizedField)) {
           isSyncing.current = true;
-          onUpdate(field, value);
-          prevProductValues.current[field] = String(value);
+          onUpdate(normalizedField, value);
+          prevProductValues.current[normalizedField] = String(value);
           setTimeout(() => {
             isSyncing.current = false;
           }, 0);
@@ -295,7 +316,8 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
     // ---- Render field input (memoized) ----
     const renderFieldInput = useCallback(
       (field: Attribute, variant: Variant, index: number) => {
-        const value = variant[field.code] ?? "";
+        const fieldCode = normalizeCode(field.code);
+        const value = variant[fieldCode] ?? "";
         const commonProps = {
           className: "w-full p-1 border rounded",
           value,
@@ -311,7 +333,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
                   const val = e.target.value;
                   handleVariantChange(
                     index,
-                    field.code,
+                    fieldCode,
                     val === "" ? null : Number(val),
                   );
                 }}
@@ -337,9 +359,9 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
             return (
               <VariantImageUploader
                 index={index}
-                fieldCode={field.code}
+                fieldCode={fieldCode}
                 productId={productId}
-                initialFiles={(variant[field.code] as string[]) || []}
+                initialFiles={(variant[fieldCode] as string[]) || []}
                 handleVariantChange={handleVariantChange}
               />
             );

@@ -27,6 +27,11 @@ interface FieldProps {
   isRequired?: boolean;
 }
 
+const normalizeCode = (code?: string): string => {
+  if (!code) return "";
+  return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
+};
+
 // ----- Wrapper for main_image (single file) -----
 const MainImageUploaderWrapper: React.FC<{
   productId: string;
@@ -119,12 +124,13 @@ const Fields: React.FC<FieldProps> = React.memo(
 
       const loadOptions = async () => {
         try {
-          if (code === "brand") {
+          const normalizedCode = normalizeCode(code);
+          if (normalizedCode === "brand") {
             const brandsData = await getBrands();
             if (isActive) setBrands(brandsData);
           }
 
-          if (code === "carrier") {
+          if (normalizedCode === "carrier") {
             const carriersData = await getCarriers();
             if (isActive) setCarriers(carriersData);
           }
@@ -136,7 +142,10 @@ const Fields: React.FC<FieldProps> = React.memo(
         }
       };
 
-      if (code === "brand" || code === "carrier") {
+      if (
+        normalizeCode(code) === "brand" ||
+        normalizeCode(code) === "carrier"
+      ) {
         void loadOptions();
       }
 
@@ -197,9 +206,10 @@ const Fields: React.FC<FieldProps> = React.memo(
     };
 
     const renderField = () => {
+      const normalizedCode = normalizeCode(code);
       switch (type) {
         case "file":
-          if (code === "main_image") {
+          if (normalizedCode === "mainImage") {
             return (
               <MainImageUploaderWrapper
                 productId={productId || ""}
@@ -208,7 +218,10 @@ const Fields: React.FC<FieldProps> = React.memo(
                 handleAttributeChange={handleAttributeChange}
               />
             );
-          } else if (code === "gallery") {
+          } else if (
+            normalizedCode === "images" ||
+            normalizedCode === "gallery"
+          ) {
             return (
               <GalleryUploaderWrapper
                 productId={productId || ""}
@@ -234,7 +247,7 @@ const Fields: React.FC<FieldProps> = React.memo(
           );
 
         case "textarea":
-          if (code === "long_desc") {
+          if (normalizedCode === "description") {
             return (
               <RichTextEditorWrapper
                 value={field || ""}
@@ -328,7 +341,8 @@ const Fields: React.FC<FieldProps> = React.memo(
         }
 
         case "select": {
-          if (code === "brand") {
+          const normalizedCode = normalizeCode(code);
+          if (normalizedCode === "brand") {
             const brandOptions = brands.map((brand) => ({
               value: brand._id.toString(),
               label: brand.name,
@@ -336,7 +350,9 @@ const Fields: React.FC<FieldProps> = React.memo(
             const selectedBrandId =
               typeof field === "object" && field !== null
                 ? (field._id || field.id || "").toString()
-                : (field || "").toString();
+                : Array.isArray(field)
+                  ? (field[0] || "").toString()
+                  : (field || "").toString();
 
             return (
               <Select
@@ -357,73 +373,52 @@ const Fields: React.FC<FieldProps> = React.memo(
             );
           }
 
-          if (code === "carrier") {
+          if (normalizedCode === "carrier") {
             const carrierOptions = carriers.map((c) => ({
               value: c._id,
               label: c.name,
             }));
 
-            const selectedValues = Array.isArray(field)
-              ? field
-                  .map((id) => {
-                    const option = carrierOptions.find((o) => o.value === id);
-                    return option || null;
-                  })
-                  .filter(
-                    (item): item is { value: string; label: string } =>
-                      item !== null,
-                  )
-              : [];
+            const rawCarrier = Array.isArray(field)
+              ? field[0]
+              : typeof field === "object" && field !== null
+                ? field._id || field.id || field.value || ""
+                : field || "";
 
             return (
               <Select
-                isMulti
                 options={carrierOptions}
-                value={selectedValues}
-                onChange={(
-                  opts: MultiValue<{ value: string; label: string } | null>,
-                ) =>
-                  handleAttributeChange(
-                    code,
-                    opts
-                      .filter(
-                        (o): o is { value: string; label: string } =>
-                          o !== null,
-                      )
-                      .map((o) => o.value),
-                  )
+                value={
+                  carrierOptions.find(
+                    (option) => option.value === rawCarrier,
+                  ) || null
+                }
+                onChange={(opt: { value: string; label: string } | null) =>
+                  handleAttributeChange(code, opt ? opt.value : null)
                 }
                 styles={customSelectStyles}
                 className="react-select-container"
                 classNamePrefix="react-select"
                 required={isRequired}
-                placeholder="Select carriers..."
+                placeholder="Select carrier..."
               />
             );
           }
 
+          const selectedValue = Array.isArray(field)
+            ? field[0] || ""
+            : (field ?? "");
+
           return (
             <Select
-              isMulti
               options={option.map((v) => ({ value: v, label: v }))}
               value={
-                Array.isArray(field)
-                  ? option
-                      .filter((v) => field.includes(v))
-                      .map((v) => ({ value: v, label: v }))
-                  : []
+                option
+                  .filter((v) => v === selectedValue)
+                  .map((v) => ({ value: v, label: v }))[0] || null
               }
-              onChange={(
-                opts: MultiValue<{ value: string; label: string } | null>,
-              ) =>
-                handleAttributeChange(
-                  code,
-                  opts
-                    .filter(
-                      (o): o is { value: string; label: string } => o !== null,
-                    )
-                    .map((o) => o.value),
-                )
+              onChange={(opt: { value: string; label: string } | null) =>
+                handleAttributeChange(code, opt ? opt.value : null)
               }
               styles={customSelectStyles}
               className="react-select-container"

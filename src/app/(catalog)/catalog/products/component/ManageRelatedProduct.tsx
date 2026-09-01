@@ -14,8 +14,21 @@ interface ManageRelatedProductProps {
 
 interface RelatedProduct {
   id: string;
-  relationship_type: string;
+  relationshipType: string;
 }
+
+const normalizeCode = (code?: string): string => {
+  if (!code) return "";
+  return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
+};
+
+const readProductValue = (obj: any, ...keys: string[]) => {
+  if (!obj) return undefined;
+  for (const key of keys) {
+    if (obj[key] !== undefined) return obj[key];
+  }
+  return undefined;
+};
 
 const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   id,
@@ -31,8 +44,12 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   const isInitializing = useRef(true);
 
   // Find attributes from the group
-  const relatedAttr = attribute.find((a) => a.code === "related_products");
-  const relationTypeAttr = attribute.find((a) => a.code === "relation_type");
+  const relatedAttr = attribute.find(
+    (a) => normalizeCode(a.code) === "relatedProducts",
+  );
+  const relationTypeAttr = attribute.find(
+    (a) => normalizeCode(a.code) === "relationType",
+  );
 
   // Fetch products on mount
   useEffect(() => {
@@ -53,25 +70,36 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
 
   // Initialize relatedProducts from product data
   useEffect(() => {
-    if (!product?.related_products) {
+    const relatedProductsData = readProductValue(
+      product,
+      "relatedProducts",
+      "related_products",
+    );
+    if (!relatedProductsData) {
       setRelatedProducts([]);
       isInitializing.current = false;
       return;
     }
 
     let initial: RelatedProduct[] = [];
-    if (Array.isArray(product.related_products)) {
-      initial = product.related_products;
-    } else if (product.related_products.ids) {
-      const defaultType = product.related_products.relationship_type || "";
-      initial = product.related_products.ids.map((pid: string) => ({
+    if (Array.isArray(relatedProductsData)) {
+      initial = relatedProductsData.map((rp: any) => ({
+        id: rp.id,
+        relationshipType: rp.relationshipType || rp.relationship_type || "",
+      }));
+    } else if (relatedProductsData.ids) {
+      const defaultType =
+        relatedProductsData.relationshipType ||
+        relatedProductsData.relationship_type ||
+        "";
+      initial = relatedProductsData.ids.map((pid: string) => ({
         id: pid,
-        relationship_type: defaultType,
+        relationshipType: defaultType,
       }));
     }
     setRelatedProducts(initial);
     isInitializing.current = false;
-  }, [product?.related_products]);
+  }, [product]);
 
   // Sync local changes to parent (skip initial render and initialization)
   useEffect(() => {
@@ -80,7 +108,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
       return;
     }
     if (isInitializing.current) return;
-    onUpdate("related_products", relatedProducts);
+    onUpdate("relatedProducts", relatedProducts);
   }, [relatedProducts, onUpdate]);
 
   // Handlers
@@ -96,7 +124,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
       const defaultType = relationTypeAttr?.options?.[0] || "";
       updated = [
         ...relatedProducts,
-        { id: productId, relationship_type: defaultType },
+        { id: productId, relationshipType: defaultType },
       ];
     }
     setRelatedProducts(updated);
@@ -104,7 +132,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
 
   const handleRelationshipChange = (productId: string, value: string) => {
     const updated = relatedProducts.map((rp) =>
-      rp.id === productId ? { ...rp, relationship_type: value } : rp,
+      rp.id === productId ? { ...rp, relationshipType: value } : rp,
     );
     setRelatedProducts(updated);
   };
@@ -183,7 +211,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
           filteredProducts.map((item) => {
             const selected = relatedProducts.find((rp) => rp.id === item._id);
             const isSelected = !!selected;
-            const relationshipType = selected?.relationship_type || "";
+            const relationshipType = selected?.relationshipType || "";
 
             return (
               <div
@@ -201,7 +229,9 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                 >
                   <div className="w-12 h-12 relative flex-shrink-0">
                     <Image
-                      src={item.main_image || "/placeholder.png"}
+                      src={
+                        item.mainImage || item.main_image || "/placeholder.png"
+                      }
                       alt={item.name || item.title || "Product"}
                       fill
                       className="object-cover rounded-lg"

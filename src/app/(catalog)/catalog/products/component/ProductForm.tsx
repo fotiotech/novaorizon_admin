@@ -83,22 +83,62 @@ const isEmptyValue = (value: any): boolean => {
 };
 
 // ------------------------------------------------------------------
+// Helper: normalize categoryProperty codes to camelCase while keeping
+// compatibility with legacy snake_case values from older data.
+// ------------------------------------------------------------------
+const normalizeCode = (code?: string): string => {
+  if (!code) return "";
+  return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
+};
+
+const toScalarId = (value: any): string | null => {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value)) return toScalarId(value[0]) || null;
+  if (typeof value === "object") {
+    if (
+      value instanceof Date === false &&
+      (typeof value.toHexString === "function" ||
+        value._bsontype === "ObjectId" ||
+        value.constructor?.name === "ObjectId")
+    ) {
+      return value.toString();
+    }
+
+    const nested =
+      value._id ?? value.id ?? value.value ?? value.categoryId ?? value.brand;
+    if (nested !== undefined && nested !== null && nested !== value) {
+      const scalar = toScalarId(nested);
+      if (scalar) return scalar;
+    }
+
+    const candidate =
+      Object.prototype.toString.call(value) === "[object Object]"
+        ? ""
+        : String(value);
+    return candidate && candidate !== "[object Object]" ? candidate : null;
+  }
+  return null;
+};
+
+// ------------------------------------------------------------------
 // Helper: get all relevant keys for a group (including children)
 // for custom memo comparison
 // ------------------------------------------------------------------
 function getGroupRelevantKeys(group: GroupNode): string[] {
   const keys: string[] = [];
-  // Add own attribute codes (convert to camelCase for lookup)
-  group.attributes.forEach((attr) => keys.push(snakeToCamel(attr.code)));
+  // Add own attribute codes (normalize to camelCase for lookup)
+  group.attributes.forEach((attr) => keys.push(normalizeCode(attr.code)));
   // Recursively add children's attribute codes
   group.children.forEach((child) => {
     keys.push(...getGroupRelevantKeys(child));
   });
   // Special groups need additional top‑level product fields
-  if (group.code === "variant_themes") {
+  if (normalizeCode(group.code) === "variantThemes") {
     keys.push("variantThemes", "variantValues", "variants");
   }
-  if (group.code === "product_relationships") {
+  if (normalizeCode(group.code) === "productRelationships") {
     keys.push("relatedProducts");
   }
   return keys;
@@ -129,15 +169,16 @@ const GroupRenderer = memo(
   }: GroupRendererProps) => {
     const { id, code, name, attributes, children } = group;
     const groupErrors = validationErrors[id] || [];
+    const normalizedCode = normalizeCode(code);
 
     const isSpecialGroup =
-      code === "variant_themes" ||
-      code === "product_relationships" ||
-      code === "variant_fields" ||
-      code === "variants";
+      normalizedCode === "variantThemes" ||
+      normalizedCode === "productRelationships" ||
+      normalizedCode === "variants" ||
+      normalizedCode === "variantFields";
 
     if (isSpecialGroup) {
-      if (code === "variant_themes") {
+      if (normalizedCode === "variantThemes") {
         return (
           <section key={id} className="mb-2">
             <h2 className="text-sm font-semibold text-muted-foreground pb-2">
@@ -175,7 +216,7 @@ const GroupRenderer = memo(
           </section>
         );
       }
-      if (code === "product_relationships") {
+      if (normalizedCode === "productRelationships") {
         return (
           <section key={id} className="mb-2">
             <h2 className="text-sm font-semibold text-muted-foreground pb-2">
@@ -203,7 +244,7 @@ const GroupRenderer = memo(
           </section>
         );
       }
-      if (code === "variants" || code === "variant_fields") {
+      if (normalizedCode === "variants" || normalizedCode === "variantFields") {
         return null;
       }
     }
@@ -219,7 +260,7 @@ const GroupRenderer = memo(
               <AttributeField
                 productId={productId}
                 attribute={a}
-                field={productData[snakeToCamel(a.code)]}
+                field={productData[normalizeCode(a.code)]}
                 handleAttributeChange={handleChange}
                 units={units}
               />
@@ -277,7 +318,7 @@ const GroupRenderer = memo(
     if (prevGroupErrors.some((e, i) => e !== nextGroupErrors[i])) return false;
 
     // 4. If group is variant_themes, also compare variants validation errors
-    if (prevProps.group.code === "variant_themes") {
+    if (normalizeCode(prevProps.group.code) === "variantThemes") {
       const prevVariantErrors = prevProps.validationErrors["variants"] || [];
       const nextVariantErrors = nextProps.validationErrors["variants"] || [];
       if (prevVariantErrors.length !== nextVariantErrors.length) return false;
@@ -347,8 +388,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
         // 1. If editing, fetch product
         if (initialProductId) {
           const result = await findProducts(initialProductId);
+          console.log("Fetched product data:", result);
           if (result && !result.error) {
             data = result;
+            data._id = initialProductId;
           } else {
             setError("Failed to load product");
           }
@@ -373,16 +416,49 @@ const ProductForm: React.FC<ProductFormProps> = ({
         // 4. Fetch draft (keyed by productId)
         const draft = await getProductDraft(productId);
         if (draft) {
-          data = { ...data, ...draft };
-          if (draft._id) {
-            setProductId(draft._id);
-          }
+          const draftData = { ...draft };
+          delete draftData._id;
+          data = { ...data, ...draftData };
+        }
+
+        if (initialProductId) {
+          data._id = initialProductId;
         }
 
         // 5. If still no categoryId and initialCategoryId is provided, set it
         if (!data.categoryId && initialCategoryId) {
           data.categoryId = initialCategoryId;
         }
+
+        if (data.categoryId) {
+          const nextCategoryId = toScalarId(data.categoryId);
+          if (nextCategoryId) {
+            data.categoryId = nextCategoryId;
+          } else {
+            delete data.categoryId;
+          }
+        }
+        if (data.brand) {
+          const nextBrandId = toScalarId(data.brand);
+          if (nextBrandId) {
+            data.brand = nextBrandId;
+          } else {
+            delete data.brand;
+          }
+        }
+        if (Array.isArray(data.carrier)) {
+          const nextCarrier = toScalarId(data.carrier);
+          if (nextCarrier) {
+            data.carrier = nextCarrier;
+          } else {
+            delete data.carrier;
+          }
+        }
+        if (typeof data.status === "string") {
+          data.status = data.status.trim().toLowerCase();
+        }
+
+        console.log("Final product data after loading and merging:", data);
 
         setProductData(data);
       } catch (err) {
@@ -435,9 +511,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
   // ============================================================
   const visibleSteps = useMemo(() => {
     const variantStepIndex = steps.findIndex((step) =>
-      step.groups.some(
-        (g) => g.code === "variant_themes" || g.code === "variant_fields",
-      ),
+      step.groups.some((g) => normalizeCode(g.code) === "variantThemes"),
     );
     // If no variant step exists, or hasVariants is truthy, show all
     if (variantStepIndex === -1 || productData.hasVariants) {
@@ -466,19 +540,23 @@ const ProductForm: React.FC<ProductFormProps> = ({
     const errors: string[] = [];
     group.attributes.forEach((attr) => {
       if (!attr.isRequired) return;
-      const camelCode = snakeToCamel(attr.code);
+      const camelCode = normalizeCode(attr.code);
       const value = productData[camelCode];
       if (isEmptyValue(value)) {
         errors.push(`${attr.name} is required`);
       }
     });
 
-    if (group.code === "product_code") {
-      const typeAttr = group.attributes.find((a) => a.code === "code_type");
-      const valueAttr = group.attributes.find((a) => a.code === "code_value");
+    if (normalizeCode(group.code) === "productCode") {
+      const typeAttr = group.attributes.find(
+        (a) => normalizeCode(a.code) === "codeType",
+      );
+      const valueAttr = group.attributes.find(
+        (a) => normalizeCode(a.code) === "codeValue",
+      );
       if (typeAttr && valueAttr) {
-        const codeType = productData[snakeToCamel("code_type")];
-        const codeValue = productData[snakeToCamel("code_value")];
+        const codeType = productData.codeType;
+        const codeValue = productData.codeValue;
         if (!isEmptyValue(codeType) && !isEmptyValue(codeValue)) {
           const valid = isValidBarcode(codeValue, codeType);
           if (!valid) {
@@ -499,7 +577,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
     let variantFields: AttributeDetail[] = [];
     for (const step of visibleSteps) {
-      const group = step.groups.find((g) => g.code === "variant_fields");
+      const group = step.groups.find(
+        (g) => normalizeCode(g.code) === "variantFields",
+      );
       if (group) {
         variantFields = group.attributes || [];
         break;
@@ -510,7 +590,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
     variants.forEach((variant: any, index: number) => {
       requiredVariantFields.forEach((field) => {
-        const camelCode = snakeToCamel(field.code);
+        const camelCode = normalizeCode(field.code);
         const value = variant[camelCode];
         if (isEmptyValue(value)) {
           errors.push(`Variant #${index + 1}: ${field.name} is required`);
@@ -533,9 +613,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
       });
     });
     const hasVariantStep = visibleSteps.some((step) =>
-      step.groups.some(
-        (g) => g.code === "variant_themes" || g.code === "variant_fields",
-      ),
+      step.groups.some((g) => normalizeCode(g.code) === "variantThemes"),
     );
     if (hasVariantStep) {
       const variantErrors = validateVariants();
@@ -565,7 +643,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     });
 
     const hasVariantGroup = currentStepData.groups.some(
-      (g) => g.code === "variant_themes",
+      (g) => normalizeCode(g.code) === "variantThemes",
     );
     if (hasVariantGroup) {
       const variantErrors = validateVariants();
@@ -601,8 +679,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
   // ---------- Change handler (stabilized using ref for currentStep) ----------
   const handleChange = useCallback(
     (field: string, value: any) => {
-      // Convert snake_case field names to camelCase for storage
-      const camelField = snakeToCamel(field);
+      // Use camelCase field names from categoryProperty when available
+      const camelField = normalizeCode(field);
 
       setProductData((prev) => ({ ...prev, [camelField]: value }));
 
@@ -611,7 +689,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
       const stepData = visibleSteps[stepIndex];
       if (stepData) {
         const group = stepData.groups.find((g) =>
-          g.attributes.some((a) => snakeToCamel(a.code) === camelField),
+          g.attributes.some((a) => normalizeCode(a.code) === camelField),
         );
         if (group) {
           setValidationErrors((prev) => {
@@ -663,12 +741,61 @@ const ProductForm: React.FC<ProductFormProps> = ({
     try {
       setError(null);
       setSuccess(null);
-      // Prepare payload with camelCase field names (Zod schema expects camelCase)
-      const payload = {
-        _id: productId === "new" ? undefined : productId,
-        ...productData,
-      };
-      const res = await createOrUpdateProduct(payload);
+
+      const payload = { ...productData };
+      const existingProductId =
+        initialProductId || (productId !== "new" ? productId : undefined);
+
+      if (existingProductId) {
+        payload._id = existingProductId;
+      } else {
+        delete payload._id;
+      }
+
+      const normalizedPayload: Record<string, any> = { ...payload };
+
+      if (normalizedPayload.categoryId) {
+        normalizedPayload.categoryId =
+          toScalarId(normalizedPayload.categoryId) || null;
+      }
+      if (normalizedPayload.brand) {
+        normalizedPayload.brand = toScalarId(normalizedPayload.brand) || null;
+      }
+      if (
+        normalizedPayload.carrier &&
+        Array.isArray(normalizedPayload.carrier)
+      ) {
+        normalizedPayload.carrier =
+          toScalarId(normalizedPayload.carrier) || null;
+      }
+      if (typeof normalizedPayload.status === "string") {
+        normalizedPayload.status = normalizedPayload.status
+          .trim()
+          .toLowerCase();
+      } else if (Array.isArray(normalizedPayload.status)) {
+        normalizedPayload.status = (normalizedPayload.status[0] || "draft")
+          .toString()
+          .trim()
+          .toLowerCase();
+      }
+
+      if (Array.isArray(normalizedPayload.variants)) {
+        normalizedPayload.variants = normalizedPayload.variants.map(
+          (variant: any) => {
+            if (!variant || typeof variant !== "object") return variant;
+            const nextVariant = { ...variant };
+            if (Array.isArray(nextVariant.mainImage)) {
+              nextVariant.mainImage = nextVariant.mainImage[0] || "";
+            }
+            if (Array.isArray(nextVariant.images)) {
+              nextVariant.images = nextVariant.images.filter(Boolean);
+            }
+            return nextVariant;
+          },
+        );
+      }
+
+      const res = await createOrUpdateProduct(normalizedPayload);
 
       if (res.success) {
         setSuccess("Product saved successfully!");
@@ -698,7 +825,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
   // ---------- Memoized values ----------
   const allVariantFields = useMemo(() => {
     for (const step of visibleSteps) {
-      const group = step.groups.find((g) => g.code === "variant_fields");
+      const group = step.groups.find(
+        (g) => normalizeCode(g.code) === "variantFields",
+      );
       if (group) return group.attributes || [];
     }
     return [];

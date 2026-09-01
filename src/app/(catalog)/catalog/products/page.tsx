@@ -10,15 +10,20 @@ import { useDebouncedCallback } from "use-debounce";
 interface Product {
   _id: string;
   title: string;
-  model: string;
+  name?: string;
+  model?: string;
   sku: string;
-  sale_price: number;
-  list_price: number;
-  stock_status: string[];
-  main_image: string;
+  sale_price?: number;
+  salePrice?: number;
+  list_price?: number;
+  listPrice?: number;
+  stock_status?: string[];
   status?: string;
-  category_id: { _id: string; name: string } | string;
-  brand: { _id: string; name: string } | string;
+  main_image?: string;
+  mainImage?: string;
+  category_id?: { _id: string; name: string } | string;
+  categoryId?: { _id: string; name: string } | string;
+  brand?: { _id: string; name: string } | string;
   quantity: number;
   lowStockThreshold: number;
   createdAt: string;
@@ -50,6 +55,7 @@ export default function ProductsPage() {
     setError(null);
     try {
       const result = await findProducts();
+      console.log("Fetched products:", result); // Debug log
       if (
         result &&
         typeof result === "object" &&
@@ -79,7 +85,9 @@ export default function ProductsPage() {
   }, [fetchAllProducts]);
 
   // Safely get category name from populated object or string
-  const getCategoryName = (cat: Product["category_id"]): string => {
+  const getCategoryName = (
+    cat: Product["category_id"] | Product["categoryId"],
+  ): string => {
     if (!cat) return "Uncategorized";
     if (typeof cat === "string") return cat;
     return cat.name || "Uncategorized";
@@ -91,17 +99,23 @@ export default function ProductsPage() {
 
     if (filters.search.trim()) {
       const searchLower = filters.search.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.title?.toLowerCase().includes(searchLower) ||
-          p.sku?.toLowerCase().includes(searchLower) ||
-          p.model?.toLowerCase().includes(searchLower),
-      );
+      result = result.filter((p) => {
+        const name = (p.name || p.title || "").toLowerCase();
+        const sku = (p.sku || "").toLowerCase();
+        const model = (p.model || "").toLowerCase();
+        return (
+          name.includes(searchLower) ||
+          sku.includes(searchLower) ||
+          model.includes(searchLower)
+        );
+      });
     }
 
     if (filters.category) {
       result = result.filter(
-        (p) => getCategoryName(p.category_id) === filters.category,
+        (p) =>
+          getCategoryName((p.categoryId ?? p.category_id) as any) ===
+          filters.category,
       );
     }
 
@@ -177,19 +191,20 @@ export default function ProductsPage() {
   const categories = useMemo(() => {
     const cats = new Set<string>();
     allProducts.forEach((p) => {
-      const name = getCategoryName(p.category_id);
+      const name = getCategoryName((p.categoryId ?? p.category_id) as any);
       if (name) cats.add(name);
     });
     return Array.from(cats);
   }, [allProducts]);
 
   // Theme-aware badge classes
-  const getStockBadgeClass = (statuses: string[]) => {
+  const getStockBadgeClass = (statuses?: string[]) => {
     const base =
       "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
-    if (statuses?.includes("In Stock"))
+    const safeStatuses = statuses ?? [];
+    if (safeStatuses.includes("In Stock"))
       return `${base} bg-secondary/20 text-secondary-foreground dark:text-secondary`;
-    if (statuses?.includes("Low Stock"))
+    if (safeStatuses.includes("Low Stock"))
       return `${base} bg-accent/20 text-accent-foreground dark:text-accent`;
     return `${base} bg-destructive/20 text-destructive-foreground dark:text-destructive`;
   };
@@ -422,12 +437,17 @@ export default function ProductsPage() {
                       <span
                         className={getStockBadgeClass(product.stock_status)}
                       >
-                        {product.stock_status?.join(", ") || "N/A"}
+                        {(
+                          product.stock_status ||
+                          ((product.status ? [product.status] : []) as any)
+                        )?.join(", ") || "N/A"}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary/20 text-primary-foreground dark:text-primary">
-                        {getCategoryName(product.category_id)}
+                        {getCategoryName(
+                          (product.categoryId ?? product.category_id) as any,
+                        )}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

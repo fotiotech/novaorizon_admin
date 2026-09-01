@@ -90,8 +90,8 @@ const InventoryPage: React.FC = () => {
               ? "low_stock"
               : "in_stock";
 
-        const productName = p.title || "";
-        const sku = p.sku || p.code_value || "";
+        const productName = p.name || p.title || "";
+        const sku = p.sku || "";
 
         return {
           _id: p._id,

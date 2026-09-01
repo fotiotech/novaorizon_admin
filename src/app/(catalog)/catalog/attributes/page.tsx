@@ -7,7 +7,8 @@ import {
   deleteAttribute,
   findAttributesAndValues,
 } from "@/app/actions/attributes";
-import AttributeForm from "./_component/AttributeForm";
+import { AttributeFormModal } from "./_component/AttributeFormModal";
+import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 
 type AttributeType = {
   _id?: string;
@@ -30,12 +31,16 @@ const Attributes = () => {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [filterText, setFilterText] = useState<string>("");
   const [sortAttrOrder, setSortAttrOrder] = useState<Option>({
     value: "asc",
     label: "A → Z",
   });
-  const [showForm, setShowForm] = useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string>("");
+  const [deleteTargetName, setDeleteTargetName] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -65,35 +70,41 @@ const Attributes = () => {
   const handleAttributeSuccess = () => {
     fetchAttributes();
     setEditingAttributeId(null);
-    setShowForm(false);
+    setIsFormModalOpen(false);
+    setSuccess("Attribute saved successfully!");
+    setTimeout(() => setSuccess(null), 3000);
   };
 
   const handleEditClick = (id: string) => {
     setEditingAttributeId(id);
-    setShowForm(true);
-  };
-
-  const handleCancelEdit = () => {
-    setEditingAttributeId(null);
-    setShowForm(false);
+    setIsFormModalOpen(true);
   };
 
   const handleNewAttribute = () => {
     setEditingAttributeId(null);
-    setShowForm(true);
+    setIsFormModalOpen(true);
   };
 
-  const handleDeleteAttribute = async (id: string) => {
-    if (confirm("Are you sure you want to delete this attribute?")) {
-      try {
-        await deleteAttribute(id);
-        fetchAttributes();
-      } catch (err) {
-        console.error("Error deleting attribute:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to delete attribute",
-        );
-      }
+  const handleDeleteClick = (id: string, name: string) => {
+    setDeleteTargetId(id);
+    setDeleteTargetName(name);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      await deleteAttribute(deleteTargetId);
+      fetchAttributes();
+      setSuccess("Attribute deleted successfully!");
+      setIsDeleteModalOpen(false);
+      setDeleteTargetId("");
+      setDeleteTargetName("");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error("Error deleting attribute:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to delete attribute",
+      );
     }
   };
 
@@ -228,15 +239,11 @@ const Attributes = () => {
         </div>
       )}
 
-      {/* Form */}
-      {(showForm || editingAttributeId) && (
-        <div className="mb-6">
-          <AttributeForm
-            attributeId={editingAttributeId || undefined}
-            onSuccess={handleAttributeSuccess}
-            onCancel={handleCancelEdit}
-            mode={editingAttributeId ? "edit" : "create"}
-          />
+      {/* Success Display */}
+      {success && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
+          <strong className="font-bold">Success:</strong>
+          <span className="block sm:inline"> {success}</span>
         </div>
       )}
 
@@ -340,7 +347,7 @@ const Attributes = () => {
                         <Edit fontSize="small" />
                       </button>
                       <button
-                        onClick={() => handleDeleteAttribute(attr._id!)}
+                        onClick={() => handleDeleteClick(attr._id!, attr.name)}
                         className="text-destructive hover:text-destructive/80 transition-colors"
                         aria-label={`Delete attribute ${attr.name}`}
                       >
@@ -362,6 +369,32 @@ const Attributes = () => {
           </div>
         )}
       </div>
+
+      {/* Attribute Form Modal */}
+      <AttributeFormModal
+        isOpen={isFormModalOpen}
+        onClose={() => {
+          setIsFormModalOpen(false);
+          setEditingAttributeId(null);
+        }}
+        onSuccess={handleAttributeSuccess}
+        attributeId={editingAttributeId || undefined}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeleteTargetId("");
+          setDeleteTargetName("");
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Delete Attribute"
+        message={`Are you sure you want to delete the attribute "${deleteTargetName}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        danger={true}
+      />
     </div>
   );
 };

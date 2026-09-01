@@ -11,12 +11,16 @@ import Image from "next/image";
 
 interface Product {
   _id: string;
-  title: string;
-  list_price: number;
+  title?: string;
+  name?: string;
+  list_price?: number;
+  listPrice?: number;
   main_image?: string;
+  mainImage?: string;
   slug: string;
-  category_id: string | { _id: string; name: string };
-  brand: string | { _id: string; name: string };
+  category_id?: string | { _id: string; name: string };
+  categoryId?: string | { _id: string; name: string };
+  brand?: string | { _id: string; name: string };
   quantity: number;
   lowStockThreshold: number;
 }
@@ -176,10 +180,14 @@ export default function Pos() {
               className="flex flex-col items-center rounded-xl border border-border bg-card p-3 shadow-sm transition hover:shadow-md"
             >
               <div className="relative h-32 w-full overflow-hidden rounded-lg bg-muted">
-                {product.main_image ? (
+                {(product.mainImage ?? product.main_image) ? (
                   <Image
-                    src={product.main_image}
-                    alt={product.title}
+                    src={
+                      product.mainImage ??
+                      product.main_image ??
+                      "/placeholder.png"
+                    }
+                    alt={product.name || product.title || "Product image"}
                     fill
                     className="object-contain"
                   />
@@ -193,7 +201,9 @@ export default function Pos() {
                 {product.title}
               </h3>
               <p className="font-bold text-primary">
-                cfa{product.list_price?.toFixed(2) || "0.00"}
+                cfa
+                {(product.listPrice ?? product.list_price ?? 0)?.toFixed(2) ||
+                  "0.00"}
               </p>
               <button
                 onClick={() => handleAddToCart(product._id)}

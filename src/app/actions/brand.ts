@@ -35,13 +35,14 @@ export async function findProductsByBrand(brandId: string) {
   await connection();
 
   if (brandId) {
-    const products = await Product.find({ brand_id: brandId });
+    const products = await Product.find({ brand: brandId });
     if (products) {
-      return products.map((product:any) => ({
+      return products.map((product: any) => ({
         ...product.toObject(),
         _id: product._id?.toString(),
-        category_id: product.category_id?.toString(),
-        brand_id: product.brand_id?.toString(),
+        categoryId: product.categoryId?.toString(),
+        category_id: product.categoryId?.toString(),
+        brand: product.brand?.toString(),
         attributes: product.attributes?.map((attr: any) => ({
           ...attr.toObject(),
           _id: attr._id?.toString(),
@@ -84,7 +85,7 @@ export async function updateBrand(
     name: string;
     logoUrl: string;
     status: "active" | "inactive";
-  }>
+  }>,
 ) {
   await connection();
   await Brand.findByIdAndUpdate(id, data, { new: true });

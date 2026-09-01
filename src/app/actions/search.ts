@@ -9,7 +9,7 @@ export async function getSearch(
   category?: string,
   brand?: string,
   priceMin?: string,
-  priceMax?: string
+  priceMax?: string,
 ) {
   await connection();
   try {
@@ -20,19 +20,19 @@ export async function getSearch(
       category,
       brand,
       priceMin,
-      priceMax
+      priceMax,
     );
 
     const products = await Product.find({
-      productName: { $regex: query, $options: "i" },
-      ...(category && { category_id: category }),
-      ...(brand && { brand_id: brand }),
+      name: { $regex: query, $options: "i" },
+      ...(category && { categoryId: category }),
+      ...(brand && { brand: brand }),
       ...(priceMin &&
         priceMax && { price: { $gte: +priceMin, $lte: +priceMax } }),
     });
 
     return {
-      products: products.map((prod:any) => ({
+      products: products.map((prod: any) => ({
         ...prod.toObject(),
         _id: prod._id.toString(),
         category_id: prod.category_id?.toString(),
@@ -51,19 +51,19 @@ async function generateFilters(
   category?: string,
   brand?: string,
   priceMin?: string,
-  priceMax?: string
+  priceMax?: string,
 ) {
   try {
     const aggregation = await Product.aggregate([
-      { $match: { productName: { $regex: query, $options: "i" } } },
+      { $match: { name: { $regex: query, $options: "i" } } },
       {
         $facet: {
           categories: [
-            { $group: { _id: "$category_id", count: { $sum: 1 } } },
+            { $group: { _id: "$categoryId", count: { $sum: 1 } } },
             {
               $lookup: {
-                from: "categories", // Ensure this matches your collection name
-                localField: "_id", // Match the category_id with the _id from categories collection
+                from: "categories",
+                localField: "_id",
                 foreignField: "_id",
                 as: "details",
               },
@@ -72,13 +72,13 @@ async function generateFilters(
             {
               $project: {
                 id: "$_id",
-                name: "$details.categoryName", // Ensure this field exists in categories collection
+                name: "$details.name",
                 count: 1,
               },
             },
           ],
           brands: [
-            { $group: { _id: "$brand_id", count: { $sum: 1 } } },
+            { $group: { _id: "$brand", count: { $sum: 1 } } },
             {
               $lookup: {
                 from: "brands",

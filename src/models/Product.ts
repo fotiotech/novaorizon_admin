@@ -55,6 +55,7 @@ export interface IProduct extends Document {
   brand: mongoose.Types.ObjectId;
   hasVariants: boolean;
   variantThemes: string[];
+  variantValues: IKeyValue[];
   keyFeatures: IKeyValue[];
   specifications: ISpecificationGroup[];
   quantity: number;
@@ -142,6 +143,8 @@ const ProductSchema = new Schema<IProduct>(
     },
     hasVariants: { type: Boolean, default: false },
     variantThemes: { type: [String], default: [] },
+    variantValues: { type: [KeyValueSchema], default: [] },
+
     keyFeatures: { type: [KeyValueSchema], default: [] },
     specifications: { type: [SpecificationGroupSchema], default: [] },
     quantity: { type: Number, default: 0, min: 0 },

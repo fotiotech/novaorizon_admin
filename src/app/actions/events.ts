@@ -194,13 +194,12 @@ export async function getRelatedProducts(
     return [];
   }
 
-  // Fetch the product's related_products and fallback data
   const product: any = await Product.findById(productId)
-    .select("related_products category_id brand")
+    .select("relatedProducts categoryId brand")
     .lean();
   if (!product) return [];
 
-  let relatedIds = product.related_products || [];
+  let relatedIds = product.relatedProducts || [];
 
   // Handle both formats: array of IDs or array of { id, relationship_type }
   if (Array.isArray(relatedIds) && relatedIds.length > 0) {
@@ -223,8 +222,8 @@ export async function getRelatedProducts(
     const fallbackQuery: any = {
       _id: { $ne: new mongoose.Types.ObjectId(productId) },
     };
-    if (product.category_id) {
-      fallbackQuery.category_id = product.category_id;
+    if (product.categoryId) {
+      fallbackQuery.categoryId = product.categoryId;
     } else if (product.brand) {
       fallbackQuery.brand = product.brand;
     }
