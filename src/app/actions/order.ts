@@ -483,25 +483,15 @@ export async function resolveReturnRequest(
           currentQty + Number(item.quantity || 0),
         );
         product.quantity = restoredQty;
-        product.stock_quantity = restoredQty;
-        product.stockQuantity = restoredQty;
 
         if (restoredQty <= 0) {
-          product.stockStatus = "out_of_stock";
-          product.stock_status = "out_of_stock";
-        } else if (
-          restoredQty <=
-          Number(product.lowStockThreshold ?? product.low_stock_threshold ?? 10)
-        ) {
-          product.stockStatus = "low_stock";
-          product.stock_status = "low_stock";
+          product.updatedAt = new Date();
+        } else if (restoredQty <= Number(product.lowStockThreshold ?? 10)) {
+          product.updatedAt = new Date();
         } else {
-          product.stockStatus = "in_stock";
-          product.stock_status = "in_stock";
+          product.updatedAt = new Date();
         }
 
-        product.lastInventoryUpdate = new Date();
-        product.last_inventory_update = product.lastInventoryUpdate;
         await product.save();
       }
 

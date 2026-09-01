@@ -14,19 +14,19 @@ export type Users = {
 
 export type Category = {
   _id?: string;
-  parent_id?: string;
-  url_slug?: string;
+  parentId?: string;
+  slug?: string;
   name?: string;
   description?: string;
   imageUrl?: string[];
   property?: string | { _id: string; name: string };
-  seo_title?: string;
-  seo_desc?: string;
+  seoTitle?: string;
+  seoDesc?: string;
   keywords?: string;
-  sort_order?: string;
+  sortOrder?: string;
   status?: string;
-  created_at?: string;
-  updated_at?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Brand = {
@@ -58,7 +58,6 @@ export type Carrier = {
 export type Product = {
   _id?: string;
   url_slug?: string; // Unique slug for the product URL
-  dsin?: string; // Unique identifier for the product
   sku?: string; // Stock Keeping Unit
   productName: string; // Name of the product
   variantName: string; // Name of the product

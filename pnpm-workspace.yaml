@@ -1,8 +1,19 @@
 allowBuilds:
   bcrypt: false
   core-js: false
+  cpu-features: true
+  esbuild: true
+  get-console-process-list: true
+  glibc-version: true
+  kerberos: true
+  mongodb-client-encryption: true
+  mongodb-crypt-library-version: true
+  native-machine-id: true
+  os-dns-native: true
   protobufjs: false
+  ssh2: true
   unrs-resolver: true
+  win-export-certificate-and-key: true
 overrides:
   '@types/react': 19.2.18
   '@types/react-dom': 19.2.5

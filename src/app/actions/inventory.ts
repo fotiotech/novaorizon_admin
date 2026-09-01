@@ -23,23 +23,28 @@ export async function getInventory() {
       {},
       {
         _id: 1,
-        title: 1,
+        name: 1,
         sku: 1,
-        stock_quantity: 1,
-        low_stock_threshold: 1,
-        stock_status: 1,
-        last_inventory_update: 1,
+        quantity: 1,
+        lowStockThreshold: 1,
+        status: 1,
+        updatedAt: 1,
       },
     ).lean();
 
     return inventoryData.map((item: any) => ({
       product_id: item?._id?.toString(),
-      productName: item.title,
+      productName: item.name,
       sku: item.sku,
-      stockQuantity: item.stock_quantity || 0,
-      lowStockThreshold: item.low_stock_threshold || 10,
-      stockStatus: item.stock_status || "out_of_stock",
-      lastUpdated: item.last_inventory_update || new Date(),
+      stockQuantity: item.quantity || 0,
+      lowStockThreshold: item.lowStockThreshold || 10,
+      stockStatus:
+        item.quantity <= 0
+          ? "out_of_stock"
+          : item.quantity <= (item.lowStockThreshold ?? 10)
+            ? "low_stock"
+            : "in_stock",
+      lastUpdated: item.updatedAt || new Date(),
     }));
   } catch (error) {
     console.error("Error fetching inventory:", error);
@@ -68,25 +73,8 @@ export async function updateInventory(
         : getLowStockThreshold(product);
 
     product.quantity = nextQuantity;
-    product.stock_quantity = nextQuantity;
-    product.stockQuantity = nextQuantity;
-
     product.lowStockThreshold = nextThreshold;
-    product.low_stock_threshold = nextThreshold;
-
-    if (nextQuantity <= 0) {
-      product.stockStatus = "out_of_stock";
-      product.stock_status = "out_of_stock";
-    } else if (nextQuantity <= nextThreshold) {
-      product.stockStatus = "low_stock";
-      product.stock_status = "low_stock";
-    } else {
-      product.stockStatus = "in_stock";
-      product.stock_status = "in_stock";
-    }
-
-    product.lastInventoryUpdate = new Date();
-    product.last_inventory_update = product.lastInventoryUpdate;
+    product.updatedAt = new Date();
 
     await product.save();
 
@@ -95,8 +83,13 @@ export async function updateInventory(
 
     return {
       message: "Success",
-      stockStatus: product.stockStatus,
-      lastUpdated: product.lastInventoryUpdate,
+      stockStatus:
+        nextQuantity <= 0
+          ? "out_of_stock"
+          : nextQuantity <= nextThreshold
+            ? "low_stock"
+            : "in_stock",
+      lastUpdated: product.updatedAt,
     };
   } catch (error) {
     console.error("Error updating inventory:", error);
@@ -110,21 +103,33 @@ export async function getInventoryStats() {
     const stats = await Product.aggregate([
       {
         $group: {
-          _id: "$stockStatus",
+          _id: {
+            $cond: [
+              { $lte: ["$quantity", 0] },
+              "out_of_stock",
+              {
+                $cond: [
+                  { $lte: ["$quantity", "$lowStockThreshold"] },
+                  "low_stock",
+                  "in_stock",
+                ],
+              },
+            ],
+          },
           count: { $sum: 1 },
-          totalStock: { $sum: "$stockQuantity" },
+          totalStock: { $sum: "$quantity" },
         },
       },
     ]);
 
     const lowStockProducts = await Product.find(
       {
-        stockStatus: "low_stock",
+        $expr: { $lte: ["$quantity", "$lowStockThreshold"] },
       },
       {
-        productName: 1,
+        name: 1,
         sku: 1,
-        stockQuantity: 1,
+        quantity: 1,
         lowStockThreshold: 1,
       },
     )

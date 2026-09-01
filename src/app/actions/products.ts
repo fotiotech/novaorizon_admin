@@ -14,6 +14,23 @@ import "@/models/Category";
 import "@/models/Brand";
 import "@/models/User";
 import { getCategoryAttributeSets } from "@/app/actions/category";
+import {
+  validateProductCreate,
+  validateProductUpdate,
+  validateProductCreateOrUpdate,
+  safeValidateProductCreate,
+  safeValidateProductUpdate,
+  safeValidateProductCreateOrUpdate,
+  CreateProductSchema,
+  UpdateProductSchema,
+  CreateOrUpdateProductSchema,
+} from "@/lib/product.schema";
+import {
+  transformSnakeToCamel,
+  transformCamelToSnake,
+  flattenCategoryProperty,
+  mergeCategoryPropertyToProduct,
+} from "@/lib/categoryProperty";
 
 // ---------- Helper: Deep Serialize ----------
 function serialize(obj: any): any {
@@ -145,16 +162,6 @@ function generateSlug(name: string, department: string | null): string {
   });
 }
 
-function generateDsin(): string {
-  return Array(10)
-    .fill(null)
-    .map(
-      () =>
-        "ABCDEFGHIJKLMNOPQRSTUVWYZ0123456789"[Math.floor(Math.random() * 35)],
-    )
-    .join("");
-}
-
 function toObjectId(value: any): mongoose.Types.ObjectId | null {
   if (!value) return null;
   if (value instanceof mongoose.Types.ObjectId) return value;
@@ -231,21 +238,27 @@ export async function createProduct(
 ): Promise<ProductResponse> {
   try {
     await connection();
+
+    // Convert snake_case keys to camelCase if needed
+    const transformedData = transformSnakeToCamel(formData);
+
+    // Validate with Zod schema
+    const validationResult = safeValidateProductCreate(transformedData);
+    if (!validationResult.success) {
+      return {
+        success: false,
+        error: `Validation failed: ${validationResult.error}`,
+      };
+    }
+
     const {
-      category_id,
+      categoryId,
       brand,
-      related_products,
+      relatedProducts,
       quantity,
       lowStockThreshold,
       ...attributes
-    } = formData;
-
-    if (!category_id) {
-      return { success: false, error: "Valid category_id is required" };
-    }
-    if (!brand) {
-      return { success: false, error: "Valid brand is required" };
-    }
+    } = validationResult.data || transformedData;
 
     const cleanedAttributes = cleanObject(attributes);
     if (Object.keys(cleanedAttributes).length === 0) {
@@ -253,12 +266,15 @@ export async function createProduct(
     }
 
     try {
-      await validateRequiredCategoryAttributes(category_id, {
-        ...cleanedAttributes,
-        ...(brand ? { brand } : {}),
-        ...(quantity !== undefined ? { quantity } : {}),
-        ...(lowStockThreshold !== undefined ? { lowStockThreshold } : {}),
-      });
+      await validateRequiredCategoryAttributes(
+        categoryId || (formData as any).category_id,
+        {
+          ...cleanedAttributes,
+          ...(brand ? { brand } : {}),
+          ...(quantity !== undefined ? { quantity } : {}),
+          ...(lowStockThreshold !== undefined ? { lowStockThreshold } : {}),
+        },
+      );
     } catch (error: any) {
       return {
         success: false,
@@ -266,44 +282,43 @@ export async function createProduct(
       };
     }
 
-    const dsin = generateDsin();
     const updateData: any = {
-      category_id: new mongoose.Types.ObjectId(category_id),
+      categoryId: new mongoose.Types.ObjectId(
+        categoryId || (formData as any).category_id,
+      ),
       brand: new mongoose.Types.ObjectId(brand),
       ...cleanedAttributes,
-      status: normalizeProductStatus(cleanedAttributes.status as string),
+      status: normalizeProductStatus(attributes.status as string),
       slug: attributes.name
         ? generateSlug(attributes.name, attributes.department ?? null)
         : undefined,
-      dsin,
       updatedAt: new Date(),
     };
 
-    if (related_products) {
-      // Convert each id to ObjectId and keep relationship_type
-      updateData.related_products = related_products.map((rp) => ({
+    if (relatedProducts) {
+      // Convert each id to ObjectId and keep relationshipType
+      updateData.relatedProducts = (relatedProducts as any[]).map((rp) => ({
         id: new mongoose.Types.ObjectId(rp.id),
-        relationship_type: rp.relationship_type || "",
+        relationshipType: rp.relationshipType || "",
       }));
     }
 
-    await Product.findOneAndUpdate(
-      { dsin },
-      {
-        $set: updateData,
-        $setOnInsert: { createdAt: new Date() },
-      },
-      {
-        upsert: true,
-        new: true,
-        runValidators: true,
-      },
-    );
+    const newProduct = new Product({
+      ...updateData,
+      createdAt: new Date(),
+    });
+    await newProduct.save();
 
     revalidatePath("/products");
     return { success: true };
   } catch (error) {
     console.error("Error creating product:", error);
+    if (error instanceof Error) {
+      return {
+        success: false,
+        error: `Failed to create product: ${error.message}`,
+      };
+    }
     return { success: false, error: "Failed to create product" };
   }
 }
@@ -314,14 +329,27 @@ export async function updateProduct(
 ): Promise<ProductResponse> {
   try {
     await connection();
+
+    // Convert snake_case keys to camelCase if needed
+    const transformedData = transformSnakeToCamel(formData);
+
+    // Validate with Zod schema
+    const validationResult = safeValidateProductUpdate(transformedData);
+    if (!validationResult.success) {
+      return {
+        success: false,
+        error: `Validation failed: ${validationResult.error}`,
+      };
+    }
+
     const {
-      category_id,
+      categoryId,
       brand,
-      related_products,
+      relatedProducts,
       quantity,
       lowStockThreshold,
       ...attributes
-    } = formData;
+    } = validationResult.data || transformedData;
 
     if (!productId) {
       return { success: false, error: "Valid product ID is required" };
@@ -330,18 +358,18 @@ export async function updateProduct(
     const cleanedAttributes = cleanObject(attributes);
     if (
       Object.keys(cleanedAttributes).length === 0 &&
-      !category_id &&
+      !categoryId &&
       !brand &&
-      !related_products &&
+      !relatedProducts &&
       quantity === undefined &&
       lowStockThreshold === undefined
     ) {
       return { success: false, error: "No valid attributes provided" };
     }
 
-    if (category_id) {
+    if (categoryId) {
       try {
-        await validateRequiredCategoryAttributes(category_id, {
+        await validateRequiredCategoryAttributes(categoryId, {
           ...cleanedAttributes,
           ...(brand ? { brand } : {}),
           ...(quantity !== undefined ? { quantity } : {}),
@@ -357,17 +385,19 @@ export async function updateProduct(
 
     const updateData: any = { ...cleanedAttributes, updatedAt: new Date() };
 
-    if (category_id) {
-      updateData.category_id = new mongoose.Types.ObjectId(category_id);
+    if (categoryId) {
+      updateData.categoryId = new mongoose.Types.ObjectId(categoryId);
     }
     if (brand) {
       updateData.brand = new mongoose.Types.ObjectId(brand);
     }
-    if (related_products) {
-      updateData.related_products = related_products.map((rp: any) => ({
-        id: new mongoose.Types.ObjectId(rp.id),
-        relationship_type: rp.relationship_type || "",
-      }));
+    if (relatedProducts) {
+      updateData.relatedProducts = (relatedProducts as any[]).map(
+        (rp: any) => ({
+          id: new mongoose.Types.ObjectId(rp.id),
+          relationshipType: rp.relationshipType || "",
+        }),
+      );
     }
     if (quantity !== undefined) {
       updateData.quantity = Number(quantity);
@@ -397,6 +427,12 @@ export async function updateProduct(
     return { success: true, data: serialize(updatedProduct.toObject()) };
   } catch (error) {
     console.error("Error updating product:", error);
+    if (error instanceof Error) {
+      return {
+        success: false,
+        error: `Failed to update product: ${error.message}`,
+      };
+    }
     return { success: false, error: "Failed to update product" };
   }
 }
@@ -407,23 +443,34 @@ export async function createOrUpdateProduct(
   try {
     await connection();
 
+    // Convert snake_case keys to camelCase if needed
+    const transformedData = transformSnakeToCamel(productData);
+
+    // Validate with Zod schema
+    const validationResult = safeValidateProductCreateOrUpdate(transformedData);
+    if (!validationResult.success) {
+      return {
+        success: false,
+        error: `Validation failed: ${validationResult.error}`,
+      };
+    }
+
     const {
       _id,
-      category_id,
+      categoryId,
       brand,
-      related_products,
+      relatedProducts,
       quantity,
       lowStockThreshold,
       ...attributes
-    } = productData;
+    } = validationResult.data || transformedData;
 
     const cleanedAttributes = cleanObject(attributes);
-    const { createdAt, updatedAt, __v, dsin, ...safeAttributes } =
-      cleanedAttributes;
+    const { createdAt, updatedAt, __v, ...safeAttributes } = cleanedAttributes;
 
-    if (category_id) {
+    if (categoryId) {
       try {
-        await validateRequiredCategoryAttributes(category_id, {
+        await validateRequiredCategoryAttributes(categoryId, {
           ...safeAttributes,
           ...(brand ? { brand } : {}),
           ...(quantity !== undefined ? { quantity } : {}),
@@ -443,11 +490,11 @@ export async function createOrUpdateProduct(
       updatedAt: new Date(),
     };
 
-    const categoryObjectId = toObjectId(category_id);
+    const categoryObjectId = toObjectId(categoryId);
     if (!categoryObjectId) {
       return { success: false, error: "Invalid category selected." };
     }
-    updateData.category_id = categoryObjectId;
+    updateData.categoryId = categoryObjectId;
 
     const brandObjectId = toObjectId(brand);
     if (!brandObjectId) {
@@ -455,33 +502,33 @@ export async function createOrUpdateProduct(
     }
     updateData.brand = brandObjectId;
 
-    // Handle related_products – now expects array of objects
-    if (related_products !== undefined) {
-      if (Array.isArray(related_products)) {
-        const validRelatedProducts = related_products
+    // Handle relatedProducts – now expects array of objects
+    if (relatedProducts !== undefined) {
+      if (Array.isArray(relatedProducts)) {
+        const validRelatedProducts = (relatedProducts as any[])
           .filter((rp: any) => rp && rp.id)
           .map((rp: any) => ({
             id: toObjectId(rp.id),
-            relationship_type: rp.relationship_type || "",
+            relationshipType: rp.relationshipType || "",
           }))
           .filter((rp: any) => rp.id);
 
         if (validRelatedProducts.length > 0) {
-          updateData.related_products = validRelatedProducts;
+          updateData.relatedProducts = validRelatedProducts;
         }
       } else {
         // fallback for old format (just in case)
-        const ids = related_products.ids || [];
+        const ids = (relatedProducts as any).ids || [];
         const validRelatedProducts = ids
           .filter((id: any) => id)
           .map((id: any) => ({
             id: toObjectId(id),
-            relationship_type: related_products.relationship_type || "",
+            relationshipType: (relatedProducts as any).relationshipType || "",
           }))
           .filter((rp: any) => rp.id);
 
         if (validRelatedProducts.length > 0) {
-          updateData.related_products = validRelatedProducts;
+          updateData.relatedProducts = validRelatedProducts;
         }
       }
     }
@@ -526,7 +573,6 @@ export async function createOrUpdateProduct(
       const createData = {
         ...updateData,
         createdAt: new Date(),
-        dsin: generateDsin(),
       };
       const newProduct = new Product(createData);
       product = await newProduct.save();
@@ -537,7 +583,7 @@ export async function createOrUpdateProduct(
 
     revalidatePath("/products");
 
-    const result = product.toObject ? product.toObject() : product;
+    const result = product?.toObject ? product?.toObject() : product;
     return { success: true, data: serialize(result) };
   } catch (error) {
     const message =
@@ -569,12 +615,11 @@ export async function deleteProduct(
       const clone = existingProduct.toObject
         ? existingProduct.toObject()
         : existingProduct;
-      const { _id, __v, createdAt, updatedAt, dsin, ...rest } = clone;
+      const { _id, __v, createdAt, updatedAt, ...rest } = clone;
 
       const recreatedProduct = new Product({
         ...rest,
         status: "draft",
-        dsin: generateDsin(),
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -635,12 +680,13 @@ export async function deleteProductImages(
       }
 
       if (imageUrl) {
-        if (!product.imageUrls.includes(imageUrl)) {
+        const productImages = product.images ?? [];
+        if (!productImages.includes(imageUrl)) {
           return { success: false, error: "Image URL not found in product" };
         }
 
         await deleteFromStorage(imageUrl);
-        product.imageUrls = product.imageUrls.filter(
+        product.images = productImages.filter(
           (url: string) => url !== imageUrl,
         );
         await product.save();

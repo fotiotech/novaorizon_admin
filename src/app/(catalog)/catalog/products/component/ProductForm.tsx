@@ -30,6 +30,12 @@ import { AttributeField } from "@/app/(catalog)/catalog/products/component/Attri
 import ManageRelatedProduct from "./ManageRelatedProduct";
 import VariantsManager from "@/app/(catalog)/catalog/products/component/variants/VariantOption";
 import { isValidBarcode } from "@/app/lib/barcode";
+import {
+  transformSnakeToCamel,
+  transformCamelToSnake,
+  flattenCategoryProperty,
+  snakeToCamel,
+} from "@/lib/categoryProperty";
 
 // ------------------------------------------------------------------
 // Types (unchanged)
@@ -82,18 +88,18 @@ const isEmptyValue = (value: any): boolean => {
 // ------------------------------------------------------------------
 function getGroupRelevantKeys(group: GroupNode): string[] {
   const keys: string[] = [];
-  // Add own attribute codes
-  group.attributes.forEach((attr) => keys.push(attr.code));
+  // Add own attribute codes (convert to camelCase for lookup)
+  group.attributes.forEach((attr) => keys.push(snakeToCamel(attr.code)));
   // Recursively add children's attribute codes
   group.children.forEach((child) => {
     keys.push(...getGroupRelevantKeys(child));
   });
   // Special groups need additional top‑level product fields
   if (group.code === "variant_themes") {
-    keys.push("variant_themes", "variant_values", "variants");
+    keys.push("variantThemes", "variantValues", "variants");
   }
   if (group.code === "product_relationships") {
-    keys.push("related_products");
+    keys.push("relatedProducts");
   }
   return keys;
 }
@@ -213,7 +219,7 @@ const GroupRenderer = memo(
               <AttributeField
                 productId={productId}
                 attribute={a}
-                field={productData[a.code]}
+                field={productData[snakeToCamel(a.code)]}
                 handleAttributeChange={handleChange}
                 units={units}
               />
@@ -348,7 +354,23 @@ const ProductForm: React.FC<ProductFormProps> = ({
           }
         }
 
-        // 2. Fetch draft (keyed by productId)
+        // 2. If categoryProperty exists in the data, flatten it and merge with product data
+        if (
+          data.categoryProperty &&
+          typeof data.categoryProperty === "object"
+        ) {
+          const flattenedCategoryProperty = flattenCategoryProperty(
+            data.categoryProperty,
+          );
+          data = { ...data, ...flattenedCategoryProperty };
+          // Remove the nested structure after flattening
+          delete (data as any).categoryProperty;
+        }
+
+        // 3. Transform any remaining snake_case fields to camelCase
+        data = transformSnakeToCamel(data);
+
+        // 4. Fetch draft (keyed by productId)
         const draft = await getProductDraft(productId);
         if (draft) {
           data = { ...data, ...draft };
@@ -357,9 +379,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
           }
         }
 
-        // 3. If still no category_id and initialCategoryId is provided, set it
-        if (!data.category_id && initialCategoryId) {
-          data.category_id = initialCategoryId;
+        // 5. If still no categoryId and initialCategoryId is provided, set it
+        if (!data.categoryId && initialCategoryId) {
+          data.categoryId = initialCategoryId;
         }
 
         setProductData(data);
@@ -375,14 +397,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
   // ---------- Fetch attribute sets and units ----------
   useEffect(() => {
     const fetchAttributeSets = async () => {
-      if (!productData.category_id) {
+      if (!productData.categoryId) {
         setSteps([]);
         return;
       }
       try {
         setIsFetchingAttributes(true);
         setError(null);
-        const sets = await getCategoryAttributeSets(productData.category_id);
+        const sets = await getCategoryAttributeSets(productData.categoryId);
         setSteps(sets);
         setCurrentStep(0);
         setValidationErrors({});
@@ -394,7 +416,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
       }
     };
     fetchAttributeSets();
-  }, [productData.category_id]);
+  }, [productData.categoryId]);
 
   useEffect(() => {
     const fetchUnits = async () => {
@@ -409,7 +431,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
   }, []);
 
   // ============================================================
-  // Compute visible steps based on has_variants
+  // Compute visible steps based on hasVariants
   // ============================================================
   const visibleSteps = useMemo(() => {
     const variantStepIndex = steps.findIndex((step) =>
@@ -417,13 +439,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
         (g) => g.code === "variant_themes" || g.code === "variant_fields",
       ),
     );
-    // If no variant step exists, or has_variants is truthy, show all
-    if (variantStepIndex === -1 || productData.has_variants) {
+    // If no variant step exists, or hasVariants is truthy, show all
+    if (variantStepIndex === -1 || productData.hasVariants) {
       return steps;
     }
     // Otherwise, filter out the variant step
     return steps.filter((_, index) => index !== variantStepIndex);
-  }, [steps, productData.has_variants]);
+  }, [steps, productData.hasVariants]);
 
   // Sync currentStep when visibleSteps changes
   useEffect(() => {
@@ -444,7 +466,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     const errors: string[] = [];
     group.attributes.forEach((attr) => {
       if (!attr.isRequired) return;
-      const value = productData[attr.code];
+      const camelCode = snakeToCamel(attr.code);
+      const value = productData[camelCode];
       if (isEmptyValue(value)) {
         errors.push(`${attr.name} is required`);
       }
@@ -454,8 +477,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
       const typeAttr = group.attributes.find((a) => a.code === "code_type");
       const valueAttr = group.attributes.find((a) => a.code === "code_value");
       if (typeAttr && valueAttr) {
-        const codeType = productData["code_type"];
-        const codeValue = productData["code_value"];
+        const codeType = productData[snakeToCamel("code_type")];
+        const codeValue = productData[snakeToCamel("code_value")];
         if (!isEmptyValue(codeType) && !isEmptyValue(codeValue)) {
           const valid = isValidBarcode(codeValue, codeType);
           if (!valid) {
@@ -487,7 +510,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
     variants.forEach((variant: any, index: number) => {
       requiredVariantFields.forEach((field) => {
-        const value = variant[field.code];
+        const camelCode = snakeToCamel(field.code);
+        const value = variant[camelCode];
         if (isEmptyValue(value)) {
           errors.push(`Variant #${index + 1}: ${field.name} is required`);
         }
@@ -577,14 +601,17 @@ const ProductForm: React.FC<ProductFormProps> = ({
   // ---------- Change handler (stabilized using ref for currentStep) ----------
   const handleChange = useCallback(
     (field: string, value: any) => {
-      setProductData((prev) => ({ ...prev, [field]: value }));
+      // Convert snake_case field names to camelCase for storage
+      const camelField = snakeToCamel(field);
+
+      setProductData((prev) => ({ ...prev, [camelField]: value }));
 
       // Use the ref to get the current step without re‑creating the callback
       const stepIndex = currentStepRef.current;
       const stepData = visibleSteps[stepIndex];
       if (stepData) {
         const group = stepData.groups.find((g) =>
-          g.attributes.some((a) => a.code === field),
+          g.attributes.some((a) => snakeToCamel(a.code) === camelField),
         );
         if (group) {
           setValidationErrors((prev) => {
@@ -594,7 +621,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
           });
         }
       }
-      if (field === "variants") {
+      if (camelField === "variants") {
         setValidationErrors((prev) => {
           const newErrors = { ...prev };
           delete newErrors["variants"];
@@ -636,6 +663,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     try {
       setError(null);
       setSuccess(null);
+      // Prepare payload with camelCase field names (Zod schema expects camelCase)
       const payload = {
         _id: productId === "new" ? undefined : productId,
         ...productData,
@@ -696,7 +724,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     );
   }
 
-  if (!productData.category_id && !loading) {
+  if (!productData.categoryId && !loading) {
     return (
       <div className="flex flex-col max-w-3xl bg-card text-card-foreground mx-auto p-4 rounded-lg">
         <Alert severity="warning">

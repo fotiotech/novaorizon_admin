@@ -4,10 +4,10 @@ export interface IAttributeGroup {
   _id: string;
   code: string;
   name: string;
-  parent_id?: mongoose.Types.ObjectId;
+  parentId?: mongoose.Types.ObjectId;
   attributes?: { id: mongoose.Types.ObjectId; isRequired: boolean }[];
   createdAt?: Date;
-  sort_order: number;
+  sortOrder: number;
 }
 
 // Helper to detect cycles in the parent hierarchy
@@ -30,10 +30,10 @@ async function checkForCycle(
     if (nextId === currentId.toString()) return true;
 
     // Fetch the parent document
-    const parent = await model.findById(nextId).select("parent_id").lean();
+    const parent = await model.findById(nextId).select("parentId").lean();
     if (!parent) break; // Parent doesn't exist → no cycle
 
-    nextId = parent.parent_id?.toString() || "";
+    nextId = parent.parentId?.toString() || "";
   }
   return false;
 }
@@ -42,7 +42,7 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
   {
     name: { type: String, required: true },
     code: { type: String, required: true, unique: true },
-    parent_id: {
+    parentId: {
       type: Schema.Types.ObjectId,
       ref: "AttributeGroup",
     },
@@ -52,7 +52,7 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
         isRequired: { type: Boolean, default: false },
       },
     ],
-    sort_order: { type: Number, default: 0 },
+    sortOrder: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -61,13 +61,13 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
 
 // ----- Pre‑save hook -----
 attributeGroupSchema.pre<IAttributeGroup>("save", async function (next) {
-  if (!this.parent_id) return next();
+  if (!this.parentId) return next();
 
   try {
     const cycleDetected = await checkForCycle(
       this.constructor as Model<IAttributeGroup>,
       this._id,
-      this.parent_id,
+      this.parentId,
     );
     if (cycleDetected) {
       return next(new Error("Cycle detected in parent_id hierarchy."));
@@ -81,14 +81,14 @@ attributeGroupSchema.pre<IAttributeGroup>("save", async function (next) {
 // ----- Pre‑findOneAndUpdate hook -----
 attributeGroupSchema.pre("findOneAndUpdate", async function (next) {
   const update = this.getUpdate() as mongoose.UpdateQuery<IAttributeGroup>;
-  // Check if the update modifies parent_id
-  if (!update || (update.parent_id === undefined && !update.$set?.parent_id)) {
+  // Check if the update modifies parentId
+  if (!update || (update.parentId === undefined && !update.$set?.parentId)) {
     return next();
   }
 
-  // Determine the new parent_id value
-  const newParentId = update.$set?.parent_id ?? update.parent_id;
-  if (!newParentId) return next(); // If clearing parent_id, no cycle risk
+  // Determine the new parentId value
+  const newParentId = update.$set?.parentId ?? update.parentId;
+  if (!newParentId) return next(); // If clearing parentId, no cycle risk
 
   // Get the document being updated
   const docId = this.getQuery()._id;

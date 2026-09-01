@@ -8,11 +8,11 @@ export async function createAttributeSet(data: {
   title: string;
   code: string;
   description?: string;
-  sort_order?: number;
+  sortOrder?: number;
 }) {
   await connection();
 
-  const { title, code, description, sort_order } = data;
+  const { title, code, description, sortOrder } = data;
 
   if (!title.trim()) throw new Error("Title is required");
   if (!code.trim()) throw new Error("Code is required");
@@ -25,7 +25,7 @@ export async function createAttributeSet(data: {
     title: title.trim(),
     code: code.trim(),
     description: description?.trim(),
-    sort_order: sort_order || 0,
+    sortOrder: sortOrder || 0,
   });
   await attributeSet.save();
 
@@ -59,12 +59,12 @@ export async function updateAttributeSet(
     title: string;
     code: string;
     description?: string;
-    sort_order?: number;
+    sortOrder?: number;
   },
 ) {
   await connection();
 
-  const { title, code, description, sort_order } = data;
+  const { title, code, description, sortOrder } = data;
 
   // Validate uniqueness of code (excluding itself)
   const existing = await AttributeSet.findOne({ code, _id: { $ne: id } });
@@ -78,7 +78,7 @@ export async function updateAttributeSet(
       title,
       code,
       description,
-      sort_order,
+      sortOrder,
     },
     { new: true },
   );

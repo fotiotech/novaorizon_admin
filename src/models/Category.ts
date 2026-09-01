@@ -2,25 +2,25 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 
 // Category Interface
 interface ICategory extends Document {
-  url_slug: string;
+  slug: string;
   name: string;
-  parent_id?: mongoose.Types.ObjectId;
+  parentId?: mongoose.Types.ObjectId;
   description?: string;
   imageUrl?: string[];
   property?: mongoose.Types.ObjectId; // Reference to CategoryProperty
   inheritProperty: boolean;
-  seo_title?: string;
-  seo_desc?: string;
+  seoTitle?: string;
+  seoDesc?: string;
   keywords?: string;
-  sort_order?: number;
+  sortOrder?: number;
   status: "active" | "inactive";
-  created_at: Date;
-  updated_at: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // Category Schema
 const CategorySchema = new Schema<ICategory>({
-  url_slug: {
+  slug: {
     type: String,
     unique: true,
     required: [true, "URL slug is required"],
@@ -30,7 +30,7 @@ const CategorySchema = new Schema<ICategory>({
     required: [true, "Category name is required"],
   },
 
-  parent_id: {
+  parentId: {
     type: mongoose.Types.ObjectId,
     ref: "Category",
   },
@@ -53,18 +53,18 @@ const CategorySchema = new Schema<ICategory>({
     type: Boolean,
     default: true,
   },
-  seo_title: { type: String, maxLength: 60 },
-  seo_desc: { type: String, maxLength: 160 },
+  seoTitle: { type: String, maxLength: 60 },
+  seoDesc: { type: String, maxLength: 160 },
   keywords: { type: String },
-  sort_order: { type: Number },
+  sortOrder: { type: Number },
   status: { type: String, enum: ["active", "inactive"], default: "active" },
-  created_at: { type: Date, default: Date.now },
-  updated_at: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 });
 
-// Update `updated_at` on save
+// Update `updatedAt` on save
 CategorySchema.pre("save", function (next) {
-  this.updated_at = new Date();
+  this.updatedAt = new Date();
   next();
 });
 

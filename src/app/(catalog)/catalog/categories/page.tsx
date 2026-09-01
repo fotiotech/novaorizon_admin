@@ -89,7 +89,7 @@ const Categories = () => {
   };
 
   const getSubcategoriesForParent = (parentId: string) => {
-    return categories.filter((cat) => cat.parent_id === parentId);
+    return categories.filter((cat) => cat.parentId === parentId);
   };
 
   const categoriesWithSubcategories = categories.map((category) => ({

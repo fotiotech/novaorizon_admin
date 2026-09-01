@@ -194,13 +194,11 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
     const activeProducts = await Product.countDocuments({ status: "active" });
 
     // Get out of stock products count
-    const outOfStock = await Product.countDocuments({
-      stock_status: { $in: ["Out of Stock", "out of stock"] },
-    });
+    const outOfStock = await Product.countDocuments({ quantity: { $lte: 0 } });
 
     // Get low stock products count
     const lowStock = await Product.countDocuments({
-      stock_status: { $in: ["Low Stock", "low stock"] },
+      quantity: { $lte: 1 },
     });
 
     // Get products by status
@@ -228,7 +226,7 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
       {
         $lookup: {
           from: "categories",
-          localField: "category_id",
+          localField: "categoryId",
           foreignField: "_id",
           as: "category",
         },
@@ -281,14 +279,14 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
     // Get recent products
     const recentProducts = await Product.find()
       .populate({
-        path: "category_id",
+        path: "categoryId",
         select: "name",
         options: { strictPopulate: false },
       })
       .sort({ createdAt: -1 })
       .limit(10)
       .select(
-        "title model sku sale_price list_price stock_status main_image status category_id",
+        "name sku price listPrice quantity lowStockThreshold mainImage status categoryId",
       )
       .lean();
 
@@ -305,7 +303,7 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
           ({
             ...product,
             _id: product._id?.toString(),
-            category: product.category_id?.name || "Uncategorized",
+            category: (product as any).categoryId?.name || "Uncategorized",
             createdAt: product.createdAt?.toISOString().split("T")[0],
           }) as any,
       ),
@@ -433,11 +431,9 @@ export async function getOverviewData() {
     // Get product statistics
     const totalProducts = await Product.countDocuments();
     const activeProducts = await Product.countDocuments({ status: "active" });
-    const outOfStock = await Product.countDocuments({
-      stock_status: { $in: ["Out of Stock", "out of stock"] },
-    });
+    const outOfStock = await Product.countDocuments({ quantity: { $lte: 0 } });
     const lowStock = await Product.countDocuments({
-      stock_status: { $in: ["Low Stock", "low stock"] },
+      quantity: { $lte: 1 },
     });
 
     // Get order statistics
@@ -465,7 +461,7 @@ export async function getOverviewData() {
     const recentProducts = await Product.find()
       .sort({ createdAt: -1 })
       .limit(3)
-      .select("title model createdAt")
+      .select("name sku createdAt")
       .lean();
 
     const recentOrders = await Order.find()
@@ -485,7 +481,7 @@ export async function getOverviewData() {
       ...recentProducts.map((product) => ({
         type: "product",
         title: "New Product Added",
-        description: `${product.title} (${product.model}) was added`,
+        description: `${product.name || product.sku || "Product"} was added`,
         time: new Date(product.createdAt).toLocaleDateString(),
       })),
       ...recentOrders.map((order) => ({

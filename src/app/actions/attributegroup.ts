@@ -10,10 +10,10 @@ export interface Group {
   _id: string;
   code: string;
   name: string;
-  parent_id: string;
+  parentId: string;
   attributes?: string[] | [{ name: string; _id?: string }];
   createdAt?: Date;
-  sort_order: number;
+  sortOrder: number;
   children?: Group[];
 }
 
@@ -22,7 +22,7 @@ function serializeGroup(group: any): Group {
     _id: group._id.toString(),
     code: group.code,
     name: group.name,
-    parent_id: group.parent_id ? group.parent_id.toString() : "",
+    parentId: group.parentId ? group.parentId.toString() : "",
     attributes: group.attributes
       ? group.attributes.map((a: any) =>
           a === ""
@@ -31,7 +31,7 @@ function serializeGroup(group: any): Group {
         )
       : [],
     createdAt: group.createdAt ? new Date(group.createdAt) : undefined,
-    sort_order: group.sort_order,
+    sortOrder: group.sortOrder,
   };
 }
 
@@ -41,8 +41,8 @@ function buildTree(flatGroups: Group[]): Group[] {
 
   const roots: (Group & { children: Group[] })[] = [];
   flatGroups.forEach((g) => {
-    if (g.parent_id) {
-      const parent = map[g.parent_id];
+    if (g.parentId) {
+      const parent = map[g.parentId];
       if (parent) parent.children.push(map[g._id]);
     } else {
       roots.push(map[g._id]);
@@ -50,7 +50,7 @@ function buildTree(flatGroups: Group[]): Group[] {
   });
 
   const sortTree = (nodes: (Group & { children: Group[] })[]) => {
-    nodes.sort((a, b) => a.sort_order - b.sort_order);
+    nodes.sort((a, b) => a.sortOrder - b.sortOrder);
     nodes.forEach((n: any) => sortTree(n.children));
   };
 
@@ -113,10 +113,10 @@ export async function findAttributeForGroups(
         _id: group._id.toString(),
         code: group.code,
         name: group.name,
-        parent_id: group.parent_id ? group.parent_id.toString() : "",
+        parentId: group.parentId ? group.parentId.toString() : "",
         attributes: groupAttrs,
         createdAt: group.createdAt,
-        sort_order: group.sort_order,
+        sortOrder: group.sortOrder,
       };
     });
 
@@ -177,10 +177,10 @@ export async function findAllAttributeGroups(
         _id: group._id.toString(),
         code: group.code,
         name: group.name,
-        parent_id: group.parent_id ? group.parent_id.toString() : "",
+        parentId: group.parentId ? group.parentId.toString() : "",
         attributes: groupAttrs,
         createdAt: group.createdAt,
-        sort_order: group.sort_order,
+        sortOrder: group.sortOrder,
       };
     });
 
@@ -197,9 +197,9 @@ export async function createAttributeGroup(
   groupId: string,
   name: string,
   code: string,
-  parent_id: string,
+  parentId: string,
   attributes: string[] = [],
-  sort_order: number,
+  sortOrder: number,
 ) {
   await connection();
   try {
@@ -225,11 +225,11 @@ export async function createAttributeGroup(
         {
           code,
           name,
-          parent_id: parent_id ? parent_id : undefined,
+          parentId: parentId ? parentId : undefined,
           attributes: attributes.map(
             (attr) => new mongoose.Types.ObjectId(attr),
           ),
-          sort_order: sort_order ?? null,
+          sortOrder: sortOrder ?? null,
         },
         { upsert: true, new: true, lean: true },
       );
@@ -254,16 +254,16 @@ export async function findGroup(id?: string) {
       return groups
         .filter(
           (group) =>
-            (!parentId && !group.parent_id) ||
-            (parentId && group.parent_id?.toString() === parentId),
+            (!parentId && !group.parentId) ||
+            (parentId && group.parentId?.toString() === parentId),
         )
-        .sort((a, b) => a.sort_order - b.sort_order)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
         .map((group) => ({
           _id: group._id?.toString(),
           code: group.code,
           name: group.name,
-          parent_id: group.parent_id?.toString(),
-          sort_order: group.sort_order,
+          parentId: group.parentId?.toString(),
+          sortOrder: group.sortOrder,
           attributes: group.attributes,
           children: buildGroupTreeWithValues(groups, group?._id?.toString()),
         }));
@@ -271,7 +271,7 @@ export async function findGroup(id?: string) {
 
     const groups = await AttributeGroup.find({})
       .populate("attributes")
-      .sort({ sort_order: 1 })
+      .sort({ sortOrder: 1 })
       .lean()
       .exec();
 
@@ -313,18 +313,18 @@ export async function updateAttributeGroup(
   updates: Partial<{
     name: string;
     code: string;
-    parent_id: string | null;
+    parentId: string | null;
     attributes: string[];
-    sort_order: number;
+    sortOrder: number;
   }>,
 ) {
   await connection();
   try {
     const updateData: any = { ...updates };
 
-    if (updates.parent_id !== undefined) {
-      updateData.parent_id = updates.parent_id
-        ? new mongoose.Types.ObjectId(updates.parent_id)
+    if (updates.parentId !== undefined) {
+      updateData.parentId = updates.parentId
+        ? new mongoose.Types.ObjectId(updates.parentId)
         : null;
     }
 

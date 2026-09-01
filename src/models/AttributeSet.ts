@@ -4,7 +4,7 @@ export interface IAttributeSet extends Document {
   title: string;
   code: string;
   description?: string;
-  sort_order?: number;
+  sortOrder?: number;
   isActive: boolean;
   createdAt?: Date;
   updatedAt?: Date;
@@ -20,7 +20,7 @@ const AttributeSetSchema = new Schema<IAttributeSet>(
       trim: true,
     },
     description: { type: String, required: false },
-    sort_order: { type: Number, default: 0 },
+    sortOrder: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true },

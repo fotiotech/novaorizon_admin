@@ -24,10 +24,17 @@ export function isValidBarcode(code: string, type?: string): boolean {
   const cleaned = code.replace(/\D/g, "");
   if (!cleaned) return false;
 
+  const normalizedType = type?.trim().toUpperCase();
+
+  // MODEL values are free-form identifiers, not barcodes.
+  if (normalizedType === "MODEL") {
+    return cleaned.length > 0;
+  }
+
   // If type is given, enforce the corresponding length
   let validLength = false;
   let expectedCheck = "";
-  switch (type) {
+  switch (normalizedType) {
     case "EAN-13":
     case "ISBN-13":
       validLength = cleaned.length === 13;

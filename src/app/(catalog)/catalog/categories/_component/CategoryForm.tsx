@@ -39,7 +39,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   const [categoryData, setCategoryData] = useState<Cat>({
     _id: "",
     name: "",
-    parent_id: "",
+    parentId: "",
     description: "",
     imageUrl: [],
     property: "",
@@ -111,7 +111,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             setCategoryData({
               _id: category._id || "",
               name: category.name || "",
-              parent_id: category.parent_id || "",
+              parentId: category.parentId || "",
               description: category.description || "",
               imageUrl: category.imageUrl || [],
               property: category.property?._id || category.property || "",
@@ -126,9 +126,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               setFiles([]);
             }
             // Set search input to the parent name (if any)
-            if (category.parent_id) {
+            if (category.parentId) {
               const parent: any = categories.find(
-                (c) => c._id === category.parent_id,
+                (c) => c._id === category.parentId,
               );
               setParentSearch(parent ? parent?.name : "");
             }
@@ -188,17 +188,17 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   );
 
   const selectParent = (cat: any) => {
-    setCategoryData((prev) => ({ ...prev, parent_id: cat._id || "" }));
+    setCategoryData((prev) => ({ ...prev, parentId: cat._id || "" }));
     setParentSearch(cat.name);
     setIsParentDropdownOpen(false);
-    // Clear any previous error for parent_id
-    if (fieldErrors.parent_id) {
-      setFieldErrors((prev) => ({ ...prev, parent_id: "" }));
+    // Clear any previous error for parentId
+    if (fieldErrors.parentId) {
+      setFieldErrors((prev) => ({ ...prev, parentId: "" }));
     }
   };
 
   const clearParent = () => {
-    setCategoryData((prev) => ({ ...prev, parent_id: "" }));
+    setCategoryData((prev) => ({ ...prev, parentId: "" }));
     setParentSearch("");
     setIsParentDropdownOpen(false);
   };
@@ -206,9 +206,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   const handleParentInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     setParentSearch(e.target.value);
     setIsParentDropdownOpen(true);
-    // If the search is cleared, also clear the parent_id
+    // If the search is cleared, also clear the parentId
     if (e.target.value === "") {
-      setCategoryData((prev) => ({ ...prev, parent_id: "" }));
+      setCategoryData((prev) => ({ ...prev, parentId: "" }));
     }
   };
 
@@ -276,7 +276,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       setCategoryData({
         _id: "",
         name: "",
-        parent_id: "",
+        parentId: "",
         description: "",
         imageUrl: [],
         property: "",
@@ -330,7 +330,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                 onChange={handleParentInputChange}
                 onFocus={handleParentFocus}
                 className={`w-full p-2 rounded-lg border ${
-                  fieldErrors.parent_id && touched.parent_id
+                  fieldErrors.parentId && touched.parentId
                     ? "border-red-500"
                     : "border-gray-300 dark:border-gray-600"
                 } bg-gray-100 dark:bg-gray-700 dark:text-white pr-8`}
@@ -366,9 +366,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                   </div>
                 )}
             </div>
-            {fieldErrors.parent_id && touched.parent_id && (
+            {fieldErrors.parentId && touched.parentId && (
               <p className="text-red-500 text-xs mt-1">
-                {fieldErrors.parent_id}
+                {fieldErrors.parentId}
               </p>
             )}
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

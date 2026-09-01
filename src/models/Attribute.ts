@@ -6,7 +6,7 @@ export interface IAttribute extends Document {
   unitFamily?: mongoose.Types.ObjectId | null; // Reference to UnitFamily, can be null
   isRequired: boolean;
   name: string;
-  sort_order: number;
+  sortOrder: number;
   option?: string[];
   type:
     | "text"
@@ -43,12 +43,11 @@ const AttributeSchema = new Schema<IAttribute>({
     unique: true,
     required: [true, "Attribute name is required"],
   },
-  sort_order: {
+  sortOrder: {
     type: Number,
-    required: [true, "Attribute sort_order is required"],
+    required: [true, "Attribute sortOrder is required"],
   },
   option: [{ type: String }],
-
   type: {
     type: String,
     enum: [

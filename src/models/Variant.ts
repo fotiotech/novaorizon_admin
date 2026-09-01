@@ -14,9 +14,6 @@ const VariantSchema = new Schema({
   url_slug: {
     type: String,
   },
-  dsin: {
-    type: String,
-  },
   sku: {
     type: String,
     trim: true,

@@ -39,7 +39,7 @@ export async function findAttributesAndValues(id?: string) {
       // Fetch all attributes
       query = Attribute.find()
         .populate("unitFamily")
-        .sort({ sort_order: 1, name: 1 });
+        .sort({ sortOrder: 1, name: 1 });
     }
 
     const response = await query.lean();
@@ -88,7 +88,7 @@ export async function createAttribute(formData: AttributeFormData) {
           isRequired: attrIsRequired,
           option: optionsArr,
           type: attrType,
-          sort_order: attrSortOrder,
+          sortOrder: attrSortOrder,
         },
       };
       const attribute = await Attribute.findOneAndUpdate(filter, update, {
