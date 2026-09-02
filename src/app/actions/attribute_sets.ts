@@ -1,6 +1,8 @@
 "use server";
 
+import mongoose from "mongoose";
 import AttributeSet from "@/models/AttributeSet";
+import CategoryProperty from "@/models/CategoryProperty";
 import { connection } from "@/utils/connection";
 import { revalidatePath } from "next/cache";
 
@@ -90,7 +92,23 @@ export async function updateAttributeSet(
 export async function deleteAttributeSet(id: string) {
   await connection();
   try {
-    await AttributeSet.findByIdAndDelete(id);
+    const setObjectId = new mongoose.Types.ObjectId(id);
+
+    const categoryProperties = await CategoryProperty.find({});
+    for (const property of categoryProperties) {
+      let changed = false;
+      property.mappings = (property.mappings || []).filter((mapping: any) => {
+        const matches = mapping.set?.toString?.() === id;
+        if (matches) changed = true;
+        return !matches;
+      });
+
+      if (changed) {
+        await property.save();
+      }
+    }
+
+    await AttributeSet.findByIdAndDelete(setObjectId);
     revalidatePath("/attribute-sets");
     return { success: true };
   } catch (error) {

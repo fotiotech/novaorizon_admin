@@ -35,9 +35,10 @@ export default function PropertyPreview({
     return group ? `${group.name} (${group.code})` : groupId;
   };
 
-  const getAttributeName = (attrId: string) => {
+  // Show attribute code and name together
+  const getAttributeLabel = (attrId: string) => {
     const attr = allAttributes.find((a) => a._id === attrId);
-    return attr ? attr.name : attrId;
+    return attr ? `code: ${attr.code} - name: ${attr.name}` : attrId;
   };
 
   const hasContent = code.trim() || name.trim() || mappings.length > 0;
@@ -97,12 +98,12 @@ export default function PropertyPreview({
                             {group.attributes.length > 0 && (
                               <ul className="ml-4 list-disc list-inside text-xs text-gray-600 dark:text-gray-300">
                                 {group.attributes.map((attr, aIdx) => {
-                                  const attrName = getAttributeName(
+                                  const attrLabel = getAttributeLabel(
                                     attr.attribute,
                                   );
                                   return (
                                     <li key={aIdx}>
-                                      {attrName}
+                                      {attrLabel}
                                       {attr.isRequired && (
                                         <span className="text-red-500 ml-1">
                                           *

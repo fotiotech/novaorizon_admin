@@ -94,5 +94,8 @@ export async function updateBrand(
 // Delete a brand
 export async function deleteBrand(id: string) {
   await connection();
+
+  await Product.updateMany({ brand: id }, { $unset: { brand: "" } });
+
   await Brand.findByIdAndDelete(id);
 }

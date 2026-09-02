@@ -14,71 +14,139 @@ import "@/models/UnitFamily";
 import { revalidatePath } from "next/cache";
 import { deleteS3Object } from "./s3";
 
-// ---------- Helper: Deep Serialize ----------
-function serialize(obj: any): any {
-  if (obj === null || obj === undefined) return obj;
-  if (
-    obj instanceof mongoose.Types.ObjectId ||
-    obj._bsontype === "ObjectId" ||
-    typeof obj.toHexString === "function"
-  ) {
-    return obj.toString();
-  }
-  if (obj instanceof Date) {
-    return obj.toISOString();
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(serialize);
-  }
-  if (typeof obj === "object") {
-    const result: any = {};
-    for (const key of Object.keys(obj)) {
-      result[key] = serialize(obj[key]);
-    }
-    return result;
-  }
-  return obj;
-}
-
 // ---------- Helper: Slug ----------
 function generateSlug(name: string) {
   return slugify(name, { lower: true });
 }
 
+async function getUniqueCategorySlug(
+  name: string,
+  parentId?: string | null,
+  excludeId?: string | null,
+): Promise<string> {
+  const normalizedName = (name || "").trim();
+  if (!normalizedName) {
+    return "category";
+  }
+
+  let base = generateSlug(normalizedName);
+  if (parentId) {
+    const parent = await Category.findById(parentId).select("slug name");
+    if (parent) {
+      const parentSlug =
+        parent.slug || parent.url_slug || generateSlug(parent.name || "");
+      base = `${parentSlug}>${generateSlug(normalizedName)}`;
+    }
+  }
+
+  let candidate = base;
+  let suffix = 2;
+
+  while (
+    await Category.exists({
+      slug: candidate,
+      _id: { $ne: excludeId || undefined },
+    })
+  ) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
+// ========================================================================
+//  SAFE safeIdString – cycle-aware, never throws
+// ========================================================================
+function safeIdString(
+  value: any,
+  depth = 0,
+  visited = new WeakSet(),
+): string | null {
+  if (depth > 10) return null;
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string" || typeof value === "number") {
+    const str = String(value);
+    return mongoose.Types.ObjectId.isValid(str) ? str : null;
+  }
+  if (Array.isArray(value)) {
+    return safeIdString(value[0], depth + 1, visited);
+  }
+  if (typeof value === "object") {
+    if (visited.has(value)) return null;
+    visited.add(value);
+
+    // Mongoose ObjectId or similar
+    if (
+      value instanceof mongoose.Types.ObjectId ||
+      value._bsontype === "ObjectId" ||
+      typeof value.toHexString === "function"
+    ) {
+      return value.toString();
+    }
+
+    // Try common ID keys
+    const candidates = [value._id, value.id, value.value];
+    for (const candidate of candidates) {
+      if (candidate !== undefined && candidate !== null) {
+        const result = safeIdString(candidate, depth + 1, visited);
+        if (result) return result;
+      }
+    }
+
+    // Fallback: if the object itself has a valid toString
+    try {
+      if (typeof value.toString === "function") {
+        const str = value.toString();
+        if (
+          str &&
+          str !== "[object Object]" &&
+          mongoose.Types.ObjectId.isValid(str)
+        ) {
+          return str;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    visited.delete(value);
+  }
+  return null;
+}
+
 export async function getCategories() {
   await connection();
   const categories = await Category.find().populate("property").lean();
-  return serialize(categories);
+  return categories;
 }
 
 // ---------- Helper: Compute full slug for a category (recursive) ----------
 async function getFullSlugForCategory(categoryId: string): Promise<string> {
-  const category = await Category.findById(categoryId).select(
-    "url_slug parent_id name",
-  );
+  const category =
+    await Category.findById(categoryId).select("slug parentId name");
   if (!category) return "";
-  // If the category already has a full slug, return it (for performance)
-  if (category.url_slug) return category.url_slug;
-  // Otherwise, build from parent
-  if (!category.parent_id) {
+
+  const canonicalSlug = category.slug || category.url_slug;
+  if (canonicalSlug) return canonicalSlug;
+
+  if (!category.parentId) {
     return generateSlug(category.name);
   }
-  const parentSlug = await getFullSlugForCategory(
-    category.parent_id.toString(),
-  );
+
+  const parentSlug = await getFullSlugForCategory(category.parentId.toString());
   return parentSlug + ">" + generateSlug(category.name);
 }
 
 // ---------- Category Property CRUD ----------
-export async function getCategoryProperty(id?: string) {
+export async function getCategoryProperty(id?: string): Promise<any> {
   await connection();
   if (id) {
     const property = await CategoryProperty.findById(id).lean();
     if (!property) return null;
-    return serialize(property);
+    return property;
   } else {
     const properties = await CategoryProperty.find().lean();
-    return serialize(properties);
+    return properties;
   }
 }
 
@@ -151,7 +219,7 @@ export async function createCategoryPropertyWithMappings(data: {
   revalidatePath("/catalog/categories/property");
 
   const plain = property.toObject();
-  return { success: true, property: serialize(plain) };
+  return { success: true, property: plain };
 }
 
 export async function updateCategoryPropertyWithMappings(
@@ -205,7 +273,7 @@ export async function updateCategoryPropertyWithMappings(
   revalidatePath("/catalog/categories/property");
 
   const plain = property.toObject();
-  return { success: true, property: serialize(plain) };
+  return { success: true, property: plain };
 }
 
 export async function deleteCategoryProperty(id: string) {
@@ -213,7 +281,13 @@ export async function deleteCategoryProperty(id: string) {
     await connection();
     const property = await CategoryProperty.findByIdAndDelete(id);
     if (!property) return { error: "Category property not found." };
+
     await Category.updateMany({ property: id }, { $unset: { property: "" } });
+    await Category.updateMany(
+      { inheritProperty: true },
+      { $set: { inheritProperty: false } },
+    );
+
     revalidatePath("/category-properties");
     return { success: true, message: "Category property deleted." };
   } catch (error: any) {
@@ -227,34 +301,33 @@ export async function getCategory(
   id?: string | null,
   parentId?: string | null,
   name?: string | null,
-) {
+): Promise<any> {
   await connection();
   if (name) {
     const category = await Category.findOne({ name });
     if (category) {
-      const subCategories = await Category.find({ parent_id: category._id });
-      return serialize(subCategories);
+      const subCategories = await Category.find({ parentId: category._id });
+      return subCategories;
     }
     return [];
   } else if (id) {
     const category = await Category.findById(id).populate("property").lean();
     if (!category) return null;
-    return serialize(category);
+    return category;
   } else if (parentId) {
-    const subCategories = await Category.find({ parent_id: parentId })
+    const subCategories = await Category.find({ parentId })
       .populate("property")
       .lean();
-    return serialize(subCategories);
+    return subCategories;
   } else {
     const categories = await Category.find().populate("property").lean();
-    return serialize(categories);
+    return categories;
   }
 }
 
-/**
- * Collect all property mappings from a category and its ancestors.
- * Returns merged mappings and the list of property IDs.
- */
+// ========================================================================
+//  COLLECT ANCESTOR PROPERTIES – now supports both parentId and parent_id
+// ========================================================================
 async function collectAncestorProperties(categoryId: string): Promise<{
   mappings: any[];
   propertyIds: string[];
@@ -265,15 +338,35 @@ async function collectAncestorProperties(categoryId: string): Promise<{
     .populate("property")
     .lean();
   let depth = 0;
-  while (current && depth < 10) {
-    if (current.property) {
-      propertyIds.push(current.property._id.toString());
+  const visited = new Set<string>();
+
+  while (current && depth < 20 && !visited.has(current._id?.toString())) {
+    visited.add(current._id.toString());
+
+    let propertyId: string | null = null;
+    try {
+      if (current.property) {
+        if (typeof current.property === "object" && current.property !== null) {
+          const propObj = current.property;
+          const idVal = propObj._id ?? propObj.id ?? propObj;
+          propertyId = safeIdString(idVal);
+        } else {
+          propertyId = safeIdString(current.property);
+        }
+      }
+    } catch (e) {
+      // ignore
     }
-    if (!current.parent_id) break;
-    current = await Category.findById(current.parent_id)
-      .populate("property")
-      .lean();
-    depth++;
+    if (propertyId) {
+      propertyIds.push(propertyId);
+    }
+
+    // ✅ Support both parentId and parent_id
+    const parentId = current.parentId ?? current.parent_id;
+    if (!parentId) break;
+
+    current = await Category.findById(parentId).populate("property").lean();
+    depth += 1;
   }
 
   if (propertyIds.length === 0) {
@@ -299,14 +392,17 @@ async function collectAncestorProperties(categoryId: string): Promise<{
   >();
 
   for (const prop of properties.reverse()) {
-    if (!prop.mappings) continue;
+    if (!prop.mappings || !Array.isArray(prop.mappings)) continue;
     for (const mapping of prop.mappings) {
+      if (!mapping.set) continue;
       const setKey = mapping.set.toString();
       if (!combinedMap.has(setKey)) {
         combinedMap.set(setKey, { set: setKey, groups: new Map() });
       }
       const setData = combinedMap.get(setKey)!;
+      if (!mapping.groups) continue;
       for (const gm of mapping.groups) {
+        if (!gm.group) continue;
         const groupKey = gm.group.toString();
         if (!setData.groups.has(groupKey)) {
           setData.groups.set(groupKey, {
@@ -315,7 +411,9 @@ async function collectAncestorProperties(categoryId: string): Promise<{
           });
         }
         const groupData = setData.groups.get(groupKey)!;
+        if (!gm.attributes) continue;
         for (const am of gm.attributes) {
+          if (!am.attribute) continue;
           const attrKey = am.attribute.toString();
           groupData.attributes.set(attrKey, am.isRequired);
         }
@@ -356,7 +454,6 @@ async function ensureCategoryPropertyFromMappings(
   if (!category) return null;
 
   if (mappings.length === 0) {
-    // No mappings – clear the property reference
     await Category.findByIdAndUpdate(categoryId, { $set: { property: null } });
     return null;
   }
@@ -365,11 +462,9 @@ async function ensureCategoryPropertyFromMappings(
   const propertyName = `${category.name} (Inherited)`;
   const propertyDescription = `Auto-generated inherited property for ${category.name}`;
 
-  // Try to find an existing property with this code
   let property = await CategoryProperty.findOne({ code: baseCode });
 
   if (property) {
-    // Update existing property with new mappings
     property.name = propertyName;
     property.description = propertyDescription;
     property.mappings = mappings.map((m) => ({
@@ -384,7 +479,6 @@ async function ensureCategoryPropertyFromMappings(
     }));
     await property.save();
   } else {
-    // Create new property
     property = new CategoryProperty({
       code: baseCode,
       name: propertyName,
@@ -403,7 +497,6 @@ async function ensureCategoryPropertyFromMappings(
     await property.save();
   }
 
-  // Link the property to the category
   await Category.findByIdAndUpdate(categoryId, {
     $set: { property: property._id },
   });
@@ -411,11 +504,15 @@ async function ensureCategoryPropertyFromMappings(
   return property._id.toString();
 }
 
+// ========================================================================
+//  createCategory – with all fixes, no reliance on serialize recursion
+// ========================================================================
 export async function createCategory(
   formData: {
     _id?: string;
     name?: string;
     parent_id?: string;
+    parentId?: string;
     description?: string;
     imageUrl?: string[];
     propertyId?: string;
@@ -427,6 +524,7 @@ export async function createCategory(
     const {
       name,
       parent_id,
+      parentId,
       description,
       imageUrl,
       propertyId,
@@ -434,80 +532,95 @@ export async function createCategory(
     } = formData;
     await connection();
 
-    // ---------- Generate full URL slug ----------
-    let url_slug: string;
-    if (parent_id) {
-      const parent = await Category.findById(parent_id).select("url_slug name");
-      if (parent) {
-        let parentSlug = parent.url_slug;
-        if (!parentSlug) {
-          parentSlug = await getFullSlugForCategory(parent._id.toString());
-        }
-        if (!parentSlug) {
-          parentSlug = generateSlug(parent.name);
-        }
-        url_slug = parentSlug + ">" + generateSlug(name || "");
-      } else {
-        url_slug = generateSlug(name || "");
-      }
-    } else {
-      url_slug = generateSlug(name || "");
+    const resolvedParentId = parentId || parent_id || null;
+    if (!name || !name.trim()) {
+      return { error: "Category name is required." };
     }
 
-    // ---------- Create or update category ----------
+    if (id && resolvedParentId && id === resolvedParentId) {
+      return { error: "A category cannot be its own parent." };
+    }
+
+    if (resolvedParentId && id) {
+      let currentParentId: string | null = resolvedParentId;
+      const seen = new Set<string>();
+      while (currentParentId && !seen.has(currentParentId)) {
+        seen.add(currentParentId);
+        const parentCategory: any =
+          await Category.findById(currentParentId).select("parentId");
+        if (!parentCategory) break;
+        if (parentCategory.parentId?.toString() === id) {
+          return {
+            error: "A category cannot be assigned to one of its descendants.",
+          };
+        }
+        currentParentId = parentCategory.parentId?.toString() || null;
+      }
+    }
+
+    const slugValue = await getUniqueCategorySlug(
+      name,
+      resolvedParentId,
+      id || undefined,
+    );
+
     let categoryId: string | null = null;
     const existingCategory = id ? await Category.findById(id) : null;
 
     if (existingCategory) {
-      // Update: include inheritProperty if provided
       const updateData: any = {
         name,
-        parent_id: parent_id || null,
+        parentId: resolvedParentId,
+        parent_id: resolvedParentId,
+        slug: slugValue,
+        url_slug: slugValue,
         description,
         imageUrl: imageUrl || [],
       };
-      if (propertyId !== undefined) {
-        updateData.property = propertyId || null;
+
+      if (inheritProperty === true) {
+        updateData.inheritProperty = true;
+      } else {
+        updateData.inheritProperty = false;
+        if (propertyId) {
+          updateData.property = propertyId;
+        } else {
+          updateData.property = null;
+        }
       }
-      // Store inheritProperty flag
-      if (inheritProperty !== undefined) {
-        updateData.inheritProperty = inheritProperty;
-      }
+
       await Category.findOneAndUpdate(
         { _id: existingCategory._id },
         { $set: updateData },
       );
       categoryId = existingCategory._id.toString();
     } else {
-      const newCategory = new Category({
-        url_slug,
+      const newCategoryData: any = {
+        slug: slugValue,
+        url_slug: slugValue,
         name,
-        parent_id: parent_id || null,
+        parentId: resolvedParentId,
+        parent_id: resolvedParentId,
         description,
         imageUrl: imageUrl || [],
-        property: propertyId || null,
-        inheritProperty: inheritProperty ?? false, // default false
-      });
+        inheritProperty: inheritProperty ?? false,
+      };
+
+      if (inheritProperty === true) {
+        newCategoryData.property = null;
+      } else {
+        newCategoryData.property = propertyId || null;
+      }
+
+      const newCategory = new Category(newCategoryData);
       const saved = await newCategory.save();
       categoryId = saved._id.toString();
     }
 
-    // ---------- Inherited property logic (if inheritProperty is true) ----------
-    console.log("[createCategory] Category saved with ID:", categoryId);
-    console.log("[createCategory] inheritProperty:", inheritProperty);
-
     if (inheritProperty && categoryId) {
-      const { mappings, propertyIds } =
-        await collectAncestorProperties(categoryId);
-
-      console.log("[createCategory] Found ancestor property IDs:", propertyIds);
-      console.log("[createCategory] Merged mappings count:", mappings.length);
+      const { mappings } = await collectAncestorProperties(categoryId);
 
       if (mappings.length === 0) {
-        console.warn(
-          "[createCategory] No mappings found in ancestors. Cannot create inherited property.",
-        );
-        // Clear any existing property reference
         await Category.findByIdAndUpdate(categoryId, {
           $set: { property: null },
         });
@@ -518,31 +631,46 @@ export async function createCategory(
       }
 
       const baseCode = generatePropertyCode(name || "");
+      const propertyName = `${name || "Category"} (Inherited)`;
       const propertyDescription = `Auto-generated from ancestors`;
 
-      const result = await createCategoryPropertyWithMappings({
-        code: baseCode,
-        name: name || "",
-        description: propertyDescription,
-        mappings,
-      });
+      let property = await CategoryProperty.findOne({ code: baseCode });
 
-      if (!result.success) {
-        console.error(
-          "[createCategory] Failed to create inherited property:",
-          result.error,
-        );
-        return { error: result.error || "Failed to create inherited property" };
+      if (property) {
+        property.name = propertyName;
+        property.description = propertyDescription;
+        property.mappings = mappings.map((m) => ({
+          set: new mongoose.Types.ObjectId(m.set),
+          groups: m.groups.map((g: any) => ({
+            group: new mongoose.Types.ObjectId(g.group),
+            attributes: g.attributes.map((a: any) => ({
+              attribute: new mongoose.Types.ObjectId(a.attribute),
+              isRequired: a.isRequired,
+            })),
+          })),
+        }));
+        await property.save();
+      } else {
+        property = new CategoryProperty({
+          code: baseCode,
+          name: propertyName,
+          description: propertyDescription,
+          mappings: mappings.map((m) => ({
+            set: new mongoose.Types.ObjectId(m.set),
+            groups: m.groups.map((g: any) => ({
+              group: new mongoose.Types.ObjectId(g.group),
+              attributes: g.attributes.map((a: any) => ({
+                attribute: new mongoose.Types.ObjectId(a.attribute),
+                isRequired: a.isRequired,
+              })),
+            })),
+          })),
+        });
+        await property.save();
       }
 
-      const newProperty = result.property;
-      console.log(
-        "[createCategory] Created new property ID:",
-        newProperty._id.toString(),
-      );
-
       await Category.findByIdAndUpdate(categoryId, {
-        $set: { property: newProperty._id },
+        $set: { property: property._id },
       });
 
       revalidatePath("/categories");
@@ -554,16 +682,30 @@ export async function createCategory(
   } catch (error: any) {
     console.error(
       "Error processing category request:",
-      error.message,
-      error.stack,
+      error?.message,
+      error?.stack,
     );
-    return { error: "Something went wrong." };
+    return {
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }
 
+// ========================================================================
+//  deleteCategory – removed invalid $pull
+// ========================================================================
 export async function deleteCategory(id: string) {
   try {
     await connection();
+
+    await Category.updateMany({ parentId: id }, { $set: { parentId: null } });
+    await Category.updateMany({ property: id }, { $unset: { property: "" } });
+
+    await mongoose.models.Product?.updateMany(
+      { categoryId: id },
+      { $unset: { categoryId: "" } },
+    );
+
     await Category.findByIdAndDelete(id);
     revalidatePath("/categories");
     return { success: true, message: "Category deleted successfully" };
@@ -732,49 +874,112 @@ async function buildAttributeSetsFromMappings(
   return result;
 }
 
+// ========================================================================
+//  getCategoryAttributeSets – with debug logs and parent_id support
+// ========================================================================
 export async function getCategoryAttributeSets(
   categoryId: string,
 ): Promise<AttributeSetResult[]> {
   await connection();
 
-  // Fetch the category with its inheritProperty flag and property reference
+  console.log("[getCategoryAttributeSets] Called with categoryId:", categoryId);
+
+  if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
+    console.warn("[getCategoryAttributeSets] Invalid categoryId:", categoryId);
+    return [];
+  }
+
   const category: any = await Category.findById(categoryId)
     .select("inheritProperty property")
     .lean();
-  if (!category) return [];
+  if (!category) {
+    console.warn(
+      "[getCategoryAttributeSets] Category not found for ID:",
+      categoryId,
+    );
+    return [];
+  }
 
-  // If inheritProperty is true, recompute and update the property from ancestors
+  console.log("[getCategoryAttributeSets] Category found:", {
+    id: category._id,
+    inheritProperty: category.inheritProperty,
+    property: category.property,
+  });
+
   if (category.inheritProperty === true) {
-    const { mappings } = await collectAncestorProperties(categoryId);
+    console.log(
+      "[getCategoryAttributeSets] Inheritance enabled – collecting ancestors",
+    );
+    const { mappings, propertyIds } =
+      await collectAncestorProperties(categoryId);
+    console.log(
+      "[getCategoryAttributeSets] Ancestor mappings count:",
+      mappings.length,
+    );
+    console.log(
+      "[getCategoryAttributeSets] Ancestor property IDs:",
+      propertyIds,
+    );
 
     if (mappings.length === 0) {
-      // No ancestor properties – clear the category's property
+      console.warn(
+        "[getCategoryAttributeSets] No ancestor mappings – clearing property",
+      );
       await Category.findByIdAndUpdate(categoryId, {
         $set: { property: null },
       });
       return [];
     }
 
-    // Ensure the category has a property reflecting the merged mappings
     const propId = await ensureCategoryPropertyFromMappings(
       categoryId,
       mappings,
     );
-    if (!propId) return [];
+    if (!propId) {
+      console.error(
+        "[getCategoryAttributeSets] Failed to ensure category property",
+      );
+      return [];
+    }
 
-    // Fetch the (now updated) property
     const property: any = await CategoryProperty.findById(propId).lean();
-    if (!property) return [];
+    if (!property) {
+      console.error(
+        "[getCategoryAttributeSets] Property not found after ensure:",
+        propId,
+      );
+      return [];
+    }
 
-    // Build attribute sets from this property's mappings
+    console.log(
+      "[getCategoryAttributeSets] Final property mappings:",
+      JSON.stringify(property.mappings, null, 2),
+    );
     return buildAttributeSetsFromMappings(property.mappings);
   } else {
-    // Not inherited – use the category's own property if it exists
-    if (!category.property) return [];
+    console.log(
+      "[getCategoryAttributeSets] Inheritance disabled – using own property",
+    );
+    if (!category.property) {
+      console.warn(
+        "[getCategoryAttributeSets] No property linked and inheritance disabled",
+      );
+      return [];
+    }
     const property: any = await CategoryProperty.findById(
       category.property,
     ).lean();
-    if (!property) return [];
+    if (!property) {
+      console.error(
+        "[getCategoryAttributeSets] Category property not found:",
+        category.property,
+      );
+      return [];
+    }
+    console.log(
+      "[getCategoryAttributeSets] Direct property mappings:",
+      JSON.stringify(property.mappings, null, 2),
+    );
     return buildAttributeSetsFromMappings(property.mappings);
   }
 }
@@ -782,19 +987,19 @@ export async function getCategoryAttributeSets(
 export async function getAllAttributeSets() {
   await connection();
   const sets = await AttributeSet.find().select("_id title code").lean();
-  return serialize(sets);
+  return sets;
 }
 
 export async function getAllAttributeGroups() {
   await connection();
   const groups = await AttributeGroup.find().select("_id name code").lean();
-  return serialize(groups);
+  return groups;
 }
 
 export async function getAllAttributes() {
   await connection();
   const attrs = await Attribute.find().select("_id name code type").lean();
-  return serialize(attrs);
+  return attrs;
 }
 
 export async function deleteCategoryImage(

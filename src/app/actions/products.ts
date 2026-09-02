@@ -1,5 +1,4 @@
 // app/actions/products.ts
-
 "use server";
 
 import { connection } from "@/utils/connection";
@@ -25,14 +24,8 @@ import {
   UpdateProductSchema,
   CreateOrUpdateProductSchema,
 } from "@/lib/product.schema";
-import {
-  transformSnakeToCamel,
-  transformCamelToSnake,
-  flattenCategoryProperty,
-  mergeCategoryPropertyToProduct,
-} from "@/lib/categoryProperty";
 
-// ---------- Helper: Deep Serialize ----------
+// ---------- Helper: serialize ----------
 function serialize(obj: any): any {
   if (obj === null || obj === undefined) return obj;
   if (
@@ -58,16 +51,13 @@ function serialize(obj: any): any {
   return obj;
 }
 
+// ---------- Helper: add legacy aliases ----------
 function addLegacyProductAliases(product: any): any {
   if (!product || typeof product !== "object") return product;
-
   const result = { ...product };
   result.title ??= result.name ?? "";
   result.name ??= result.title ?? "";
-  result.model ??=
-    Array.isArray(result.productCode) && result.productCode.length
-      ? (result.productCode[0]?.value ?? "")
-      : "";
+  result.model ??= result.productCode?.value ?? "";
   result.category_id ??= result.categoryId ?? null;
   result.categoryId ??= result.category_id ?? null;
   result.main_image ??= result.mainImage ?? "";
@@ -100,7 +90,7 @@ export interface CreateProductForm {
   brand: string;
   name?: string;
   department?: string;
-  related_products?: { id: string; relationship_type: string }[]; // updated
+  related_products?: { id: string; relationship_type: string }[];
   [key: string]: any;
 }
 
@@ -112,6 +102,20 @@ interface ProductResponse {
 
 interface DeleteProductOptions {
   recreate?: boolean;
+}
+
+// ---------- Helper: sanitize productCode ----------
+function sanitizeProductCode(productCode: any): any {
+  if (!productCode) return null;
+  let code = productCode;
+  if (Array.isArray(code) && code.length > 0) {
+    code = code[0];
+  }
+  if (!code || typeof code !== "object") return null;
+  const type = code.type || "";
+  const value = code.value || "";
+  if (!type || !value) return null;
+  return { type, value };
 }
 
 // ---------- Helper Functions ----------
@@ -133,11 +137,9 @@ function normalizeProductStatus(
 ): "draft" | "active" | "inactive" {
   const value = typeof status === "string" ? status : String(status ?? "draft");
   const current = value.toLowerCase();
-
   if (current === "active" || current === "inactive" || current === "draft") {
     return current;
   }
-
   return "draft";
 }
 
@@ -146,11 +148,9 @@ async function validateRequiredCategoryAttributes(
   productData: Record<string, any>,
 ) {
   if (!categoryId) return;
-
   try {
     const attributeSets = await getCategoryAttributeSets(categoryId);
     const requiredCodes = new Set<string>();
-
     for (const set of attributeSets) {
       for (const group of set.groups ?? []) {
         for (const attribute of group.attributes ?? []) {
@@ -160,14 +160,11 @@ async function validateRequiredCategoryAttributes(
         }
       }
     }
-
     if (requiredCodes.size === 0) return;
-
     const ignoredRequiredCodes = new Set(["sale_price", "salePrice"]);
     const missing: string[] = [];
     for (const code of requiredCodes) {
       if (ignoredRequiredCodes.has(code)) continue;
-
       const value = productData[code];
       if (
         value === undefined ||
@@ -178,7 +175,6 @@ async function validateRequiredCategoryAttributes(
         missing.push(code);
       }
     }
-
     if (missing.length > 0) {
       throw new Error(
         `Required product fields missing for this category: ${missing.join(", ")}`,
@@ -191,7 +187,6 @@ async function validateRequiredCategoryAttributes(
     ) {
       throw error;
     }
-    // Ignore category metadata lookup failures so existing product flows remain compatible
   }
 }
 
@@ -213,7 +208,6 @@ function extractIdCandidate(value: any): any {
     ) {
       return value.toString();
     }
-
     for (const key of [
       "_id",
       "id",
@@ -228,7 +222,6 @@ function extractIdCandidate(value: any): any {
         if (nested !== null && nested !== undefined) return nested;
       }
     }
-
     for (const key of Object.keys(value)) {
       if (["name", "label", "slug", "url_slug"].includes(key)) continue;
       const nested = extractIdCandidate(value[key]);
@@ -240,10 +233,8 @@ function extractIdCandidate(value: any): any {
 
 function toObjectId(value: any): mongoose.Types.ObjectId | null {
   const candidate = extractIdCandidate(value);
-  if (candidate === null || candidate === undefined || candidate === "") {
+  if (candidate === null || candidate === undefined || candidate === "")
     return null;
-  }
-
   const stringValue =
     typeof candidate === "string" ? candidate.trim() : String(candidate);
   if (mongoose.Types.ObjectId.isValid(stringValue)) {
@@ -252,130 +243,264 @@ function toObjectId(value: any): mongoose.Types.ObjectId | null {
   return null;
 }
 
-function normalizeReferenceId(value: any): string | null {
-  if (!value) return null;
-  if (typeof value === "string") {
-    return mongoose.Types.ObjectId.isValid(value) ? value : null;
-  }
-  if (value instanceof mongoose.Types.ObjectId) {
-    return value.toString();
-  }
-  if (typeof value === "object") {
-    if (value._id) return normalizeReferenceId(value._id);
-    if (value.toString && value.toString() !== "[object Object]") {
-      const stringValue = value.toString();
-      return mongoose.Types.ObjectId.isValid(stringValue) ? stringValue : null;
+// ---------- Manual population ----------
+async function populateProduct(product: any) {
+  if (!product) return product;
+  const result = { ...product };
+
+  if (result.categoryId) {
+    try {
+      const category = await Category.findById(result.categoryId)
+        .select("_id name")
+        .lean()
+        .exec();
+      if (category) {
+        result.categoryId = category;
+      } else {
+        result.categoryId = null;
+      }
+    } catch (e: any) {
+      console.warn(`Invalid categoryId ${result.categoryId}:`, e.message);
+      result.categoryId = null;
     }
   }
-  return null;
-}
 
-async function hydrateProductReferences<T extends Record<string, any>>(
-  products: T[],
-) {
-  const brandIds = Array.from(
-    new Set(
-      products
-        .map((product) => normalizeReferenceId((product as any).brand))
-        .filter((id): id is string => Boolean(id)),
-    ),
-  );
-  const categoryIds = Array.from(
-    new Set(
-      products
-        .map((product) => normalizeReferenceId((product as any).categoryId))
-        .filter((id): id is string => Boolean(id)),
-    ),
-  );
+  if (result.brand) {
+    try {
+      const brand = await Brand.findById(result.brand)
+        .select("_id name")
+        .lean()
+        .exec();
+      if (brand) {
+        result.brand = brand;
+      } else {
+        result.brand = null;
+      }
+    } catch (e: any) {
+      console.warn(`Invalid brand ${result.brand}:`, e.message);
+      result.brand = null;
+    }
+  }
 
-  const [brandDocs, categoryDocs] = await Promise.all([
-    brandIds.length
-      ? Brand.find({
-          _id: { $in: brandIds.map((id) => new mongoose.Types.ObjectId(id)) },
-        })
-          .select("_id name")
-          .lean()
-          .exec()
-      : [],
-    categoryIds.length
-      ? Category.find({
-          _id: {
-            $in: categoryIds.map((id) => new mongoose.Types.ObjectId(id)),
-          },
-        })
-          .select("_id name")
-          .lean()
-          .exec()
-      : [],
-  ]);
-
-  const brandMap = new Map(
-    (brandDocs as any[]).map((brand) => [
-      brand._id.toString(),
-      { _id: brand._id.toString(), name: brand.name },
-    ]),
-  );
-  const categoryMap = new Map(
-    (categoryDocs as any[]).map((category) => [
-      category._id.toString(),
-      { _id: category._id.toString(), name: category.name },
-    ]),
-  );
-
-  return products.map((product) => {
-    const productWithRefs: Record<string, any> = { ...product };
-
-    const brandRaw = (product as any).brand;
-    const brandId = normalizeReferenceId(brandRaw);
-    productWithRefs.brand = brandId
-      ? (brandMap.get(brandId) ?? brandRaw)
-      : null;
-
-    const categoryRaw = (product as any).categoryId;
-    const categoryId = normalizeReferenceId(categoryRaw);
-    productWithRefs.categoryId = categoryId
-      ? (categoryMap.get(categoryId) ?? categoryRaw)
-      : null;
-
-    return productWithRefs as T;
-  });
+  return result;
 }
 
 // ---------- Server Actions ----------
 export async function findProducts(id?: string) {
   try {
     await connection();
-
     if (id) {
       const product = await Product.findById(id).lean().exec();
-
-      if (!product) {
-        return { success: false, error: "Product not found" };
-      }
-
-      const hydratedProduct = (await hydrateProductReferences([product]))[0];
-      return addLegacyProductAliases(serialize(hydratedProduct));
+      if (!product) return { success: false, error: "Product not found" };
+      const populated = await populateProduct(product);
+      const serialized = serialize(populated);
+      return addLegacyProductAliases(serialized);
     }
-
     const products = await Product.find().sort({ createdAt: -1 }).lean().exec();
-
-    if (!products) {
-      console.error("No products found");
+    if (!products || products.length === 0) {
+      console.log("No products found");
       return [];
     }
-
-    const hydratedProducts = await hydrateProductReferences(products);
-    console.log(
-      `Fetched ${hydratedProducts.length} products from the database.`,
-    );
-
-    return (serialize(hydratedProducts) as any[]).map(addLegacyProductAliases);
+    const populated = await Promise.all(products.map(populateProduct));
+    const serialized = serialize(populated);
+    return (serialized as any[]).map(addLegacyProductAliases);
   } catch (error) {
     console.error("Error finding products:", error);
     return { success: false, error: "Failed to fetch products" };
   }
 }
 
+// ---------- Build keyFeatures and specifications ----------
+async function buildStructuredFields(
+  flatData: Record<string, any>,
+  categoryId: string,
+): Promise<Record<string, any>> {
+  const result = { ...flatData };
+  const attributeSets = await getCategoryAttributeSets(categoryId);
+  if (!attributeSets || attributeSets.length === 0) {
+    return result;
+  }
+
+  const keyFeatureCodes: string[] = [];
+  const specGroupMap: Record<
+    string,
+    {
+      groupId: string;
+      groupCode: string;
+      groupName: string;
+      attributeCodes: string[];
+    }
+  > = {};
+
+  for (const set of attributeSets) {
+    for (const group of set.groups || []) {
+      const normalizedGroupCode = group.code.replace(/_([a-z])/g, (_, c) =>
+        c.toUpperCase(),
+      );
+      if (normalizedGroupCode === "keyFeatures") {
+        for (const attr of group.attributes || []) {
+          keyFeatureCodes.push(attr.code);
+        }
+      } else if (normalizedGroupCode === "specifications") {
+        const traverse = (g: any) => {
+          const code = g.code.replace(/_([a-z])/g, (_: any, c: string) =>
+            c.toUpperCase(),
+          );
+          const name = g.name || code;
+          const attrCodes = (g.attributes || []).map((a: any) => a.code);
+          const groupKey = g.id || code;
+          if (!specGroupMap[groupKey]) {
+            specGroupMap[groupKey] = {
+              groupId: g.id,
+              groupCode: code,
+              groupName: name,
+              attributeCodes: [],
+            };
+          }
+          specGroupMap[groupKey].attributeCodes.push(...attrCodes);
+          for (const child of g.children || []) {
+            traverse(child);
+          }
+        };
+        traverse(group);
+      }
+    }
+  }
+
+  if (keyFeatureCodes.length > 0) {
+    const keyFeatures: any[] = [];
+    for (const code of keyFeatureCodes) {
+      const camelCode = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      if (result[camelCode] !== undefined) {
+        const value = result[camelCode];
+        if (value && typeof value === "object" && "value" in value) {
+          keyFeatures.push({ k: camelCode, v: value.value, unit: value.unit });
+        } else {
+          keyFeatures.push({ k: camelCode, v: value });
+        }
+        delete result[camelCode];
+      }
+    }
+    if (keyFeatures.length > 0) {
+      result.keyFeatures = keyFeatures;
+    }
+  }
+
+  const specGroups: any[] = [];
+  for (const groupKey of Object.keys(specGroupMap)) {
+    const groupInfo = specGroupMap[groupKey];
+    const attributes: any[] = [];
+    for (const code of groupInfo.attributeCodes) {
+      const camelCode = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      if (result[camelCode] !== undefined) {
+        const value = result[camelCode];
+        if (value && typeof value === "object" && "value" in value) {
+          attributes.push({ k: camelCode, v: value.value, unit: value.unit });
+        } else {
+          attributes.push({ k: camelCode, v: value });
+        }
+        delete result[camelCode];
+      }
+    }
+    if (attributes.length > 0) {
+      specGroups.push({
+        name: groupInfo.groupName || groupInfo.groupCode,
+        attributes: attributes,
+      });
+    }
+  }
+  if (specGroups.length > 0) {
+    result.specifications = specGroups;
+  }
+
+  if (
+    result.variantValues !== undefined &&
+    !Array.isArray(result.variantValues)
+  ) {
+    result.variantValues = normalizeKeyValueCollection(result.variantValues);
+  }
+  if (result.keyFeatures !== undefined && !Array.isArray(result.keyFeatures)) {
+    result.keyFeatures = normalizeKeyValueCollection(result.keyFeatures);
+  }
+
+  return result;
+}
+
+// ---------- Helper: normalize key-value collections ----------
+function normalizeKeyValueCollection(value: any): any[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return null;
+        const key = entry.k ?? entry.key ?? entry.name ?? "";
+        const normalizedKey =
+          typeof key === "string" ? key.trim() : String(key ?? "").trim();
+        if (!normalizedKey) return null;
+        const normalizedEntry: Record<string, any> = {
+          k: normalizedKey,
+          v: entry.v ?? entry.value ?? entry.values ?? "",
+        };
+        if (entry.unit) normalizedEntry.unit = entry.unit;
+        return normalizedEntry;
+      })
+      .filter(Boolean);
+  }
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, val]) => {
+        const normalizedKey = String(key).trim();
+        if (!normalizedKey) return null;
+        return { k: normalizedKey, v: val ?? "" };
+      })
+      .filter(Boolean);
+  }
+  return [];
+}
+
+// ---------- finalizeCanonicalProductData ----------
+async function finalizeCanonicalProductData(
+  data: Record<string, any>,
+  categoryId?: string,
+) {
+  const canonicalData = { ...data };
+  for (const key of ["categoryId", "brand"]) {
+    if (canonicalData[key] === null || canonicalData[key] === undefined) {
+      delete canonicalData[key];
+      continue;
+    }
+    const scalar = toScalarId(canonicalData[key]);
+    if (scalar) {
+      canonicalData[key] = scalar;
+    } else {
+      delete canonicalData[key];
+    }
+  }
+  if (Array.isArray(canonicalData.carrier)) {
+    const carrier = toScalarId(canonicalData.carrier);
+    if (carrier) {
+      canonicalData.carrier = carrier;
+    } else {
+      delete canonicalData.carrier;
+    }
+  }
+  if (typeof canonicalData.status === "string") {
+    canonicalData.status = canonicalData.status.trim().toLowerCase();
+  }
+
+  if (canonicalData.productCode) {
+    canonicalData.productCode = sanitizeProductCode(canonicalData.productCode);
+  }
+
+  if (categoryId) {
+    const structured = await buildStructuredFields(canonicalData, categoryId);
+    return structured;
+  }
+
+  return canonicalData;
+}
+
+// ---------- createProduct ----------
 export async function createProduct(
   formData: CreateProductForm,
 ): Promise<ProductResponse> {
@@ -383,8 +508,10 @@ export async function createProduct(
     await connection();
 
     const normalizedIncoming = normalizeProductPayloadForValidation(formData);
-    const transformedData = transformSnakeToCamel(normalizedIncoming);
-    const canonicalData = finalizeCanonicalProductData(transformedData);
+    const canonicalData = await finalizeCanonicalProductData(
+      normalizedIncoming,
+      normalizedIncoming.categoryId || (formData as any).category_id,
+    );
 
     const validationResult = safeValidateProductCreate(canonicalData);
     if (!validationResult.success) {
@@ -401,7 +528,7 @@ export async function createProduct(
       quantity,
       lowStockThreshold,
       ...attributes
-    } = validationResult.data || transformedData;
+    } = validationResult.data || canonicalData;
 
     const cleanedAttributes = cleanObject(attributes);
     if (Object.keys(cleanedAttributes).length === 0) {
@@ -438,12 +565,25 @@ export async function createProduct(
       updatedAt: new Date(),
     };
 
+    // Handle productCode from attributes.type and attributes.value
+    if (attributes.type && attributes.value) {
+      updateData.productCode = {
+        type: attributes.type,
+        value: attributes.value,
+      };
+      delete updateData.type;
+      delete updateData.value;
+    } else if (attributes.productCode) {
+      updateData.productCode = sanitizeProductCode(attributes.productCode);
+    }
+
     if (relatedProducts) {
-      // Convert each id to ObjectId and keep relationshipType
-      updateData.relatedProducts = (relatedProducts as any[]).map((rp) => ({
-        id: new mongoose.Types.ObjectId(rp.id),
-        relationshipType: rp.relationshipType || "",
-      }));
+      updateData.relatedProducts = (relatedProducts as any[]).map(
+        (rp: any) => ({
+          product: new mongoose.Types.ObjectId(rp.id),
+          relationshipType: rp.relationshipType || "",
+        }),
+      );
     }
 
     const newProduct = new Product({
@@ -466,6 +606,7 @@ export async function createProduct(
   }
 }
 
+// ---------- updateProduct ----------
 export async function updateProduct(
   productId: string,
   formData: any,
@@ -481,39 +622,31 @@ export async function updateProduct(
         (key) => key === "categoryId" || key === "category_id" || key === "_id",
       );
 
-    const transformedData = transformSnakeToCamel(normalizedIncoming);
-    const canonicalData = finalizeCanonicalProductData(transformedData);
+    const canonicalData = await finalizeCanonicalProductData(
+      normalizedIncoming,
+      normalizedIncoming.categoryId || normalizedIncoming.category_id,
+    );
 
     if (categoryOnlyUpdate) {
       const categoryId = canonicalData.categoryId ?? canonicalData.category_id;
-
-      if (!productId) {
+      if (!productId)
         return { success: false, error: "Valid product ID is required" };
-      }
-      if (!categoryId) {
-        return { success: false, error: "Category is required" };
-      }
-
+      if (!categoryId) return { success: false, error: "Category is required" };
       const updateData: any = {
         categoryId: new mongoose.Types.ObjectId(categoryId),
         updatedAt: new Date(),
       };
-
       const updatedProduct = await Product.findOneAndUpdate(
         { _id: new mongoose.Types.ObjectId(productId) },
         updateData,
         { new: true, runValidators: true },
       );
-
-      if (!updatedProduct) {
+      if (!updatedProduct)
         return { success: false, error: "Product not found" };
-      }
-
       revalidatePath("/products");
-      return { success: true, data: serialize(updatedProduct.toObject()) };
+      return { success: true, data: updatedProduct.toObject() };
     }
 
-    // Validate with Zod schema
     const validationResult = safeValidateProductUpdate(canonicalData);
     if (!validationResult.success) {
       return {
@@ -531,9 +664,8 @@ export async function updateProduct(
       ...attributes
     } = validationResult.data || canonicalData;
 
-    if (!productId) {
+    if (!productId)
       return { success: false, error: "Valid product ID is required" };
-    }
 
     const cleanedAttributes = cleanObject(attributes);
     if (
@@ -565,19 +697,33 @@ export async function updateProduct(
 
     const updateData: any = { ...cleanedAttributes, updatedAt: new Date() };
 
+    // Handle productCode from attributes.type and attributes.value
+    if (attributes.type && attributes.value) {
+      updateData.productCode = {
+        type: attributes.type,
+        value: attributes.value,
+      };
+      delete updateData.type;
+      delete updateData.value;
+    } else if (attributes.productCode) {
+      updateData.productCode = sanitizeProductCode(attributes.productCode);
+    }
+
     if (categoryId) {
       updateData.categoryId = new mongoose.Types.ObjectId(categoryId);
     }
     if (brand) {
       updateData.brand = new mongoose.Types.ObjectId(brand);
     }
-    if (relatedProducts) {
-      updateData.relatedProducts = (relatedProducts as any[]).map(
-        (rp: any) => ({
-          id: new mongoose.Types.ObjectId(rp.id),
+    if (relatedProducts !== undefined) {
+      if (Array.isArray(relatedProducts) && relatedProducts.length === 0) {
+        updateData.relatedProducts = [];
+      } else if (Array.isArray(relatedProducts)) {
+        updateData.relatedProducts = relatedProducts.map((rp: any) => ({
+          product: new mongoose.Types.ObjectId(rp.id),
           relationshipType: rp.relationshipType || "",
-        }),
-      );
+        }));
+      }
     }
     if (quantity !== undefined) {
       updateData.quantity = Number(quantity);
@@ -585,7 +731,6 @@ export async function updateProduct(
     if (lowStockThreshold !== undefined) {
       updateData.lowStockThreshold = Number(lowStockThreshold);
     }
-
     if (attributes.name) {
       updateData.slug = generateSlug(
         attributes.name,
@@ -593,18 +738,16 @@ export async function updateProduct(
       );
     }
 
+    console.log("[updateProduct] Final updateData:", updateData);
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: new mongoose.Types.ObjectId(productId) },
       updateData,
       { new: true, runValidators: true },
     );
-
-    if (!updatedProduct) {
-      return { success: false, error: "Product not found" };
-    }
+    if (!updatedProduct) return { success: false, error: "Product not found" };
 
     revalidatePath("/products");
-    return { success: true, data: serialize(updatedProduct.toObject()) };
+    return { success: true, data: updatedProduct.toObject() };
   } catch (error) {
     console.error("Error updating product:", error);
     if (error instanceof Error) {
@@ -619,10 +762,8 @@ export async function updateProduct(
 
 function toScalarId(value: any): string | null {
   const candidate = extractIdCandidate(value);
-  if (candidate === null || candidate === undefined || candidate === "") {
+  if (candidate === null || candidate === undefined || candidate === "")
     return null;
-  }
-
   const stringValue =
     typeof candidate === "string" ? candidate.trim() : String(candidate);
   return stringValue && stringValue !== "[object Object]" ? stringValue : null;
@@ -630,13 +771,10 @@ function toScalarId(value: any): string | null {
 
 function normalizeProductPayloadForValidation(value: any): any {
   if (!value || typeof value !== "object") return value;
-
   if (Array.isArray(value)) {
     return value.map((item) => normalizeProductPayloadForValidation(item));
   }
-
   const normalized = { ...value };
-
   const refKeys = ["categoryId", "brand", "carrier"];
   for (const key of refKeys) {
     if (normalized[key] !== undefined) {
@@ -648,15 +786,12 @@ function normalizeProductPayloadForValidation(value: any): any {
       }
     }
   }
-
   if (typeof normalized.status === "string") {
-    const statusValue = normalized.status.trim();
-    normalized.status = statusValue.toLowerCase();
+    normalized.status = normalized.status.trim().toLowerCase();
   } else if (Array.isArray(normalized.status)) {
     normalized.status = normalized.status[0] || "draft";
     normalized.status = String(normalized.status).trim().toLowerCase();
   }
-
   if (Array.isArray(normalized.variants)) {
     normalized.variants = normalized.variants.map((variant: any) => {
       if (!variant || typeof variant !== "object") return variant;
@@ -670,91 +805,10 @@ function normalizeProductPayloadForValidation(value: any): any {
       return nextVariant;
     });
   }
-
   return normalized;
 }
 
-function normalizeKeyValueCollection(value: any): any[] {
-  if (!value) return [];
-
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => {
-        if (!entry || typeof entry !== "object") return null;
-
-        const key = entry.k ?? entry.key ?? entry.name ?? "";
-        const normalizedKey =
-          typeof key === "string" ? key.trim() : String(key ?? "").trim();
-
-        if (!normalizedKey) return null;
-
-        const normalizedEntry: Record<string, any> = {
-          k: normalizedKey,
-          v: entry.v ?? entry.value ?? entry.values ?? "",
-        };
-
-        if (entry.unit) normalizedEntry.unit = entry.unit;
-        return normalizedEntry;
-      })
-      .filter(Boolean);
-  }
-
-  if (typeof value === "object") {
-    return Object.entries(value)
-      .map(([key, val]) => {
-        const normalizedKey = String(key).trim();
-        if (!normalizedKey) return null;
-        return { k: normalizedKey, v: val ?? "" };
-      })
-      .filter(Boolean);
-  }
-
-  return [];
-}
-
-function finalizeCanonicalProductData(data: Record<string, any>) {
-  const canonicalData = { ...data };
-
-  for (const key of ["categoryId", "brand"]) {
-    if (canonicalData[key] === null || canonicalData[key] === undefined) {
-      delete canonicalData[key];
-      continue;
-    }
-    const scalar = toScalarId(canonicalData[key]);
-    if (scalar) {
-      canonicalData[key] = scalar;
-    } else {
-      delete canonicalData[key];
-    }
-  }
-
-  if (Array.isArray(canonicalData.carrier)) {
-    const carrier = toScalarId(canonicalData.carrier);
-    if (carrier) {
-      canonicalData.carrier = carrier;
-    } else {
-      delete canonicalData.carrier;
-    }
-  }
-
-  if (canonicalData.variantValues !== undefined) {
-    canonicalData.variantValues = normalizeKeyValueCollection(
-      canonicalData.variantValues,
-    );
-  }
-  if (canonicalData.keyFeatures !== undefined) {
-    canonicalData.keyFeatures = normalizeKeyValueCollection(
-      canonicalData.keyFeatures,
-    );
-  }
-
-  if (typeof canonicalData.status === "string") {
-    canonicalData.status = canonicalData.status.trim().toLowerCase();
-  }
-
-  return canonicalData;
-}
-
+// ---------- createOrUpdateProduct ----------
 export async function createOrUpdateProduct(
   productData: any,
 ): Promise<ProductResponse> {
@@ -763,8 +817,17 @@ export async function createOrUpdateProduct(
 
     const normalizedIncoming =
       normalizeProductPayloadForValidation(productData);
-    const transformedData = transformSnakeToCamel(normalizedIncoming);
-    const canonicalData = finalizeCanonicalProductData(transformedData);
+    const categoryId =
+      normalizedIncoming.categoryId || normalizedIncoming.category_id;
+    const canonicalData = await finalizeCanonicalProductData(
+      normalizedIncoming,
+      categoryId,
+    );
+
+    console.log(
+      "[createOrUpdateProduct] After finalizeCanonicalProductData:",
+      canonicalData,
+    );
 
     const validationResult = safeValidateProductCreateOrUpdate(canonicalData);
     if (!validationResult.success) {
@@ -776,7 +839,7 @@ export async function createOrUpdateProduct(
 
     const {
       _id,
-      categoryId,
+      categoryId: catId,
       brand,
       relatedProducts,
       quantity,
@@ -787,9 +850,11 @@ export async function createOrUpdateProduct(
     const cleanedAttributes = cleanObject(attributes);
     const { createdAt, updatedAt, __v, ...safeAttributes } = cleanedAttributes;
 
-    if (categoryId) {
+    console.log("[createOrUpdateProduct] safeAttributes:", safeAttributes);
+
+    if (catId) {
       try {
-        await validateRequiredCategoryAttributes(categoryId, {
+        await validateRequiredCategoryAttributes(catId, {
           ...safeAttributes,
           ...(brand ? { brand } : {}),
           ...(quantity !== undefined ? { quantity } : {}),
@@ -805,11 +870,30 @@ export async function createOrUpdateProduct(
 
     const updateData: any = {
       ...safeAttributes,
-      status: normalizeProductStatus(safeAttributes.status as string),
       updatedAt: new Date(),
     };
 
-    const categoryObjectId = toObjectId(categoryId);
+    // Only set status if it was provided (to avoid resetting to draft)
+    if (safeAttributes.status !== undefined) {
+      updateData.status = normalizeProductStatus(safeAttributes.status);
+    }
+
+    // Handle productCode from attributes.type and attributes.value
+    if (safeAttributes.type && safeAttributes.value) {
+      updateData.productCode = {
+        type: safeAttributes.type,
+        value: safeAttributes.value,
+      };
+      delete updateData.type;
+      delete updateData.value;
+    } else if (safeAttributes.productCode) {
+      updateData.productCode = sanitizeProductCode(safeAttributes.productCode);
+      // If productCode is set from existing, we might need to ensure type/value are removed
+      delete updateData.type;
+      delete updateData.value;
+    }
+
+    const categoryObjectId = toObjectId(catId);
     if (!categoryObjectId) {
       return { success: false, error: "Invalid category selected." };
     }
@@ -821,34 +905,30 @@ export async function createOrUpdateProduct(
     }
     updateData.brand = brandObjectId;
 
-    // Handle relatedProducts – now expects array of objects
     if (relatedProducts !== undefined) {
       if (Array.isArray(relatedProducts)) {
-        const validRelatedProducts = (relatedProducts as any[])
-          .filter((rp: any) => rp && rp.id)
-          .map((rp: any) => ({
-            id: toObjectId(rp.id),
-            relationshipType: rp.relationshipType || "",
-          }))
-          .filter((rp: any) => rp.id);
-
-        if (validRelatedProducts.length > 0) {
-          updateData.relatedProducts = validRelatedProducts;
+        if (relatedProducts.length === 0) {
+          updateData.relatedProducts = [];
+        } else {
+          const valid = relatedProducts
+            .filter((rp: any) => rp && rp.id)
+            .map((rp: any) => ({
+              product: toObjectId(rp.id),
+              relationshipType: rp.relationshipType || "",
+            }))
+            .filter((rp: any) => rp.product);
+          updateData.relatedProducts = valid;
         }
       } else {
-        // fallback for old format (just in case)
         const ids = (relatedProducts as any).ids || [];
-        const validRelatedProducts = ids
+        const valid = ids
           .filter((id: any) => id)
           .map((id: any) => ({
-            id: toObjectId(id),
+            product: toObjectId(id),
             relationshipType: (relatedProducts as any).relationshipType || "",
           }))
-          .filter((rp: any) => rp.id);
-
-        if (validRelatedProducts.length > 0) {
-          updateData.relatedProducts = validRelatedProducts;
-        }
+          .filter((rp: any) => rp.product);
+        updateData.relatedProducts = valid;
       }
     }
 
@@ -858,7 +938,6 @@ export async function createOrUpdateProduct(
     if (lowStockThreshold !== undefined) {
       updateData.lowStockThreshold = Number(lowStockThreshold);
     }
-
     if (safeAttributes.name) {
       updateData.slug = generateSlug(
         safeAttributes.name,
@@ -866,9 +945,13 @@ export async function createOrUpdateProduct(
       );
     }
 
+    console.log(
+      "[createOrUpdateProduct] Final updateData before save:",
+      updateData,
+    );
+
     let product;
     let isNew = false;
-
     const existingId = toObjectId(_id);
     if (existingId) {
       const existing = await Product.findById(existingId);
@@ -901,66 +984,62 @@ export async function createOrUpdateProduct(
     }
 
     revalidatePath("/products");
-
     const result = product?.toObject ? product?.toObject() : product;
-    return { success: true, data: serialize(result) };
+    return { success: true, data: result };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown server error";
     console.error("Error in createOrUpdateProduct:", error);
-    return {
-      success: false,
-      error: message || "Failed to save product",
-    };
+    return { success: false, error: message || "Failed to save product" };
   }
 }
 
+// ---------- deleteProduct ----------
 export async function deleteProduct(
   id: string,
   options: DeleteProductOptions = {},
 ): Promise<ProductResponse> {
   try {
     await connection();
-    if (!id) {
-      return { success: false, error: "Product ID is required" };
-    }
-
+    if (!id) return { success: false, error: "Product ID is required" };
     const existingProduct = await Product.findById(id);
-    if (!existingProduct) {
-      return { success: false, error: "Product not found" };
-    }
+    if (!existingProduct) return { success: false, error: "Product not found" };
+
+    await Product.updateMany(
+      { "relatedProducts.product": new mongoose.Types.ObjectId(id) },
+      {
+        $pull: {
+          relatedProducts: { product: new mongoose.Types.ObjectId(id) },
+        },
+      },
+    );
 
     if (options.recreate) {
       const clone = existingProduct.toObject
         ? existingProduct.toObject()
         : existingProduct;
       const { _id, __v, createdAt, updatedAt, ...rest } = clone;
-
       const recreatedProduct = new Product({
         ...rest,
         status: "draft",
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-
       const savedProduct = await recreatedProduct.save();
       await Product.findByIdAndDelete(id);
-
       revalidatePath("/products");
       return {
         success: true,
         data: {
           deletedId: id,
           recreatedId: savedProduct._id.toString(),
-          product: serialize(savedProduct.toObject()),
+          product: savedProduct.toObject(),
         },
       };
     }
 
     const deletedProduct = await Product.findByIdAndDelete(id);
-    if (!deletedProduct) {
-      return { success: false, error: "Product not found" };
-    }
+    if (!deletedProduct) return { success: false, error: "Product not found" };
     revalidatePath("/products");
     return { success: true, data: "Product deleted successfully" };
   } catch (error) {
@@ -969,17 +1048,16 @@ export async function deleteProduct(
   }
 }
 
+// ---------- deleteProductImages ----------
 export async function deleteProductImages(
   productId: string,
   imageUrl?: string,
 ): Promise<ProductResponse> {
   try {
     await connection();
-
     if (!productId && !imageUrl) {
       return { success: false, error: "ProductId or imageUrl is required" };
     }
-
     const deleteFromStorage = async (url: string) => {
       const urlObj = new URL(url);
       const encodedFileName = urlObj.pathname.split("/").pop();
@@ -991,31 +1069,25 @@ export async function deleteProductImages(
         await deleteObject(ref(storage, path));
       }
     };
-
     if (productId && mongoose.isValidObjectId(productId)) {
       const product = await Product.findById(productId);
-      if (!product) {
-        return { success: false, error: "Product not found" };
-      }
-
+      if (!product) return { success: false, error: "Product not found" };
       if (imageUrl) {
         const productImages = product.images ?? [];
         if (!productImages.includes(imageUrl)) {
           return { success: false, error: "Image URL not found in product" };
         }
-
         await deleteFromStorage(imageUrl);
         product.images = productImages.filter(
           (url: string) => url !== imageUrl,
         );
         await product.save();
-        return { success: true, data: serialize(product.toObject()) };
+        return { success: true, data: product.toObject() };
       }
     } else if (imageUrl) {
       await deleteFromStorage(imageUrl);
       return { success: true, data: "Image deleted successfully" };
     }
-
     return { success: false, error: "Invalid parameters" };
   } catch (error) {
     console.error("Error deleting product images:", error);

@@ -1,28 +1,24 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
-// ==================== 1. INTERFACES ====================
+// ==================== INTERFACES ====================
 
-// ProductCode sub‑document
 interface IProductCode {
   type: "EAN" | "UPC" | "ISBN" | "QR" | "MODEL";
   value: string;
 }
 
-// Key‑Value pair with optional unit
 interface IKeyValue {
   k: string;
-  v: any; // numeric, string, boolean, etc.
-  unit?: string; // NEW: e.g., 'kg', 'cm', 'USD'
+  v: any;
+  unit?: string;
 }
 
-// Recursive specification group
 interface ISpecificationGroup {
   name: string;
   attributes?: IKeyValue[];
   groups?: ISpecificationGroup[];
 }
 
-// Variant sub‑document
 interface IVariant {
   attributes: IKeyValue[];
   sku: string;
@@ -32,22 +28,20 @@ interface IVariant {
   images?: string[];
 }
 
-// Review sub‑document
 interface IReview {
   user: mongoose.Types.ObjectId;
   rating: number;
   comment?: string;
 }
 
-// Related products structure
-interface IRelatedProducts {
-  ids: mongoose.Types.ObjectId[];
+// Related product now an array of objects
+interface IRelatedProduct {
+  product: mongoose.Types.ObjectId;
   relationshipType?: string;
 }
 
-// Main Product document
 export interface IProduct extends Document {
-  productCode: IProductCode[];
+  productCode: IProductCode | null;
   name: string;
   sku: string;
   slug: string;
@@ -68,7 +62,7 @@ export interface IProduct extends Document {
   shortDescription: string;
   variants: IVariant[];
   carrier?: mongoose.Types.ObjectId;
-  relatedProducts: IRelatedProducts;
+  relatedProducts: IRelatedProduct[]; // changed
   reviewsRatings: IReview[];
   tags: string[];
   status: "draft" | "active" | "inactive";
@@ -76,7 +70,7 @@ export interface IProduct extends Document {
   updatedAt: Date;
 }
 
-// ==================== 2. SUB‑SCHEMAS ====================
+// ==================== SUB‑SCHEMAS ====================
 
 const ProductCodeSchema = new Schema<IProductCode>({
   type: {
@@ -87,15 +81,12 @@ const ProductCodeSchema = new Schema<IProductCode>({
   value: { type: String, required: true },
 });
 
-// KeyValueSchema now includes unit
 const KeyValueSchema = new Schema<IKeyValue>({
   k: { type: String, required: true, trim: true },
   v: { type: Schema.Types.Mixed, required: true },
-  unit: { type: String, trim: true }, // optional
+  unit: { type: String, trim: true },
 });
 
-// Recursive specification groups need to stay as nested plain objects rather than
-// a direct Schema instance in an array, otherwise Mongoose rejects the schema.
 const SpecificationGroupSchema = new Schema<ISpecificationGroup>({
   name: { type: String, required: true, trim: true },
   attributes: { type: [KeyValueSchema], default: [] },
@@ -117,11 +108,11 @@ const ReviewSchema = new Schema<IReview>({
   comment: { type: String, maxlength: 200 },
 });
 
-// ==================== 3. MAIN SCHEMA ====================
+// ==================== MAIN SCHEMA ====================
 
 const ProductSchema = new Schema<IProduct>(
   {
-    productCode: { type: [ProductCodeSchema], default: [] },
+    productCode: { type: ProductCodeSchema, default: null },
     name: { type: String, trim: true, default: "" },
     sku: { type: String, trim: true, index: true, default: "" },
     slug: {
@@ -136,15 +127,10 @@ const ProductSchema = new Schema<IProduct>(
       ref: "Category",
       required: true,
     },
-    brand: {
-      type: Schema.Types.ObjectId,
-      ref: "Brand",
-      required: true,
-    },
+    brand: { type: Schema.Types.ObjectId, ref: "Brand", required: true },
     hasVariants: { type: Boolean, default: false },
     variantThemes: { type: [String], default: [] },
     variantValues: { type: [KeyValueSchema], default: [] },
-
     keyFeatures: { type: [KeyValueSchema], default: [] },
     specifications: { type: [SpecificationGroupSchema], default: [] },
     quantity: { type: Number, default: 0, min: 0 },
@@ -158,11 +144,13 @@ const ProductSchema = new Schema<IProduct>(
     variants: { type: [VariantSchema], default: [] },
     carrier: { type: Schema.Types.ObjectId, ref: "Carrier" },
     relatedProducts: {
-      ids: {
-        type: [{ type: Schema.Types.ObjectId, ref: "Product" }],
-        default: [],
-      },
-      relationshipType: { type: String },
+      type: [
+        {
+          product: { type: Schema.Types.ObjectId, ref: "Product" },
+          relationshipType: { type: String },
+        },
+      ],
+      default: [],
     },
     reviewsRatings: { type: [ReviewSchema], default: [] },
     tags: { type: [String], default: [] },
@@ -173,12 +161,14 @@ const ProductSchema = new Schema<IProduct>(
       index: true,
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    strict: false, // allow dynamic category attributes as top‑level fields
+  },
 );
 
-// ==================== 4. INDEXES ====================
+// ==================== INDEXES ====================
 
-// ---- 4a. Text search index (includes unit? Not needed, but we can index values) ----
 ProductSchema.index(
   {
     name: "text",
@@ -186,7 +176,7 @@ ProductSchema.index(
     shortDescription: "text",
     tags: "text",
     "keyFeatures.v": "text",
-    "specifications.$**": "text", // recursive text search on all spec values
+    "specifications.$**": "text",
   },
   {
     weights: {
@@ -201,33 +191,20 @@ ProductSchema.index(
   },
 );
 
-// ---- 4b. Exact key‑value lookups (including unit if needed) ----
-// For keyFeatures
 ProductSchema.index({ "keyFeatures.k": 1, "keyFeatures.v": 1 });
-// Optionally add unit to the compound index if you query by unit often:
-// ProductSchema.index({ 'keyFeatures.k': 1, 'keyFeatures.v': 1, 'keyFeatures.unit': 1 });
-
-// For specifications (nested attributes)
 ProductSchema.index({
   "specifications.attributes.k": 1,
   "specifications.attributes.v": 1,
 });
-// Similar optional unit index.
-
-// ---- 4c. Common query filters ----
 ProductSchema.index({ categoryId: 1, status: 1, price: 1 });
 ProductSchema.index({ brand: 1, status: 1 });
 ProductSchema.index({ slug: 1 }, { unique: true });
 ProductSchema.index({ sku: 1 });
 ProductSchema.index({ status: 1, createdAt: -1 });
-
-// Optional partial index for active products on keyFeatures
 ProductSchema.index(
   { "keyFeatures.k": 1, "keyFeatures.v": 1 },
   { partialFilterExpression: { status: "active" } },
 );
-
-// ==================== 5. MODEL ====================
 
 const Product =
   (mongoose.models.Product as mongoose.Model<IProduct>) ||

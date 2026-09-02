@@ -4,7 +4,7 @@ import { z } from "zod";
 // SUB-SCHEMAS FOR PRODUCT VALIDATION
 // ============================================================================
 
-// ProductCode sub-schema
+// ProductCode sub-schema (single object, not array)
 export const ProductCodeSchema = z.object({
   type: z.enum(["EAN", "UPC", "ISBN", "QR", "MODEL"]),
   value: z.string().trim().min(1, "Product code value is required"),
@@ -36,16 +36,19 @@ export const VariantSchema = z.object({
   images: z.array(z.string()).default([]),
 });
 
-// Related products structure
-export const RelatedProductSchema = z.object({
-  id: z.string().min(1, "Product ID is required"),
-  relationshipType: z.string().optional(),
-});
+// ============================================================================
+// RELATED PRODUCTS
+// ============================================================================
 
-export const RelatedProductsSchema = z.object({
-  ids: z.array(z.string()).default([]),
-  relationshipType: z.string().optional(),
-});
+export const RelatedProductEntrySchema = z
+  .object({
+    product: z.string().optional(),
+    id: z.string().optional(),
+    relationshipType: z.string().optional(),
+  })
+  .refine((data) => data.product || data.id, {
+    message: "Either product or id must be provided",
+  });
 
 // ============================================================================
 // MAIN PRODUCT SCHEMAS
@@ -72,15 +75,13 @@ export const CreateProductSchema = z
     keyFeatures: z.array(KeyValueSchema).default([]),
     specifications: z.array(SpecificationGroupSchema).default([]),
     carrier: z.string().optional(),
-    relatedProducts: z
-      .array(RelatedProductSchema)
-      .or(RelatedProductsSchema)
-      .default([]),
+    relatedProducts: z.array(RelatedProductEntrySchema).default([]),
     tags: z.array(z.string()).default([]),
     status: z.enum(["draft", "active", "inactive"]).default("draft"),
-    productCode: z.array(ProductCodeSchema).default([]),
+    // productCode is now a single object (or null)
+    productCode: ProductCodeSchema.nullable().optional(),
   })
-  .passthrough();
+  .passthrough(); // allows dynamic category attributes and temporary fields
 
 // Schema for updating a product (all fields optional except ID)
 export const UpdateProductSchema = CreateProductSchema.partial().extend({
@@ -134,7 +135,7 @@ export function validateProductCreateOrUpdate(data: unknown) {
  * Safe validation that returns a result object instead of throwing
  * @param data - Product data to validate
  * @param schema - Zod schema to validate against
- * @returns { success: boolean, data?: T, error?: string }
+ * @returns { success: boolean; data?: T; error?: string }
  */
 export function safeValidate<T>(
   data: unknown,

@@ -4,7 +4,7 @@ import mongoose, { Schema, model, models, Document } from "mongoose";
 interface ICategory extends Document {
   slug: string;
   name: string;
-  parentId?: mongoose.Types.ObjectId;
+  parent_id?: mongoose.Types.ObjectId;
   description?: string;
   imageUrl?: string[];
   property?: mongoose.Types.ObjectId; // Reference to CategoryProperty
@@ -30,7 +30,7 @@ const CategorySchema = new Schema<ICategory>({
     required: [true, "Category name is required"],
   },
 
-  parentId: {
+  parent_id: {
     type: mongoose.Types.ObjectId,
     ref: "Category",
   },

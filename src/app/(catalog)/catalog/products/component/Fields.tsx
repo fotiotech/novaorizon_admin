@@ -343,16 +343,30 @@ const Fields: React.FC<FieldProps> = React.memo(
         case "select": {
           const normalizedCode = normalizeCode(code);
           if (normalizedCode === "brand") {
-            const brandOptions = brands.map((brand) => ({
-              value: brand._id.toString(),
-              label: brand.name,
-            }));
-            const selectedBrandId =
-              typeof field === "object" && field !== null
-                ? (field._id || field.id || "").toString()
-                : Array.isArray(field)
-                  ? (field[0] || "").toString()
-                  : (field || "").toString();
+            const brandOptions = brands
+              .filter(Boolean)
+              .map((brand) => ({
+                value: brand?._id ? brand._id.toString() : "",
+                label: brand?.name || "Unnamed brand",
+              }))
+              .filter((brand) => brand.value);
+
+            const selectedBrandId = (() => {
+              const candidate =
+                typeof field === "object" && field !== null
+                  ? (field._id ?? field.id ?? field.value)
+                  : Array.isArray(field)
+                    ? field[0]
+                    : field;
+
+              if (!candidate) return "";
+              if (typeof candidate === "object") {
+                const nested = candidate._id ?? candidate.id ?? candidate.value;
+                return nested ? String(nested) : "";
+              }
+
+              return String(candidate);
+            })();
 
             return (
               <Select

@@ -47,13 +47,23 @@ const CategoryList: React.FC<CategoryListProps> = ({
   };
 
   // Recursive filter by name (case‑insensitive)
-  const filterTree = (nodes: CategoryNode[], query: string): CategoryNode[] => {
+  const filterTree = (
+    nodes: CategoryNode[],
+    query: string,
+    visited = new Set<string>(),
+  ): CategoryNode[] => {
     if (!query.trim()) return nodes;
     const lower = query.toLowerCase();
     return nodes
       ?.map((node) => {
+        if (visited.has(node._id)) return null;
+        visited.add(node._id);
         const matches = node.name.toLowerCase().includes(lower);
-        const filteredChildren = filterTree(node.subcategories, query);
+        const filteredChildren = filterTree(
+          node.subcategories || [],
+          query,
+          visited,
+        );
         if (matches || filteredChildren?.length > 0) {
           return {
             ...node,
@@ -75,14 +85,19 @@ const CategoryList: React.FC<CategoryListProps> = ({
     nodes: CategoryNode[],
     level: number = 0,
     parentExpanded: boolean = true,
+    visited = new Set<string>(),
   ): Array<CategoryNode & { level: number; visible: boolean }> => {
     let rows: Array<CategoryNode & { level: number; visible: boolean }> = [];
     for (const node of nodes) {
+      if (!node?._id || visited.has(node._id)) continue;
+      visited.add(node._id);
       const isExpanded = expanded.has(node._id);
       const visible = parentExpanded;
       rows.push({ ...node, level, visible });
       if (node.subcategories && node.subcategories.length > 0 && isExpanded) {
-        rows = rows.concat(flattenTree(node.subcategories, level + 1, true));
+        rows = rows.concat(
+          flattenTree(node.subcategories, level + 1, true, visited),
+        );
       }
     }
     return rows;

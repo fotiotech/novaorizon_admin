@@ -2,6 +2,8 @@
 
 import { connection } from "@/utils/connection";
 import Attribute from "@/models/Attribute";
+import AttributeGroup from "@/models/AttributeGroup";
+import CategoryProperty from "@/models/CategoryProperty";
 import mongoose, { Types } from "mongoose";
 import { revalidatePath } from "next/cache";
 import "@/models/UnitFamily";
@@ -206,6 +208,37 @@ export async function deleteAttribute(id: string) {
     await session.withTransaction(async () => {
       const attribute = await Attribute.findById(id).session(session);
       if (!attribute) throw new Error("Attribute not found");
+
+      await AttributeGroup.updateMany(
+        {},
+        { $pull: { attributes: { id: new mongoose.Types.ObjectId(id) } } },
+        { session },
+      );
+
+      const categoryProperties = await CategoryProperty.find({}).session(
+        session,
+      );
+      for (const property of categoryProperties) {
+        let changed = false;
+        property.mappings = (property.mappings || []).map((mapping: any) => ({
+          ...mapping,
+          groups: (mapping.groups || []).map((group: any) => ({
+            ...group,
+            attributes: (group.attributes || []).filter((entry: any) => {
+              const attributeId =
+                entry.attribute?.toString?.() ?? entry.attribute;
+              const matches = attributeId === id;
+              if (matches) changed = true;
+              return !matches;
+            }),
+          })),
+        }));
+
+        if (changed) {
+          await property.save({ session });
+        }
+      }
+
       await Attribute.findByIdAndDelete(id).session(session);
     });
     revalidatePath("/admin/attributes");

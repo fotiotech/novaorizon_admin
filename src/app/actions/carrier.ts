@@ -2,6 +2,7 @@
 import { connection } from "@/utils/connection";
 
 import Carrier from "@/models/Carrier";
+import Product from "@/models/Product";
 import { revalidatePath } from "next/cache";
 
 // CREATE
@@ -50,17 +51,18 @@ export async function getCarriers() {
 export async function getCarriersById(_id: string) {
   await connection();
   const data = await Carrier.findOne({ _id });
-  
+
   // 🛑 If no carrier is found, return null
   if (!data) return null;
 
   return {
     ...data.toObject(),
     _id: data._id.toString(),
-    regionsServed: data.regionsServed?.map((region: any) => ({
-      ...region.toObject(),
-      _id: region._id?.toString(),
-    })) || [],
+    regionsServed:
+      data.regionsServed?.map((region: any) => ({
+        ...region.toObject(),
+        _id: region._id?.toString(),
+      })) || [],
   };
 }
 
@@ -128,6 +130,9 @@ export async function updateCarrier(
 // DELETE
 export async function deleteCarrier(id: string) {
   await connection();
+
+  await Product.updateMany({ carrier: id }, { $unset: { carrier: "" } });
+
   return Carrier.findByIdAndDelete(id);
 }
 

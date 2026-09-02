@@ -30,12 +30,6 @@ import { AttributeField } from "@/app/(catalog)/catalog/products/component/Attri
 import ManageRelatedProduct from "./ManageRelatedProduct";
 import VariantsManager from "@/app/(catalog)/catalog/products/component/variants/VariantOption";
 import { isValidBarcode } from "@/app/lib/barcode";
-import {
-  transformSnakeToCamel,
-  transformCamelToSnake,
-  flattenCategoryProperty,
-  snakeToCamel,
-} from "@/lib/categoryProperty";
 
 // ------------------------------------------------------------------
 // Types (unchanged)
@@ -69,7 +63,7 @@ type AttributeSetStep = {
 };
 
 // ------------------------------------------------------------------
-// Helper: check if a value is "empty"
+// Helpers (unchanged)
 // ------------------------------------------------------------------
 const isEmptyValue = (value: any): boolean => {
   if (value === undefined || value === null) return true;
@@ -82,10 +76,6 @@ const isEmptyValue = (value: any): boolean => {
   return false;
 };
 
-// ------------------------------------------------------------------
-// Helper: normalize categoryProperty codes to camelCase while keeping
-// compatibility with legacy snake_case values from older data.
-// ------------------------------------------------------------------
 const normalizeCode = (code?: string): string => {
   if (!code) return "";
   return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
@@ -123,18 +113,14 @@ const toScalarId = (value: any): string | null => {
 };
 
 // ------------------------------------------------------------------
-// Helper: get all relevant keys for a group (including children)
-// for custom memo comparison
+// getGroupRelevantKeys (unchanged)
 // ------------------------------------------------------------------
 function getGroupRelevantKeys(group: GroupNode): string[] {
   const keys: string[] = [];
-  // Add own attribute codes (normalize to camelCase for lookup)
   group.attributes.forEach((attr) => keys.push(normalizeCode(attr.code)));
-  // Recursively add children's attribute codes
   group.children.forEach((child) => {
     keys.push(...getGroupRelevantKeys(child));
   });
-  // Special groups need additional top‑level product fields
   if (normalizeCode(group.code) === "variantThemes") {
     keys.push("variantThemes", "variantValues", "variants");
   }
@@ -145,7 +131,7 @@ function getGroupRelevantKeys(group: GroupNode): string[] {
 }
 
 // ------------------------------------------------------------------
-// Memoized GroupRenderer component with custom comparator
+// Memoized GroupRenderer (unchanged)
 // ------------------------------------------------------------------
 interface GroupRendererProps {
   group: GroupNode;
@@ -293,15 +279,12 @@ const GroupRenderer = memo(
     );
   },
   (prevProps, nextProps) => {
-    // Custom comparator: only re‑render if relevant data changed
-    // 1. Quick checks for stable props
     if (prevProps.productId !== nextProps.productId) return false;
     if (prevProps.units !== nextProps.units) return false;
     if (prevProps.allVariantFields !== nextProps.allVariantFields) return false;
     if (prevProps.handleChange !== nextProps.handleChange) return false;
     if (prevProps.group.id !== nextProps.group.id) return false;
 
-    // 2. Compare relevant productData fields
     const relevantKeys = getGroupRelevantKeys(prevProps.group);
     for (const key of relevantKeys) {
       if (prevProps.productData[key] !== nextProps.productData[key]) {
@@ -309,7 +292,6 @@ const GroupRenderer = memo(
       }
     }
 
-    // 3. Compare validation errors for this group
     const prevGroupErrors =
       prevProps.validationErrors[prevProps.group.id] || [];
     const nextGroupErrors =
@@ -317,7 +299,6 @@ const GroupRenderer = memo(
     if (prevGroupErrors.length !== nextGroupErrors.length) return false;
     if (prevGroupErrors.some((e, i) => e !== nextGroupErrors[i])) return false;
 
-    // 4. If group is variant_themes, also compare variants validation errors
     if (normalizeCode(prevProps.group.code) === "variantThemes") {
       const prevVariantErrors = prevProps.validationErrors["variants"] || [];
       const nextVariantErrors = nextProps.validationErrors["variants"] || [];
@@ -325,8 +306,6 @@ const GroupRenderer = memo(
       if (prevVariantErrors.some((e, i) => e !== nextVariantErrors[i]))
         return false;
     }
-
-    // All checks passed → skip re‑render
     return true;
   },
 );
@@ -337,8 +316,8 @@ GroupRenderer.displayName = "GroupRenderer";
 // Main Component
 // ------------------------------------------------------------------
 interface ProductFormProps {
-  productId?: string; // if provided, editing an existing product
-  initialCategoryId?: string; // for new products, the selected category ID
+  productId?: string;
+  initialCategoryId?: string;
 }
 
 const ProductForm: React.FC<ProductFormProps> = ({
@@ -362,17 +341,16 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [units, setUnits] = useState<any[]>([]);
 
-  // Ref to track current step without causing re‑renders in callbacks
   const currentStepRef = useRef(currentStep);
 
-  // ---------- Draft (server) ----------
+  // Draft auto-save
   useEffect(() => {
     if (Object.keys(productData).length === 0) return;
     const timer = setTimeout(async () => {
       try {
         await saveProductDraft(productId, productData);
       } catch (err) {
-        // ignore – drafts are optional
+        // ignore
       }
     }, 800);
     return () => clearTimeout(timer);
@@ -385,39 +363,43 @@ const ProductForm: React.FC<ProductFormProps> = ({
         setLoading(true);
         let data: Record<string, any> = {};
 
-        // 1. If editing, fetch product
         if (initialProductId) {
           const result = await findProducts(initialProductId);
-          console.log("Fetched product data:", result);
+          console.log("[ProductForm] Raw product data:", result);
           if (result && !result.error) {
             data = result;
-            data._id = initialProductId;
           } else {
             setError("Failed to load product");
           }
         }
 
-        // 2. If categoryProperty exists in the data, flatten it and merge with product data
-        if (
-          data.categoryProperty &&
-          typeof data.categoryProperty === "object"
-        ) {
-          const flattenedCategoryProperty = flattenCategoryProperty(
-            data.categoryProperty,
-          );
-          data = { ...data, ...flattenedCategoryProperty };
-          // Remove the nested structure after flattening
-          delete (data as any).categoryProperty;
+        // Safely map productCode to type/value
+        if (data.productCode) {
+          // If it's an array, take the first element (legacy)
+          let code = data.productCode;
+          if (Array.isArray(code) && code.length > 0) {
+            code = code[0];
+          }
+          if (code && typeof code === "object") {
+            data.type = code.type || "";
+            data.value = code.value || "";
+          }
         }
 
-        // 3. Transform any remaining snake_case fields to camelCase
-        data = transformSnakeToCamel(data);
-
-        // 4. Fetch draft (keyed by productId)
         const draft = await getProductDraft(productId);
         if (draft) {
-          const draftData = { ...draft };
+          let draftData = { ...draft };
           delete draftData._id;
+          if (draftData.productCode) {
+            let code = draftData.productCode;
+            if (Array.isArray(code) && code.length > 0) {
+              code = code[0];
+            }
+            if (code && typeof code === "object") {
+              draftData.type = code.type || "";
+              draftData.value = code.value || "";
+            }
+          }
           data = { ...data, ...draftData };
         }
 
@@ -425,43 +407,36 @@ const ProductForm: React.FC<ProductFormProps> = ({
           data._id = initialProductId;
         }
 
-        // 5. If still no categoryId and initialCategoryId is provided, set it
         if (!data.categoryId && initialCategoryId) {
           data.categoryId = initialCategoryId;
         }
 
+        // Normalize reference IDs
         if (data.categoryId) {
-          const nextCategoryId = toScalarId(data.categoryId);
-          if (nextCategoryId) {
-            data.categoryId = nextCategoryId;
-          } else {
-            delete data.categoryId;
-          }
+          const id = toScalarId(data.categoryId);
+          data.categoryId = id || null;
         }
         if (data.brand) {
-          const nextBrandId = toScalarId(data.brand);
-          if (nextBrandId) {
-            data.brand = nextBrandId;
-          } else {
-            delete data.brand;
-          }
+          const id = toScalarId(data.brand);
+          data.brand = id || null;
         }
         if (Array.isArray(data.carrier)) {
-          const nextCarrier = toScalarId(data.carrier);
-          if (nextCarrier) {
-            data.carrier = nextCarrier;
-          } else {
-            delete data.carrier;
-          }
+          const id = toScalarId(data.carrier);
+          data.carrier = id || null;
         }
-        if (typeof data.status === "string") {
+
+        // Ensure status is always set (default to 'draft')
+        if (data.status) {
           data.status = data.status.trim().toLowerCase();
+        } else {
+          data.status = "draft";
         }
 
-        console.log("Final product data after loading and merging:", data);
-
+        // Log final data for debugging
+        console.log("[ProductForm] Final product data:", data);
         setProductData(data);
       } catch (err) {
+        console.error("Error loading product data:", err);
         setError("Failed to load data");
       } finally {
         setLoading(false);
@@ -506,36 +481,29 @@ const ProductForm: React.FC<ProductFormProps> = ({
     fetchUnits();
   }, []);
 
-  // ============================================================
-  // Compute visible steps based on hasVariants
-  // ============================================================
+  // ---------- Visible steps ----------
   const visibleSteps = useMemo(() => {
     const variantStepIndex = steps.findIndex((step) =>
       step.groups.some((g) => normalizeCode(g.code) === "variantThemes"),
     );
-    // If no variant step exists, or hasVariants is truthy, show all
     if (variantStepIndex === -1 || productData.hasVariants) {
       return steps;
     }
-    // Otherwise, filter out the variant step
     return steps.filter((_, index) => index !== variantStepIndex);
   }, [steps, productData.hasVariants]);
 
-  // Sync currentStep when visibleSteps changes
   useEffect(() => {
     if (currentStep >= visibleSteps.length) {
       setCurrentStep(Math.max(0, visibleSteps.length - 1));
     }
-    // Update ref as well
     currentStepRef.current = Math.max(0, visibleSteps.length - 1);
   }, [visibleSteps, currentStep]);
 
-  // Keep the ref in sync with currentStep state
   useEffect(() => {
     currentStepRef.current = currentStep;
   }, [currentStep]);
 
-  // ---------- Validation (unchanged) ----------
+  // ---------- Validation (uses "type" and "value") ----------
   const validateGroup = (group: GroupNode): string[] => {
     const errors: string[] = [];
     group.attributes.forEach((attr) => {
@@ -549,19 +517,19 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
     if (normalizeCode(group.code) === "productCode") {
       const typeAttr = group.attributes.find(
-        (a) => normalizeCode(a.code) === "codeType",
+        (a) => normalizeCode(a.code) === "type",
       );
       const valueAttr = group.attributes.find(
-        (a) => normalizeCode(a.code) === "codeValue",
+        (a) => normalizeCode(a.code) === "value",
       );
       if (typeAttr && valueAttr) {
-        const codeType = productData.codeType;
-        const codeValue = productData.codeValue;
+        const codeType = productData.type;
+        const codeValue = productData.value;
         if (!isEmptyValue(codeType) && !isEmptyValue(codeValue)) {
           const valid = isValidBarcode(codeValue, codeType);
           if (!valid) {
             errors.push(
-              `${valueAttr.name} is not a valid ${codeType} barcode. Please check the format and checksum.`,
+              `${valueAttr.name} is not a valid ${codeType} barcode.`,
             );
           }
         }
@@ -676,15 +644,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
-  // ---------- Change handler (stabilized using ref for currentStep) ----------
+  // ---------- Change handler ----------
   const handleChange = useCallback(
     (field: string, value: any) => {
-      // Use camelCase field names from categoryProperty when available
       const camelField = normalizeCode(field);
-
       setProductData((prev) => ({ ...prev, [camelField]: value }));
 
-      // Use the ref to get the current step without re‑creating the callback
       const stepIndex = currentStepRef.current;
       const stepData = visibleSteps[stepIndex];
       if (stepData) {
@@ -743,14 +708,23 @@ const ProductForm: React.FC<ProductFormProps> = ({
       setSuccess(null);
 
       const payload = { ...productData };
-      const existingProductId =
-        initialProductId || (productId !== "new" ? productId : undefined);
+      const productIdToUse =
+        initialProductId ||
+        payload._id ||
+        (productId !== "new" ? productId : undefined);
 
-      if (existingProductId) {
-        payload._id = existingProductId;
+      if (productIdToUse) {
+        payload._id = productIdToUse;
+        console.log("[ProductForm] Submitting UPDATE with _id:", payload._id);
       } else {
         delete payload._id;
+        console.log("[ProductForm] Submitting CREATE (no _id)");
       }
+
+      delete payload.Id;
+      delete payload.id;
+
+      console.log("[ProductForm] Full payload:", payload);
 
       const normalizedPayload: Record<string, any> = { ...payload };
 
@@ -794,6 +768,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
           },
         );
       }
+
+      console.log(
+        "[ProductForm] Normalized payload sent to server:",
+        normalizedPayload,
+      );
 
       const res = await createOrUpdateProduct(normalizedPayload);
 

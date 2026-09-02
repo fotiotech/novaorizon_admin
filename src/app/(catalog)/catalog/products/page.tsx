@@ -5,28 +5,38 @@ import Link from "next/link";
 import { findProducts, deleteProduct } from "@/app/actions/products";
 import { Delete } from "@mui/icons-material";
 import { useDebouncedCallback } from "use-debounce";
+import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import { CircularProgress } from "@mui/material";
 
-// Product type matches the structure returned by findProducts (populated)
+// Product type matches the actual schema
 interface Product {
   _id: string;
-  title: string;
-  name?: string;
-  model?: string;
+  name: string;
   sku: string;
-  sale_price?: number;
-  salePrice?: number;
-  list_price?: number;
-  listPrice?: number;
-  stock_status?: string[];
-  status?: string;
-  main_image?: string;
-  mainImage?: string;
-  category_id?: { _id: string; name: string } | string;
-  categoryId?: { _id: string; name: string } | string;
-  brand?: { _id: string; name: string } | string;
+  slug: string;
+  categoryId: { _id: string; name: string } | string | null;
+  brand: { _id: string; name: string } | string | null;
+  hasVariants: boolean;
+  variantThemes: string[];
+  variantValues: any[];
+  keyFeatures: any[];
+  specifications: any[];
   quantity: number;
   lowStockThreshold: number;
+  listPrice: number;
+  price: number;
+  mainImage: string;
+  images: string[];
+  description: string;
+  shortDescription: string;
+  variants: any[];
+  carrier?: any;
+  relatedProducts: any[];
+  reviewsRatings: any[];
+  tags: string[];
+  status: "draft" | "active" | "inactive";
   createdAt: string;
+  updatedAt: string;
 }
 
 interface FilterOptions {
@@ -49,20 +59,24 @@ export default function ProductsPage() {
     status: "",
   });
 
-  // Fetch all products (no id → array)
+  // ---------- Delete modal state ----------
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Fetch all products
   const fetchAllProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const result = await findProducts();
-      console.log("Fetched products:", result); // Debug log
+      console.log(`Fetched ${result?.length || 0} products.`);
       if (
         result &&
         typeof result === "object" &&
         "success" in result &&
         result.success === false
       ) {
-        setError(result.error || "Failed to fetch products");
         setAllProducts([]);
         return;
       }
@@ -85,9 +99,7 @@ export default function ProductsPage() {
   }, [fetchAllProducts]);
 
   // Safely get category name from populated object or string
-  const getCategoryName = (
-    cat: Product["category_id"] | Product["categoryId"],
-  ): string => {
+  const getCategoryName = (cat: Product["categoryId"]): string => {
     if (!cat) return "Uncategorized";
     if (typeof cat === "string") return cat;
     return cat.name || "Uncategorized";
@@ -100,27 +112,25 @@ export default function ProductsPage() {
     if (filters.search.trim()) {
       const searchLower = filters.search.toLowerCase();
       result = result.filter((p) => {
-        const name = (p.name || p.title || "").toLowerCase();
+        const name = (p.name || "").toLowerCase();
         const sku = (p.sku || "").toLowerCase();
-        const model = (p.model || "").toLowerCase();
+        const tags = (p.tags || []).join(" ").toLowerCase();
         return (
           name.includes(searchLower) ||
           sku.includes(searchLower) ||
-          model.includes(searchLower)
+          tags.includes(searchLower)
         );
       });
     }
 
     if (filters.category) {
       result = result.filter(
-        (p) =>
-          getCategoryName((p.categoryId ?? p.category_id) as any) ===
-          filters.category,
+        (p) => getCategoryName(p.categoryId) === filters.category,
       );
     }
 
     if (filters.status) {
-      result = result.filter((p) => (p.status || "active") === filters.status);
+      result = result.filter((p) => p.status === filters.status);
     }
 
     return result;
@@ -138,29 +148,29 @@ export default function ProductsPage() {
     setPage(1);
   }, [filters]);
 
-  // Delete product handler
-  const handleDelete = async (productId: string, recreate = false) => {
-    const actionLabel = recreate ? "delete and recreate" : "delete";
-    const confirmMessage = recreate
-      ? "This will delete the current product and create a fresh draft copy. Continue?"
-      : "Are you sure you want to delete this product?";
+  // ---------- Delete handlers ----------
+  const handleDeleteClick = (product: Product) => {
+    setDeleteTarget(product);
+    setIsDeleteOpen(true);
+  };
 
-    if (!window.confirm(confirmMessage)) return;
-
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
-      const result = await deleteProduct(productId, { recreate });
+      const result = await deleteProduct(deleteTarget._id);
       if (result.success) {
         await fetchAllProducts();
-        const message = recreate
-          ? "Product deleted and recreated successfully."
-          : "Product deleted successfully.";
-        alert(message);
       } else {
-        alert(result.error || `Failed to ${actionLabel} product.`);
+        alert(result.error || "Failed to delete product");
       }
     } catch (err) {
       console.error("Delete error:", err);
-      alert(`An error occurred while trying to ${actionLabel} the product.`);
+      alert("An error occurred while deleting the product.");
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteOpen(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -191,25 +201,37 @@ export default function ProductsPage() {
   const categories = useMemo(() => {
     const cats = new Set<string>();
     allProducts.forEach((p) => {
-      const name = getCategoryName((p.categoryId ?? p.category_id) as any);
+      const name = getCategoryName(p.categoryId);
       if (name) cats.add(name);
     });
     return Array.from(cats);
   }, [allProducts]);
 
-  // Theme-aware badge classes
-  const getStockBadgeClass = (statuses?: string[]) => {
-    const base =
-      "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
-    const safeStatuses = statuses ?? [];
-    if (safeStatuses.includes("In Stock"))
-      return `${base} bg-secondary/20 text-secondary-foreground dark:text-secondary`;
-    if (safeStatuses.includes("Low Stock"))
-      return `${base} bg-accent/20 text-accent-foreground dark:text-accent`;
-    return `${base} bg-destructive/20 text-destructive-foreground dark:text-destructive`;
+  // Stock badge based on quantity and threshold
+  const getStockBadge = (product: Product) => {
+    const qty = product.quantity || 0;
+    const threshold = product.lowStockThreshold || 5;
+    if (qty === 0) {
+      return {
+        label: "Out of Stock",
+        className:
+          "bg-destructive/20 text-destructive-foreground dark:text-destructive",
+      };
+    } else if (qty <= threshold) {
+      return {
+        label: "Low Stock",
+        className: "bg-accent/20 text-accent-foreground dark:text-accent",
+      };
+    } else {
+      return {
+        label: "In Stock",
+        className:
+          "bg-secondary/20 text-secondary-foreground dark:text-secondary",
+      };
+    }
   };
 
-  // Loading skeleton (enhanced)
+  // Loading skeleton
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -279,7 +301,7 @@ export default function ProductsPage() {
               type="text"
               defaultValue={filters.search}
               onChange={handleSearchChange}
-              placeholder="Search by title, SKU, model..."
+              placeholder="Search by name, SKU, tags..."
               className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
             />
           </div>
@@ -388,96 +410,86 @@ export default function ProductsPage() {
                   </td>
                 </tr>
               ) : (
-                paginatedProducts.map((product) => (
-                  <tr key={product._id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
-                            {product.main_image ? (
-                              <img
-                                src={product.main_image}
-                                alt={product.title}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <svg
-                                className="h-5 w-5 text-primary"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                paginatedProducts.map((product) => {
+                  const stockBadge = getStockBadge(product);
+                  return (
+                    <tr key={product._id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10">
+                            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                              {product.mainImage ? (
+                                <img
+                                  src={product.mainImage}
+                                  alt={product.name}
+                                  className="h-full w-full object-cover"
                                 />
-                              </svg>
-                            )}
+                              ) : (
+                                <svg
+                                  className="h-5 w-5 text-primary"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                  />
+                                </svg>
+                              )}
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-foreground">
+                              {product.name || "Untitled"}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {product.tags?.slice(0, 2).join(", ")}
+                            </div>
                           </div>
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-foreground">
-                            {product.title || "Untitled"}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {product.model}
-                          </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                        {product.sku}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                        CFA {product.listPrice || product.price || 0}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${stockBadge.className}`}
+                        >
+                          {stockBadge.label}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary/20 text-primary-foreground dark:text-primary">
+                          {getCategoryName(product.categoryId)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex items-center space-x-3">
+                          <Link
+                            href={`/catalog/products/edit/${product._id}`}
+                            className="text-primary hover:text-primary/80 transition-colors"
+                          >
+                            Edit
+                          </Link>
+                          <button
+                            onClick={() => handleDeleteClick(product)}
+                            className="text-destructive hover:text-destructive/80 transition-colors"
+                            aria-label="Delete product"
+                            title="Delete product"
+                          >
+                            <Delete fontSize="small" />
+                          </button>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                      {product.sku}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                      CFA {product.sale_price || product.list_price || 0}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={getStockBadgeClass(product.stock_status)}
-                      >
-                        {(
-                          product.stock_status ||
-                          ((product.status ? [product.status] : []) as any)
-                        )?.join(", ") || "N/A"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary/20 text-primary-foreground dark:text-primary">
-                        {getCategoryName(
-                          (product.categoryId ?? product.category_id) as any,
-                        )}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-3">
-                        <Link
-                          href={`/catalog/products/edit/${product._id}`}
-                          className="text-primary hover:text-primary/80 transition-colors"
-                        >
-                          Edit
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(product._id, true)}
-                          className="text-amber-600 hover:text-amber-500 transition-colors"
-                          aria-label="Delete and recreate product"
-                          title="Delete and recreate"
-                        >
-                          Recreate
-                        </button>
-                        <button
-                          onClick={() => handleDelete(product._id)}
-                          className="text-destructive hover:text-destructive/80 transition-colors"
-                          aria-label="Delete product"
-                          title="Delete product"
-                        >
-                          <Delete fontSize="small" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -510,6 +522,17 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+
+      {/* ---------- Delete Confirmation Modal ---------- */}
+      <ConfirmDialog
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        onConfirm={confirmDelete}
+        title="Delete Product"
+        message={`Are you sure you want to delete "${deleteTarget?.name || "this product"}"? This action cannot be undone.`}
+        confirmLabel={isDeleting ? "Deleting..." : "Delete"}
+        danger={true}
+      />
     </div>
   );
 }

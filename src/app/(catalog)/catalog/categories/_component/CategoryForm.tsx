@@ -119,6 +119,8 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             setSelectedPropertyId(
               category.property?._id || category.property || "",
             );
+            // ✅ Load inheritProperty from the fetched category
+            setInheritProperty(category.inheritProperty ?? false);
             if (category.attributes) setAttributes(category.attributes);
             if (category.imageUrl && category.imageUrl.length > 0) {
               setFiles(category.imageUrl);
@@ -130,7 +132,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               const parent: any = categories.find(
                 (c) => c._id === category.parentId,
               );
-              setParentSearch(parent ? parent?.name : "");
+              setParentSearch(parent ? parent.name : "");
             }
           } else {
             setError("Category not found");
@@ -183,15 +185,19 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   };
 
   // ---------- Parent selector handlers ----------
-  const filteredParents = categories.filter((cat: any) =>
-    cat.name.toLowerCase().includes(parentSearch.toLowerCase()),
-  );
+  const filteredParents = categories.filter((cat: any) => {
+    const matchesQuery = cat.name
+      .toLowerCase()
+      .includes(parentSearch.toLowerCase());
+    const isCurrentCategory = categoryId && cat._id === categoryId;
+    return matchesQuery && !isCurrentCategory;
+  });
 
   const selectParent = (cat: any) => {
+    if (categoryId && cat._id === categoryId) return;
     setCategoryData((prev) => ({ ...prev, parentId: cat._id || "" }));
     setParentSearch(cat.name);
     setIsParentDropdownOpen(false);
-    // Clear any previous error for parentId
     if (fieldErrors.parentId) {
       setFieldErrors((prev) => ({ ...prev, parentId: "" }));
     }
@@ -206,7 +212,6 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   const handleParentInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     setParentSearch(e.target.value);
     setIsParentDropdownOpen(true);
-    // If the search is cleared, also clear the parentId
     if (e.target.value === "") {
       setCategoryData((prev) => ({ ...prev, parentId: "" }));
     }
@@ -403,7 +408,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         </div>
       </fieldset>
 
-      {/* Property & Inheritance - unchanged */}
+      {/* Property & Inheritance */}
       <fieldset className="space-y-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
         <legend className="text-lg font-medium text-gray-900 dark:text-gray-100">
           Category Property &amp; Inheritance
@@ -418,7 +423,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             name="property"
             value={selectedPropertyId}
             onChange={(e) => setSelectedPropertyId(e.target.value)}
-            className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 dark:text-white"
+            className={`w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 dark:text-white ${
+              inheritProperty ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+            disabled={inheritProperty} // disable when inheritance is on
           >
             <option value="">None</option>
             {properties.map((prop) => (
@@ -428,7 +436,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             ))}
           </select>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Select a property to associate attribute sets with this category.
+            {inheritProperty
+              ? "Inheritance enabled – manual selection is ignored."
+              : "Select a property to associate attribute sets with this category."}
           </p>
         </div>
 

@@ -2,6 +2,7 @@
 "use server";
 import { connection } from "@/utils/connection";
 import AttributeGroup from "@/models/AttributeGroup";
+import CategoryProperty from "@/models/CategoryProperty";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 import Attribute from "@/models/Attribute";
@@ -354,9 +355,31 @@ export async function updateAttributeGroup(
 export async function deleteAttributeGroup(id: string) {
   await connection();
   try {
-    await AttributeGroup.findByIdAndDelete({
-      _id: new mongoose.Types.ObjectId(id),
-    });
+    const groupObjectId = new mongoose.Types.ObjectId(id);
+
+    await AttributeGroup.updateMany(
+      { parentId: groupObjectId },
+      { $set: { parentId: null } },
+    );
+
+    const categoryProperties = await CategoryProperty.find({});
+    for (const property of categoryProperties) {
+      let changed = false;
+      property.mappings = (property.mappings || []).map((mapping: any) => ({
+        ...mapping,
+        groups: (mapping.groups || []).filter((group: any) => {
+          const matches = group.group?.toString?.() === id;
+          if (matches) changed = true;
+          return !matches;
+        }),
+      }));
+
+      if (changed) {
+        await property.save();
+      }
+    }
+
+    await AttributeGroup.findByIdAndDelete(groupObjectId);
     revalidatePath("/catalog/attributes/groups");
     return { success: true };
   } catch (error) {
