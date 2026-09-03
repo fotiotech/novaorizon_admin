@@ -17,27 +17,27 @@ const OPERATORS = [
 
 // ---------- Product attributes ----------
 const PRODUCT_ATTRIBUTES = [
-  { label: "Category", value: "category_id" },
-  { label: "Title", value: "title" },
+  { label: "Category", value: "categoryId" },
+  { label: "Name", value: "name" },
   { label: "Brand", value: "brand" },
   { label: "Weight", value: "weight" },
   { label: "Length", value: "length" },
   { label: "Width", value: "width" },
   { label: "Height", value: "height" },
   { label: "Color", value: "color" },
-  { label: "Main Image", value: "main_image" },
-  { label: "List Price", value: "list_price" },
+  { label: "Main Image", value: "mainImage" },
+  { label: "List Price", value: "listPrice" },
   { label: "Currency", value: "currency" },
-  { label: "Stock Status", value: "stock_status" },
+  { label: "Stock Status", value: "stockStatus" },
   { label: "Quantity", value: "quantity" },
-  { label: "Short Descriptions", value: "short_description" },
-  { label: "Long Descriptions", value: "long_description" },
-  { label: "Primary Material", value: "primary_material" },
-  { label: "Shipping Weight", value: "shipping_weight" },
-  { label: "Origin Country", value: "origin_country" },
-  { label: "Warranty Period", value: "warranty_period" },
-  { label: "Meta Title", value: "meta_title" },
-  { label: "Safety Certifications", value: "safety_certifications" },
+  { label: "Short Descriptions", value: "shortDescription" },
+  { label: "Long Descriptions", value: "description" },
+  { label: "Primary Material", value: "primaryMaterial" },
+  { label: "Shipping Weight", value: "weight" },
+  { label: "Origin Country", value: "originCountry" },
+  { label: "Warranty Period", value: "warrantyPeriod" },
+  { label: "Meta Title", value: "metaTitle" },
+  { label: "Safety Certifications", value: "safetyCertifications" },
 ];
 
 // ---------- Collection attributes ----------
@@ -222,7 +222,7 @@ export default function CollectionRuleForm({
                 </div>
 
                 <div className="md:col-span-4">
-                  {rule.attribute === "category_id" &&
+                  {rule.attribute === "categoryId" &&
                   targetType === "Product" ? (
                     <>
                       <label className="block mb-1 font-medium text-sm text-gray-700">

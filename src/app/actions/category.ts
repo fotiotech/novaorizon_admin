@@ -321,6 +321,7 @@ export async function getCategory(
     return subCategories;
   } else {
     const categories = await Category.find().populate("property").lean();
+    console.log(categories);
     return categories;
   }
 }

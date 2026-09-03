@@ -114,7 +114,7 @@ const ProductSchema = new Schema<IProduct>(
   {
     productCode: { type: ProductCodeSchema, default: null },
     name: { type: String, trim: true, default: "" },
-    sku: { type: String, trim: true, index: true, default: "" },
+    sku: { type: String, trim: true, default: "" },
     slug: {
       type: String,
       trim: true,

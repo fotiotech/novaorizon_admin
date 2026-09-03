@@ -313,6 +313,46 @@ const GroupRenderer = memo(
 GroupRenderer.displayName = "GroupRenderer";
 
 // ------------------------------------------------------------------
+// Helper: flatten structured fields (keyFeatures, specifications) into flat keys
+// ------------------------------------------------------------------
+function flattenStructuredFields(
+  data: Record<string, any>,
+): Record<string, any> {
+  const result = { ...data };
+
+  // Flatten keyFeatures
+  if (Array.isArray(result.keyFeatures)) {
+    for (const item of result.keyFeatures) {
+      if (item.k && item.v !== undefined) {
+        result[item.k] = item.v;
+      }
+    }
+    // Do not delete keyFeatures – the form does not use it directly, but we keep it for later use.
+  }
+
+  // Flatten specifications (recursive)
+  if (Array.isArray(result.specifications)) {
+    const flattenSpecs = (specs: any[]) => {
+      for (const group of specs) {
+        if (Array.isArray(group.attributes)) {
+          for (const attr of group.attributes) {
+            if (attr.k && attr.v !== undefined) {
+              result[attr.k] = attr.v;
+            }
+          }
+        }
+        if (Array.isArray(group.groups)) {
+          flattenSpecs(group.groups);
+        }
+      }
+    };
+    flattenSpecs(result.specifications);
+  }
+
+  return result;
+}
+
+// ------------------------------------------------------------------
 // Main Component
 // ------------------------------------------------------------------
 interface ProductFormProps {
@@ -373,9 +413,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
           }
         }
 
-        // Safely map productCode to type/value
+        // -------- Flatten structured fields into flat keys ----------
+        data = flattenStructuredFields(data);
+
+        // Map productCode to type/value for the form
         if (data.productCode) {
-          // If it's an array, take the first element (legacy)
           let code = data.productCode;
           if (Array.isArray(code) && code.length > 0) {
             code = code[0];
@@ -390,6 +432,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
         if (draft) {
           let draftData = { ...draft };
           delete draftData._id;
+          // Flatten draft as well
+          draftData = flattenStructuredFields(draftData);
           if (draftData.productCode) {
             let code = draftData.productCode;
             if (Array.isArray(code) && code.length > 0) {
@@ -432,8 +476,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
           data.status = "draft";
         }
 
-        // Log final data for debugging
-        console.log("[ProductForm] Final product data:", data);
+        console.log("[ProductForm] Final product data after flattening:", data);
         setProductData(data);
       } catch (err) {
         console.error("Error loading product data:", err);
@@ -708,6 +751,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
       setSuccess(null);
 
       const payload = { ...productData };
+
+      // Ensure status is always sent
+      if (!payload.status) {
+        payload.status = "draft";
+      }
+
       const productIdToUse =
         initialProductId ||
         payload._id ||
@@ -724,7 +773,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
       delete payload.Id;
       delete payload.id;
 
-      console.log("[ProductForm] Full payload:", payload);
+      console.log("[ProductForm] Full payload before normalization:", payload);
 
       const normalizedPayload: Record<string, any> = { ...payload };
 
@@ -771,7 +820,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
       console.log(
         "[ProductForm] Normalized payload sent to server:",
-        normalizedPayload,
+        JSON.stringify(normalizedPayload, null, 2),
       );
 
       const res = await createOrUpdateProduct(normalizedPayload);

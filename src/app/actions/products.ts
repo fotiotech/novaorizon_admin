@@ -118,6 +118,40 @@ function sanitizeProductCode(productCode: any): any {
   return { type, value };
 }
 
+// ---------- Helper: normalize key-value collections (strips _id) ----------
+function normalizeKeyValueCollection(value: any): any[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return null;
+        const key = entry.k ?? entry.key ?? entry.name ?? "";
+        const normalizedKey =
+          typeof key === "string" ? key.trim() : String(key ?? "").trim();
+        if (!normalizedKey) return null;
+        const normalizedEntry: Record<string, any> = {
+          k: normalizedKey,
+          v: entry.v ?? entry.value ?? entry.values ?? "",
+        };
+        if (entry.unit) normalizedEntry.unit = entry.unit;
+        // Remove _id if present (Mongoose will auto-generate if needed)
+        delete normalizedEntry._id;
+        return normalizedEntry;
+      })
+      .filter(Boolean);
+  }
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, val]) => {
+        const normalizedKey = String(key).trim();
+        if (!normalizedKey) return null;
+        return { k: normalizedKey, v: val ?? "" };
+      })
+      .filter(Boolean);
+  }
+  return [];
+}
+
 // ---------- Helper Functions ----------
 function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
   if (!obj || typeof obj !== "object") return {};
@@ -321,6 +355,36 @@ async function buildStructuredFields(
     return result;
   }
 
+  // If keyFeatures is already present as an array, preserve it and don't rebuild
+  if (Array.isArray(result.keyFeatures) && result.keyFeatures.length > 0) {
+    // Delete flat keys that would otherwise be moved into keyFeatures
+    const keyFeatureCodes: string[] = [];
+    for (const set of attributeSets) {
+      for (const group of set.groups || []) {
+        const normalizedGroupCode = group.code.replace(/_([a-z])/g, (_, c) =>
+          c.toUpperCase(),
+        );
+        if (normalizedGroupCode === "keyFeatures") {
+          for (const attr of group.attributes || []) {
+            const camelCode = attr.code.replace(/_([a-z])/g, (_, c) =>
+              c.toUpperCase(),
+            );
+            keyFeatureCodes.push(camelCode);
+          }
+        }
+      }
+    }
+    for (const code of keyFeatureCodes) {
+      if (result[code] !== undefined) {
+        delete result[code];
+      }
+    }
+    // Normalize keyFeatures (strip _id)
+    result.keyFeatures = normalizeKeyValueCollection(result.keyFeatures);
+    return result;
+  }
+
+  // Otherwise, build keyFeatures from flat attributes
   const keyFeatureCodes: string[] = [];
   const specGroupMap: Record<
     string,
@@ -382,7 +446,7 @@ async function buildStructuredFields(
       }
     }
     if (keyFeatures.length > 0) {
-      result.keyFeatures = keyFeatures;
+      result.keyFeatures = normalizeKeyValueCollection(keyFeatures);
     }
   }
 
@@ -405,7 +469,7 @@ async function buildStructuredFields(
     if (attributes.length > 0) {
       specGroups.push({
         name: groupInfo.groupName || groupInfo.groupCode,
-        attributes: attributes,
+        attributes: normalizeKeyValueCollection(attributes),
       });
     }
   }
@@ -424,38 +488,6 @@ async function buildStructuredFields(
   }
 
   return result;
-}
-
-// ---------- Helper: normalize key-value collections ----------
-function normalizeKeyValueCollection(value: any): any[] {
-  if (!value) return [];
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => {
-        if (!entry || typeof entry !== "object") return null;
-        const key = entry.k ?? entry.key ?? entry.name ?? "";
-        const normalizedKey =
-          typeof key === "string" ? key.trim() : String(key ?? "").trim();
-        if (!normalizedKey) return null;
-        const normalizedEntry: Record<string, any> = {
-          k: normalizedKey,
-          v: entry.v ?? entry.value ?? entry.values ?? "",
-        };
-        if (entry.unit) normalizedEntry.unit = entry.unit;
-        return normalizedEntry;
-      })
-      .filter(Boolean);
-  }
-  if (typeof value === "object") {
-    return Object.entries(value)
-      .map(([key, val]) => {
-        const normalizedKey = String(key).trim();
-        if (!normalizedKey) return null;
-        return { k: normalizedKey, v: val ?? "" };
-      })
-      .filter(Boolean);
-  }
-  return [];
 }
 
 // ---------- finalizeCanonicalProductData ----------
@@ -738,10 +770,30 @@ export async function updateProduct(
       );
     }
 
-    console.log("[updateProduct] Final updateData:", updateData);
+    // Sanitize keyFeatures and specifications (remove _id)
+    if (updateData.keyFeatures) {
+      updateData.keyFeatures = normalizeKeyValueCollection(
+        updateData.keyFeatures,
+      );
+    }
+    if (updateData.specifications) {
+      const sanitizeSpecs = (specs: any[]): any[] => {
+        return specs.map((group: any) => ({
+          ...group,
+          attributes: normalizeKeyValueCollection(group.attributes || []),
+          groups: group.groups ? sanitizeSpecs(group.groups) : [],
+        }));
+      };
+      updateData.specifications = sanitizeSpecs(updateData.specifications);
+    }
+
+    console.log(
+      "[updateProduct] Final updateData before save:",
+      JSON.stringify(updateData, null, 2),
+    );
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: new mongoose.Types.ObjectId(productId) },
-      updateData,
+      { $set: updateData },
       { new: true, runValidators: true },
     );
     if (!updatedProduct) return { success: false, error: "Product not found" };
@@ -826,7 +878,7 @@ export async function createOrUpdateProduct(
 
     console.log(
       "[createOrUpdateProduct] After finalizeCanonicalProductData:",
-      canonicalData,
+      JSON.stringify(canonicalData, null, 2),
     );
 
     const validationResult = safeValidateProductCreateOrUpdate(canonicalData);
@@ -850,7 +902,10 @@ export async function createOrUpdateProduct(
     const cleanedAttributes = cleanObject(attributes);
     const { createdAt, updatedAt, __v, ...safeAttributes } = cleanedAttributes;
 
-    console.log("[createOrUpdateProduct] safeAttributes:", safeAttributes);
+    console.log(
+      "[createOrUpdateProduct] safeAttributes:",
+      JSON.stringify(safeAttributes, null, 2),
+    );
 
     if (catId) {
       try {
@@ -888,9 +943,25 @@ export async function createOrUpdateProduct(
       delete updateData.value;
     } else if (safeAttributes.productCode) {
       updateData.productCode = sanitizeProductCode(safeAttributes.productCode);
-      // If productCode is set from existing, we might need to ensure type/value are removed
       delete updateData.type;
       delete updateData.value;
+    }
+
+    // Sanitize keyFeatures and specifications (remove _id)
+    if (updateData.keyFeatures) {
+      updateData.keyFeatures = normalizeKeyValueCollection(
+        updateData.keyFeatures,
+      );
+    }
+    if (updateData.specifications) {
+      const sanitizeSpecs = (specs: any[]): any[] => {
+        return specs.map((group: any) => ({
+          ...group,
+          attributes: normalizeKeyValueCollection(group.attributes || []),
+          groups: group.groups ? sanitizeSpecs(group.groups) : [],
+        }));
+      };
+      updateData.specifications = sanitizeSpecs(updateData.specifications);
     }
 
     const categoryObjectId = toObjectId(catId);
@@ -947,7 +1018,7 @@ export async function createOrUpdateProduct(
 
     console.log(
       "[createOrUpdateProduct] Final updateData before save:",
-      updateData,
+      JSON.stringify(updateData, null, 2),
     );
 
     let product;
