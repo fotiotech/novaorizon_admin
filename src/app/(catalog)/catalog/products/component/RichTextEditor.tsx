@@ -5,7 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useState, useCallback, useRef, useEffect, memo } from "react";
-import useFileUploader from "@/hooks/useFileUploader";
+import { useFileUploader } from "@/hooks/useFileUploader"; // ✅ named import
 
 export interface RichTextEditorProps {
   value: string;
@@ -14,15 +14,15 @@ export interface RichTextEditorProps {
   productId: string;
 }
 
-// ---- Extensions: StarterKit contains all basic extensions, we only add Image & Placeholder ----
+// ---- Extensions ----
 const extensions = [
   StarterKit.configure({
-    heading: { levels: [1, 2, 3] }, // restrict heading levels
-    link: { openOnClick: false }, // custom link behaviour
+    heading: { levels: [1, 2, 3] },
+    link: { openOnClick: false },
   }),
   Image.configure({ inline: false, allowBase64: false }),
   Placeholder.configure({
-    placeholder: "Write description...", // default, overridden by prop later
+    placeholder: "Write description...",
   }),
 ];
 
@@ -48,6 +48,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
 
     const insertedUrlsRef = useRef<string[]>([]);
 
+    // ---- Debounced change emission ----
     useEffect(() => {
       onChangeRef.current = onChange;
     }, [onChange]);
@@ -73,6 +74,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
       }, 250);
     }, []);
 
+    // ---- Cleanup timer on unmount ----
     useEffect(() => {
       return () => {
         if (changeTimerRef.current) {
@@ -93,7 +95,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
     // ---- Editor instance ----
     const editor = useEditor({
       extensions: extensions.map((ext) => {
-        // Allow dynamic placeholder override
         if (ext.name === "placeholder") {
           return Placeholder.configure({
             placeholder: placeholder || "Write description...",
@@ -178,7 +179,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
       setShowLinkDialog(true);
     }, [editor]);
 
-    // ---- Render toolbar button ----
+    // ---- Toolbar button ----
     const ToolbarButton = useCallback(
       ({ onClick, active, children, title }: any) => (
         <button
@@ -212,7 +213,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
         className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800"
       >
         <div className="border-b p-2 flex flex-wrap gap-2 bg-gray-50 dark:bg-gray-700">
-          {/* Headings */}
           <select
             className="text-sm p-1 border rounded bg-white dark:bg-gray-800"
             onChange={(e) => {
@@ -239,7 +239,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
             <option value="3">Heading 3</option>
           </select>
 
-          {/* Basic formatting */}
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBold().run()}
             active={editor.isActive("bold")}
@@ -269,7 +268,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
             {"<>"}
           </ToolbarButton>
 
-          {/* Lists */}
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             active={editor.isActive("bulletList")}
@@ -285,7 +283,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
             1. List
           </ToolbarButton>
 
-          {/* Block formatting */}
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             active={editor.isActive("blockquote")}
@@ -301,7 +298,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
             {"{ }"}
           </ToolbarButton>
 
-          {/* Link */}
           <ToolbarButton
             onClick={openLinkDialog}
             active={editor.isActive("link")}
@@ -310,7 +306,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
             🔗
           </ToolbarButton>
 
-          {/* Image upload */}
           <ToolbarButton
             onClick={() => fileInputRef.current?.click()}
             title="Insert Image"
@@ -331,7 +326,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
             }}
           />
 
-          {/* Undo/Redo */}
           <ToolbarButton
             onClick={() => editor.chain().focus().undo().run()}
             title="Undo (Ctrl+Z)"
@@ -352,7 +346,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
 
         <EditorContent editor={editor} />
 
-        {/* Link Dialog */}
         {showLinkDialog && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
@@ -385,7 +378,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
           </div>
         )}
 
-        {/* Image Alt Text Dialog */}
         {showImageAltDialog && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">

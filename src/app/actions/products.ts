@@ -4,8 +4,6 @@
 import { connection } from "@/utils/connection";
 import { revalidatePath } from "next/cache";
 import slugify from "slugify";
-import { ref, deleteObject } from "firebase/storage";
-import { storage } from "@/utils/firebaseConfig";
 import mongoose from "mongoose";
 import Product from "@/models/Product";
 import Brand from "@/models/Brand";
@@ -13,87 +11,11 @@ import Category from "@/models/Category";
 import "@/models/Attribute";
 import "@/models/User";
 import { getCategoryAttributeSets } from "@/app/actions/category";
-import {
-  validateProductCreate,
-  validateProductUpdate,
-  validateProductCreateOrUpdate,
-  safeValidateProductCreate,
-  safeValidateProductUpdate,
-  safeValidateProductCreateOrUpdate,
-  CreateProductSchema,
-  UpdateProductSchema,
-  CreateOrUpdateProductSchema,
-} from "@/lib/product.schema";
-
-// ---------- Helper: serialize ----------
-function serialize(obj: any): any {
-  if (obj === null || obj === undefined) return obj;
-  if (
-    obj instanceof mongoose.Types.ObjectId ||
-    obj._bsontype === "ObjectId" ||
-    typeof obj.toHexString === "function"
-  ) {
-    return obj.toString();
-  }
-  if (obj instanceof Date) {
-    return obj.toISOString();
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(serialize);
-  }
-  if (typeof obj === "object") {
-    const result: any = {};
-    for (const key of Object.keys(obj)) {
-      result[key] = serialize(obj[key]);
-    }
-    return result;
-  }
-  return obj;
-}
-
-// ---------- Helper: add legacy aliases ----------
-function addLegacyProductAliases(product: any): any {
-  if (!product || typeof product !== "object") return product;
-  const result = { ...product };
-  result.title ??= result.name ?? "";
-  result.name ??= result.title ?? "";
-  result.model ??= result.productCode?.value ?? "";
-  result.category_id ??= result.categoryId ?? null;
-  result.categoryId ??= result.category_id ?? null;
-  result.main_image ??= result.mainImage ?? "";
-  result.mainImage ??= result.main_image ?? "";
-  result.list_price ??= result.listPrice ?? 0;
-  result.listPrice ??= result.list_price ?? 0;
-  result.sale_price ??= result.salePrice ?? result.listPrice ?? 0;
-  result.salePrice ??= result.sale_price ?? result.listPrice ?? 0;
-  result.related_products ??= result.relatedProducts ?? [];
-  result.relatedProducts ??= result.related_products ?? [];
-  result.short_description ??= result.shortDescription ?? "";
-  result.shortDescription ??= result.short_description ?? "";
-  result.short_desc ??= result.shortDescription ?? "";
-  result.low_stock_threshold ??= result.lowStockThreshold ?? 0;
-  result.lowStockThreshold ??= result.low_stock_threshold ?? 0;
-  result.stock_status ??= result.status ? [result.status] : [];
-  result.status ??=
-    Array.isArray(result.stock_status) && result.stock_status.length
-      ? result.stock_status[0]
-      : "draft";
-  result.stockQuantity ??= result.quantity ?? 0;
-  result.quantity ??= result.stockQuantity ?? 0;
-  result.image ??= result.mainImage ?? result.main_image ?? "";
-  return result;
-}
+import { safeValidateProductCreateOrUpdate } from "@/lib/product.schema";
+import { ref, deleteObject } from "firebase/storage";
+import { storage } from "@/utils/firebaseConfig";
 
 // ---------- Types ----------
-export interface CreateProductForm {
-  category_id: string;
-  brand: string;
-  name?: string;
-  department?: string;
-  related_products?: { id: string; relationship_type: string }[];
-  [key: string]: any;
-}
-
 interface ProductResponse {
   success: boolean;
   data?: any;
@@ -104,932 +26,432 @@ interface DeleteProductOptions {
   recreate?: boolean;
 }
 
-// ---------- Helper: sanitize productCode ----------
-function sanitizeProductCode(productCode: any): any {
-  if (!productCode) return null;
-  let code = productCode;
-  if (Array.isArray(code) && code.length > 0) {
-    code = code[0];
+// ---------- Helpers ----------
+
+function toObjectId(value: any): mongoose.Types.ObjectId | null {
+  if (!value) return null;
+  try {
+    return new mongoose.Types.ObjectId(value);
+  } catch {
+    return null;
   }
-  if (!code || typeof code !== "object") return null;
-  const type = code.type || "";
-  const value = code.value || "";
+}
+
+function generateSlug(name: string, department?: string | null): string {
+  return slugify(`${name}${department ? `-${department}` : ""}`, {
+    lower: true,
+  });
+}
+
+function normalizeStatus(status: unknown): "draft" | "active" | "inactive" {
+  const str = String(status ?? "draft").toLowerCase();
+  if (str === "active" || str === "inactive" || str === "draft")
+    return str as any;
+  return "draft";
+}
+
+function sanitizeProductCode(
+  code: any,
+): { type: string; value: string } | null {
+  if (!code) return null;
+  const raw = Array.isArray(code) ? code[0] : code;
+  if (!raw || typeof raw !== "object") return null;
+  const type = raw.type || "";
+  const value = raw.value || "";
   if (!type || !value) return null;
   return { type, value };
 }
 
-// ---------- Helper: normalize key-value collections (strips _id) ----------
+/** Normalize a key-value collection: ensure it's an array of {k, v, unit?} without _id */
 function normalizeKeyValueCollection(value: any): any[] {
   if (!value) return [];
   if (Array.isArray(value)) {
     return value
       .map((entry) => {
         if (!entry || typeof entry !== "object") return null;
-        const key = entry.k ?? entry.key ?? entry.name ?? "";
-        const normalizedKey =
-          typeof key === "string" ? key.trim() : String(key ?? "").trim();
+        const k = entry.k ?? entry.key ?? entry.name ?? "";
+        const normalizedKey = String(k).trim();
         if (!normalizedKey) return null;
-        const normalizedEntry: Record<string, any> = {
+        const result: any = {
           k: normalizedKey,
           v: entry.v ?? entry.value ?? entry.values ?? "",
         };
-        if (entry.unit) normalizedEntry.unit = entry.unit;
-        // Remove _id if present (Mongoose will auto-generate if needed)
-        delete normalizedEntry._id;
-        return normalizedEntry;
+        if (entry.unit) result.unit = entry.unit;
+        return result;
       })
       .filter(Boolean);
   }
   if (typeof value === "object") {
     return Object.entries(value)
-      .map(([key, val]) => {
-        const normalizedKey = String(key).trim();
-        if (!normalizedKey) return null;
-        return { k: normalizedKey, v: val ?? "" };
+      .map(([k, v]) => {
+        const key = String(k).trim();
+        if (!key) return null;
+        return { k: key, v: v ?? "" };
       })
       .filter(Boolean);
   }
   return [];
 }
 
-// ---------- Helper Functions ----------
-function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
-  if (!obj || typeof obj !== "object") return {};
-  return Object.entries(obj).reduce((acc, [key, value]) => {
-    if (value != null && !(typeof value === "string" && !value.trim())) {
-      if (key === "attributes" && typeof value === "object") {
-        return { ...acc, ...value };
-      }
-      return { ...acc, [key]: value };
-    }
-    return acc;
-  }, {});
+function sanitizeSpecifications(specs: any[]): any[] {
+  if (!Array.isArray(specs)) return [];
+  return specs.map((group) => ({
+    ...group,
+    attributes: normalizeKeyValueCollection(group.attributes || []),
+    groups: group.groups ? sanitizeSpecifications(group.groups) : [],
+  }));
 }
 
-function normalizeProductStatus(
-  status?: unknown,
-): "draft" | "active" | "inactive" {
-  const value = typeof status === "string" ? status : String(status ?? "draft");
-  const current = value.toLowerCase();
-  if (current === "active" || current === "inactive" || current === "draft") {
-    return current;
+// ---------- Build structured fields from flat attributes ----------
+async function buildStructuredFields(
+  flatData: Record<string, any>,
+  categoryId: string,
+): Promise<{
+  keyFeatures: any[];
+  specifications: any[];
+  leftover: Record<string, any>;
+}> {
+  const attributeSets = await getCategoryAttributeSets(categoryId);
+  const result: { keyFeatures: any[]; specifications: any[] } = {
+    keyFeatures: [],
+    specifications: [],
+  };
+  const usedKeys = new Set<string>();
+
+  // Helper to collect all attribute codes from a group (including children)
+  function collectAttributeCodes(group: any, codes: Set<string>) {
+    group.attributes?.forEach((attr: any) => codes.add(attr.code));
+    group.children?.forEach((child: any) =>
+      collectAttributeCodes(child, codes),
+    );
   }
-  return "draft";
+
+  // Process each group in each set
+  for (const set of attributeSets) {
+    for (const group of set.groups || []) {
+      const groupCode = group.code.replace(/_([a-z])/g, (_, c) =>
+        c.toUpperCase(),
+      );
+      const allAttrCodes = new Set<string>();
+      collectAttributeCodes(group, allAttrCodes);
+
+      if (groupCode === "keyFeatures") {
+        const features: any[] = [];
+        for (const code of allAttrCodes) {
+          const camelCode = code.replace(/_([a-z])/g, (_, c) =>
+            c.toUpperCase(),
+          );
+          const value = flatData[camelCode];
+          if (value !== undefined && value !== null && value !== "") {
+            let unit: string | undefined = undefined;
+            let finalValue = value;
+            if (
+              value &&
+              typeof value === "object" &&
+              "value" in value &&
+              "unit" in value
+            ) {
+              finalValue = value.value;
+              unit = value.unit;
+            }
+            features.push({
+              k: camelCode,
+              v: finalValue,
+              ...(unit ? { unit } : {}),
+            });
+            usedKeys.add(camelCode);
+          }
+        }
+        if (features.length) {
+          result.keyFeatures = normalizeKeyValueCollection(features);
+        }
+      } else if (groupCode === "specifications") {
+        // Build a hierarchical structure from group and its children
+        function buildSpecGroup(g: any): any {
+          const groupName = g.name || g.code;
+          const groupAttrs: any[] = [];
+          const childGroups: any[] = [];
+
+          g.attributes?.forEach((attr: any) => {
+            const camelCode = attr.code.replace(
+              /_([a-z])/g,
+              (_: any, c: string) => c.toUpperCase(),
+            );
+            const value = flatData[camelCode];
+            if (value !== undefined && value !== null && value !== "") {
+              let unit: string | undefined = undefined;
+              let finalValue = value;
+              if (
+                value &&
+                typeof value === "object" &&
+                "value" in value &&
+                "unit" in value
+              ) {
+                finalValue = value.value;
+                unit = value.unit;
+              }
+              groupAttrs.push({
+                k: camelCode,
+                v: finalValue,
+                ...(unit ? { unit } : {}),
+              });
+              usedKeys.add(camelCode);
+            }
+          });
+
+          g.children?.forEach((child: any) => {
+            const childResult = buildSpecGroup(child);
+            if (childResult.attributes.length || childResult.groups.length) {
+              childGroups.push(childResult);
+            }
+          });
+
+          return {
+            name: groupName,
+            attributes: normalizeKeyValueCollection(groupAttrs),
+            groups: childGroups,
+          };
+        }
+
+        const built = buildSpecGroup(group);
+        if (built.attributes.length || built.groups.length) {
+          result.specifications.push(built);
+        }
+      }
+      // Other groups are left as flat fields (they are not part of keyFeatures/specifications)
+    }
+  }
+
+  // Leftover: all flat data except keys that were consumed
+  const leftover: Record<string, any> = {};
+  for (const [key, value] of Object.entries(flatData)) {
+    if (!usedKeys.has(key)) {
+      leftover[key] = value;
+    }
+  }
+
+  return { ...result, leftover };
 }
 
+/** Validate that all required category attributes are present */
 async function validateRequiredCategoryAttributes(
   categoryId: string,
-  productData: Record<string, any>,
+  data: Record<string, any>,
 ) {
   if (!categoryId) return;
-  try {
-    const attributeSets = await getCategoryAttributeSets(categoryId);
-    const requiredCodes = new Set<string>();
-    for (const set of attributeSets) {
-      for (const group of set.groups ?? []) {
-        for (const attribute of group.attributes ?? []) {
-          if (attribute.isRequired && attribute.code) {
-            requiredCodes.add(attribute.code);
-          }
+  const attributeSets = await getCategoryAttributeSets(categoryId);
+  const requiredCodes = new Set<string>();
+  for (const set of attributeSets) {
+    for (const group of set.groups ?? []) {
+      for (const attr of group.attributes ?? []) {
+        if (attr.isRequired && attr.code) {
+          if (attr.code === "sale_price" || attr.code === "salePrice") continue;
+          requiredCodes.add(attr.code);
         }
       }
     }
-    if (requiredCodes.size === 0) return;
-    const ignoredRequiredCodes = new Set(["sale_price", "salePrice"]);
-    const missing: string[] = [];
-    for (const code of requiredCodes) {
-      if (ignoredRequiredCodes.has(code)) continue;
-      const value = productData[code];
-      if (
-        value === undefined ||
-        value === null ||
-        (typeof value === "string" && !value.trim()) ||
-        (Array.isArray(value) && value.length === 0)
-      ) {
-        missing.push(code);
-      }
-    }
-    if (missing.length > 0) {
-      throw new Error(
-        `Required product fields missing for this category: ${missing.join(", ")}`,
-      );
-    }
-  } catch (error) {
+  }
+  const missing: string[] = [];
+  for (const code of requiredCodes) {
+    const camelCode = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    const value = data[camelCode];
     if (
-      error instanceof Error &&
-      error.message.includes("Required product fields")
+      value === undefined ||
+      value === null ||
+      (typeof value === "string" && !value.trim()) ||
+      (Array.isArray(value) && value.length === 0)
     ) {
-      throw error;
+      missing.push(code);
     }
+  }
+  if (missing.length) {
+    throw new Error(`Missing required fields: ${missing.join(", ")}`);
   }
 }
 
-function generateSlug(name: string, department: string | null): string {
-  return slugify(`${name}${department ? `-${department}` : ""}`, {
-    lower: true,
-  });
-}
-
-function extractIdCandidate(value: any): any {
-  if (!value) return null;
-  if (typeof value === "string" || typeof value === "number") return value;
-  if (Array.isArray(value)) return extractIdCandidate(value[0]);
-  if (typeof value === "object") {
-    if (value instanceof mongoose.Types.ObjectId) return value.toString();
-    if (
-      typeof value.toHexString === "function" &&
-      value.constructor?.name === "ObjectId"
-    ) {
-      return value.toString();
-    }
-    for (const key of [
-      "_id",
-      "id",
-      "value",
-      "categoryId",
-      "category_id",
-      "brand",
-      "brandId",
-    ]) {
-      if (Object.prototype.hasOwnProperty.call(value, key)) {
-        const nested = extractIdCandidate(value[key]);
-        if (nested !== null && nested !== undefined) return nested;
-      }
-    }
-    for (const key of Object.keys(value)) {
-      if (["name", "label", "slug", "url_slug"].includes(key)) continue;
-      const nested = extractIdCandidate(value[key]);
-      if (nested !== null && nested !== undefined) return nested;
-    }
-  }
-  return null;
-}
-
-function toObjectId(value: any): mongoose.Types.ObjectId | null {
-  const candidate = extractIdCandidate(value);
-  if (candidate === null || candidate === undefined || candidate === "")
-    return null;
-  const stringValue =
-    typeof candidate === "string" ? candidate.trim() : String(candidate);
-  if (mongoose.Types.ObjectId.isValid(stringValue)) {
-    return new mongoose.Types.ObjectId(stringValue);
-  }
-  return null;
-}
-
-// ---------- Manual population ----------
-async function populateProduct(product: any) {
-  if (!product) return product;
-  const result = { ...product };
-
-  if (result.categoryId) {
-    try {
-      const category = await Category.findById(result.categoryId)
-        .select("_id name")
-        .lean()
-        .exec();
-      if (category) {
-        result.categoryId = category;
-      } else {
-        result.categoryId = null;
-      }
-    } catch (e: any) {
-      console.warn(`Invalid categoryId ${result.categoryId}:`, e.message);
-      result.categoryId = null;
-    }
-  }
-
-  if (result.brand) {
-    try {
-      const brand = await Brand.findById(result.brand)
-        .select("_id name")
-        .lean()
-        .exec();
-      if (brand) {
-        result.brand = brand;
-      } else {
-        result.brand = null;
-      }
-    } catch (e: any) {
-      console.warn(`Invalid brand ${result.brand}:`, e.message);
-      result.brand = null;
-    }
-  }
-
-  return result;
+/** Serialize Mongoose document to plain object (convert ObjectId to string, Date to ISO) */
+function serialize(doc: any): any {
+  if (!doc) return doc;
+  const obj = doc.toObject ? doc.toObject() : doc;
+  return JSON.parse(JSON.stringify(obj));
 }
 
 // ---------- Server Actions ----------
+
+/** Find products – by ID or all (with aggregation-based population) */
 export async function findProducts(id?: string) {
   try {
     await connection();
     if (id) {
-      const product = await Product.findById(id).lean().exec();
+      const product = await Product.findById(id).lean();
       if (!product) return { success: false, error: "Product not found" };
-      const populated = await populateProduct(product);
-      const serialized = serialize(populated);
-      return addLegacyProductAliases(serialized);
+      return serialize(product);
     }
-    const products = await Product.find().sort({ createdAt: -1 }).lean().exec();
-    if (!products || products.length === 0) {
-      console.log("No products found");
-      return [];
-    }
-    const populated = await Promise.all(products.map(populateProduct));
-    const serialized = serialize(populated);
-    return (serialized as any[]).map(addLegacyProductAliases);
+
+    // Use aggregation to safely join category and brand without casting errors
+    const products = await Product.aggregate([
+      {
+        $lookup: {
+          from: "categories", // MongoDB collection name (default: pluralized, lowercase)
+          localField: "categoryId",
+          foreignField: "_id",
+          as: "category",
+        },
+      },
+      {
+        $lookup: {
+          from: "brands", // MongoDB collection name
+          localField: "brand",
+          foreignField: "_id",
+          as: "brand",
+        },
+      },
+      {
+        $addFields: {
+          categoryId: { $arrayElemAt: ["$category", 0] },
+          brand: { $arrayElemAt: ["$brand", 0] },
+        },
+      },
+      { $project: { category: 0, brand: 0 } },
+      { $sort: { createdAt: -1 } },
+    ]);
+
+    return products.map(serialize);
   } catch (error) {
     console.error("Error finding products:", error);
     return { success: false, error: "Failed to fetch products" };
   }
 }
 
-// ---------- Build keyFeatures and specifications ----------
-async function buildStructuredFields(
-  flatData: Record<string, any>,
-  categoryId: string,
-): Promise<Record<string, any>> {
-  const result = { ...flatData };
-  const attributeSets = await getCategoryAttributeSets(categoryId);
-  if (!attributeSets || attributeSets.length === 0) {
-    return result;
-  }
-
-  // If keyFeatures is already present as an array, preserve it and don't rebuild
-  if (Array.isArray(result.keyFeatures) && result.keyFeatures.length > 0) {
-    // Delete flat keys that would otherwise be moved into keyFeatures
-    const keyFeatureCodes: string[] = [];
-    for (const set of attributeSets) {
-      for (const group of set.groups || []) {
-        const normalizedGroupCode = group.code.replace(/_([a-z])/g, (_, c) =>
-          c.toUpperCase(),
-        );
-        if (normalizedGroupCode === "keyFeatures") {
-          for (const attr of group.attributes || []) {
-            const camelCode = attr.code.replace(/_([a-z])/g, (_, c) =>
-              c.toUpperCase(),
-            );
-            keyFeatureCodes.push(camelCode);
-          }
-        }
-      }
-    }
-    for (const code of keyFeatureCodes) {
-      if (result[code] !== undefined) {
-        delete result[code];
-      }
-    }
-    // Normalize keyFeatures (strip _id)
-    result.keyFeatures = normalizeKeyValueCollection(result.keyFeatures);
-    return result;
-  }
-
-  // Otherwise, build keyFeatures from flat attributes
-  const keyFeatureCodes: string[] = [];
-  const specGroupMap: Record<
-    string,
-    {
-      groupId: string;
-      groupCode: string;
-      groupName: string;
-      attributeCodes: string[];
-    }
-  > = {};
-
-  for (const set of attributeSets) {
-    for (const group of set.groups || []) {
-      const normalizedGroupCode = group.code.replace(/_([a-z])/g, (_, c) =>
-        c.toUpperCase(),
-      );
-      if (normalizedGroupCode === "keyFeatures") {
-        for (const attr of group.attributes || []) {
-          keyFeatureCodes.push(attr.code);
-        }
-      } else if (normalizedGroupCode === "specifications") {
-        const traverse = (g: any) => {
-          const code = g.code.replace(/_([a-z])/g, (_: any, c: string) =>
-            c.toUpperCase(),
-          );
-          const name = g.name || code;
-          const attrCodes = (g.attributes || []).map((a: any) => a.code);
-          const groupKey = g.id || code;
-          if (!specGroupMap[groupKey]) {
-            specGroupMap[groupKey] = {
-              groupId: g.id,
-              groupCode: code,
-              groupName: name,
-              attributeCodes: [],
-            };
-          }
-          specGroupMap[groupKey].attributeCodes.push(...attrCodes);
-          for (const child of g.children || []) {
-            traverse(child);
-          }
-        };
-        traverse(group);
-      }
-    }
-  }
-
-  if (keyFeatureCodes.length > 0) {
-    const keyFeatures: any[] = [];
-    for (const code of keyFeatureCodes) {
-      const camelCode = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-      if (result[camelCode] !== undefined) {
-        const value = result[camelCode];
-        if (value && typeof value === "object" && "value" in value) {
-          keyFeatures.push({ k: camelCode, v: value.value, unit: value.unit });
-        } else {
-          keyFeatures.push({ k: camelCode, v: value });
-        }
-        delete result[camelCode];
-      }
-    }
-    if (keyFeatures.length > 0) {
-      result.keyFeatures = normalizeKeyValueCollection(keyFeatures);
-    }
-  }
-
-  const specGroups: any[] = [];
-  for (const groupKey of Object.keys(specGroupMap)) {
-    const groupInfo = specGroupMap[groupKey];
-    const attributes: any[] = [];
-    for (const code of groupInfo.attributeCodes) {
-      const camelCode = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-      if (result[camelCode] !== undefined) {
-        const value = result[camelCode];
-        if (value && typeof value === "object" && "value" in value) {
-          attributes.push({ k: camelCode, v: value.value, unit: value.unit });
-        } else {
-          attributes.push({ k: camelCode, v: value });
-        }
-        delete result[camelCode];
-      }
-    }
-    if (attributes.length > 0) {
-      specGroups.push({
-        name: groupInfo.groupName || groupInfo.groupCode,
-        attributes: normalizeKeyValueCollection(attributes),
-      });
-    }
-  }
-  if (specGroups.length > 0) {
-    result.specifications = specGroups;
-  }
-
-  if (
-    result.variantValues !== undefined &&
-    !Array.isArray(result.variantValues)
-  ) {
-    result.variantValues = normalizeKeyValueCollection(result.variantValues);
-  }
-  if (result.keyFeatures !== undefined && !Array.isArray(result.keyFeatures)) {
-    result.keyFeatures = normalizeKeyValueCollection(result.keyFeatures);
-  }
-
-  return result;
-}
-
-// ---------- finalizeCanonicalProductData ----------
-async function finalizeCanonicalProductData(
-  data: Record<string, any>,
-  categoryId?: string,
-) {
-  const canonicalData = { ...data };
-  for (const key of ["categoryId", "brand"]) {
-    if (canonicalData[key] === null || canonicalData[key] === undefined) {
-      delete canonicalData[key];
-      continue;
-    }
-    const scalar = toScalarId(canonicalData[key]);
-    if (scalar) {
-      canonicalData[key] = scalar;
-    } else {
-      delete canonicalData[key];
-    }
-  }
-  if (Array.isArray(canonicalData.carrier)) {
-    const carrier = toScalarId(canonicalData.carrier);
-    if (carrier) {
-      canonicalData.carrier = carrier;
-    } else {
-      delete canonicalData.carrier;
-    }
-  }
-  if (typeof canonicalData.status === "string") {
-    canonicalData.status = canonicalData.status.trim().toLowerCase();
-  }
-
-  if (canonicalData.productCode) {
-    canonicalData.productCode = sanitizeProductCode(canonicalData.productCode);
-  }
-
-  if (categoryId) {
-    const structured = await buildStructuredFields(canonicalData, categoryId);
-    return structured;
-  }
-
-  return canonicalData;
-}
-
-// ---------- createProduct ----------
-export async function createProduct(
-  formData: CreateProductForm,
-): Promise<ProductResponse> {
-  try {
-    await connection();
-
-    const normalizedIncoming = normalizeProductPayloadForValidation(formData);
-    const canonicalData = await finalizeCanonicalProductData(
-      normalizedIncoming,
-      normalizedIncoming.categoryId || (formData as any).category_id,
-    );
-
-    const validationResult = safeValidateProductCreate(canonicalData);
-    if (!validationResult.success) {
-      return {
-        success: false,
-        error: `Validation failed: ${validationResult.error}`,
-      };
-    }
-
-    const {
-      categoryId,
-      brand,
-      relatedProducts,
-      quantity,
-      lowStockThreshold,
-      ...attributes
-    } = validationResult.data || canonicalData;
-
-    const cleanedAttributes = cleanObject(attributes);
-    if (Object.keys(cleanedAttributes).length === 0) {
-      return { success: false, error: "At least one attribute is required" };
-    }
-
-    try {
-      await validateRequiredCategoryAttributes(
-        categoryId || (formData as any).category_id,
-        {
-          ...cleanedAttributes,
-          ...(brand ? { brand } : {}),
-          ...(quantity !== undefined ? { quantity } : {}),
-          ...(lowStockThreshold !== undefined ? { lowStockThreshold } : {}),
-        },
-      );
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message || "Category-required fields are missing.",
-      };
-    }
-
-    const updateData: any = {
-      categoryId: new mongoose.Types.ObjectId(
-        categoryId || (formData as any).category_id,
-      ),
-      brand: new mongoose.Types.ObjectId(brand),
-      ...cleanedAttributes,
-      status: normalizeProductStatus(attributes.status as string),
-      slug: attributes.name
-        ? generateSlug(attributes.name, attributes.department ?? null)
-        : undefined,
-      updatedAt: new Date(),
-    };
-
-    // Handle productCode from attributes.type and attributes.value
-    if (attributes.type && attributes.value) {
-      updateData.productCode = {
-        type: attributes.type,
-        value: attributes.value,
-      };
-      delete updateData.type;
-      delete updateData.value;
-    } else if (attributes.productCode) {
-      updateData.productCode = sanitizeProductCode(attributes.productCode);
-    }
-
-    if (relatedProducts) {
-      updateData.relatedProducts = (relatedProducts as any[]).map(
-        (rp: any) => ({
-          product: new mongoose.Types.ObjectId(rp.id),
-          relationshipType: rp.relationshipType || "",
-        }),
-      );
-    }
-
-    const newProduct = new Product({
-      ...updateData,
-      createdAt: new Date(),
-    });
-    await newProduct.save();
-
-    revalidatePath("/products");
-    return { success: true };
-  } catch (error) {
-    console.error("Error creating product:", error);
-    if (error instanceof Error) {
-      return {
-        success: false,
-        error: `Failed to create product: ${error.message}`,
-      };
-    }
-    return { success: false, error: "Failed to create product" };
-  }
-}
-
-// ---------- updateProduct ----------
-export async function updateProduct(
-  productId: string,
+/** Create or update a product (upsert by ID if provided) */
+export async function createOrUpdateProduct(
   formData: any,
 ): Promise<ProductResponse> {
   try {
     await connection();
 
-    const normalizedIncoming = normalizeProductPayloadForValidation(formData);
-    const rawKeys = Object.keys(normalizedIncoming ?? {});
-    const categoryOnlyUpdate =
-      rawKeys.length > 0 &&
-      rawKeys.every(
-        (key) => key === "categoryId" || key === "category_id" || key === "_id",
-      );
-
-    const canonicalData = await finalizeCanonicalProductData(
-      normalizedIncoming,
-      normalizedIncoming.categoryId || normalizedIncoming.category_id,
-    );
-
-    if (categoryOnlyUpdate) {
-      const categoryId = canonicalData.categoryId ?? canonicalData.category_id;
-      if (!productId)
-        return { success: false, error: "Valid product ID is required" };
-      if (!categoryId) return { success: false, error: "Category is required" };
-      const updateData: any = {
-        categoryId: new mongoose.Types.ObjectId(categoryId),
-        updatedAt: new Date(),
-      };
-      const updatedProduct = await Product.findOneAndUpdate(
-        { _id: new mongoose.Types.ObjectId(productId) },
-        updateData,
-        { new: true, runValidators: true },
-      );
-      if (!updatedProduct)
-        return { success: false, error: "Product not found" };
-      revalidatePath("/products");
-      return { success: true, data: updatedProduct.toObject() };
+    // Validate with Zod (allows _id for upsert)
+    const validated = safeValidateProductCreateOrUpdate(formData);
+    if (!validated.success) {
+      return { success: false, error: `Validation failed: ${validated.error}` };
     }
 
-    const validationResult = safeValidateProductUpdate(canonicalData);
-    if (!validationResult.success) {
-      return {
-        success: false,
-        error: `Validation failed: ${validationResult.error}`,
-      };
+    const data = validated.data || formData;
+    const existingId = data._id ? toObjectId(data._id) : null;
+
+    // Prepare base product data (common to both create and update)
+    const baseData: any = { ...data };
+    delete baseData._id;
+
+    // Handle category and brand IDs
+    let categoryId: mongoose.Types.ObjectId | null = null;
+    let brand: mongoose.Types.ObjectId | null = null;
+
+    if (data.categoryId) {
+      categoryId = toObjectId(data.categoryId);
+      if (!categoryId) return { success: false, error: "Invalid category" };
+    }
+    if (data.brand) {
+      brand = toObjectId(data.brand);
+      if (!brand) return { success: false, error: "Invalid brand" };
     }
 
-    const {
-      categoryId,
-      brand,
-      relatedProducts,
-      quantity,
-      lowStockThreshold,
-      ...attributes
-    } = validationResult.data || canonicalData;
-
-    if (!productId)
-      return { success: false, error: "Valid product ID is required" };
-
-    const cleanedAttributes = cleanObject(attributes);
-    if (
-      Object.keys(cleanedAttributes).length === 0 &&
-      !categoryId &&
-      !brand &&
-      !relatedProducts &&
-      quantity === undefined &&
-      lowStockThreshold === undefined
-    ) {
-      return { success: false, error: "No valid attributes provided" };
-    }
-
+    // Validate required category attributes (if category is provided)
     if (categoryId) {
-      try {
-        await validateRequiredCategoryAttributes(categoryId, {
-          ...cleanedAttributes,
-          ...(brand ? { brand } : {}),
-          ...(quantity !== undefined ? { quantity } : {}),
-          ...(lowStockThreshold !== undefined ? { lowStockThreshold } : {}),
-        });
-      } catch (error: any) {
-        return {
-          success: false,
-          error: error.message || "Category-required fields are missing.",
-        };
-      }
+      await validateRequiredCategoryAttributes(categoryId.toString(), data);
     }
 
-    const updateData: any = { ...cleanedAttributes, updatedAt: new Date() };
-
-    // Handle productCode from attributes.type and attributes.value
-    if (attributes.type && attributes.value) {
-      updateData.productCode = {
-        type: attributes.type,
-        value: attributes.value,
-      };
-      delete updateData.type;
-      delete updateData.value;
-    } else if (attributes.productCode) {
-      updateData.productCode = sanitizeProductCode(attributes.productCode);
-    }
-
-    if (categoryId) {
-      updateData.categoryId = new mongoose.Types.ObjectId(categoryId);
-    }
-    if (brand) {
-      updateData.brand = new mongoose.Types.ObjectId(brand);
-    }
-    if (relatedProducts !== undefined) {
-      if (Array.isArray(relatedProducts) && relatedProducts.length === 0) {
-        updateData.relatedProducts = [];
-      } else if (Array.isArray(relatedProducts)) {
-        updateData.relatedProducts = relatedProducts.map((rp: any) => ({
-          product: new mongoose.Types.ObjectId(rp.id),
-          relationshipType: rp.relationshipType || "",
-        }));
-      }
-    }
-    if (quantity !== undefined) {
-      updateData.quantity = Number(quantity);
-    }
-    if (lowStockThreshold !== undefined) {
-      updateData.lowStockThreshold = Number(lowStockThreshold);
-    }
-    if (attributes.name) {
-      updateData.slug = generateSlug(
-        attributes.name,
-        attributes.department ?? null,
-      );
-    }
-
-    // Sanitize keyFeatures and specifications (remove _id)
-    if (updateData.keyFeatures) {
-      updateData.keyFeatures = normalizeKeyValueCollection(
-        updateData.keyFeatures,
-      );
-    }
-    if (updateData.specifications) {
-      const sanitizeSpecs = (specs: any[]): any[] => {
-        return specs.map((group: any) => ({
-          ...group,
-          attributes: normalizeKeyValueCollection(group.attributes || []),
-          groups: group.groups ? sanitizeSpecs(group.groups) : [],
-        }));
-      };
-      updateData.specifications = sanitizeSpecs(updateData.specifications);
-    }
-
-    console.log(
-      "[updateProduct] Final updateData before save:",
-      JSON.stringify(updateData, null, 2),
-    );
-    const updatedProduct = await Product.findOneAndUpdate(
-      { _id: new mongoose.Types.ObjectId(productId) },
-      { $set: updateData },
-      { new: true, runValidators: true },
-    );
-    if (!updatedProduct) return { success: false, error: "Product not found" };
-
-    revalidatePath("/products");
-    return { success: true, data: updatedProduct.toObject() };
-  } catch (error) {
-    console.error("Error updating product:", error);
-    if (error instanceof Error) {
-      return {
-        success: false,
-        error: `Failed to update product: ${error.message}`,
-      };
-    }
-    return { success: false, error: "Failed to update product" };
-  }
-}
-
-function toScalarId(value: any): string | null {
-  const candidate = extractIdCandidate(value);
-  if (candidate === null || candidate === undefined || candidate === "")
-    return null;
-  const stringValue =
-    typeof candidate === "string" ? candidate.trim() : String(candidate);
-  return stringValue && stringValue !== "[object Object]" ? stringValue : null;
-}
-
-function normalizeProductPayloadForValidation(value: any): any {
-  if (!value || typeof value !== "object") return value;
-  if (Array.isArray(value)) {
-    return value.map((item) => normalizeProductPayloadForValidation(item));
-  }
-  const normalized = { ...value };
-  const refKeys = ["categoryId", "brand", "carrier"];
-  for (const key of refKeys) {
-    if (normalized[key] !== undefined) {
-      const scalarValue = toScalarId(normalized[key]);
-      if (scalarValue) {
-        normalized[key] = scalarValue;
-      } else {
-        delete normalized[key];
-      }
-    }
-  }
-  if (typeof normalized.status === "string") {
-    normalized.status = normalized.status.trim().toLowerCase();
-  } else if (Array.isArray(normalized.status)) {
-    normalized.status = normalized.status[0] || "draft";
-    normalized.status = String(normalized.status).trim().toLowerCase();
-  }
-  if (Array.isArray(normalized.variants)) {
-    normalized.variants = normalized.variants.map((variant: any) => {
-      if (!variant || typeof variant !== "object") return variant;
-      const nextVariant = { ...variant };
-      if (Array.isArray(nextVariant.mainImage)) {
-        nextVariant.mainImage = nextVariant.mainImage[0] || "";
-      }
-      if (Array.isArray(nextVariant.images)) {
-        nextVariant.images = nextVariant.images.filter(Boolean);
-      }
-      return nextVariant;
-    });
-  }
-  return normalized;
-}
-
-// ---------- createOrUpdateProduct ----------
-export async function createOrUpdateProduct(
-  productData: any,
-): Promise<ProductResponse> {
-  try {
-    await connection();
-
-    const normalizedIncoming =
-      normalizeProductPayloadForValidation(productData);
-    const categoryId =
-      normalizedIncoming.categoryId || normalizedIncoming.category_id;
-    const canonicalData = await finalizeCanonicalProductData(
-      normalizedIncoming,
-      categoryId,
-    );
-
-    console.log(
-      "[createOrUpdateProduct] After finalizeCanonicalProductData:",
-      JSON.stringify(canonicalData, null, 2),
-    );
-
-    const validationResult = safeValidateProductCreateOrUpdate(canonicalData);
-    if (!validationResult.success) {
-      return {
-        success: false,
-        error: `Validation failed: ${validationResult.error}`,
-      };
-    }
-
-    const {
-      _id,
-      categoryId: catId,
-      brand,
-      relatedProducts,
-      quantity,
-      lowStockThreshold,
-      ...attributes
-    } = validationResult.data || canonicalData;
-
-    const cleanedAttributes = cleanObject(attributes);
-    const { createdAt, updatedAt, __v, ...safeAttributes } = cleanedAttributes;
-
-    console.log(
-      "[createOrUpdateProduct] safeAttributes:",
-      JSON.stringify(safeAttributes, null, 2),
-    );
-
-    if (catId) {
-      try {
-        await validateRequiredCategoryAttributes(catId, {
-          ...safeAttributes,
-          ...(brand ? { brand } : {}),
-          ...(quantity !== undefined ? { quantity } : {}),
-          ...(lowStockThreshold !== undefined ? { lowStockThreshold } : {}),
-        });
-      } catch (error: any) {
-        return {
-          success: false,
-          error: error.message || "Category-required fields are missing.",
-        };
-      }
-    }
-
-    const updateData: any = {
-      ...safeAttributes,
+    // Build the document data (start with everything)
+    const productData: any = {
+      ...baseData,
+      status: normalizeStatus(data.status),
       updatedAt: new Date(),
     };
 
-    // Only set status if it was provided (to avoid resetting to draft)
-    if (safeAttributes.status !== undefined) {
-      updateData.status = normalizeProductStatus(safeAttributes.status);
+    if (categoryId) productData.categoryId = categoryId;
+    if (brand) productData.brand = brand;
+    if (data.name) {
+      productData.slug = generateSlug(data.name, data.department);
     }
 
-    // Handle productCode from attributes.type and attributes.value
-    if (safeAttributes.type && safeAttributes.value) {
-      updateData.productCode = {
-        type: safeAttributes.type,
-        value: safeAttributes.value,
-      };
-      delete updateData.type;
-      delete updateData.value;
-    } else if (safeAttributes.productCode) {
-      updateData.productCode = sanitizeProductCode(safeAttributes.productCode);
-      delete updateData.type;
-      delete updateData.value;
+    // Handle productCode
+    if (data.type && data.value) {
+      productData.productCode = { type: data.type, value: data.value };
+      delete productData.type;
+      delete productData.value;
+    } else if (data.productCode) {
+      productData.productCode = sanitizeProductCode(data.productCode);
     }
 
-    // Sanitize keyFeatures and specifications (remove _id)
-    if (updateData.keyFeatures) {
-      updateData.keyFeatures = normalizeKeyValueCollection(
-        updateData.keyFeatures,
+    // -------- Build structured fields from flat attributes ----------
+    if (categoryId) {
+      const { keyFeatures, specifications, leftover } =
+        await buildStructuredFields(productData, categoryId.toString());
+      // Replace structured fields
+      productData.keyFeatures = keyFeatures;
+      productData.specifications = specifications;
+      // Keep leftover flat fields (they are not part of keyFeatures/specifications)
+      // but we already have them in productData; we need to remove the keys that were used
+      // Actually we can just keep productData as is; the structured fields are added,
+      // and the flat keys remain – they won't conflict with the model because the model is strict: false.
+      // However, we may want to delete them to keep the document clean.
+      // We'll remove the keys that were consumed by keyFeatures/specifications.
+      const usedKeys = new Set<string>();
+      // Collect used keys from keyFeatures and specifications
+      keyFeatures.forEach((item: any) => usedKeys.add(item.k));
+      specifications.forEach((group: any) => {
+        const collect = (g: any) => {
+          g.attributes?.forEach((attr: any) => usedKeys.add(attr.k));
+          g.groups?.forEach(collect);
+        };
+        collect(group);
+      });
+      for (const key of usedKeys) {
+        delete productData[key];
+      }
+      // Also delete any keys that might have been used but are not in the usedKeys set? No, we only delete those used.
+    }
+
+    // Normalize keyFeatures and specifications (ensure arrays, strip _id)
+    if (productData.keyFeatures) {
+      productData.keyFeatures = normalizeKeyValueCollection(
+        productData.keyFeatures,
       );
     }
-    if (updateData.specifications) {
-      const sanitizeSpecs = (specs: any[]): any[] => {
-        return specs.map((group: any) => ({
-          ...group,
-          attributes: normalizeKeyValueCollection(group.attributes || []),
-          groups: group.groups ? sanitizeSpecs(group.groups) : [],
-        }));
-      };
-      updateData.specifications = sanitizeSpecs(updateData.specifications);
+    if (productData.specifications) {
+      productData.specifications = sanitizeSpecifications(
+        productData.specifications,
+      );
     }
 
-    const categoryObjectId = toObjectId(catId);
-    if (!categoryObjectId) {
-      return { success: false, error: "Invalid category selected." };
-    }
-    updateData.categoryId = categoryObjectId;
-
-    const brandObjectId = toObjectId(brand);
-    if (!brandObjectId) {
-      return { success: false, error: "Invalid brand selected." };
-    }
-    updateData.brand = brandObjectId;
-
-    if (relatedProducts !== undefined) {
-      if (Array.isArray(relatedProducts)) {
-        if (relatedProducts.length === 0) {
-          updateData.relatedProducts = [];
-        } else {
-          const valid = relatedProducts
-            .filter((rp: any) => rp && rp.id)
-            .map((rp: any) => ({
-              product: toObjectId(rp.id),
-              relationshipType: rp.relationshipType || "",
-            }))
-            .filter((rp: any) => rp.product);
-          updateData.relatedProducts = valid;
-        }
-      } else {
-        const ids = (relatedProducts as any).ids || [];
-        const valid = ids
-          .filter((id: any) => id)
-          .map((id: any) => ({
-            product: toObjectId(id),
-            relationshipType: (relatedProducts as any).relationshipType || "",
+    // Handle relatedProducts
+    if (data.relatedProducts !== undefined) {
+      if (
+        Array.isArray(data.relatedProducts) &&
+        data.relatedProducts.length === 0
+      ) {
+        productData.relatedProducts = [];
+      } else if (Array.isArray(data.relatedProducts)) {
+        productData.relatedProducts = data.relatedProducts
+          .filter((rp: any) => rp && rp.id)
+          .map((rp: any) => ({
+            product: toObjectId(rp.id),
+            relationshipType: rp.relationshipType || "",
           }))
           .filter((rp: any) => rp.product);
-        updateData.relatedProducts = valid;
       }
     }
 
-    if (quantity !== undefined) {
-      updateData.quantity = Number(quantity);
-    }
-    if (lowStockThreshold !== undefined) {
-      updateData.lowStockThreshold = Number(lowStockThreshold);
-    }
-    if (safeAttributes.name) {
-      updateData.slug = generateSlug(
-        safeAttributes.name,
-        safeAttributes.department ?? null,
-      );
-    }
-
-    console.log(
-      "[createOrUpdateProduct] Final updateData before save:",
-      JSON.stringify(updateData, null, 2),
-    );
-
     let product;
     let isNew = false;
-    const existingId = toObjectId(_id);
+
     if (existingId) {
       const existing = await Product.findById(existingId);
       if (existing) {
-        product = await Product.findOneAndUpdate(
-          { _id: existingId },
-          { $set: updateData },
+        delete productData.createdAt;
+        product = await Product.findByIdAndUpdate(
+          existingId,
+          { $set: productData },
           { new: true, runValidators: true },
         );
         if (!product) {
@@ -1043,39 +465,32 @@ export async function createOrUpdateProduct(
     }
 
     if (isNew) {
-      const createData = {
-        ...updateData,
-        createdAt: new Date(),
-      };
-      const newProduct = new Product(createData);
-      product = await newProduct.save();
-      if (!product) {
-        return { success: false, error: "Failed to create product" };
-      }
+      productData.createdAt = new Date();
+      product = new Product(productData);
+      await product.save();
     }
 
     revalidatePath("/products");
-    const result = product?.toObject ? product?.toObject() : product;
-    return { success: true, data: result };
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown server error";
+    return { success: true, data: serialize(product) };
+  } catch (error: any) {
     console.error("Error in createOrUpdateProduct:", error);
-    return { success: false, error: message || "Failed to save product" };
+    return { success: false, error: error.message || "Failed to save product" };
   }
 }
 
-// ---------- deleteProduct ----------
+/** Delete a product, optionally recreate it as draft */
 export async function deleteProduct(
   id: string,
   options: DeleteProductOptions = {},
 ): Promise<ProductResponse> {
   try {
     await connection();
-    if (!id) return { success: false, error: "Product ID is required" };
-    const existingProduct = await Product.findById(id);
-    if (!existingProduct) return { success: false, error: "Product not found" };
+    if (!id) return { success: false, error: "Product ID required" };
 
+    const product = await Product.findById(id);
+    if (!product) return { success: false, error: "Product not found" };
+
+    // Remove references from other products
     await Product.updateMany(
       { "relatedProducts.product": new mongoose.Types.ObjectId(id) },
       {
@@ -1086,82 +501,101 @@ export async function deleteProduct(
     );
 
     if (options.recreate) {
-      const clone = existingProduct.toObject
-        ? existingProduct.toObject()
-        : existingProduct;
-      const { _id, __v, createdAt, updatedAt, ...rest } = clone;
-      const recreatedProduct = new Product({
-        ...rest,
-        status: "draft",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      const savedProduct = await recreatedProduct.save();
+      // Clone product, set to draft, and save new one
+      const clone: any = product.toObject();
+      delete clone._id;
+      delete clone.__v;
+      delete clone.createdAt;
+      delete clone.updatedAt;
+      clone.status = "draft";
+      clone.createdAt = new Date();
+      clone.updatedAt = new Date();
+      const recreated = new Product(clone);
+      await recreated.save();
+      // Delete the original
       await Product.findByIdAndDelete(id);
       revalidatePath("/products");
       return {
         success: true,
         data: {
           deletedId: id,
-          recreatedId: savedProduct._id.toString(),
-          product: savedProduct.toObject(),
+          recreatedId: recreated._id.toString(),
+          product: serialize(recreated),
         },
       };
     }
 
-    const deletedProduct = await Product.findByIdAndDelete(id);
-    if (!deletedProduct) return { success: false, error: "Product not found" };
+    // Normal delete
+    await Product.findByIdAndDelete(id);
     revalidatePath("/products");
     return { success: true, data: "Product deleted successfully" };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error deleting product:", error);
-    return { success: false, error: "Failed to delete product" };
+    return {
+      success: false,
+      error: error.message || "Failed to delete product",
+    };
   }
 }
 
-// ---------- deleteProductImages ----------
+/** Delete product images from storage and product record */
 export async function deleteProductImages(
-  productId: string,
+  productId?: string,
   imageUrl?: string,
 ): Promise<ProductResponse> {
   try {
     await connection();
+
     if (!productId && !imageUrl) {
-      return { success: false, error: "ProductId or imageUrl is required" };
+      return { success: false, error: "ProductId or imageUrl required" };
     }
+
     const deleteFromStorage = async (url: string) => {
-      const urlObj = new URL(url);
-      const encodedFileName = urlObj.pathname.split("/").pop();
-      if (encodedFileName) {
-        const fileName = decodeURIComponent(encodedFileName);
-        const path = fileName.startsWith("uploads/")
-          ? fileName
-          : `uploads/${fileName}`;
-        await deleteObject(ref(storage, path));
+      try {
+        const urlObj = new URL(url);
+        const encodedFileName = urlObj.pathname.split("/").pop();
+        if (encodedFileName) {
+          const fileName = decodeURIComponent(encodedFileName);
+          const path = fileName.startsWith("uploads/")
+            ? fileName
+            : `uploads/${fileName}`;
+          await deleteObject(ref(storage, path));
+        }
+      } catch (e) {
+        console.warn("Failed to delete image from storage:", e);
       }
     };
+
     if (productId && mongoose.isValidObjectId(productId)) {
       const product = await Product.findById(productId);
       if (!product) return { success: false, error: "Product not found" };
+
       if (imageUrl) {
-        const productImages = product.images ?? [];
-        if (!productImages.includes(imageUrl)) {
+        // Remove specific image from product
+        const images = product.images || [];
+        if (!images.includes(imageUrl)) {
           return { success: false, error: "Image URL not found in product" };
         }
         await deleteFromStorage(imageUrl);
-        product.images = productImages.filter(
-          (url: string) => url !== imageUrl,
-        );
+        product.images = images.filter((url: string) => url !== imageUrl);
         await product.save();
-        return { success: true, data: product.toObject() };
+        return { success: true, data: serialize(product) };
+      } else {
+        // Delete all images? Not implemented – we require imageUrl.
+        return { success: false, error: "Image URL required" };
       }
     } else if (imageUrl) {
+      // No productId provided – just delete from storage
       await deleteFromStorage(imageUrl);
-      return { success: true, data: "Image deleted successfully" };
+      return { success: true, data: "Image deleted from storage" };
     }
+
     return { success: false, error: "Invalid parameters" };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error deleting product images:", error);
-    return { success: false, error: "Failed to delete product images" };
+    return {
+      success: false,
+      error: error.message || "Failed to delete images",
+    };
   }
 }

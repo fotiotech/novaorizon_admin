@@ -32,7 +32,7 @@ import VariantsManager from "@/app/(catalog)/catalog/products/component/variants
 import { isValidBarcode } from "@/app/lib/barcode";
 
 // ------------------------------------------------------------------
-// Types (unchanged)
+// Types
 // ------------------------------------------------------------------
 export type AttributeDetail = {
   id: string;
@@ -63,7 +63,7 @@ type AttributeSetStep = {
 };
 
 // ------------------------------------------------------------------
-// Helpers (unchanged)
+// Helpers
 // ------------------------------------------------------------------
 const isEmptyValue = (value: any): boolean => {
   if (value === undefined || value === null) return true;
@@ -112,8 +112,38 @@ const toScalarId = (value: any): string | null => {
   return null;
 };
 
+// Normalize variantValues: array of {k, v} -> object { k: [v] }
+function normalizeVariantValues(data: any): Record<string, string[]> {
+  if (!data) return {};
+  if (Array.isArray(data)) {
+    const obj: Record<string, string[]> = {};
+    data.forEach((item) => {
+      if (item && typeof item === "object" && "k" in item && "v" in item) {
+        const key = normalizeCode(item.k);
+        const values = Array.isArray(item.v) ? item.v : [item.v];
+        obj[key] = values;
+      }
+    });
+    return obj;
+  }
+  if (typeof data === "object") {
+    const obj: Record<string, string[]> = {};
+    Object.entries(data).forEach(([k, v]) => {
+      const key = normalizeCode(k);
+      const values = Array.isArray(v)
+        ? v
+        : v !== undefined && v !== null
+          ? [v]
+          : [];
+      obj[key] = values;
+    });
+    return obj;
+  }
+  return {};
+}
+
 // ------------------------------------------------------------------
-// getGroupRelevantKeys (unchanged)
+// getGroupRelevantKeys
 // ------------------------------------------------------------------
 function getGroupRelevantKeys(group: GroupNode): string[] {
   const keys: string[] = [];
@@ -131,7 +161,7 @@ function getGroupRelevantKeys(group: GroupNode): string[] {
 }
 
 // ------------------------------------------------------------------
-// Memoized GroupRenderer (unchanged)
+// Memoized GroupRenderer (FULL DEFINITION)
 // ------------------------------------------------------------------
 interface GroupRendererProps {
   group: GroupNode;
@@ -313,24 +343,21 @@ const GroupRenderer = memo(
 GroupRenderer.displayName = "GroupRenderer";
 
 // ------------------------------------------------------------------
-// Helper: flatten structured fields (keyFeatures, specifications) into flat keys
+// Helper: flatten structured fields
 // ------------------------------------------------------------------
 function flattenStructuredFields(
   data: Record<string, any>,
 ): Record<string, any> {
   const result = { ...data };
 
-  // Flatten keyFeatures
   if (Array.isArray(result.keyFeatures)) {
     for (const item of result.keyFeatures) {
       if (item.k && item.v !== undefined) {
         result[item.k] = item.v;
       }
     }
-    // Do not delete keyFeatures – the form does not use it directly, but we keep it for later use.
   }
 
-  // Flatten specifications (recursive)
   if (Array.isArray(result.specifications)) {
     const flattenSpecs = (specs: any[]) => {
       for (const group of specs) {
@@ -428,11 +455,15 @@ const ProductForm: React.FC<ProductFormProps> = ({
           }
         }
 
+        // Normalize variantValues from array to object
+        if (data.variantValues) {
+          data.variantValues = normalizeVariantValues(data.variantValues);
+        }
+
         const draft = await getProductDraft(productId);
         if (draft) {
           let draftData = { ...draft };
           delete draftData._id;
-          // Flatten draft as well
           draftData = flattenStructuredFields(draftData);
           if (draftData.productCode) {
             let code = draftData.productCode;
@@ -443,6 +474,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
               draftData.type = code.type || "";
               draftData.value = code.value || "";
             }
+          }
+          if (draftData.variantValues) {
+            draftData.variantValues = normalizeVariantValues(
+              draftData.variantValues,
+            );
           }
           data = { ...data, ...draftData };
         }
@@ -455,7 +491,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
           data.categoryId = initialCategoryId;
         }
 
-        // Normalize reference IDs
+        // Normalize reference IDs (ensure they are strings)
         if (data.categoryId) {
           const id = toScalarId(data.categoryId);
           data.categoryId = id || null;
@@ -546,7 +582,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     currentStepRef.current = currentStep;
   }, [currentStep]);
 
-  // ---------- Validation (uses "type" and "value") ----------
+  // ---------- Validation ----------
   const validateGroup = (group: GroupNode): string[] => {
     const errors: string[] = [];
     group.attributes.forEach((attr) => {
@@ -752,6 +788,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
       const payload = { ...productData };
 
+      // Remove any existing structured fields – the server will rebuild them
+      delete payload.keyFeatures;
+      delete payload.specifications;
+
       // Ensure status is always sent
       if (!payload.status) {
         payload.status = "draft";
@@ -773,57 +813,57 @@ const ProductForm: React.FC<ProductFormProps> = ({
       delete payload.Id;
       delete payload.id;
 
-      console.log("[ProductForm] Full payload before normalization:", payload);
-
-      const normalizedPayload: Record<string, any> = { ...payload };
-
-      if (normalizedPayload.categoryId) {
-        normalizedPayload.categoryId =
-          toScalarId(normalizedPayload.categoryId) || null;
+      // Normalize IDs
+      if (payload.categoryId) {
+        payload.categoryId = toScalarId(payload.categoryId) || null;
       }
-      if (normalizedPayload.brand) {
-        normalizedPayload.brand = toScalarId(normalizedPayload.brand) || null;
+      if (payload.brand) {
+        payload.brand = toScalarId(payload.brand) || null;
       }
-      if (
-        normalizedPayload.carrier &&
-        Array.isArray(normalizedPayload.carrier)
-      ) {
-        normalizedPayload.carrier =
-          toScalarId(normalizedPayload.carrier) || null;
+      if (payload.carrier && Array.isArray(payload.carrier)) {
+        payload.carrier = toScalarId(payload.carrier) || null;
       }
-      if (typeof normalizedPayload.status === "string") {
-        normalizedPayload.status = normalizedPayload.status
-          .trim()
-          .toLowerCase();
-      } else if (Array.isArray(normalizedPayload.status)) {
-        normalizedPayload.status = (normalizedPayload.status[0] || "draft")
+      if (typeof payload.status === "string") {
+        payload.status = payload.status.trim().toLowerCase();
+      } else if (Array.isArray(payload.status)) {
+        payload.status = (payload.status[0] || "draft")
           .toString()
           .trim()
           .toLowerCase();
       }
 
-      if (Array.isArray(normalizedPayload.variants)) {
-        normalizedPayload.variants = normalizedPayload.variants.map(
-          (variant: any) => {
-            if (!variant || typeof variant !== "object") return variant;
-            const nextVariant = { ...variant };
-            if (Array.isArray(nextVariant.mainImage)) {
-              nextVariant.mainImage = nextVariant.mainImage[0] || "";
-            }
-            if (Array.isArray(nextVariant.images)) {
-              nextVariant.images = nextVariant.images.filter(Boolean);
-            }
-            return nextVariant;
-          },
+      // Ensure variants mainImage and images are properly formatted
+      if (Array.isArray(payload.variants)) {
+        payload.variants = payload.variants.map((variant: any) => {
+          if (!variant || typeof variant !== "object") return variant;
+          const nextVariant = { ...variant };
+          if (Array.isArray(nextVariant.mainImage)) {
+            nextVariant.mainImage = nextVariant.mainImage[0] || "";
+          }
+          if (Array.isArray(nextVariant.images)) {
+            nextVariant.images = nextVariant.images.filter(Boolean);
+          }
+          return nextVariant;
+        });
+      }
+
+      // Convert variantValues from object to array of {k, v} if needed
+      if (
+        payload.variantValues &&
+        typeof payload.variantValues === "object" &&
+        !Array.isArray(payload.variantValues)
+      ) {
+        payload.variantValues = Object.entries(payload.variantValues).map(
+          ([k, v]) => ({ k, v }),
         );
       }
 
       console.log(
-        "[ProductForm] Normalized payload sent to server:",
-        JSON.stringify(normalizedPayload, null, 2),
+        "[ProductForm] Final payload sent to server:",
+        JSON.stringify(payload, null, 2),
       );
 
-      const res = await createOrUpdateProduct(normalizedPayload);
+      const res = await createOrUpdateProduct(payload);
 
       if (res.success) {
         setSuccess("Product saved successfully!");

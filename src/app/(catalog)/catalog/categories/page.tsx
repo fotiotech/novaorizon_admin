@@ -120,30 +120,16 @@ const Categories = () => {
         subcategories: buildSafeSubtree(category._id as string),
       };
     }
-    // For non‑root categories, we will still include them as children of their parent
-    // But we also need to include them in the flat list so they appear in the UI.
-    // We'll include them without subcategories (they will be rendered as part of their parent's tree).
+
     return {
       ...category,
       subcategories: [], // subcategories will be built from the root
     };
   });
 
-  // However, this still includes non‑root categories at the top level, which may cause duplicates.
-  // The better approach is to only show root categories and render children recursively.
-  // Since CategoryList expects a flat list with subcategories, we'll keep it but ensure
-  // that non‑root categories don't have subcategories built again (they are already children).
-
-  // Actually, we should only show root categories in the top‑level list.
-  // We'll filter to roots for the main list.
   const rootCategories = categoriesWithSubcategories.filter(
     (cat) => !cat.parentId,
   );
-
-  // But CategoryList might expect all categories? The original code mapped all categories.
-  // To avoid breaking existing UI, we'll pass the full list but with safe subcategories.
-  // We'll pass the full list, but non‑root categories will have empty subcategories.
-  // That's acceptable.
 
   return (
     <div className="space-y-6">

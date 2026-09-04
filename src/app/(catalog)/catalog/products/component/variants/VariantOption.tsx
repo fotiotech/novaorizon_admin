@@ -234,11 +234,11 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       variants,
     ]);
 
-    // ---- Sync variants to parent on every change (skip initial) ----
-    useEffect(() => {
-      if (isInitializing.current || isFirstRender.current) return;
-      onUpdate("variants", variants);
-    }, [variants, onUpdate]);
+    // ---- ❌ REMOVED: redundant sync effect that caused infinite loop ----
+    // useEffect(() => {
+    //   if (isInitializing.current || isFirstRender.current) return;
+    //   onUpdate("variants", variants);
+    // }, [variants, onUpdate]);
 
     // ---- Handlers (memoized) ----
     const handleThemeSelect = useCallback(

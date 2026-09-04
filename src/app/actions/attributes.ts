@@ -200,52 +200,71 @@ export async function updateAttribute(
   }
 }
 
-// deleteAttribute – now accepts _id
+// app/actions/attributes.ts
+
 export async function deleteAttribute(id: string) {
   await connection();
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new Error("Invalid attribute ID");
+  }
+
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      const attribute = await Attribute.findById(id).session(session);
-      if (!attribute) throw new Error("Attribute not found");
-
+      // 1. Remove attribute from all AttributeGroups
       await AttributeGroup.updateMany(
         {},
-        { $pull: { attributes: { id: new mongoose.Types.ObjectId(id) } } },
+        { $pull: { attributes: new mongoose.Types.ObjectId(id) } },
         { session },
       );
 
-      const categoryProperties = await CategoryProperty.find({}).session(
-        session,
-      );
+      // 2. Remove attribute from all CategoryProperty mappings
+      // Fetch properties as plain objects to avoid Mongoose document casting issues
+      const categoryProperties = await CategoryProperty.find({})
+        .lean()
+        .session(session);
+
       for (const property of categoryProperties) {
+        if (!property.mappings) continue;
+
         let changed = false;
-        property.mappings = (property.mappings || []).map((mapping: any) => ({
+        // Build new mappings array, filtering out the attribute
+        const newMappings = property.mappings.map((mapping: any) => ({
           ...mapping,
           groups: (mapping.groups || []).map((group: any) => ({
             ...group,
             attributes: (group.attributes || []).filter((entry: any) => {
-              const attributeId =
-                entry.attribute?.toString?.() ?? entry.attribute;
-              const matches = attributeId === id;
-              if (matches) changed = true;
-              return !matches;
+              const attrId = entry.attribute?.toString?.() ?? entry.attribute;
+              const keep = attrId !== id;
+              if (!keep) changed = true;
+              return keep;
             }),
           })),
         }));
 
         if (changed) {
-          await property.save({ session });
+          // Directly update the mappings field to avoid Mongoose validation on the whole document
+          await CategoryProperty.findByIdAndUpdate(
+            property._id,
+            { $set: { mappings: newMappings } },
+            { session },
+          );
         }
       }
 
-      await Attribute.findByIdAndDelete(id).session(session);
+      // 3. Delete the attribute itself
+      const deleted = await Attribute.findByIdAndDelete(id).session(session);
+      if (!deleted) {
+        throw new Error("Attribute not found");
+      }
     });
+
     revalidatePath("/admin/attributes");
     return { success: true };
   } catch (error) {
     console.error("Error in deleteAttribute:", error);
-    throw new Error("Failed to delete attribute");
+    throw new Error("Failed to delete attribute: " + (error as Error).message);
   } finally {
     await session.endSession();
   }

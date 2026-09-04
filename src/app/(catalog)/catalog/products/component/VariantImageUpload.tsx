@@ -17,26 +17,19 @@ interface VariantImageUploaderProps {
 
 const VariantImageUploader: React.FC<VariantImageUploaderProps> = React.memo(
   ({ index, fieldCode, productId, initialFiles = [], handleVariantChange }) => {
-    // Build a subfolder: variants/variant-{index}/{fieldCode}
+    const safeInitialFiles = Array.isArray(initialFiles) ? initialFiles : [];
+
     const subfolder = `variants/variant-${index}/${fieldCode}`;
-
     const { files, loading, addFiles, removeFile, progressByName } =
-      useFileUploader(productId, initialFiles, subfolder);
+      useFileUploader(productId, safeInitialFiles, subfolder);
 
-    // Whenever files change, update the variant's field.
-    // For mainImage we store a single string path, not an array.
+    // Always store the full array of image URLs for the variant field.
     useEffect(() => {
-      const nextValue =
-        fieldCode.toLowerCase().includes("image") &&
-        !fieldCode.toLowerCase().includes("images")
-          ? files[0] || ""
-          : files;
-      handleVariantChange(index, fieldCode, nextValue);
+      handleVariantChange(index, fieldCode, files);
     }, [files, index, fieldCode, handleVariantChange]);
 
-    // Wrap removeFile to match onRemove signature
-    const handleRemove = async (indexToRemove: number) => {
-      await removeFile(indexToRemove);
+    const handleRemove = async (indexToRemove: number, fileUrl: string) => {
+      await removeFile(indexToRemove, fileUrl);
     };
 
     return (

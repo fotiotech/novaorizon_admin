@@ -7,7 +7,7 @@ import Image from "next/image";
 type FilesUploaderProps = {
   files: string[];
   addFiles: (newFiles: File[]) => void;
-  onRemove: (index: number, fileUrl: string) => Promise<any>; // 👈 returns any, not void
+  onRemove: (index: number, fileUrl: string) => Promise<any>;
   loading?: boolean;
   progressByName?: Record<string, number>;
 };
@@ -20,6 +20,9 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   progressByName = {},
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // ✅ Guard: ensure files is always an array
+  const fileArray = Array.isArray(files) ? files : [];
 
   const onDrop = (acceptedFiles: File[]) => {
     addFiles(acceptedFiles);
@@ -38,13 +41,13 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     if (containerRef.current) {
       containerRef.current.scrollLeft = 0;
     }
-  }, [files]);
+  }, [fileArray]);
 
   const handleRemove = async (e: React.MouseEvent, index: number) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const fileUrl = files[index];
+    const fileUrl = fileArray[index];
     if (!fileUrl) return;
 
     const fileName = fileUrl.split("/").pop() || "";
@@ -60,7 +63,6 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
 
     try {
       await onRemove(index, fileUrl);
-      // Parent updates its state, so we don't modify files here.
     } catch (error) {
       console.error("Remove failed:", error);
       alert((error as Error).message || "Failed to remove image");
@@ -77,7 +79,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
           scrollSnapType: "x mandatory",
         }}
       >
-        {files?.map((fileUrl, index) => {
+        {fileArray.map((fileUrl, index) => {
           const fileName = fileUrl.split("/").pop() || "";
           const uploadProgress = progressByName[fileName];
           const isUploading =

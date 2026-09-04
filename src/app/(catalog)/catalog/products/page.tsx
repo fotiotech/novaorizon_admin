@@ -25,7 +25,6 @@ interface Product {
   lowStockThreshold: number;
   listPrice: number;
   price: number;
-  mainImage: string;
   images: string[];
   description: string;
   shortDescription: string;
@@ -418,9 +417,9 @@ export default function ProductsPage() {
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
                             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
-                              {product.mainImage ? (
+                              {product.images?.[0] ? (
                                 <img
-                                  src={product.mainImage}
+                                  src={product.images[0]}
                                   alt={product.name}
                                   className="h-full w-full object-cover"
                                 />

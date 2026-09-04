@@ -120,23 +120,6 @@ export async function getCategories() {
   return categories;
 }
 
-// ---------- Helper: Compute full slug for a category (recursive) ----------
-async function getFullSlugForCategory(categoryId: string): Promise<string> {
-  const category =
-    await Category.findById(categoryId).select("slug parentId name");
-  if (!category) return "";
-
-  const canonicalSlug = category.slug || category.url_slug;
-  if (canonicalSlug) return canonicalSlug;
-
-  if (!category.parentId) {
-    return generateSlug(category.name);
-  }
-
-  const parentSlug = await getFullSlugForCategory(category.parentId.toString());
-  return parentSlug + ">" + generateSlug(category.name);
-}
-
 // ---------- Category Property CRUD ----------
 export async function getCategoryProperty(id?: string): Promise<any> {
   await connection();
@@ -512,7 +495,6 @@ export async function createCategory(
   formData: {
     _id?: string;
     name?: string;
-    parent_id?: string;
     parentId?: string;
     description?: string;
     imageUrl?: string[];
@@ -524,7 +506,6 @@ export async function createCategory(
   try {
     const {
       name,
-      parent_id,
       parentId,
       description,
       imageUrl,
@@ -533,7 +514,7 @@ export async function createCategory(
     } = formData;
     await connection();
 
-    const resolvedParentId = parentId || parent_id || null;
+    const resolvedParentId = parentId || null;
     if (!name || !name.trim()) {
       return { error: "Category name is required." };
     }
@@ -572,7 +553,6 @@ export async function createCategory(
       const updateData: any = {
         name,
         parentId: resolvedParentId,
-        parent_id: resolvedParentId,
         slug: slugValue,
         url_slug: slugValue,
         description,
@@ -601,7 +581,6 @@ export async function createCategory(
         url_slug: slugValue,
         name,
         parentId: resolvedParentId,
-        parent_id: resolvedParentId,
         description,
         imageUrl: imageUrl || [],
         inheritProperty: inheritProperty ?? false,
@@ -632,7 +611,7 @@ export async function createCategory(
       }
 
       const baseCode = generatePropertyCode(name || "");
-      const propertyName = `${name || "Category"} (Inherited)`;
+      const propertyName = `${name || "Category"}`;
       const propertyDescription = `Auto-generated from ancestors`;
 
       let property = await CategoryProperty.findOne({ code: baseCode });

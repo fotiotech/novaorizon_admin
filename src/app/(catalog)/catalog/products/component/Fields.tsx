@@ -7,7 +7,7 @@ import { getBrands } from "@/app/actions/brand";
 import { getCarriers } from "@/app/actions/carrier";
 import { Brand } from "@/constant/types";
 import RichTextEditorWrapper from "./RichTextEditorWrapper";
-import useFileUploader from "@/hooks/useFileUploader";
+import { useFileUploader } from "@/hooks/useFileUploader"; // ✅ named import
 
 interface Carrier {
   _id: string;
@@ -32,39 +32,7 @@ const normalizeCode = (code?: string): string => {
   return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
 };
 
-// ----- Wrapper for main_image (single file) -----
-const MainImageUploaderWrapper: React.FC<{
-  productId: string;
-  field: string | null;
-  code: string;
-  handleAttributeChange: (code: string, value: any) => void;
-}> = memo(({ productId, field, code, handleAttributeChange }) => {
-  const initialFiles = field ? [field] : [];
-  const { files, addFiles, removeFile, loading, progressByName } =
-    useFileUploader(productId, initialFiles, "main");
-
-  useEffect(() => {
-    const currentValue = field || null;
-    const nextValue = files.length > 0 ? files[0] : null;
-
-    if (nextValue !== currentValue) {
-      handleAttributeChange(code, nextValue);
-    }
-  }, [files, field, handleAttributeChange, code]);
-
-  return (
-    <FilesUploader
-      files={files}
-      addFiles={addFiles}
-      onRemove={removeFile}
-      loading={loading}
-      progressByName={progressByName}
-    />
-  );
-});
-MainImageUploaderWrapper.displayName = "MainImageUploaderWrapper";
-
-// ----- Wrapper for gallery (multiple files) -----
+// ----- Wrapper for gallery (multiple files) ONLY -----
 const GalleryUploaderWrapper: React.FC<{
   productId: string;
   field: string[];
@@ -73,7 +41,7 @@ const GalleryUploaderWrapper: React.FC<{
 }> = memo(({ productId, field, code, handleAttributeChange }) => {
   const initialFiles = Array.isArray(field) ? field : [];
   const { files, addFiles, removeFile, loading, progressByName } =
-    useFileUploader(productId, initialFiles, "gallery");
+    useFileUploader(productId, initialFiles, "images");
 
   useEffect(() => {
     const currentValue = Array.isArray(field) ? field : [];
@@ -101,7 +69,6 @@ GalleryUploaderWrapper.displayName = "GalleryUploaderWrapper";
 
 // ----- Main Fields Component -----
 
-// Add React.memo at the end
 const Fields: React.FC<FieldProps> = React.memo(
   ({
     type,
@@ -155,6 +122,7 @@ const Fields: React.FC<FieldProps> = React.memo(
     }, [code]);
 
     const customSelectStyles = {
+      // ... (unchanged, same as before)
       control: (provided: any, state: any) => ({
         ...provided,
         backgroundColor: "transparent",
@@ -209,19 +177,8 @@ const Fields: React.FC<FieldProps> = React.memo(
       const normalizedCode = normalizeCode(code);
       switch (type) {
         case "file":
-          if (normalizedCode === "mainImage") {
-            return (
-              <MainImageUploaderWrapper
-                productId={productId || ""}
-                field={field}
-                code={code}
-                handleAttributeChange={handleAttributeChange}
-              />
-            );
-          } else if (
-            normalizedCode === "images" ||
-            normalizedCode === "gallery"
-          ) {
+          // Only handle images (gallery) – mainImage is removed
+          if (normalizedCode === "images") {
             return (
               <GalleryUploaderWrapper
                 productId={productId || ""}

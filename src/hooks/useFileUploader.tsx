@@ -13,25 +13,28 @@ export const useFileUploader = (
   initialFiles: string[] = [],
   subfolder?: string,
 ) => {
-  const [files, setFiles] = useState<string[]>(initialFiles);
+  // ✅ Guard: ensure initialFiles is always an array
+  const safeInitialFiles = Array.isArray(initialFiles) ? initialFiles : [];
+
+  const [files, setFiles] = useState<string[]>(safeInitialFiles);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [progressByName, setProgressByName] = useState<Record<string, number>>(
     {},
   );
   const mountedRef = useRef(true);
-  const prevInitialFilesRef = useRef<string[]>(initialFiles);
+  const prevInitialFilesRef = useRef<string[]>(safeInitialFiles);
 
-  // ----- NEW: Sync external initialFiles changes -----
+  // ----- Sync external initialFiles changes (with guard) -----
   useEffect(() => {
+    const safeFiles = Array.isArray(initialFiles) ? initialFiles : [];
     const prev = prevInitialFilesRef.current;
-    // Compare arrays (shallow comparison is enough since URLs are strings)
     if (
-      initialFiles.length !== prev.length ||
-      initialFiles.some((url, i) => url !== prev[i])
+      safeFiles.length !== prev.length ||
+      safeFiles.some((url, i) => url !== prev[i])
     ) {
-      setFiles(initialFiles);
-      prevInitialFilesRef.current = initialFiles;
+      setFiles(safeFiles);
+      prevInitialFilesRef.current = safeFiles;
     }
   }, [initialFiles]);
 
@@ -184,14 +187,21 @@ export const useFileUploader = (
     [files, uploadFiles],
   );
 
+  // ✅ RESTORED: removeFile accepts (index, fileUrl) and extracts file key from URL
   const removeFile = useCallback(
-    async (index: number) => {
+    async (index: number, fileUrl: string) => {
       if (index < 0 || index >= files.length) {
         return { success: false, message: "Index out of bounds" };
       }
-      const fileUrl = files[index];
+      // Use the provided fileUrl, but fallback to files[index] if needed
+      const url = fileUrl || files[index];
       try {
-        await deleteS3Object(fileUrl);
+        // Extract file key from the full URL
+        const urlObj = new URL(url);
+        const fileKey = urlObj.pathname.startsWith("/")
+          ? urlObj.pathname.slice(1)
+          : urlObj.pathname;
+        await deleteS3Object(fileKey);
         setFiles((prev) => prev.filter((_, i) => i !== index));
         return { success: true };
       } catch (error) {
@@ -239,7 +249,7 @@ export const useFileUploader = (
     setFiles,
     listFiles,
     updateFile,
-    removeFile,
+    removeFile, // ✅ now expects (index, fileUrl)
     removeMultipleFiles,
     clearFiles,
   };

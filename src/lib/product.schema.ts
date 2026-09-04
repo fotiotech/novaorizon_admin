@@ -1,24 +1,24 @@
 import { z } from "zod";
 
 // ============================================================================
-// SUB-SCHEMAS FOR PRODUCT VALIDATION
+// SUB-SCHEMAS
 // ============================================================================
 
-// ProductCode sub-schema (single object, not array)
-export const ProductCodeSchema = z.object({
+// ProductCode – single object
+const ProductCodeSchema = z.object({
   type: z.enum(["EAN", "UPC", "ISBN", "QR", "MODEL"]),
   value: z.string().trim().min(1, "Product code value is required"),
 });
 
-// Key-Value pair with optional unit
-export const KeyValueSchema = z.object({
+// Key-Value pair
+const KeyValueSchema = z.object({
   k: z.string().trim().min(1, "Key is required"),
-  v: z.any(), // Can be string, number, boolean, etc.
+  v: z.any(),
   unit: z.string().optional(),
 });
 
 // Recursive specification group
-export const SpecificationGroupSchema: z.ZodType<any> = z.lazy(() =>
+const SpecificationGroupSchema: z.ZodType<any> = z.lazy(() =>
   z.object({
     name: z.string().trim().min(1, "Group name is required"),
     attributes: z.array(KeyValueSchema).default([]),
@@ -26,21 +26,17 @@ export const SpecificationGroupSchema: z.ZodType<any> = z.lazy(() =>
   }),
 );
 
-// Variant sub-schema
-export const VariantSchema = z.object({
+// Variant
+const VariantSchema = z.object({
   attributes: z.array(KeyValueSchema).default([]),
   sku: z.string().trim().min(1, "Variant SKU is required"),
-  price: z.number().min(0, "Variant price cannot be negative").default(0),
-  quantity: z.number().min(0, "Variant quantity cannot be negative").default(0),
-  mainImage: z.string().optional(),
+  price: z.number().min(0).default(0),
+  quantity: z.number().min(0).default(0),
   images: z.array(z.string()).default([]),
 });
 
-// ============================================================================
-// RELATED PRODUCTS
-// ============================================================================
-
-export const RelatedProductEntrySchema = z
+// Related product entry
+const RelatedProductEntrySchema = z
   .object({
     product: z.string().optional(),
     id: z.string().optional(),
@@ -50,99 +46,68 @@ export const RelatedProductEntrySchema = z
     message: "Either product or id must be provided",
   });
 
+// productCode may be object, array of objects, null, or undefined – transform array to first element
+const ProductCodeOrArraySchema = z
+  .union([ProductCodeSchema, z.array(ProductCodeSchema), z.null()])
+  .transform((val) => {
+    if (Array.isArray(val)) {
+      return val.length > 0 ? val[0] : null;
+    }
+    return val;
+  })
+  .nullable()
+  .optional();
+
 // ============================================================================
-// MAIN PRODUCT SCHEMAS
+// UNIFIED SCHEMA (for createOrUpdateProduct)
 // ============================================================================
 
-// Schema for creating a new product
-export const CreateProductSchema = z
+export const CreateOrUpdateProductSchema = z
   .object({
-    categoryId: z.string().min(1, "Category is required"),
-    brand: z.string().min(1, "Brand is required"),
-    name: z.string().trim().min(1, "Product name is required"),
-    sku: z.string().trim().min(1, "SKU is required"),
+    // Optional _id for updates
+    _id: z.string().optional(),
+
+    // Core fields (all optional – partial for updates, but can be required for create)
+    categoryId: z.string().min(1, "Category is required").optional(),
+    brand: z.string().min(1, "Brand is required").optional(),
+    name: z.string().trim().min(1, "Product name is required").optional(),
+    sku: z.string().trim().min(1, "SKU is required").optional(),
     description: z.string().optional(),
     shortDescription: z.string().optional(),
-    quantity: z.number().min(0).default(0),
-    lowStockThreshold: z.number().min(0).default(5),
-    listPrice: z.number().min(0).default(0),
-    price: z.number().min(0).default(0),
-    mainImage: z.string().optional(),
-    images: z.array(z.string()).default([]),
-    hasVariants: z.boolean().default(false),
-    variantThemes: z.array(z.string()).default([]),
-    variants: z.array(VariantSchema).default([]),
-    keyFeatures: z.array(KeyValueSchema).default([]),
-    specifications: z.array(SpecificationGroupSchema).default([]),
+    quantity: z.number().min(0).default(0).optional(),
+    lowStockThreshold: z.number().min(0).default(5).optional(),
+    listPrice: z.number().min(0).default(0).optional(),
+    price: z.number().min(0).default(0).optional(),
+    images: z.array(z.string()).default([]).optional(),
+    hasVariants: z.boolean().default(false).optional(),
+    variantThemes: z.array(z.string()).default([]).optional(),
+    variants: z.array(VariantSchema).default([]).optional(),
+    keyFeatures: z.array(KeyValueSchema).default([]).optional(),
+    specifications: z.array(SpecificationGroupSchema).default([]).optional(),
     carrier: z.string().optional(),
-    relatedProducts: z.array(RelatedProductEntrySchema).default([]),
-    tags: z.array(z.string()).default([]),
-    status: z.enum(["draft", "active", "inactive"]).default("draft"),
-    // productCode is now a single object (or null)
-    productCode: ProductCodeSchema.nullable().optional(),
+    relatedProducts: z.array(RelatedProductEntrySchema).default([]).optional(),
+    tags: z.array(z.string()).default([]).optional(),
+    status: z.enum(["draft", "active", "inactive"]).default("draft").optional(),
+
+    // productCode – can be object, array, null, undefined
+    productCode: ProductCodeOrArraySchema,
+
+    // Allow dynamic category attributes (passthrough)
   })
-  .passthrough(); // allows dynamic category attributes and temporary fields
-
-// Schema for updating a product (all fields optional except ID)
-export const UpdateProductSchema = CreateProductSchema.partial().extend({
-  _id: z.string().optional(),
-  categoryId: z.string().optional(),
-  brand: z.string().optional(),
-});
-
-// Schema for create or update (used in createOrUpdateProduct)
-export const CreateOrUpdateProductSchema = CreateProductSchema.partial().extend(
-  {
-    _id: z.string().optional(),
-    createdAt: z.any().optional(),
-    updatedAt: z.any().optional(),
-    __v: z.any().optional(),
-  },
-);
+  .passthrough();
 
 // ============================================================================
 // VALIDATION UTILITIES
 // ============================================================================
 
 /**
- * Validates product data against the create schema
+ * Safe validation for product create or update
  * @param data - Product data to validate
- * @returns Validated data or throws ZodError
- */
-export function validateProductCreate(data: unknown) {
-  return CreateProductSchema.parse(data);
-}
-
-/**
- * Validates product data against the update schema
- * @param data - Product data to validate
- * @returns Validated data or throws ZodError
- */
-export function validateProductUpdate(data: unknown) {
-  return UpdateProductSchema.parse(data);
-}
-
-/**
- * Validates product data against the create or update schema
- * @param data - Product data to validate
- * @returns Validated data or throws ZodError
- */
-export function validateProductCreateOrUpdate(data: unknown) {
-  return CreateOrUpdateProductSchema.parse(data);
-}
-
-/**
- * Safe validation that returns a result object instead of throwing
- * @param data - Product data to validate
- * @param schema - Zod schema to validate against
  * @returns { success: boolean; data?: T; error?: string }
  */
-export function safeValidate<T>(
-  data: unknown,
-  schema: z.ZodSchema<T>,
-): { success: boolean; data?: T; error?: string } {
+export function safeValidateProductCreateOrUpdate(data: unknown) {
   try {
-    const validatedData = schema.parse(data);
+    const validatedData = CreateOrUpdateProductSchema.parse(data);
     return { success: true, data: validatedData };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -156,25 +121,4 @@ export function safeValidate<T>(
       error: error instanceof Error ? error.message : "Validation failed",
     };
   }
-}
-
-/**
- * Safe validation for product creation
- */
-export function safeValidateProductCreate(data: unknown) {
-  return safeValidate(data, CreateProductSchema);
-}
-
-/**
- * Safe validation for product update
- */
-export function safeValidateProductUpdate(data: unknown) {
-  return safeValidate(data, UpdateProductSchema);
-}
-
-/**
- * Safe validation for product create or update
- */
-export function safeValidateProductCreateOrUpdate(data: unknown) {
-  return safeValidate(data, CreateOrUpdateProductSchema);
 }

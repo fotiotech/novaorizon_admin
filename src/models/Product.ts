@@ -137,7 +137,6 @@ const ProductSchema = new Schema<IProduct>(
     lowStockThreshold: { type: Number, default: 5, min: 0 },
     listPrice: { type: Number, default: 0, min: 0 },
     price: { type: Number, default: 0, min: 0 },
-    mainImage: { type: String, default: "" },
     images: { type: [String], default: [] },
     description: { type: String, default: "" },
     shortDescription: { type: String, default: "" },
