@@ -208,7 +208,8 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           transform transition-transform duration-300 ease-in-out
           ${shouldShow ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
-          w-3/4 lg:w-72 h-full overflow-y-auto
+          w-3/5
+           lg:w-52 h-full overflow-y-auto
           bg-background/95 text-foreground border-r border-border shadow-[0_18px_45px_rgba(15,23,42,0.12)]
           flex flex-col justify-between backdrop-blur-md
         `}
