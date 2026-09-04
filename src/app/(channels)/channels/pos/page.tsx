@@ -1,7 +1,7 @@
 // app/(pos)/page.tsx
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { usePOSStore } from "@/app/store/posStore";
 import { useSession } from "next-auth/react";
 import { v4 as uuidv4 } from "uuid";
@@ -9,20 +9,24 @@ import { findProducts } from "@/app/actions/products";
 import { completePOSOrder } from "@/app/actions/order";
 import Image from "next/image";
 
+// Updated Product interface to match the new schema
 interface Product {
   _id: string;
-  title?: string;
-  name?: string;
-  list_price?: number;
-  listPrice?: number;
-  main_image?: string;
-  mainImage?: string;
+  name: string; // was 'title'
+  sku: string;
   slug: string;
-  category_id?: string | { _id: string; name: string };
-  categoryId?: string | { _id: string; name: string };
-  brand?: string | { _id: string; name: string };
+  categoryId: string | { _id: string; name: string };
+  brand: string | { _id: string; name: string };
   quantity: number;
   lowStockThreshold: number;
+  listPrice: number; // was 'list_price'
+  price: number; // sale price (optional)
+  mainImage: string; // was 'main_image'
+  images: string[];
+  description: string;
+  shortDescription: string;
+  status: "draft" | "active" | "inactive";
+  // Additional fields may be needed for variants, but not used here
 }
 
 export default function Pos() {
@@ -46,7 +50,6 @@ export default function Pos() {
     updateItem,
     removeItem,
     clear,
-    applyDiscount,
   } = usePOSStore();
 
   // Initialize cart session
@@ -70,8 +73,7 @@ export default function Pos() {
       setLoading(true);
       setError(null);
       try {
-        const result = await findProducts(); // no id => returns array
-        console.log("Fetched products:", result);
+        const result = await findProducts(); // returns array of products with new schema
         if (Array.isArray(result)) {
           setProducts(result);
         } else {
@@ -86,9 +88,9 @@ export default function Pos() {
     fetchProducts();
   }, []);
 
-  // Filter products by search term (name or barcode)
+  // Filter products by search term (searches on 'name')
   const filteredProducts = products.filter((p) =>
-    p.title?.toLowerCase().includes(searchTerm.toLowerCase()),
+    p.name?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const handleAddToCart = async (productId: string) => {
@@ -180,14 +182,10 @@ export default function Pos() {
               className="flex flex-col items-center rounded-xl border border-border bg-card p-3 shadow-sm transition hover:shadow-md"
             >
               <div className="relative h-32 w-full overflow-hidden rounded-lg bg-muted">
-                {(product.mainImage ?? product.main_image) ? (
+                {product.mainImage ? (
                   <Image
-                    src={
-                      product.mainImage ??
-                      product.main_image ??
-                      "/placeholder.png"
-                    }
-                    alt={product.name || product.title || "Product image"}
+                    src={product.mainImage}
+                    alt={product.name || "Product image"}
                     fill
                     className="object-contain"
                   />
@@ -198,12 +196,10 @@ export default function Pos() {
                 )}
               </div>
               <h3 className="mt-2 text-center text-sm font-semibold line-clamp-2">
-                {product.title}
+                {product.name}
               </h3>
               <p className="font-bold text-primary">
-                cfa
-                {(product.listPrice ?? product.list_price ?? 0)?.toFixed(2) ||
-                  "0.00"}
+                cfa {product.listPrice?.toFixed(2) || "0.00"}
               </p>
               <button
                 onClick={() => handleAddToCart(product._id)}
