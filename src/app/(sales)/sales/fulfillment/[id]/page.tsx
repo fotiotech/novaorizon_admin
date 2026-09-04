@@ -9,7 +9,6 @@ import { findOrders } from "@/app/actions/order";
 import { OrderStatusUpdater } from "@/app/(sales)/components/OrderStatusUpdate";
 import SearchFilter from "@/app/(sales)/components/SearchFilter";
 
-
 interface FilterOptions {
   search: string;
   orderStatus: string;
@@ -104,7 +103,8 @@ export default function CarrierDetailPage() {
 
   // Status badge helper
   const getStatusBadge = (status: string) => {
-    const base = "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
+    const base =
+      "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
     switch (status?.toLowerCase()) {
       case "completed":
         return `${base} bg-green/20 text-green-700 dark:text-green-400`;
@@ -121,7 +121,8 @@ export default function CarrierDetailPage() {
   };
 
   const getPaymentBadge = (status: string) => {
-    const base = "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
+    const base =
+      "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
     switch (status?.toLowerCase()) {
       case "paid":
         return `${base} bg-green/20 text-green-700 dark:text-green-400`;
@@ -161,7 +162,10 @@ export default function CarrierDetailPage() {
     <div className="space-y-6">
       {/* Header with back button */}
       <div className="flex items-center gap-4">
-        <Link href="/carrier" className="text-primary hover:text-primary/80">
+        <Link
+          href="/sales/fulfillment"
+          className="text-primary hover:text-primary/80"
+        >
           ← Back to Carriers
         </Link>
         <h1 className="text-3xl font-bold text-foreground">{carrier.name}</h1>
@@ -183,7 +187,8 @@ export default function CarrierDetailPage() {
           <ul className="list-disc ml-5 mt-1">
             {carrier.regionsServed.map((r: any) => (
               <li key={r._id}>
-                {r.region} – base {r.basePrice}, delivery {r.averageDeliveryTime}
+                {r.region} – base {r.basePrice}, delivery{" "}
+                {r.averageDeliveryTime}
               </li>
             ))}
           </ul>
@@ -191,7 +196,10 @@ export default function CarrierDetailPage() {
       </div>
 
       {/* Search & Filter */}
-      <SearchFilter onFilterChange={handleFilterChange} initialFilters={filters} />
+      <SearchFilter
+        onFilterChange={handleFilterChange}
+        initialFilters={filters}
+      />
 
       {/* Orders Table */}
       <div className="bg-card p-6 rounded-lg shadow-md border border-border">
@@ -199,7 +207,9 @@ export default function CarrierDetailPage() {
           <h2 className="text-xl font-semibold text-foreground">
             Orders ({total})
           </h2>
-          {loading && <span className="text-sm text-muted-foreground">Loading...</span>}
+          {loading && (
+            <span className="text-sm text-muted-foreground">Loading...</span>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -232,7 +242,10 @@ export default function CarrierDetailPage() {
             <tbody className="bg-card divide-y divide-border">
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-muted-foreground">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-4 text-center text-muted-foreground"
+                  >
                     No orders found for this carrier.
                   </td>
                 </tr>
@@ -245,7 +258,9 @@ export default function CarrierDetailPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-foreground">
                       {order.firstName} {order.lastName}
                       <br />
-                      <span className="text-xs text-muted-foreground">{order.email}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {order.email}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-foreground">
                       CFA {order.total?.toFixed(2) || "0.00"}

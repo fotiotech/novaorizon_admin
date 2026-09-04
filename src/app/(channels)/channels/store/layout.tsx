@@ -5,13 +5,12 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 
 const navItems = [
-  { name: "App", href: "/content-management/app" },
-  { name: "Pages", href: "/content-management/pages" },
-  { name: "Posts", href: "/content-management/posts" },
-  { name: "Media", href: "/content-management/media" },
-  { name: "Blog", href: "/content-management/blog" },
-  { name: "Tags", href: "/content-management/tags" },
-  { name: "FAQs", href: "/content-management/faqs" },
+  { name: "Pages", href: "/channels/store/pages" },
+  { name: "Posts", href: "/channels/store/posts" },
+  { name: "Media", href: "/channels/store/media" },
+  { name: "Blog", href: "/channels/store/blog" },
+  { name: "Tags", href: "/channels/store/tags" },
+  { name: "FAQs", href: "/channels/store/faqs" },
 ];
 
 function Sidebar({

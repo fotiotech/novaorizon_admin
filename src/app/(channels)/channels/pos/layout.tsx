@@ -4,11 +4,11 @@ import { ReactNode } from "react";
 import SectionLayout from "@/components/SectionLayout";
 
 const posLinks = [
-  { name: "Dashboard", href: "/pos" },
+  { name: "Dashboard", href: "/channels/pos" },
   { name: "Sales", href: "/sales" },
   { name: "Products", href: "/catalog/products" },
   { name: "Customers", href: "/customers/customers" },
-  { name: "Reports", href: "/pos/reports" },
+  { name: "Reports", href: "/channels/pos/reports" },
 ];
 
 export default function PosLayout({ children }: { children: ReactNode }) {

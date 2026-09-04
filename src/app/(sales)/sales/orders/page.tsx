@@ -1,14 +1,36 @@
 // app/sales/orders/page.tsx
 "use client";
 
-import { deleteOrder, findOrders } from "@/app/actions/order";
-import { Prices } from "@/components/Prices";
+import {
+  deleteOrder,
+  findOrders,
+  updateOrderStatus,
+} from "@/app/actions/order";
 import { Delete } from "@mui/icons-material";
 import Link from "next/link";
 import React, { useEffect, useState, useCallback } from "react";
 import { SkeletonLoader } from "./_component/SkeletonLoader";
-import { OrderStatusUpdater } from "../../components/OrderStatusUpdate";
 import SearchFilter from "../../components/SearchFilter";
+import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import { Modal } from "@/components/ux/Modal";
+
+type OrderStatus =
+  | "pending"
+  | "processing"
+  | "shipped"
+  | "in transit"
+  | "completed"
+  | "return_requested"
+  | "cancelled"
+  | "returned";
+
+type PaymentStatus =
+  | "pending"
+  | "cancelled"
+  | "cod_pending"
+  | "paid"
+  | "failed"
+  | "refunded";
 
 interface FilterOptions {
   search: string;
@@ -25,6 +47,19 @@ const AllOrderPage = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Delete confirmation modal
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteOrderNumber, setDeleteOrderNumber] = useState<string | null>(
+    null,
+  );
+
+  // Status update modal
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [statusUpdateOrder, setStatusUpdateOrder] = useState<any | null>(null);
+  const [selectedNewStatus, setSelectedNewStatus] =
+    useState<OrderStatus>("pending");
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const [filters, setFilters] = useState<FilterOptions>({
     search: "",
@@ -78,20 +113,53 @@ const AllOrderPage = () => {
     setPage(1);
   };
 
-  const handleDelete = async (orderNumber: string) => {
-    if (
-      !window.confirm(`Are you sure you want to delete order #${orderNumber}?`)
-    ) {
-      return;
-    }
-    setDeletingId(orderNumber);
-    const result = await deleteOrder(orderNumber);
+  // Delete handlers
+  const handleDeleteClick = (orderNumber: string) => {
+    setDeleteOrderNumber(orderNumber);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteOrderNumber) return;
+    setDeletingId(deleteOrderNumber);
+    const result = await deleteOrder(deleteOrderNumber);
     if (result) {
       fetchOrders(page, filters);
     } else {
       console.log("Failed to delete order or order not found.");
     }
     setDeletingId(null);
+    setDeleteOrderNumber(null);
+    setIsDeleteModalOpen(false);
+  };
+
+  // Status update handlers
+  const openStatusModal = (order: any) => {
+    setStatusUpdateOrder(order);
+    setSelectedNewStatus((order.orderStatus as OrderStatus) || "pending");
+    setIsStatusModalOpen(true);
+  };
+
+  const handleStatusUpdate = async () => {
+    if (!statusUpdateOrder || !selectedNewStatus) return;
+    setUpdatingStatus(true);
+    try {
+      const result = await updateOrderStatus(statusUpdateOrder.orderNumber, {
+        orderStatus: selectedNewStatus, // now properly typed
+      });
+      if (result.success) {
+        fetchOrders(page, filters);
+        setIsStatusModalOpen(false);
+        setStatusUpdateOrder(null);
+        setSelectedNewStatus("pending");
+      } else {
+        console.error("Failed to update status:", result.error);
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
+    } finally {
+      setUpdatingStatus(false);
+    }
   };
 
   const goToPage = (newPage: number) => {
@@ -100,7 +168,7 @@ const AllOrderPage = () => {
     }
   };
 
-  // Theme-aware badge classes
+  // Badge classes (unchanged)
   const getStatusBadgeClass = (status: string) => {
     const base =
       "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
@@ -148,13 +216,11 @@ const AllOrderPage = () => {
         </Link>
       </div>
 
-      {/* Search & Filter */}
       <SearchFilter
         onFilterChange={handleFilterChange}
         initialFilters={filters}
       />
 
-      {/* Orders Table */}
       <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border mt-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold text-foreground">
@@ -240,11 +306,16 @@ const AllOrderPage = () => {
                       >
                         View
                       </Link>
-                      <OrderStatusUpdater orderNumber={order.orderNumber} />
+                      <button
+                        onClick={() => openStatusModal(order)}
+                        className="text-foreground hover:text-foreground/80 transition-colors text-sm"
+                      >
+                        Update Status
+                      </button>
                       <button
                         title="Delete Order"
                         type="button"
-                        onClick={() => handleDelete(order.orderNumber)}
+                        onClick={() => handleDeleteClick(order.orderNumber)}
                         disabled={deletingId === order.orderNumber}
                         className="text-destructive hover:text-destructive/80 disabled:opacity-50 text-sm"
                       >
@@ -285,6 +356,78 @@ const AllOrderPage = () => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Order"
+        message={`Are you sure you want to delete order #${deleteOrderNumber}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        danger={true}
+      />
+
+      {/* Status Update Modal */}
+      <Modal
+        isOpen={isStatusModalOpen}
+        onClose={() => setIsStatusModalOpen(false)}
+        title="Update Order Status"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Order #{statusUpdateOrder?.orderNumber} — current status:{" "}
+            <span className="font-medium text-foreground">
+              {statusUpdateOrder?.orderStatus || "pending"}
+            </span>
+          </p>
+          <div>
+            <label
+              htmlFor="status-select"
+              className="block text-sm font-medium text-foreground"
+            >
+              New Status
+            </label>
+            <select
+              id="status-select"
+              value={selectedNewStatus}
+              onChange={(e) =>
+                setSelectedNewStatus(e.target.value as OrderStatus)
+              }
+              className="mt-1 block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="shipped">Shipped</option>
+              <option value="in transit">In Transit</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="return_requested">Return Requested</option>
+              <option value="returned">Returned</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition"
+              onClick={() => setIsStatusModalOpen(false)}
+              disabled={updatingStatus}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition disabled:opacity-50"
+              onClick={handleStatusUpdate}
+              disabled={updatingStatus || !selectedNewStatus}
+            >
+              {updatingStatus ? "Updating..." : "Update Status"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

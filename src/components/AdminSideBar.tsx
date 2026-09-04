@@ -91,7 +91,7 @@ export const rawMenuConfig = [
     title: "Sales",
     links: [
       { name: "Orders", href: "/orders", icon: <ShoppingBag /> },
-      { name: "Carriers", href: "/carriers", icon: <LocalShipping /> },
+      { name: "Fulfillment", href: "/fulfillment", icon: <LocalShipping /> },
       { name: "Refunds", href: "/refunds", icon: <Replay /> },
     ],
   },
@@ -126,17 +126,10 @@ export const rawMenuConfig = [
     ],
   },
   {
-    title: "POS",
-    links: [{ name: "Point of sales", href: "/pos", icon: <GetAppRounded /> }],
-  },
-  {
-    title: "Store",
+    title: "Channels",
     links: [
-      { name: "Pages", href: "/pages", icon: <Campaign /> },
-      { name: "Posts", href: "/posts", icon: <Language /> },
-      { name: "Media", href: "/media", icon: <Language /> },
-      { name: "Blog", href: "/blog", icon: <Campaign /> },
-      { name: "FAQs", href: "/faqs", icon: <Assignment /> },
+      { name: "Store", href: "/store", icon: <Campaign /> },
+      { name: "POS", href: "/pos", icon: <GetAppRounded /> },
     ],
   },
 ];

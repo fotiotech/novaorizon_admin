@@ -46,7 +46,7 @@ export default function CarrierForm({
 
   const handleRegionChange = (
     index: number,
-    e: React.ChangeEvent<HTMLInputElement>
+    e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const { name, value } = e.target;
     const updatedRegions = [...formData.regionsServed];
@@ -85,7 +85,7 @@ export default function CarrierForm({
         costWeight: parseFloat(formData.costWeight as any),
       };
       await onSubmit(payload);
-      router.push("/carrier");
+      router.push("/sales/fulfillment");
       router.refresh();
     } catch (error) {
       console.error("Error submitting carrier:", error);

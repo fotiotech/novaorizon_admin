@@ -3,7 +3,7 @@ import SectionLayout from "@/components/SectionLayout";
 
 const salesLinks = [
   { name: "Orders", href: "/sales/orders" },
-  { name: "Carriers", href: "/sales/carriers" },
+  { name: "Fulfillment", href: "/sales/fulfillment" },
   { name: "Refunds", href: "/sales/refunds" },
 ];
 

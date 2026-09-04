@@ -27,7 +27,7 @@ export const createCarrier = async (data: any) => {
     const newCarrier = new Carrier(data);
     await newCarrier.save();
 
-    revalidatePath("/admin/shipping/manage_shipping");
+    revalidatePath("/sales/fulfillment");
   } catch (error) {
     console.error("Error creating carrier:", error);
   }
@@ -120,7 +120,7 @@ export async function updateCarrier(
     }
 
     // Revalidate page cache
-    revalidatePath("/admin/shipping/manage_shipping");
+    revalidatePath("/sales/fulfillment");
   } catch (error) {
     console.error("Error updating carrier:", error);
     throw error;
