@@ -27,11 +27,6 @@ interface FieldProps {
   isRequired?: boolean;
 }
 
-const normalizeCode = (code?: string): string => {
-  if (!code) return "";
-  return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
-};
-
 // ----- Wrapper for gallery (multiple files) ONLY -----
 const GalleryUploaderWrapper: React.FC<{
   productId: string;
@@ -91,13 +86,12 @@ const Fields: React.FC<FieldProps> = React.memo(
 
       const loadOptions = async () => {
         try {
-          const normalizedCode = normalizeCode(code);
-          if (normalizedCode === "brand") {
+          if (code === "brand") {
             const brandsData = await getBrands();
             if (isActive) setBrands(brandsData);
           }
 
-          if (normalizedCode === "carrier") {
+          if (code === "carrier") {
             const carriersData = await getCarriers();
             if (isActive) setCarriers(carriersData);
           }
@@ -109,10 +103,7 @@ const Fields: React.FC<FieldProps> = React.memo(
         }
       };
 
-      if (
-        normalizeCode(code) === "brand" ||
-        normalizeCode(code) === "carrier"
-      ) {
+      if (code === "brand" || code === "carrier") {
         void loadOptions();
       }
 
@@ -174,15 +165,20 @@ const Fields: React.FC<FieldProps> = React.memo(
     };
 
     const renderField = () => {
-      const normalizedCode = normalizeCode(code);
       switch (type) {
         case "file":
           // Only handle images (gallery) – mainImage is removed
-          if (normalizedCode === "images") {
+          if (code === "images") {
+            console.log(
+              "rendering images code",
+              code,
+              "with productId",
+              productId,
+            );
             return (
               <GalleryUploaderWrapper
                 productId={productId || ""}
-                field={field}
+                field={field || []}
                 code={code}
                 handleAttributeChange={handleAttributeChange}
               />
@@ -204,7 +200,7 @@ const Fields: React.FC<FieldProps> = React.memo(
           );
 
         case "textarea":
-          if (normalizedCode === "description") {
+          if (code === "description") {
             return (
               <RichTextEditorWrapper
                 value={field || ""}
@@ -298,8 +294,7 @@ const Fields: React.FC<FieldProps> = React.memo(
         }
 
         case "select": {
-          const normalizedCode = normalizeCode(code);
-          if (normalizedCode === "brand") {
+          if (code === "brand") {
             const brandOptions = brands
               .filter(Boolean)
               .map((brand) => ({
@@ -344,7 +339,7 @@ const Fields: React.FC<FieldProps> = React.memo(
             );
           }
 
-          if (normalizedCode === "carrier") {
+          if (code === "carrier") {
             const carrierOptions = carriers.map((c) => ({
               value: c._id,
               label: c.name,

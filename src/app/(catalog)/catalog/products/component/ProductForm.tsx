@@ -512,6 +512,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
           data.status = "draft";
         }
 
+        if (Array.isArray(data.images)) {
+          data.images = data.images.map((img) =>
+            typeof img === "string" ? img : "",
+          );
+        }
+
         console.log("[ProductForm] Final product data after flattening:", data);
         setProductData(data);
       } catch (err) {
@@ -930,6 +936,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
       </div>
     );
   }
+
+  console.log("[ProductForm] Rendering with productData:", productData);
 
   // ---------- Main render ----------
   return (

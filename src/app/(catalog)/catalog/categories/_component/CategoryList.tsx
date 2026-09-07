@@ -153,9 +153,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
                 <th scope="col" className="px-4 py-3 min-w-[200px]">
                   Category
                 </th>
-                <th scope="col" className="px-4 py-3 text-center w-32">
-                  Subcategories
-                </th>
+
                 <th scope="col" className="px-4 py-3 text-right w-24">
                   Actions
                 </th>
@@ -180,17 +178,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                       style={{ paddingLeft: `${row.level * 1.5 + 1}rem` }}
                     >
                       <div className="flex items-start gap-1">
-                        {hasChildren ? (
-                          <button
-                            onClick={() => toggleExpand(row._id)}
-                            className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition mt-0.5"
-                            aria-label={isExpanded ? "Collapse" : "Expand"}
-                          >
-                            {isExpanded ? "▼" : "▶"}
-                          </button>
-                        ) : (
-                          <span className="w-5 inline-block" />
-                        )}
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-gray-800 dark:text-gray-200">
                             {row.name}
@@ -202,19 +189,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                           )}
                         </div>
                       </div>
-                    </td>
-
-                    {/* Subcategory count */}
-                    <td className="px-4 py-2 text-center">
-                      {hasChildren ? (
-                        <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-600 text-gray-800 dark:text-gray-200">
-                          {row.subcategories.length}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300 dark:text-gray-600">
-                          0
-                        </span>
-                      )}
                     </td>
 
                     {/* Actions */}

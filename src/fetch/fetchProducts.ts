@@ -1,6 +1,6 @@
 // fetch/fetchProducts.ts
 
-import { findProducts, updateProduct } from "@/app/actions/products";
+import { createOrUpdateProduct, findProducts } from "@/app/actions/products";
 import { normalizeProducts } from "@/app/store/slices/normalizedData";
 import { setProducts } from "@/app/store/slices/productSlice";
 import { AppDispatch } from "@/app/store/store";
@@ -79,7 +79,11 @@ export const updateProductStock =
   (id: string, quantity: number, lowStockThreshold: number) =>
   async (dispatch: AppDispatch) => {
     try {
-      const response = await updateProduct(id, { quantity, lowStockThreshold });
+      const response = await createOrUpdateProduct({
+        _id: id,
+        quantity,
+        lowStockThreshold,
+      });
       if (!response.success) {
         throw new Error(response.error || "Failed to update product");
       }
