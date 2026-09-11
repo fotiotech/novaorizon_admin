@@ -1,7 +1,6 @@
 // middleware.ts
 import { auth } from "@/app/auth";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
 export default auth((req: any) => {
   const isLoggedIn = !!req.auth;

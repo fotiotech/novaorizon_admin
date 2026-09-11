@@ -39,14 +39,20 @@ import {
   Payment,
   Language,
   Room,
+  MarkEmailUnread,
 } from "@mui/icons-material";
 import { useUnreadMessages } from "@/app/(customers)/customers/chat/_component/useUnreadMessages";
+import { useNewContactCount } from "@/hooks/useNewContactCount";
 
 export interface MenuLink {
   name: string;
   href: string;
   icon?: React.ReactNode;
   showUnreadCount?: boolean;
+  /** Show badge with count of new contact messages */
+  showContactCount?: boolean;
+  /** Skip the section-slug prefix when building the final href */
+  absolute?: boolean;
 }
 
 export interface MenuSection {
@@ -110,7 +116,7 @@ export const rawMenuConfig = [
     links: [
       { name: "Customers", href: "/customers", icon: <Person2 /> },
       { name: "Segmentation", href: "/segmentation", icon: <Segment /> },
-      { name: "Feedbacks", href: "/feedbacks", icon: <Assignment /> },
+      { name: "Messages", href: "/messages", icon: <Assignment /> },
       { name: "Chat", href: "/chat", icon: <Chat />, showUnreadCount: true },
     ],
   },
@@ -132,12 +138,27 @@ export const rawMenuConfig = [
       { name: "POS", href: "/pos", icon: <GetAppRounded /> },
     ],
   },
+  {
+    title: "Admin",
+    links: [
+      {
+        name: "Contact Messages",
+        href: "/admin/messages",
+        icon: <MarkEmailUnread />,
+        showContactCount: true,
+        absolute: true,
+      },
+    ],
+  },
 ];
 
 // Build the final menu with section‑prefixed hrefs and slugs
 const menuConfig: MenuSection[] = rawMenuConfig.map((section) => {
   const slug = slugify(section.title);
   const links = section.links.map((link) => {
+    // Links flagged as absolute keep their href untouched
+    if ("absolute" in link && link.absolute) return link;
+
     let newHref = link.href;
     const prefix = `/${slug}`;
     if (!newHref.startsWith(prefix)) {
@@ -158,6 +179,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 }) => {
   const pathname = usePathname();
   const unreadCount = useUnreadMessages();
+  const newContactCount = useNewContactCount();
 
   // All sections expanded by default
   const [expandedSections, setExpandedSections] = useState<
@@ -282,9 +304,18 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                               </span>
                               <span className="font-medium">{link.name}</span>
                             </div>
+
+                            {/* Chat unread badge */}
                             {link.showUnreadCount && unreadCount > 0 && (
                               <span className="bg-destructive text-destructive-foreground rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
                                 {unreadCount > 99 ? "99+" : unreadCount}
+                              </span>
+                            )}
+
+                            {/* Contact messages badge */}
+                            {link.showContactCount && newContactCount > 0 && (
+                              <span className="bg-blue-600 text-white rounded-full px-2 py-0.5 text-xs font-medium min-w-5 text-center">
+                                {newContactCount > 99 ? "99+" : newContactCount}
                               </span>
                             )}
                           </Link>
