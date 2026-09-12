@@ -71,7 +71,7 @@ const AdminTopBar = ({
               className="h-auto w-auto"
             />
             <span className="text-sm font-semibold text-foreground">
-              Nova Horizon
+              NovaOrizon
             </span>
           </Link>
         </div>

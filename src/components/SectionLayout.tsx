@@ -14,7 +14,7 @@ export interface SectionLink {
 interface SectionLayoutProps {
   title: string;
   children: ReactNode;
-  links?: SectionLink[]; // optional sub‑navigation links
+  links?: SectionLink[]; // optional sub-navigation links
 }
 
 const SectionLayout: React.FC<SectionLayoutProps> = ({
@@ -26,12 +26,23 @@ const SectionLayout: React.FC<SectionLayoutProps> = ({
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+      <div className="mb-3">
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">
+          {title}
+        </h1>
 
-        {/* Sub‑navigation (tabs) */}
+        {/* Sub-navigation (tabs) — single row, scrolls horizontally on overflow */}
         {links.length > 0 && (
-          <nav className="mt-4 flex flex-wrap gap-1 border-b border-border">
+          <nav
+            className="
+              mt-2 flex flex-nowrap items-stretch gap-1
+              border-b border-border
+              overflow-x-auto overflow-y-hidden
+              scrollbar-thin scrollbar-thumb-border
+              [-ms-overflow-style:none] [scrollbar-width:none]
+              [&::-webkit-scrollbar]:hidden
+            "
+          >
             {links.map((link) => {
               const isActive =
                 pathname === link.href || pathname.startsWith(link.href + "/");
@@ -39,14 +50,16 @@ const SectionLayout: React.FC<SectionLayoutProps> = ({
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                  className={`shrink-0 whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-t-md transition-colors ${
                     isActive
-                      ? "bg-card text-primary border-b-2 border-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      ? "bg-card text-primary border-b-2 border-primary -mb-px"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted border-b-2 border-transparent"
                   }`}
                 >
                   {link.icon && (
-                    <span className="mr-2 inline-block">{link.icon}</span>
+                    <span className="mr-1.5 inline-flex items-center">
+                      {link.icon}
+                    </span>
                   )}
                   {link.name}
                 </Link>

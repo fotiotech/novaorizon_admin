@@ -1,5 +1,5 @@
 // components/VariantImageUploader.tsx
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import FilesUploader from "@/components/FilesUploader";
 
@@ -23,10 +23,19 @@ const VariantImageUploader: React.FC<VariantImageUploaderProps> = React.memo(
     const { files, loading, addFiles, removeFile, progressByName } =
       useFileUploader(productId, safeInitialFiles, subfolder);
 
-    // Always store the full array of image URLs for the variant field.
+    // BUG 5: pin the callback to a ref. The parent recreates
+    // `handleVariantChange` whenever the selected themes change, which used
+    // to make this effect fire on every variant row and clobber uncommitted
+    // edits in other rows. With the ref, the effect only fires when `files`
+    // actually changes.
+    const cbRef = useRef(handleVariantChange);
     useEffect(() => {
-      handleVariantChange(index, fieldCode, files);
-    }, [files, index, fieldCode, handleVariantChange]);
+      cbRef.current = handleVariantChange;
+    }, [handleVariantChange]);
+
+    useEffect(() => {
+      cbRef.current(index, fieldCode, files);
+    }, [files, index, fieldCode]);
 
     const handleRemove = async (indexToRemove: number, fileUrl: string) => {
       await removeFile(indexToRemove, fileUrl);

@@ -105,7 +105,7 @@ export const rawMenuConfig = [
     title: "Catalog",
     links: [
       { name: "Products", href: "/products", icon: <Inventory2 /> },
-      { name: "Categories", href: "/categories", icon: <Category /> },
+      { name: "Category", href: "/categories", icon: <Category /> },
       { name: "Brands", href: "/brands", icon: <Tag /> },
       { name: "Attributes", href: "/attributes", icon: <Assignment /> },
       { name: "Inventory", href: "/inventory", icon: <Inventory /> },
@@ -138,18 +138,6 @@ export const rawMenuConfig = [
       { name: "POS", href: "/pos", icon: <GetAppRounded /> },
     ],
   },
-  {
-    title: "Admin",
-    links: [
-      {
-        name: "Contact Messages",
-        href: "/admin/messages",
-        icon: <MarkEmailUnread />,
-        showContactCount: true,
-        absolute: true,
-      },
-    ],
-  },
 ];
 
 // Build the final menu with section‑prefixed hrefs and slugs
@@ -157,7 +145,7 @@ const menuConfig: MenuSection[] = rawMenuConfig.map((section) => {
   const slug = slugify(section.title);
   const links = section.links.map((link) => {
     // Links flagged as absolute keep their href untouched
-    if ("absolute" in link && link.absolute) return link;
+    // if ("absolute" in link && link.absolute) return link;
 
     let newHref = link.href;
     const prefix = `/${slug}`;
@@ -187,7 +175,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   >(() => {
     const initial: Record<string, boolean> = {};
     menuConfig.forEach((section) => {
-      initial[section.title] = true;
+      initial[section.title] = false;
     });
     return initial;
   });
@@ -224,7 +212,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           ${shouldShow ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
           w-3/5
-           lg:w-52 h-full overflow-y-auto
+           lg:w-56 h-full overflow-y-auto
           bg-background/95 text-foreground border-r border-border shadow-[0_18px_45px_rgba(15,23,42,0.12)]
           flex flex-col justify-between backdrop-blur-md
         `}
@@ -263,12 +251,12 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
               </button>
             )}
           </div>
-          <nav className="p-4 space-y-6 overflow-y-auto">
+          <nav className="p-4  overflow-y-auto">
             {menuConfig.map((section) => {
               const isExpanded = expandedSections[section.title] ?? true;
               return (
-                <div key={section.title} className="mb-6">
-                  <div className="flex items-center justify-between mb-1">
+                <div key={section.title} className="">
+                  <div className="flex items-center justify-between">
                     <Link
                       href={`/${section.slug}`}
                       onClick={handleClose}
@@ -291,7 +279,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                           <Link
                             href={link.href}
                             onClick={handleClose}
-                            className={`flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all duration-200 ${
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl border transition-all duration-200 ${
                               pathname === link.href ||
                               pathname?.startsWith(link.href)
                                 ? "border-primary/20 bg-primary/10 text-primary shadow-sm"
@@ -302,7 +290,9 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                               <span className="text-muted-foreground">
                                 {link.icon}
                               </span>
-                              <span className="font-medium">{link.name}</span>
+                              <span className="font-medium text-sm">
+                                {link.name}
+                              </span>
                             </div>
 
                             {/* Chat unread badge */}

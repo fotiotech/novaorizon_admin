@@ -1,6 +1,10 @@
 // fetch/fetchProducts.ts
 
-import { createOrUpdateProduct, findProducts } from "@/app/actions/products";
+import {
+  createOrUpdateProduct,
+  findProductById,
+  findProducts,
+} from "@/app/actions/products";
 import { normalizeProducts } from "@/app/store/slices/normalizedData";
 import { setProducts } from "@/app/store/slices/productSlice";
 import { AppDispatch } from "@/app/store/store";
@@ -26,7 +30,7 @@ const convertMapToObject = (data: any): any => {
 // Fetch products (single or all)
 export const fetchProducts = (id?: string) => async (dispatch: AppDispatch) => {
   try {
-    const data = id ? await findProducts(id) : await findProducts();
+    const data = id ? await findProductById(id) : await findProducts();
 
     // Check for server error response
     if (

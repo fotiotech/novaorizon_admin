@@ -9,7 +9,7 @@ interface ManageRelatedProductProps {
   id: string;
   product?: any;
   attribute?: any[];
-  onUpdate: (field: string, value: any) => void; // callback to parent
+  onUpdate: (field: string, value: any) => void;
 }
 
 interface RelatedProduct {
@@ -17,16 +17,12 @@ interface RelatedProduct {
   relationshipType: string;
 }
 
-const normalizeCode = (code?: string): string => {
-  if (!code) return "";
-  return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
-};
+const normalizeCode = (code?: string): string =>
+  !code ? "" : code.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
 const readProductValue = (obj: any, ...keys: string[]) => {
   if (!obj) return undefined;
-  for (const key of keys) {
-    if (obj[key] !== undefined) return obj[key];
-  }
+  for (const key of keys) if (obj[key] !== undefined) return obj[key];
   return undefined;
 };
 
@@ -43,7 +39,6 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   const isFirstRender = useRef(true);
   const isInitializing = useRef(true);
 
-  // Find attributes from the group
   const relatedAttr = attribute.find(
     (a) => normalizeCode(a.code) === "relatedProducts",
   );
@@ -51,16 +46,15 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     (a) => normalizeCode(a.code) === "relationType",
   );
 
-  // Fetch products on mount
   useEffect(() => {
     async function fetchProducts() {
-      const res = await findProducts();
-      if (Array.isArray(res)) setProducts(res);
+      // Server-side filtering is handled in products.ts; keep pageSize small.
+      const res = await findProducts({ pageSize: 100 });
+      if (res && Array.isArray(res.products)) setProducts(res.products);
     }
     fetchProducts();
   }, []);
 
-  // Reset local state when product ID changes (new product)
   useEffect(() => {
     setRelatedProducts([]);
     setSearchTerm("");
@@ -68,18 +62,12 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     isFirstRender.current = true;
   }, [id]);
 
-  // Initialize relatedProducts from product data
   useEffect(() => {
     const relatedProductsData = readProductValue(
       product,
       "relatedProducts",
       "related_products",
     );
-    if (!relatedProductsData) {
-      setRelatedProducts([]);
-      isInitializing.current = false;
-      return;
-    }
 
     let initial: RelatedProduct[] = [];
     if (Array.isArray(relatedProductsData)) {
@@ -87,7 +75,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
         id: rp.id,
         relationshipType: rp.relationshipType || rp.relationship_type || "",
       }));
-    } else if (relatedProductsData.ids) {
+    } else if (relatedProductsData?.ids) {
       const defaultType =
         relatedProductsData.relationshipType ||
         relatedProductsData.relationship_type ||
@@ -97,11 +85,20 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
         relationshipType: defaultType,
       }));
     }
-    setRelatedProducts(initial);
+
+    setRelatedProducts((prev) => {
+      const same =
+        prev.length === initial.length &&
+        prev.every(
+          (p, i) =>
+            p.id === initial[i].id &&
+            p.relationshipType === initial[i].relationshipType,
+        );
+      return same ? prev : initial;
+    });
     isInitializing.current = false;
   }, [product]);
 
-  // Sync local changes to parent (skip initial render and initialization)
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -111,14 +108,10 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     onUpdate("relatedProducts", relatedProducts);
   }, [relatedProducts, onUpdate]);
 
-  // Handlers
   const handleProductSelect = (productId: string) => {
-    const existingIndex = relatedProducts.findIndex(
-      (rp) => rp.id === productId,
-    );
-
-    let updated;
-    if (existingIndex >= 0) {
+    const idx = relatedProducts.findIndex((rp) => rp.id === productId);
+    let updated: RelatedProduct[];
+    if (idx >= 0) {
       updated = relatedProducts.filter((rp) => rp.id !== productId);
     } else {
       const defaultType = relationTypeAttr?.options?.[0] || "";
@@ -131,18 +124,17 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   };
 
   const handleRelationshipChange = (productId: string, value: string) => {
-    const updated = relatedProducts.map((rp) =>
-      rp.id === productId ? { ...rp, relationshipType: value } : rp,
+    setRelatedProducts((prev) =>
+      prev.map((rp) =>
+        rp.id === productId ? { ...rp, relationshipType: value } : rp,
+      ),
     );
-    setRelatedProducts(updated);
   };
 
   const handleRemoveProduct = (productId: string) => {
-    const updated = relatedProducts.filter((rp) => rp.id !== productId);
-    setRelatedProducts(updated);
+    setRelatedProducts((prev) => prev.filter((rp) => rp.id !== productId));
   };
 
-  // Filter products by search term
   const filteredProducts = useMemo(() => {
     if (!searchTerm.trim()) return products;
     const term = searchTerm.toLowerCase().trim();
@@ -154,7 +146,6 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     );
   }, [products, searchTerm]);
 
-  // Build options for relation type select
   const relationOptions =
     relationTypeAttr?.options?.map((opt: string) => ({
       value: opt,
@@ -165,13 +156,12 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Header with search and count */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-foreground">
             {relatedAttr.name}
           </span>
-          <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+          <span className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full">
             {relatedProducts.length} selected
           </span>
         </div>
@@ -181,10 +171,10 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
             placeholder="Search products..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-2 pl-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm"
+            className="w-full p-2 pl-8 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground text-sm"
           />
           <svg
-            className="absolute left-2 top-2.5 w-4 h-4 text-gray-400"
+            className="absolute left-2 top-2.5 w-4 h-4 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -199,10 +189,9 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
         </div>
       </div>
 
-      {/* Product list */}
       <div className="h-72 overflow-y-auto space-y-2 pr-1">
         {filteredProducts.length === 0 ? (
-          <p className="text-center text-gray-500 py-4 text-sm">
+          <p className="text-center text-muted-foreground py-4 text-sm">
             {searchTerm
               ? "No products match your search."
               : "No products found."}
@@ -218,11 +207,10 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                 key={item._id}
                 className={`group flex flex-wrap items-center gap-3 p-3 rounded-lg border transition-all duration-200 ${
                   isSelected
-                    ? "border-indigo-400 bg-indigo-50 shadow-sm"
-                    : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                    ? "border-primary/60 bg-primary/10 shadow-sm"
+                    : "border-border hover:border-input hover:shadow-sm bg-card"
                 }`}
               >
-                {/* Clickable area to select/deselect */}
                 <div
                   className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
                   onClick={() => handleProductSelect(item._id)}
@@ -235,23 +223,22 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                       alt={item.name || item.title || "Product"}
                       fill
                       className="object-cover rounded-lg"
-                      sizes="48px" // 👈 add this line
+                      sizes="48px"
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-medium text-gray-800 truncate">
+                    <h3 className="text-sm font-medium text-foreground truncate">
                       {item.name || item.title || "Untitled Product"}
                     </h3>
                     {item.sku && (
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="text-xs text-muted-foreground truncate">
                         SKU: {item.sku}
                       </p>
                     )}
                   </div>
-                  {/* Selected checkmark */}
                   {isSelected && (
                     <svg
-                      className="w-5 h-5 text-indigo-600 flex-shrink-0"
+                      className="w-5 h-5 text-primary flex-shrink-0"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -266,7 +253,6 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                   )}
                 </div>
 
-                {/* Relationship type selector & remove button */}
                 {isSelected && (
                   <div
                     className="flex items-center gap-2 flex-shrink-0"
@@ -294,7 +280,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                     ) : (
                       <input
                         type="text"
-                        className="w-36 p-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        className="w-36 p-1.5 border border-input rounded text-sm bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-ring"
                         value={relationshipType}
                         placeholder="Relation type"
                         onChange={(e) =>
@@ -305,7 +291,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRemoveProduct(item._id)}
-                      className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                      className="p-1 text-muted-foreground hover:text-destructive transition-colors"
                       aria-label="Remove"
                     >
                       <svg

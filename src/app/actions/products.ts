@@ -16,6 +16,24 @@ import { ref, deleteObject } from "firebase/storage";
 import { storage } from "@/utils/firebaseConfig";
 
 // ---------- Types ----------
+export interface ProductListParams {
+  q?: string;
+  categoryId?: string;
+  status?: "draft" | "active" | "inactive" | "";
+  page?: number;
+  pageSize?: number;
+  sort?: "createdAt" | "name" | "price";
+  sortDir?: "asc" | "desc";
+}
+
+export interface ProductListResult {
+  products: any[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 interface ProductResponse {
   success: boolean;
   data?: any;
@@ -26,8 +44,16 @@ interface DeleteProductOptions {
   recreate?: boolean;
 }
 
-// ---------- Helpers ----------
+const UNAUTHORIZED = { success: false as const, error: "Unauthorized" };
+const LIST_UNAUTHORIZED: ProductListResult = {
+  products: [],
+  total: 0,
+  page: 1,
+  pageSize: 10,
+  totalPages: 0,
+};
 
+// ---------- Helpers ----------
 function toObjectId(value: any): mongoose.Types.ObjectId | null {
   if (!value) return null;
   try {
@@ -37,6 +63,10 @@ function toObjectId(value: any): mongoose.Types.ObjectId | null {
   }
 }
 
+function escapeRegex(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function generateSlug(name: string, department?: string | null): string {
   return slugify(`${name}${department ? `-${department}` : ""}`, {
     lower: true,
@@ -44,9 +74,8 @@ function generateSlug(name: string, department?: string | null): string {
 }
 
 function normalizeStatus(status: unknown): "draft" | "active" | "inactive" {
-  const str = String(status ?? "draft").toLowerCase();
-  if (str === "active" || str === "inactive" || str === "draft")
-    return str as any;
+  const s = String(status ?? "draft").toLowerCase();
+  if (s === "active" || s === "inactive" || s === "draft") return s as any;
   return "draft";
 }
 
@@ -62,7 +91,6 @@ function sanitizeProductCode(
   return { type, value };
 }
 
-/** Normalize a key-value collection: ensure it's an array of {k, v, unit?} without _id */
 function normalizeKeyValueCollection(value: any): any[] {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -70,12 +98,9 @@ function normalizeKeyValueCollection(value: any): any[] {
       .map((entry) => {
         if (!entry || typeof entry !== "object") return null;
         const k = entry.k ?? entry.key ?? entry.name ?? "";
-        const normalizedKey = String(k).trim();
-        if (!normalizedKey) return null;
-        const result: any = {
-          k: normalizedKey,
-          v: entry.v ?? entry.value ?? entry.values ?? "",
-        };
+        const key = String(k).trim();
+        if (!key) return null;
+        const result: any = { k: key, v: entry.v ?? entry.value ?? "" };
         if (entry.unit) result.unit = entry.unit;
         return result;
       })
@@ -85,8 +110,7 @@ function normalizeKeyValueCollection(value: any): any[] {
     return Object.entries(value)
       .map(([k, v]) => {
         const key = String(k).trim();
-        if (!key) return null;
-        return { k: key, v: v ?? "" };
+        return key ? { k: key, v: v ?? "" } : null;
       })
       .filter(Boolean);
   }
@@ -95,14 +119,19 @@ function normalizeKeyValueCollection(value: any): any[] {
 
 function sanitizeSpecifications(specs: any[]): any[] {
   if (!Array.isArray(specs)) return [];
-  return specs.map((group) => ({
-    ...group,
-    attributes: normalizeKeyValueCollection(group.attributes || []),
-    groups: group.groups ? sanitizeSpecifications(group.groups) : [],
+  return specs.map((g) => ({
+    ...g,
+    attributes: normalizeKeyValueCollection(g.attributes || []),
+    groups: g.groups ? sanitizeSpecifications(g.groups) : [],
   }));
 }
 
-// ---------- Build structured fields from flat attributes ----------
+function serialize(doc: any): any {
+  if (!doc) return doc;
+  const obj = doc.toObject ? doc.toObject() : doc;
+  return JSON.parse(JSON.stringify(obj));
+}
+
 async function buildStructuredFields(
   flatData: Record<string, any>,
   categoryId: string,
@@ -118,15 +147,11 @@ async function buildStructuredFields(
   };
   const usedKeys = new Set<string>();
 
-  // Helper to collect all attribute codes from a group (including children)
   function collectAttributeCodes(group: any, codes: Set<string>) {
-    group.attributes?.forEach((attr: any) => codes.add(attr.code));
-    group.children?.forEach((child: any) =>
-      collectAttributeCodes(child, codes),
-    );
+    group.attributes?.forEach((a: any) => codes.add(a.code));
+    group.children?.forEach((c: any) => collectAttributeCodes(c, codes));
   }
 
-  // Process each group in each set
   for (const set of attributeSets) {
     for (const group of set.groups || []) {
       const groupCode = group.code.replace(/_([a-z])/g, (_, c) =>
@@ -138,12 +163,10 @@ async function buildStructuredFields(
       if (groupCode === "keyFeatures") {
         const features: any[] = [];
         for (const code of allAttrCodes) {
-          const camelCode = code.replace(/_([a-z])/g, (_, c) =>
-            c.toUpperCase(),
-          );
-          const value = flatData[camelCode];
+          const camel = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+          const value = flatData[camel];
           if (value !== undefined && value !== null && value !== "") {
-            let unit: string | undefined = undefined;
+            let unit: string | undefined;
             let finalValue = value;
             if (
               value &&
@@ -155,31 +178,28 @@ async function buildStructuredFields(
               unit = value.unit;
             }
             features.push({
-              k: camelCode,
+              k: camel,
               v: finalValue,
               ...(unit ? { unit } : {}),
             });
-            usedKeys.add(camelCode);
+            usedKeys.add(camel);
           }
         }
         if (features.length) {
           result.keyFeatures = normalizeKeyValueCollection(features);
         }
       } else if (groupCode === "specifications") {
-        // Build a hierarchical structure from group and its children
         function buildSpecGroup(g: any): any {
           const groupName = g.name || g.code;
           const groupAttrs: any[] = [];
           const childGroups: any[] = [];
-
           g.attributes?.forEach((attr: any) => {
-            const camelCode = attr.code.replace(
-              /_([a-z])/g,
-              (_: any, c: string) => c.toUpperCase(),
+            const camel = attr.code.replace(/_([a-z])/g, (_: any, c: string) =>
+              c.toUpperCase(),
             );
-            const value = flatData[camelCode];
+            const value = flatData[camel];
             if (value !== undefined && value !== null && value !== "") {
-              let unit: string | undefined = undefined;
+              let unit: string | undefined;
               let finalValue = value;
               if (
                 value &&
@@ -191,49 +211,38 @@ async function buildStructuredFields(
                 unit = value.unit;
               }
               groupAttrs.push({
-                k: camelCode,
+                k: camel,
                 v: finalValue,
                 ...(unit ? { unit } : {}),
               });
-              usedKeys.add(camelCode);
+              usedKeys.add(camel);
             }
           });
-
           g.children?.forEach((child: any) => {
-            const childResult = buildSpecGroup(child);
-            if (childResult.attributes.length || childResult.groups.length) {
-              childGroups.push(childResult);
-            }
+            const cr = buildSpecGroup(child);
+            if (cr.attributes.length || cr.groups.length) childGroups.push(cr);
           });
-
           return {
             name: groupName,
             attributes: normalizeKeyValueCollection(groupAttrs),
             groups: childGroups,
           };
         }
-
         const built = buildSpecGroup(group);
         if (built.attributes.length || built.groups.length) {
           result.specifications.push(built);
         }
       }
-      // Other groups are left as flat fields (they are not part of keyFeatures/specifications)
     }
   }
 
-  // Leftover: all flat data except keys that were consumed
   const leftover: Record<string, any> = {};
-  for (const [key, value] of Object.entries(flatData)) {
-    if (!usedKeys.has(key)) {
-      leftover[key] = value;
-    }
+  for (const [k, v] of Object.entries(flatData)) {
+    if (!usedKeys.has(k)) leftover[k] = v;
   }
-
   return { ...result, leftover };
 }
 
-/** Validate that all required category attributes are present */
 async function validateRequiredCategoryAttributes(
   categoryId: string,
   data: Record<string, any>,
@@ -253,8 +262,8 @@ async function validateRequiredCategoryAttributes(
   }
   const missing: string[] = [];
   for (const code of requiredCodes) {
-    const camelCode = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-    const value = data[camelCode];
+    const camel = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    const value = data[camel];
     if (
       value === undefined ||
       value === null ||
@@ -269,68 +278,152 @@ async function validateRequiredCategoryAttributes(
   }
 }
 
-/** Serialize Mongoose document to plain object (convert ObjectId to string, Date to ISO) */
-function serialize(doc: any): any {
-  if (!doc) return doc;
-  const obj = doc.toObject ? doc.toObject() : doc;
-  return JSON.parse(JSON.stringify(obj));
-}
+// ==================================================================
+// SERVER ACTIONS
+// ==================================================================
 
-// ---------- Server Actions ----------
-
-/** Find products – by ID or all (with aggregation-based population) */
-export async function findProducts(id?: string) {
+/** Single product by id (auth required). */
+export async function findProductById(id: string): Promise<any> {
   try {
     await connection();
-    if (id) {
-      const product = await Product.findById(id).lean();
-      if (!product) return { success: false, error: "Product not found" };
-      return serialize(product);
-    }
-
-    // Use aggregation to safely join category and brand without casting errors
-    const products = await Product.aggregate([
-      {
-        $lookup: {
-          from: "categories", // MongoDB collection name (default: pluralized, lowercase)
-          localField: "categoryId",
-          foreignField: "_id",
-          as: "category",
-        },
-      },
-      {
-        $lookup: {
-          from: "brands", // MongoDB collection name
-          localField: "brand",
-          foreignField: "_id",
-          as: "brand",
-        },
-      },
-      {
-        $addFields: {
-          categoryId: { $arrayElemAt: ["$category", 0] },
-          brand: { $arrayElemAt: ["$brand", 0] },
-        },
-      },
-      { $project: { category: 0, brand: 0 } },
-      { $sort: { createdAt: -1 } },
-    ]);
-
-    return products.map(serialize);
+    const product = await Product.findById(id).lean();
+    if (!product) return { success: false, error: "Product not found" };
+    return serialize(product);
   } catch (error) {
-    console.error("Error finding products:", error);
-    return { success: false, error: "Failed to fetch products" };
+    console.error("Error finding product:", error);
+    return { success: false, error: "Failed to fetch product" };
   }
 }
 
-/** Create or update a product (upsert by ID if provided) */
+/**
+ * Server-side filtered, sorted, paginated product list.
+ * Also supports the legacy "return everything for related-products picker"
+ * via `pageSize: 100` (defaults cap at 100).
+ */
+export async function findProducts(
+  params: ProductListParams = {},
+): Promise<ProductListResult> {
+  await connection();
+
+  const page = Math.max(1, Number(params.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(params.pageSize) || 10));
+  const skip = (page - 1) * pageSize;
+  const sortField = params.sort ?? "createdAt";
+  const sortDir = params.sortDir === "asc" ? 1 : -1;
+
+  // Build the pipeline match stage from filters.
+  const match: Record<string, any> = {};
+
+  if (params.status) {
+    match.status = params.status;
+  }
+
+  if (params.categoryId && mongoose.Types.ObjectId.isValid(params.categoryId)) {
+    match.categoryId = new mongoose.Types.ObjectId(params.categoryId);
+  }
+
+  const q = (params.q ?? "").trim();
+  if (q) {
+    const rx = new RegExp(escapeRegex(q), "i");
+    match.$or = [
+      { name: rx },
+      { sku: rx },
+      { tags: rx },
+      { shortDescription: rx },
+    ];
+  }
+
+  try {
+    const pipeline: any[] = [];
+    if (Object.keys(match).length > 0) pipeline.push({ $match: match });
+
+    pipeline.push({
+      $facet: {
+        rows: [
+          { $sort: { [sortField]: sortDir } },
+          { $skip: skip },
+          { $limit: pageSize },
+          {
+            $lookup: {
+              from: "categories",
+              localField: "categoryId",
+              foreignField: "_id",
+              as: "category",
+            },
+          },
+          {
+            $lookup: {
+              from: "brands",
+              localField: "brand",
+              foreignField: "_id",
+              as: "brandDoc",
+            },
+          },
+          {
+            $addFields: {
+              categoryId: { $arrayElemAt: ["$category", 0] },
+              brand: { $arrayElemAt: ["$brandDoc", 0] },
+            },
+          },
+          { $project: { category: 0, brandDoc: 0 } },
+        ],
+        total: [{ $count: "count" }],
+      },
+    });
+
+    const [facet] = await Product.aggregate(pipeline);
+    const rows: any[] = facet?.rows ?? [];
+    const total: number = facet?.total?.[0]?.count ?? 0;
+
+    return {
+      products: rows.map(serialize),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  } catch (error) {
+    console.error("Error finding products:", error);
+    return { ...LIST_UNAUTHORIZED, page, pageSize };
+  }
+}
+
+/** Distinct categories for the filter bar (name + id). */
+export async function getProductFilterCategories(): Promise<
+  { id: string; name: string }[]
+> {
+  try {
+    await connection();
+    const rows = await Product.aggregate([
+      { $match: { categoryId: { $ne: null } } },
+      { $group: { _id: "$categoryId" } },
+      {
+        $lookup: {
+          from: "categories",
+          localField: "_id",
+          foreignField: "_id",
+          as: "cat",
+        },
+      },
+      { $unwind: { path: "$cat", preserveNullAndEmptyArrays: true } },
+      { $project: { _id: 0, id: { $toString: "$_id" }, name: "$cat.name" } },
+      { $match: { name: { $ne: null } } },
+      { $sort: { name: 1 } },
+    ]);
+    return rows as { id: string; name: string }[];
+  } catch (error) {
+    console.error("Error fetching filter categories:", error);
+    return [];
+  }
+}
+
+/** Create or update. */
 export async function createOrUpdateProduct(
   formData: any,
 ): Promise<ProductResponse> {
   try {
     await connection();
 
-    // Validate with Zod (allows _id for upsert)
     const validated = safeValidateProductCreateOrUpdate(formData);
     if (!validated.success) {
       return { success: false, error: `Validation failed: ${validated.error}` };
@@ -339,11 +432,9 @@ export async function createOrUpdateProduct(
     const data = validated.data || formData;
     const existingId = data._id ? toObjectId(data._id) : null;
 
-    // Prepare base product data (common to both create and update)
     const baseData: any = { ...data };
     delete baseData._id;
 
-    // Handle category and brand IDs
     let categoryId: mongoose.Types.ObjectId | null = null;
     let brand: mongoose.Types.ObjectId | null = null;
 
@@ -356,12 +447,10 @@ export async function createOrUpdateProduct(
       if (!brand) return { success: false, error: "Invalid brand" };
     }
 
-    // Validate required category attributes (if category is provided)
     if (categoryId) {
       await validateRequiredCategoryAttributes(categoryId.toString(), data);
     }
 
-    // Build the document data (start with everything)
     const productData: any = {
       ...baseData,
       status: normalizeStatus(data.status),
@@ -370,11 +459,8 @@ export async function createOrUpdateProduct(
 
     if (categoryId) productData.categoryId = categoryId;
     if (brand) productData.brand = brand;
-    if (data.name) {
-      productData.slug = generateSlug(data.name, data.department);
-    }
+    if (data.name) productData.slug = generateSlug(data.name, data.department);
 
-    // Handle productCode
     if (data.type && data.value) {
       productData.productCode = { type: data.type, value: data.value };
       delete productData.type;
@@ -383,36 +469,25 @@ export async function createOrUpdateProduct(
       productData.productCode = sanitizeProductCode(data.productCode);
     }
 
-    // -------- Build structured fields from flat attributes ----------
     if (categoryId) {
-      const { keyFeatures, specifications, leftover } =
-        await buildStructuredFields(productData, categoryId.toString());
-      // Replace structured fields
+      const { keyFeatures, specifications } = await buildStructuredFields(
+        productData,
+        categoryId.toString(),
+      );
       productData.keyFeatures = keyFeatures;
       productData.specifications = specifications;
-      // Keep leftover flat fields (they are not part of keyFeatures/specifications)
-      // but we already have them in productData; we need to remove the keys that were used
-      // Actually we can just keep productData as is; the structured fields are added,
-      // and the flat keys remain – they won't conflict with the model because the model is strict: false.
-      // However, we may want to delete them to keep the document clean.
-      // We'll remove the keys that were consumed by keyFeatures/specifications.
       const usedKeys = new Set<string>();
-      // Collect used keys from keyFeatures and specifications
-      keyFeatures.forEach((item: any) => usedKeys.add(item.k));
-      specifications.forEach((group: any) => {
-        const collect = (g: any) => {
-          g.attributes?.forEach((attr: any) => usedKeys.add(attr.k));
-          g.groups?.forEach(collect);
+      keyFeatures.forEach((i: any) => usedKeys.add(i.k));
+      specifications.forEach((g: any) => {
+        const collect = (gg: any) => {
+          gg.attributes?.forEach((a: any) => usedKeys.add(a.k));
+          gg.groups?.forEach(collect);
         };
-        collect(group);
+        collect(g);
       });
-      for (const key of usedKeys) {
-        delete productData[key];
-      }
-      // Also delete any keys that might have been used but are not in the usedKeys set? No, we only delete those used.
+      for (const key of usedKeys) delete productData[key];
     }
 
-    // Normalize keyFeatures and specifications (ensure arrays, strip _id)
     if (productData.keyFeatures) {
       productData.keyFeatures = normalizeKeyValueCollection(
         productData.keyFeatures,
@@ -424,14 +499,8 @@ export async function createOrUpdateProduct(
       );
     }
 
-    // Handle relatedProducts
     if (data.relatedProducts !== undefined) {
-      if (
-        Array.isArray(data.relatedProducts) &&
-        data.relatedProducts.length === 0
-      ) {
-        productData.relatedProducts = [];
-      } else if (Array.isArray(data.relatedProducts)) {
+      if (Array.isArray(data.relatedProducts)) {
         productData.relatedProducts = data.relatedProducts
           .filter((rp: any) => rp && rp.id)
           .map((rp: any) => ({
@@ -454,9 +523,7 @@ export async function createOrUpdateProduct(
           { $set: productData },
           { new: true, runValidators: true },
         );
-        if (!product) {
-          return { success: false, error: "Product not found" };
-        }
+        if (!product) return { success: false, error: "Product not found" };
       } else {
         isNew = true;
       }
@@ -470,7 +537,10 @@ export async function createOrUpdateProduct(
       await product.save();
     }
 
-    revalidatePath("/products");
+    revalidatePath("/catalog/products");
+    if (existingId) {
+      revalidatePath(`/catalog/products/edit/${existingId.toString()}`);
+    }
     return { success: true, data: serialize(product) };
   } catch (error: any) {
     console.error("Error in createOrUpdateProduct:", error);
@@ -478,7 +548,7 @@ export async function createOrUpdateProduct(
   }
 }
 
-/** Delete a product, optionally recreate it as draft */
+/** Delete (or duplicate-and-delete). */
 export async function deleteProduct(
   id: string,
   options: DeleteProductOptions = {},
@@ -490,7 +560,6 @@ export async function deleteProduct(
     const product = await Product.findById(id);
     if (!product) return { success: false, error: "Product not found" };
 
-    // Remove references from other products
     await Product.updateMany(
       { "relatedProducts.product": new mongoose.Types.ObjectId(id) },
       {
@@ -501,7 +570,6 @@ export async function deleteProduct(
     );
 
     if (options.recreate) {
-      // Clone product, set to draft, and save new one
       const clone: any = product.toObject();
       delete clone._id;
       delete clone.__v;
@@ -512,9 +580,8 @@ export async function deleteProduct(
       clone.updatedAt = new Date();
       const recreated = new Product(clone);
       await recreated.save();
-      // Delete the original
       await Product.findByIdAndDelete(id);
-      revalidatePath("/products");
+      revalidatePath("/catalog/products");
       return {
         success: true,
         data: {
@@ -525,9 +592,9 @@ export async function deleteProduct(
       };
     }
 
-    // Normal delete
     await Product.findByIdAndDelete(id);
-    revalidatePath("/products");
+    revalidatePath("/catalog/products");
+    revalidatePath(`/catalog/products/edit/${id}`);
     return { success: true, data: "Product deleted successfully" };
   } catch (error: any) {
     console.error("Error deleting product:", error);
@@ -538,14 +605,13 @@ export async function deleteProduct(
   }
 }
 
-/** Delete product images from storage and product record */
+/** Delete a product image from storage + product record. */
 export async function deleteProductImages(
   productId?: string,
   imageUrl?: string,
 ): Promise<ProductResponse> {
   try {
     await connection();
-
     if (!productId && !imageUrl) {
       return { success: false, error: "ProductId or imageUrl required" };
     }
@@ -553,9 +619,9 @@ export async function deleteProductImages(
     const deleteFromStorage = async (url: string) => {
       try {
         const urlObj = new URL(url);
-        const encodedFileName = urlObj.pathname.split("/").pop();
-        if (encodedFileName) {
-          const fileName = decodeURIComponent(encodedFileName);
+        const encoded = urlObj.pathname.split("/").pop();
+        if (encoded) {
+          const fileName = decodeURIComponent(encoded);
           const path = fileName.startsWith("uploads/")
             ? fileName
             : `uploads/${fileName}`;
@@ -569,27 +635,21 @@ export async function deleteProductImages(
     if (productId && mongoose.isValidObjectId(productId)) {
       const product = await Product.findById(productId);
       if (!product) return { success: false, error: "Product not found" };
-
       if (imageUrl) {
-        // Remove specific image from product
         const images = product.images || [];
         if (!images.includes(imageUrl)) {
           return { success: false, error: "Image URL not found in product" };
         }
         await deleteFromStorage(imageUrl);
-        product.images = images.filter((url: string) => url !== imageUrl);
+        product.images = images.filter((u: string) => u !== imageUrl);
         await product.save();
         return { success: true, data: serialize(product) };
-      } else {
-        // Delete all images? Not implemented – we require imageUrl.
-        return { success: false, error: "Image URL required" };
       }
+      return { success: false, error: "Image URL required" };
     } else if (imageUrl) {
-      // No productId provided – just delete from storage
       await deleteFromStorage(imageUrl);
       return { success: true, data: "Image deleted from storage" };
     }
-
     return { success: false, error: "Invalid parameters" };
   } catch (error: any) {
     console.error("Error deleting product images:", error);

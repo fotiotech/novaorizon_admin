@@ -77,7 +77,7 @@ export default function Pos() {
         if (Array.isArray(result)) {
           setProducts(result);
         } else {
-          setError(result.error || "Failed to fetch products");
+          setError("Failed to fetch products");
         }
       } catch (err: any) {
         setError(err.message || "Network error");

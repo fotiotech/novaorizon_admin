@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { findProducts, deleteProduct } from "@/app/actions/products";
+import {
+  findProducts,
+  deleteProduct,
+  getProductFilterCategories,
+} from "@/app/actions/products";
 import { Delete } from "@mui/icons-material";
 import { useDebouncedCallback } from "use-debounce";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
-import { CircularProgress } from "@mui/material";
+import { toast } from "react-hot-toast";
 
-// Product type matches the actual schema
 interface Product {
   _id: string;
   name: string;
@@ -16,156 +19,107 @@ interface Product {
   slug: string;
   categoryId: { _id: string; name: string } | string | null;
   brand: { _id: string; name: string } | string | null;
-  hasVariants: boolean;
-  variantThemes: string[];
-  variantValues: any[];
-  keyFeatures: any[];
-  specifications: any[];
   quantity: number;
   lowStockThreshold: number;
   listPrice: number;
   price: number;
   images: string[];
-  description: string;
-  shortDescription: string;
-  variants: any[];
-  carrier?: any;
-  relatedProducts: any[];
-  reviewsRatings: any[];
   tags: string[];
   status: "draft" | "active" | "inactive";
   createdAt: string;
-  updatedAt: string;
 }
 
 interface FilterOptions {
   search: string;
-  category: string;
+  categoryId: string;
   status: string;
 }
 
+const ITEMS_PER_PAGE = 10;
+
 export default function ProductsPage() {
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
-  const itemsPerPage = 10;
 
   const [filters, setFilters] = useState<FilterOptions>({
     search: "",
-    category: "",
+    categoryId: "",
     status: "",
   });
+  const [searchInput, setSearchInput] = useState("");
 
-  // ---------- Delete modal state ----------
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>(
+    [],
+  );
+
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Fetch all products
-  const fetchAllProducts = useCallback(async () => {
+  const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
+
+  // Load category filter options once.
+  useEffect(() => {
+    (async () => {
+      const rows = await getProductFilterCategories();
+      setCategories(rows);
+    })();
+  }, []);
+
+  const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await findProducts();
-      console.log(`Fetched ${result?.length || 0} products.`);
-      if (
-        result &&
-        typeof result === "object" &&
-        "success" in result &&
-        result.success === false
-      ) {
-        setAllProducts([]);
-        return;
-      }
-      if (Array.isArray(result)) {
-        setAllProducts(result);
-      } else {
-        setError("Unexpected response from server");
-        setAllProducts([]);
-      }
+      const res = await findProducts({
+        q: filters.search,
+        categoryId: filters.categoryId || undefined,
+        status: (filters.status as any) || undefined,
+        page,
+        pageSize: ITEMS_PER_PAGE,
+        sort: "createdAt",
+        sortDir: "desc",
+      });
+      setProducts(res.products as Product[]);
+      setTotal(res.total);
     } catch (err) {
       console.error("Error fetching products:", err);
       setError("Failed to load products.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters, page]);
 
   useEffect(() => {
-    fetchAllProducts();
-  }, [fetchAllProducts]);
-
-  // Safely get category name from populated object or string
-  const getCategoryName = (cat: Product["categoryId"]): string => {
-    if (!cat) return "Uncategorized";
-    if (typeof cat === "string") return cat;
-    return cat.name || "Uncategorized";
-  };
-
-  // Client‑side filtering
-  const filteredProducts = useMemo(() => {
-    let result = allProducts;
-
-    if (filters.search.trim()) {
-      const searchLower = filters.search.toLowerCase();
-      result = result.filter((p) => {
-        const name = (p.name || "").toLowerCase();
-        const sku = (p.sku || "").toLowerCase();
-        const tags = (p.tags || []).join(" ").toLowerCase();
-        return (
-          name.includes(searchLower) ||
-          sku.includes(searchLower) ||
-          tags.includes(searchLower)
-        );
-      });
-    }
-
-    if (filters.category) {
-      result = result.filter(
-        (p) => getCategoryName(p.categoryId) === filters.category,
-      );
-    }
-
-    if (filters.status) {
-      result = result.filter((p) => p.status === filters.status);
-    }
-
-    return result;
-  }, [allProducts, filters]);
-
-  // Pagination
-  const totalFiltered = filteredProducts.length;
-  const totalPages = Math.ceil(totalFiltered / itemsPerPage);
-  const paginatedProducts = useMemo(() => {
-    const start = (page - 1) * itemsPerPage;
-    return filteredProducts.slice(start, start + itemsPerPage);
-  }, [filteredProducts, page, itemsPerPage]);
+    void fetchProducts();
+  }, [fetchProducts]);
 
   useEffect(() => {
     setPage(1);
   }, [filters]);
 
-  // ---------- Delete handlers ----------
-  const handleDeleteClick = (product: Product) => {
-    setDeleteTarget(product);
-    setIsDeleteOpen(true);
-  };
-
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
+    const toastId = toast.loading("Deleting product...");
     try {
       const result = await deleteProduct(deleteTarget._id);
       if (result.success) {
-        await fetchAllProducts();
+        toast.success(`"${deleteTarget.name}" deleted`, { id: toastId });
+        await fetchProducts();
       } else {
-        alert(result.error || "Failed to delete product");
+        toast.error(result.error || "Failed to delete product", {
+          id: toastId,
+        });
       }
     } catch (err) {
       console.error("Delete error:", err);
-      alert("An error occurred while deleting the product.");
+      toast.error("An error occurred while deleting the product.", {
+        id: toastId,
+      });
     } finally {
       setIsDeleting(false);
       setIsDeleteOpen(false);
@@ -173,12 +127,12 @@ export default function ProductsPage() {
     }
   };
 
-  // Debounced search
   const debouncedSearch = useDebouncedCallback((value: string) => {
     setFilters((prev) => ({ ...prev, search: value }));
-  }, 500);
+  }, 400);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchInput(e.target.value);
     debouncedSearch(e.target.value);
   };
 
@@ -188,25 +142,25 @@ export default function ProductsPage() {
   };
 
   const handleClearFilters = () => {
-    setFilters({ search: "", category: "", status: "" });
+    setSearchInput("");
+    debouncedSearch.cancel();
+    setFilters({ search: "", categoryId: "", status: "" });
     setPage(1);
   };
 
-  const goToPage = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
+  const goToPage = (p: number) => {
+    if (p >= 1 && p <= totalPages) setPage(p);
   };
 
-  // Build category options from the populated names
-  const categories = useMemo(() => {
-    const cats = new Set<string>();
-    allProducts.forEach((p) => {
-      const name = getCategoryName(p.categoryId);
-      if (name) cats.add(name);
-    });
-    return Array.from(cats);
-  }, [allProducts]);
+  const hasActiveFilters =
+    !!filters.search || !!filters.categoryId || !!filters.status;
 
-  // Stock badge based on quantity and threshold
+  const getCategoryName = (cat: Product["categoryId"]): string => {
+    if (!cat) return "Uncategorized";
+    if (typeof cat === "string") return cat;
+    return cat.name || "Uncategorized";
+  };
+
   const getStockBadge = (product: Product) => {
     const qty = product.quantity || 0;
     const threshold = product.lowStockThreshold || 5;
@@ -221,43 +175,34 @@ export default function ProductsPage() {
         label: "Low Stock",
         className: "bg-accent/20 text-accent-foreground dark:text-accent",
       };
-    } else {
-      return {
-        label: "In Stock",
-        className:
-          "bg-secondary/20 text-secondary-foreground dark:text-secondary",
-      };
     }
+    return {
+      label: "In Stock",
+      className:
+        "bg-secondary/20 text-secondary-foreground dark:text-secondary",
+    };
   };
 
-  // Loading skeleton
-  if (loading) {
+  if (loading && products.length === 0) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-6">
-          <div className="h-8 w-48 bg-muted animate-pulse rounded"></div>
-          <div className="h-10 w-32 bg-muted animate-pulse rounded"></div>
+          <div className="h-8 w-48 bg-muted animate-pulse rounded" />
+          <div className="h-10 w-32 bg-muted animate-pulse rounded" />
         </div>
-        <div className="bg-card p-4 rounded-lg shadow-md border border-border space-y-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i}>
-                <div className="h-4 w-20 bg-muted animate-pulse rounded mb-1"></div>
-                <div className="h-10 w-full bg-muted animate-pulse rounded"></div>
-              </div>
-            ))}
-          </div>
+        <div className="bg-card p-3 rounded-lg shadow-md border border-border mb-4">
+          <div className="h-9 w-full bg-muted animate-pulse rounded" />
         </div>
         <div className="bg-card p-6 rounded-lg shadow-md border border-border">
           <div className="space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center space-x-4">
-                <div className="h-12 w-12 bg-muted animate-pulse rounded-lg"></div>
+                <div className="h-12 w-12 bg-muted animate-pulse rounded-lg" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-3/4 bg-muted animate-pulse rounded"></div>
-                  <div className="h-3 w-1/2 bg-muted animate-pulse rounded"></div>
+                  <div className="h-4 w-3/4 bg-muted animate-pulse rounded" />
+                  <div className="h-3 w-1/2 bg-muted animate-pulse rounded" />
                 </div>
-                <div className="h-6 w-16 bg-muted animate-pulse rounded-full"></div>
+                <div className="h-6 w-16 bg-muted animate-pulse rounded-full" />
               </div>
             ))}
           </div>
@@ -272,6 +217,12 @@ export default function ProductsPage() {
         <div className="text-center bg-destructive/10 text-destructive p-4 rounded-lg">
           <p className="font-semibold">Error</p>
           <p>{error}</p>
+          <button
+            onClick={() => void fetchProducts()}
+            className="mt-3 px-4 py-1.5 text-sm border border-destructive/40 rounded-md hover:bg-destructive/10 transition"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -289,100 +240,104 @@ export default function ProductsPage() {
         </Link>
       </div>
 
-      {/* Filter bar */}
-      <div className="bg-card text-card-foreground p-4 rounded-lg shadow-md border border-border space-y-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">
-              Search
-            </label>
+      {/* Compact filter bar */}
+      <div className="bg-card text-card-foreground rounded-lg shadow-sm border border-border mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-2">
+          <div className="relative flex-1 min-w-0">
+            <svg
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"
+              />
+            </svg>
             <input
               type="text"
-              defaultValue={filters.search}
+              value={searchInput}
               onChange={handleSearchChange}
-              placeholder="Search by name, SKU, tags..."
-              className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+              placeholder="Search name, SKU, tags..."
+              className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">
-              Category
-            </label>
-            <select
-              name="category"
-              value={filters.category}
-              onChange={handleSelectChange}
-              className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground capitalize"
-            >
-              <option value="">All Categories</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">
-              Status
-            </label>
-            <select
-              name="status"
-              value={filters.status}
-              onChange={handleSelectChange}
-              className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground capitalize"
-            >
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="draft">Draft</option>
-            </select>
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <button
-            onClick={handleClearFilters}
-            className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+
+          <select
+            name="categoryId"
+            value={filters.categoryId}
+            onChange={handleSelectChange}
+            className="w-full sm:w-48 px-2.5 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground capitalize"
           >
-            Clear Filters
-          </button>
+            <option value="">All Categories</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            name="status"
+            value={filters.status}
+            onChange={handleSelectChange}
+            className="w-full sm:w-32 px-2.5 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground capitalize"
+          >
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="draft">Draft</option>
+          </select>
+
+          {hasActiveFilters && (
+            <button
+              onClick={handleClearFilters}
+              className="shrink-0 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-input rounded-md transition-colors"
+              title="Clear filters"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Products Table */}
       <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">
-            Products {totalFiltered > 0 && `(${totalFiltered})`}
+            Products {total > 0 && `(${total})`}
           </h2>
+          {loading && (
+            <span className="text-xs text-muted-foreground">Loading…</span>
+          )}
         </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted/50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Product
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  SKU
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Price
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Stock
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Category
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Actions
-                </th>
+                {[
+                  "Product",
+                  "SKU",
+                  "Price",
+                  "Stock",
+                  "Category",
+                  "Actions",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
-              {paginatedProducts.length === 0 ? (
+              {products.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -390,7 +345,7 @@ export default function ProductsPage() {
                   >
                     <div className="flex flex-col items-center gap-2">
                       <span>No products found.</span>
-                      {filters.search || filters.category || filters.status ? (
+                      {hasActiveFilters ? (
                         <button
                           onClick={handleClearFilters}
                           className="text-primary hover:underline text-sm"
@@ -409,7 +364,7 @@ export default function ProductsPage() {
                   </td>
                 </tr>
               ) : (
-                paginatedProducts.map((product) => {
+                products.map((product) => {
                   const stockBadge = getStockBadge(product);
                   return (
                     <tr key={product._id}>
@@ -418,6 +373,7 @@ export default function ProductsPage() {
                           <div className="flex-shrink-0 h-10 w-10">
                             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
                               {product.images?.[0] ? (
+                                // eslint-disable-next-line @next/next/no-img-element
                                 <img
                                   src={product.images[0]}
                                   alt={product.name}
@@ -464,7 +420,7 @@ export default function ProductsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary/20 text-primary-foreground dark:text-primary">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary/20 text-primary">
                           {getCategoryName(product.categoryId)}
                         </span>
                       </td>
@@ -477,7 +433,10 @@ export default function ProductsPage() {
                             Edit
                           </Link>
                           <button
-                            onClick={() => handleDeleteClick(product)}
+                            onClick={() => {
+                              setDeleteTarget(product);
+                              setIsDeleteOpen(true);
+                            }}
                             className="text-destructive hover:text-destructive/80 transition-colors"
                             aria-label="Delete product"
                             title="Delete product"
@@ -497,7 +456,7 @@ export default function ProductsPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between mt-4">
             <div className="text-sm text-muted-foreground">
-              Showing {paginatedProducts.length} of {totalFiltered} products
+              Showing {products.length} of {total} products
             </div>
             <div className="flex gap-2">
               <button
@@ -522,7 +481,6 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {/* ---------- Delete Confirmation Modal ---------- */}
       <ConfirmDialog
         isOpen={isDeleteOpen}
         onClose={() => setIsDeleteOpen(false)}
@@ -530,7 +488,7 @@ export default function ProductsPage() {
         title="Delete Product"
         message={`Are you sure you want to delete "${deleteTarget?.name || "this product"}"? This action cannot be undone.`}
         confirmLabel={isDeleting ? "Deleting..." : "Delete"}
-        danger={true}
+        danger
       />
     </div>
   );

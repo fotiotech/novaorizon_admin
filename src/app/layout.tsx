@@ -5,8 +5,10 @@ import Providers from "./providers";
 import Script from "next/script";
 import { Inter, Geist } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "react-hot-toast";
 import { cn } from "@/lib/utils";
 import AdminLayout from "@/components/AdminLayout";
+import { MuiThemeBridge } from "@/components/MuiThemeBridge";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -49,16 +51,37 @@ export default function RootLayout({
         </noscript>
 
         {/* ✅ Wrap everything in Providers, which already includes your ThemeProvider */}
-        <Providers>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <AdminLayout>{children}</AdminLayout>
-          </ThemeProvider>
-        </Providers>
+        <MuiThemeBridge>
+          <Providers>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              <AdminLayout>
+                {children}
+                <Toaster
+                  position="top-right"
+                  toastOptions={{
+                    duration: 3500,
+                    style: {
+                      background: "#1f2937",
+                      color: "#f9fafb",
+                      borderRadius: "0.5rem",
+                    },
+                    success: {
+                      iconTheme: { primary: "#6366f1", secondary: "#fff" },
+                    },
+                    error: {
+                      iconTheme: { primary: "#ef4444", secondary: "#fff" },
+                    },
+                  }}
+                />
+              </AdminLayout>
+            </ThemeProvider>
+          </Providers>
+        </MuiThemeBridge>
       </body>
     </html>
   );

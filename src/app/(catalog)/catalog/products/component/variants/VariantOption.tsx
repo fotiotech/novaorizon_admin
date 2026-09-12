@@ -18,14 +18,12 @@ interface Attribute {
   options?: string[];
   type: string;
 }
-
 interface Variant {
   [key: string]: string | number | string[] | null;
   sku: string;
   price: number;
   quantity: number;
 }
-
 interface VariantsManagerProps {
   productId: string;
   product?: any;
@@ -34,16 +32,12 @@ interface VariantsManagerProps {
   onUpdate: (field: string, value: any) => void;
 }
 
-const normalizeCode = (code?: string): string => {
-  if (!code) return "";
-  return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
-};
+const normalizeCode = (code?: string): string =>
+  !code ? "" : code.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
 const readProductValue = (obj: any, ...keys: string[]) => {
   if (!obj) return undefined;
-  for (const key of keys) {
-    if (obj[key] !== undefined) return obj[key];
-  }
+  for (const key of keys) if (obj[key] !== undefined) return obj[key];
   return undefined;
 };
 
@@ -53,22 +47,9 @@ const cartesian = (arrays: string[][]): string[][] =>
     [[]],
   );
 
-// Built-in variant fields that are always shown
 const builtInVariantFields: Attribute[] = [
-  {
-    id: "sku",
-    code: "sku",
-    name: "SKU",
-    type: "text",
-    options: [],
-  },
-  {
-    id: "price",
-    code: "price",
-    name: "Price",
-    type: "number",
-    options: [],
-  },
+  { id: "sku", code: "sku", name: "SKU", type: "text", options: [] },
+  { id: "price", code: "price", name: "Price", type: "number", options: [] },
   {
     id: "quantity",
     code: "quantity",
@@ -78,19 +59,16 @@ const builtInVariantFields: Attribute[] = [
   },
 ];
 
+const INPUT_SM =
+  "w-full p-1 border border-input rounded bg-background text-foreground";
+
 const VariantsManager: React.FC<VariantsManagerProps> = memo(
   ({ productId, product, attributes = [], variantFields = [], onUpdate }) => {
-    // Merge built-in fields with provided variantFields, avoiding duplicates
     const allVariantFields = useMemo(() => {
-      const existingCodes = new Set(
-        variantFields.map((f) => normalizeCode(f.code)),
-      );
+      const existing = new Set(variantFields.map((f) => normalizeCode(f.code)));
       const merged = [...variantFields];
-      builtInVariantFields.forEach((field) => {
-        const code = normalizeCode(field.code);
-        if (!existingCodes.has(code)) {
-          merged.push(field);
-        }
+      builtInVariantFields.forEach((f) => {
+        if (!existing.has(normalizeCode(f.code))) merged.push(f);
       });
       return merged;
     }, [variantFields]);
@@ -105,15 +83,12 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
     const prevProductId = useRef<string | null>(null);
     const prevProductThemes = useRef<string[]>([]);
     const prevProductValues = useRef<Record<string, string[]>>({});
-    const isSyncing = useRef(false);
     const selectedThemeCodesRef = useRef<string[]>([]);
 
-    // Keep ref in sync
     useEffect(() => {
       selectedThemeCodesRef.current = selectedThemeCodes;
     }, [selectedThemeCodes]);
 
-    // ---- Reset when productId changes ----
     useEffect(() => {
       if (prevProductId.current !== productId) {
         prevProductId.current = productId;
@@ -126,72 +101,51 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       }
     }, [productId]);
 
-    // ---- Initialize from product data (only when product data actually changes) ----
     useEffect(() => {
       if (!product || Object.keys(product).length === 0) return;
-
       const savedThemes =
         readProductValue(product, "variantThemes", "variant_themes") || [];
-      const savedThemesNormalized = savedThemes.map((code: string) =>
-        normalizeCode(code),
+      const savedThemesNormalized = savedThemes.map((c: string) =>
+        normalizeCode(c),
       );
-
       const savedValues =
         readProductValue(product, "variantValues", "variant_values") || {};
-      // Normalize keys of savedValues to match our state keys
       const normalizedSavedValues: Record<string, string[]> = {};
       Object.entries(savedValues).forEach(([k, v]) => {
         const key = normalizeCode(k);
         const values = Array.isArray(v) ? v : v ? [v] : [];
         normalizedSavedValues[key] = values;
       });
-
-      // Check if themes or values have actually changed from previous known state
       const themesChanged =
         savedThemesNormalized.length !== prevProductThemes.current.length ||
         savedThemesNormalized.some(
           (t: string, i: number) => t !== prevProductThemes.current[i],
         );
-
       const valuesChanged = Object.keys(normalizedSavedValues).some(
-        (key: string) =>
+        (key) =>
           JSON.stringify(normalizedSavedValues[key]) !==
           JSON.stringify(prevProductValues.current[key] || []),
       );
-
       if (!themesChanged && !valuesChanged) {
-        // Nothing changed, skip re-initialization
         isInitializing.current = false;
         return;
       }
-
-      // Update refs with new data
       prevProductThemes.current = savedThemesNormalized;
       prevProductValues.current = normalizedSavedValues;
-
-      // Apply new data to state
       const validThemes = savedThemes.filter((code: string) =>
         attributes.some((a) => normalizeCode(a.code) === normalizeCode(code)),
       );
       setSelectedThemeCodes(validThemes);
-
       const initialValues: Record<string, string[]> = {};
       attributes.forEach((attr) => {
-        const normalizedAttrCode = normalizeCode(attr.code);
-        initialValues[normalizedAttrCode] =
-          normalizedSavedValues[normalizedAttrCode] || [];
+        const key = normalizeCode(attr.code);
+        initialValues[key] = normalizedSavedValues[key] || [];
       });
       setThemeValues(initialValues);
-
-      const initialVariants = Array.isArray(product.variants)
-        ? product.variants
-        : [];
-      setVariants(initialVariants);
-
+      setVariants(Array.isArray(product.variants) ? product.variants : []);
       isInitializing.current = false;
     }, [product, attributes]);
 
-    // ---- Generate variants when themes or values change ----
     const fieldKey = useMemo(
       () => allVariantFields.map((f) => f.code).join(","),
       [allVariantFields],
@@ -199,68 +153,48 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
 
     useEffect(() => {
       if (isInitializing.current) return;
-
-      const themeCodes = selectedThemeCodes.map((code) => normalizeCode(code));
-      const valueArrays = themeCodes.map((code) => themeValues[code] || []);
-
-      if (
-        themeCodes.length > 0 &&
-        valueArrays.some((arr) => arr.length === 0)
-      ) {
-        if (variants.length > 0) {
-          setVariants([]);
-        }
+      const themeCodes = selectedThemeCodes.map((c) => normalizeCode(c));
+      const valueArrays = themeCodes.map((c) => themeValues[c] || []);
+      if (themeCodes.length > 0 && valueArrays.some((a) => a.length === 0)) {
+        if (variants.length > 0) setVariants([]);
         return;
       }
-
-      if (themeCodes.length === 0) {
-        // If no themes selected, keep existing variants (don't clear)
-        return;
-      }
-
+      if (themeCodes.length === 0) return;
       const combinations = cartesian(valueArrays);
       const existingMap = new Map<string, Variant>();
       variants.forEach((v) => {
-        const key = themeCodes.map((code) => v[code] as string).join("|");
+        const key = themeCodes.map((c) => v[c] as string).join("|");
         existingMap.set(key, v);
       });
-
       const newVariants = combinations.map((combo) => {
         const variant: any = {};
-        themeCodes.forEach((code, i) => {
-          variant[code] = combo[i];
-        });
+        themeCodes.forEach((c, i) => (variant[c] = combo[i]));
         const key = combo.join("|");
         const existing = existingMap.get(key);
         if (existing) {
           const themeSet = new Set(themeCodes);
-          Object.keys(existing).forEach((field) => {
-            if (!themeSet.has(field)) {
-              variant[field] = existing[field];
-            }
+          Object.keys(existing).forEach((f) => {
+            if (!themeSet.has(f)) variant[f] = existing[f];
           });
         } else {
-          allVariantFields.forEach((field) => {
-            const code = normalizeCode(field.code);
-            if (field.type === "number") variant[code] = null;
-            else if (field.type === "file") variant[code] = [];
-            else if (field.type === "boolean") variant[code] = false;
-            else variant[code] = "";
+          allVariantFields.forEach((f) => {
+            const c = normalizeCode(f.code);
+            if (f.type === "number") variant[c] = null;
+            else if (f.type === "file") variant[c] = [];
+            else if (f.type === "boolean") variant[c] = false;
+            else variant[c] = "";
           });
-          // Ensure built-in fields have sensible defaults
           if (!variant.sku && variant.sku !== "") variant.sku = "";
           if (!variant.price && variant.price !== 0) variant.price = 0;
           if (!variant.quantity && variant.quantity !== 0) variant.quantity = 0;
         }
         return variant;
       });
-
       const hasChanged =
         newVariants.length !== variants.length ||
         newVariants.some(
           (v, i) => JSON.stringify(v) !== JSON.stringify(variants[i]),
         );
-
       if (hasChanged) {
         setVariants(newVariants);
         onUpdate("variants", newVariants);
@@ -274,36 +208,28 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       variants,
     ]);
 
-    // ---- Handlers (memoized) ----
     const handleThemeSelect = useCallback(
       (selectedOptions: any) => {
-        const selectedCodes = selectedOptions
-          ? selectedOptions.map((opt: any) => normalizeCode(opt.value))
+        const codes = selectedOptions
+          ? selectedOptions.map((o: any) => normalizeCode(o.value))
           : [];
-        setSelectedThemeCodes(selectedCodes);
-        onUpdate("variantThemes", selectedCodes);
-
-        // When themes change, we also need to update the product's main attribute values?
-        // That's handled by the sync effect? We removed sync effect, so we'll just update state.
-        // We'll keep the existing themeValues as they are, but the generation effect will
-        // use the new selected themes and existing values.
-        // However, if a theme is deselected, we might want to remove its values from state?
-        // We'll keep them in state but they won't be used.
+        setSelectedThemeCodes(codes);
+        onUpdate("variantThemes", codes);
       },
       [onUpdate],
     );
 
     const handleThemeValuesChange = useCallback(
       (themeCode: string, valuesString: string) => {
-        const normalizedThemeCode = normalizeCode(themeCode);
+        const key = normalizeCode(themeCode);
         const values = valuesString
           .split(",")
           .map((v) => v.trim())
           .filter(Boolean);
         setThemeValues((prev) => {
-          const newThemeValues = { ...prev, [normalizedThemeCode]: values };
-          onUpdate("variantValues", newThemeValues);
-          return newThemeValues;
+          const next = { ...prev, [key]: values };
+          onUpdate("variantValues", next);
+          return next;
         });
       },
       [onUpdate],
@@ -311,46 +237,38 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
 
     const handleVariantChange = useCallback(
       (index: number, field: string, value: any) => {
-        const normalizedField = normalizeCode(field);
+        const key = normalizeCode(field);
         setVariants((prev) => {
           const updated = prev.map((v, i) =>
-            i === index ? { ...v, [normalizedField]: value } : v,
+            i === index ? { ...v, [key]: value } : v,
           );
           onUpdate("variants", updated);
           return updated;
         });
-
-        // If changing the first variant's theme attribute, also update the main product attribute
-        // to keep it in sync with the first variant's value.
-        if (index === 0 && selectedThemeCodes.includes(normalizedField)) {
-          onUpdate(normalizedField, value);
+        if (index === 0 && selectedThemeCodes.includes(key)) {
+          onUpdate(key, value);
         }
       },
       [onUpdate, selectedThemeCodes],
     );
 
-    // ---- Render field input (memoized) ----
     const renderFieldInput = useCallback(
       (field: Attribute, variant: Variant, index: number) => {
         const fieldCode = normalizeCode(field.code);
         const value = variant[fieldCode] ?? "";
-        const commonProps = {
-          className: "w-full p-1 border rounded",
-          value,
-        };
-
         switch (field.type) {
           case "number":
             return (
               <input
                 type="number"
-                {...commonProps}
+                className={INPUT_SM}
+                value={value as any}
                 onChange={(e) => {
-                  const val = e.target.value;
+                  const v = e.target.value;
                   handleVariantChange(
                     index,
                     fieldCode,
-                    val === "" ? null : Number(val),
+                    v === "" ? null : Number(v),
                   );
                 }}
               />
@@ -358,7 +276,8 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
           case "select":
             return (
               <select
-                {...commonProps}
+                className={INPUT_SM}
+                value={value as any}
                 onChange={(e) =>
                   handleVariantChange(index, field.code, e.target.value)
                 }
@@ -385,7 +304,8 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
             return (
               <input
                 type="text"
-                {...commonProps}
+                className={INPUT_SM}
+                value={value as any}
                 onChange={(e) =>
                   handleVariantChange(index, field.code, e.target.value)
                 }
@@ -396,29 +316,26 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       [handleVariantChange, productId],
     );
 
-    // ---- Memoized derived data ----
     const themeOptions = useMemo(
       () =>
         attributes.map((attr) => ({
-          value: attr.code,
+          value: normalizeCode(attr.code),
           label: attr.name || attr.code,
         })),
       [attributes],
     );
 
     const selectedOptions = useMemo(
-      () =>
-        themeOptions.filter((opt) => selectedThemeCodes.includes(opt.value)),
+      () => themeOptions.filter((o) => selectedThemeCodes.includes(o.value)),
       [themeOptions, selectedThemeCodes],
     );
 
-    // ---- Render ----
     const hasVariants = variants.length > 0;
     const hasThemes = attributes.length > 0;
 
     if (!hasThemes && !hasVariants) {
       return (
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-muted-foreground">
           No variant themes defined for this group.
         </div>
       );
@@ -428,7 +345,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       <div className="flex flex-col gap-4 w-full overflow-auto">
         {hasThemes && (
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Select themes to use for variants
             </label>
             <Select
@@ -446,25 +363,27 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
         {selectedThemeCodes.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {selectedThemeCodes.map((code) => {
-              const attr = attributes.find((a) => a.code === code);
+              const attr = attributes.find(
+                (a) => normalizeCode(a.code) === code,
+              );
               if (!attr) return null;
               const normalizedCode = normalizeCode(code);
               return (
                 <div key={code}>
-                  <label className="block text-sm font-medium capitalize mb-1">
+                  <label className="block text-sm font-medium capitalize text-foreground mb-1">
                     {attr.name || code} values
                   </label>
                   <input
                     type="text"
-                    className="w-full border rounded p-2"
-                    placeholder={`Enter ${attr.name || code} values, comma‑separated`}
+                    className="w-full border border-input rounded p-2 bg-background text-foreground"
+                    placeholder={`Enter ${attr.name || code} values, comma-separated`}
                     value={themeValues[normalizedCode]?.join(", ") || ""}
                     onChange={(e) =>
                       handleThemeValuesChange(code, e.target.value)
                     }
                   />
                   {attr.options && attr.options.length > 0 && (
-                    <div className="text-xs text-gray-400 mt-1">
+                    <div className="text-xs text-muted-foreground mt-1">
                       Suggested: {attr.options.join(", ")}
                     </div>
                   )}
@@ -479,19 +398,20 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
             <div className="overflow-x-auto mt-4">
               <table className="min-w-full border-collapse">
                 <thead>
-                  <tr className="bg-gray-100">
+                  <tr className="bg-muted">
                     {selectedThemeCodes.map((code) => (
                       <th
                         key={code}
-                        className="border p-2 text-left capitalize"
+                        className="border border-border p-2 text-left capitalize text-foreground"
                       >
-                        {attributes.find((a) => a.code === code)?.name || code}
+                        {attributes.find((a) => normalizeCode(a.code) === code)
+                          ?.name || code}
                       </th>
                     ))}
                     {allVariantFields.map((field) => (
                       <th
                         key={field.code}
-                        className="border p-2 text-left capitalize"
+                        className="border border-border p-2 text-left capitalize text-foreground"
                       >
                         {field.name || field.code}
                       </th>
@@ -506,12 +426,18 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
                     return (
                       <tr key={`${rowKey}-${index}`}>
                         {selectedThemeCodes.map((code) => (
-                          <td key={code} className="border p-2">
+                          <td
+                            key={code}
+                            className="border border-border p-2 text-foreground"
+                          >
                             {variant[code] as string}
                           </td>
                         ))}
                         {allVariantFields.map((field) => (
-                          <td key={field.code} className="border p-2">
+                          <td
+                            key={field.code}
+                            className="border border-border p-2"
+                          >
                             {renderFieldInput(field, variant, index)}
                           </td>
                         ))}
@@ -522,11 +448,11 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
               </table>
             </div>
 
-            <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-200">
-              <div className="text-sm font-medium text-gray-700">
+            <div className="mt-4 p-3 bg-muted/50 rounded border border-border">
+              <div className="text-sm font-medium text-foreground">
                 Variant Summary
               </div>
-              <div className="text-xs text-gray-600 mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 Total variants:{" "}
                 <span className="font-semibold">{variants.length}</span>
               </div>
@@ -538,7 +464,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
                   return (
                     <span
                       key={idx}
-                      className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded text-xs"
+                      className="px-2 py-0.5 bg-primary/15 text-primary rounded text-xs"
                     >
                       {label}
                     </span>

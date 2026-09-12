@@ -1,24 +1,47 @@
 "use client";
 
-import React, { useEffect, useState, useRef, memo } from "react";
+import React, { useEffect, useState, useMemo, useCallback, memo } from "react";
 import Select, { MultiValue } from "react-select";
 import FilesUploader from "../../../../../components/FilesUploader";
 import { getBrands } from "@/app/actions/brand";
 import { getCarriers } from "@/app/actions/carrier";
 import { Brand } from "@/constant/types";
 import RichTextEditorWrapper from "./RichTextEditorWrapper";
-import { useFileUploader } from "@/hooks/useFileUploader"; // ✅ named import
+import { useFileUploader } from "@/hooks/useFileUploader";
 
 interface Carrier {
   _id: string;
   name: string;
 }
 
+// ------------------------------------------------------------------
+// Field value shapes (see #26 — discriminated value helpers)
+// ------------------------------------------------------------------
+// Field value shapes — one per "field kind" the form supports.
+type UnitValue = { value: number | ""; unit?: string };
+type NumberFieldValue = number | "" | UnitValue | null | undefined;
+type StringFieldValue = string | null | undefined;
+type ArrayFieldValue = string[] | null | undefined;
+
+// Guards
+const isUnitValue = (v: unknown): v is UnitValue =>
+  typeof v === "object" && v !== null && "value" in v;
+const asString = (v: unknown): string =>
+  typeof v === "string" ? v : v == null ? "" : String(v);
+const asStringArray = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+const asNumberInput = (v: NumberFieldValue): number | "" => {
+  if (v == null || v === "") return "";
+  if (typeof v === "number") return v;
+  if (isUnitValue(v)) return v.value;
+  return "";
+};
+
 interface FieldProps {
   type?: string;
   code: string;
   name?: string;
-  field?: any;
+  field?: unknown;
   option?: any[];
   handleAttributeChange: (code: string, value: any) => void;
   productId?: string;
@@ -27,7 +50,111 @@ interface FieldProps {
   isRequired?: boolean;
 }
 
-// ----- Wrapper for gallery (multiple files) ONLY -----
+// ------------------------------------------------------------------
+// Shared class tokens — every native input uses these so dark mode is
+// consistent and there is a single source of truth.
+// ------------------------------------------------------------------
+const INPUT_CLASS =
+  "w-full p-3 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground transition-colors";
+const LABEL_CLASS = "block text-sm font-medium text-foreground mb-2";
+const CHECK_BORDER = "border-input";
+const CHECK_BG = "bg-primary border-primary";
+
+// ------------------------------------------------------------------
+// Static select styles (theme-aware) — unchanged from prior pass
+// ------------------------------------------------------------------
+const customSelectStyles = {
+  control: (provided: any, state: any) => ({
+    ...provided,
+    backgroundColor: "hsl(var(--background))",
+    borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--input))",
+    borderRadius: "0.5rem",
+    boxShadow: state.isFocused ? "0 0 0 2px hsl(var(--ring) / 0.25)" : "none",
+    minHeight: "44px",
+    transition: "border-color 150ms ease, box-shadow 150ms ease",
+    "&:hover": {
+      borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--border))",
+    },
+  }),
+  menu: (provided: any) => ({
+    ...provided,
+    backgroundColor: "hsl(var(--popover))",
+    color: "hsl(var(--popover-foreground))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "0.5rem",
+    overflow: "hidden",
+    boxShadow: "0 8px 24px hsl(var(--foreground) / 0.08)",
+  }),
+  menuPortal: (provided: any) => ({ ...provided, zIndex: 9999 }),
+  menuList: (provided: any) => ({ ...provided, padding: 4 }),
+  option: (provided: any, state: any) => ({
+    ...provided,
+    backgroundColor: state.isSelected
+      ? "hsl(var(--primary))"
+      : state.isFocused
+        ? "hsl(var(--accent))"
+        : "hsl(var(--popover))",
+    color: state.isSelected
+      ? "hsl(var(--primary-foreground))"
+      : "hsl(var(--popover-foreground))",
+    cursor: "pointer",
+    borderRadius: "0.25rem",
+  }),
+  singleValue: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
+  placeholder: (p: any) => ({ ...p, color: "hsl(var(--muted-foreground))" }),
+  input: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
+  multiValue: (p: any) => ({
+    ...p,
+    backgroundColor: "hsl(var(--secondary))",
+    borderRadius: "0.375rem",
+  }),
+  multiValueLabel: (p: any) => ({
+    ...p,
+    color: "hsl(var(--secondary-foreground))",
+  }),
+  multiValueRemove: (p: any) => ({
+    ...p,
+    color: "hsl(var(--secondary-foreground))",
+    "&:hover": {
+      backgroundColor: "hsl(var(--destructive))",
+      color: "hsl(var(--destructive-foreground))",
+    },
+  }),
+  indicatorSeparator: (p: any) => ({
+    ...p,
+    backgroundColor: "hsl(var(--border))",
+  }),
+  dropdownIndicator: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    "&:hover": { color: "hsl(var(--foreground))" },
+  }),
+  clearIndicator: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    "&:hover": { color: "hsl(var(--foreground))" },
+  }),
+  loadingIndicator: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+  }),
+  noOptionsMessage: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+  }),
+} as const;
+
+const PORTAL_PROPS = {
+  menuPortalTarget: typeof document !== "undefined" ? document.body : undefined,
+  menuPosition: "fixed" as const,
+  menuShouldScrollIntoView: false,
+  isSearchable: false,
+  blurInputOnSelect: true,
+} as const;
+
+// ------------------------------------------------------------------
+// Gallery uploader
+// ------------------------------------------------------------------
 const GalleryUploaderWrapper: React.FC<{
   productId: string;
   field: string[];
@@ -40,13 +167,11 @@ const GalleryUploaderWrapper: React.FC<{
 
   useEffect(() => {
     const currentValue = Array.isArray(field) ? field : [];
-    const nextValue = files;
-
     if (
-      nextValue.length !== currentValue.length ||
-      nextValue.some((url, index) => url !== currentValue[index])
+      files.length !== currentValue.length ||
+      files.some((url, i) => url !== currentValue[i])
     ) {
-      handleAttributeChange(code, nextValue);
+      handleAttributeChange(code, files);
     }
   }, [files, field, handleAttributeChange, code]);
 
@@ -62,8 +187,9 @@ const GalleryUploaderWrapper: React.FC<{
 });
 GalleryUploaderWrapper.displayName = "GalleryUploaderWrapper";
 
-// ----- Main Fields Component -----
-
+// ------------------------------------------------------------------
+// Main Fields component
+// ------------------------------------------------------------------
 const Fields: React.FC<FieldProps> = React.memo(
   ({
     type,
@@ -83,115 +209,124 @@ const Fields: React.FC<FieldProps> = React.memo(
 
     useEffect(() => {
       let isActive = true;
-
       const loadOptions = async () => {
         try {
           if (code === "brand") {
-            const brandsData = await getBrands();
-            if (isActive) setBrands(brandsData);
+            const data = await getBrands();
+            if (isActive) setBrands(data);
           }
-
           if (code === "carrier") {
-            const carriersData = await getCarriers();
-            if (isActive) setCarriers(carriersData);
+            const data = await getCarriers();
+            if (isActive) setCarriers(data);
           }
         } catch (err) {
           console.error(`Failed to load ${code} options:`, err);
-          if (isActive) {
-            setError("Failed to fetch options. Please refresh.");
-          }
+          if (isActive) setError("Failed to fetch options. Please refresh.");
         }
       };
-
-      if (code === "brand" || code === "carrier") {
-        void loadOptions();
-      }
-
+      if (code === "brand" || code === "carrier") void loadOptions();
       return () => {
         isActive = false;
       };
     }, [code]);
 
-    const customSelectStyles = {
-      // ... (unchanged, same as before)
-      control: (provided: any, state: any) => ({
-        ...provided,
-        backgroundColor: "transparent",
-        borderColor: state.isFocused ? "#6366f1" : "#d1d5db",
-        borderRadius: "0.5rem",
-        boxShadow: state.isFocused
-          ? "0 0 0 2px rgba(99, 102, 241, 0.2)"
-          : "none",
-        minHeight: "44px",
-        "&:hover": {
-          borderColor: state.isFocused ? "#6366f1" : "#9ca3af",
-        },
-      }),
-      menu: (provided: any) => ({
-        ...provided,
-        backgroundColor: "#1f2937",
-        borderRadius: "0.5rem",
-        overflow: "hidden",
-      }),
-      option: (provided: any, state: any) => ({
-        ...provided,
-        backgroundColor: state.isSelected
-          ? "#6366f1"
-          : state.isFocused
-            ? "#4b5563"
-            : "#1f2937",
-        color: state.isSelected ? "white" : provided.color,
-        "&:hover": {
-          backgroundColor: "#4b5563",
-        },
-      }),
-      multiValue: (provided: any) => ({
-        ...provided,
-        backgroundColor: "#6366f1",
-        borderRadius: "0.375rem",
-      }),
-      multiValueLabel: (provided: any) => ({
-        ...provided,
-        color: "white",
-      }),
-      multiValueRemove: (provided: any) => ({
-        ...provided,
-        color: "white",
-        "&:hover": {
-          backgroundColor: "#818cf8",
-          color: "white",
-        },
-      }),
-    };
+    const brandOptions = useMemo(
+      () =>
+        (brands || [])
+          .filter(Boolean)
+          .map((b: any) => ({
+            value: b?._id ? String(b._id) : "",
+            label: b?.name || "Unnamed brand",
+          }))
+          .filter((o) => o.value),
+      [brands],
+    );
+
+    const carrierOptions = useMemo(
+      () => (carriers || []).map((c) => ({ value: c._id, label: c.name })),
+      [carriers],
+    );
+
+    const genericOptions = useMemo(
+      () => option.map((v) => ({ value: v, label: v })),
+      [option],
+    );
+
+    const handleBrandChange = useCallback(
+      (opt: { value: string } | null) =>
+        handleAttributeChange(code, opt ? opt.value : null),
+      [handleAttributeChange, code],
+    );
+    const handleCarrierChange = useCallback(
+      (opt: { value: string } | null) =>
+        handleAttributeChange(code, opt ? opt.value : null),
+      [handleAttributeChange, code],
+    );
+    const handleGenericChange = useCallback(
+      (opt: { value: string } | null) =>
+        handleAttributeChange(code, opt ? opt.value : null),
+      [handleAttributeChange, code],
+    );
+
+    const selectedBrandId = useMemo(() => {
+      const candidate = isUnitValue(field)
+        ? field.value
+        : typeof field === "object" && field !== null
+          ? ((field as any)._id ?? (field as any).id ?? (field as any).value)
+          : Array.isArray(field)
+            ? field[0]
+            : field;
+      if (!candidate) return "";
+      if (typeof candidate === "object") {
+        const nested =
+          (candidate as any)._id ??
+          (candidate as any).id ??
+          (candidate as any).value;
+        return nested ? String(nested) : "";
+      }
+      return String(candidate);
+    }, [field]);
+
+    const rawCarrier = useMemo(() => {
+      if (Array.isArray(field)) return field[0];
+      if (typeof field === "object" && field !== null) {
+        const o = field as any;
+        return o._id || o.id || o.value || "";
+      }
+      return (field as string) || "";
+    }, [field]);
+
+    const selectedMultiValues = useMemo(
+      () => asStringArray(field).map((v) => ({ value: v, label: v })),
+      [field],
+    );
 
     const renderField = () => {
       switch (type) {
         case "file":
-          // Only handle images (gallery) – mainImage is removed
           if (code === "images") {
-            console.log(
-              "rendering images code",
-              code,
-              "with productId",
-              productId,
-            );
             return (
               <GalleryUploaderWrapper
                 productId={productId || ""}
-                field={field || []}
+                field={asStringArray(field)}
                 code={code}
                 handleAttributeChange={handleAttributeChange}
               />
             );
           }
-          return null;
+          // Bug 18 from review: don't silently render nothing for unknown file fields.
+          return (
+            <div className="text-sm text-destructive border border-destructive/40 rounded-md p-3">
+              File field <code>{code}</code> has no uploader configured.
+            </div>
+          );
 
         case "text":
           return (
             <input
               type="text"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
-              value={field || ""}
+              className={INPUT_CLASS}
+              value={asString(field as StringFieldValue)}
               placeholder={`Enter ${name}`}
               onChange={(e) => handleAttributeChange(code, e.target.value)}
               required={isRequired}
@@ -203,7 +338,7 @@ const Fields: React.FC<FieldProps> = React.memo(
           if (code === "description") {
             return (
               <RichTextEditorWrapper
-                value={field || ""}
+                value={asString(field as StringFieldValue)}
                 onChange={(html: any) => handleAttributeChange(code, html)}
                 placeholder={`Enter ${name}`}
                 productId={productId || ""}
@@ -212,8 +347,8 @@ const Fields: React.FC<FieldProps> = React.memo(
           }
           return (
             <textarea
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
-              value={field || ""}
+              className={INPUT_CLASS}
+              value={asString(field as StringFieldValue)}
               placeholder={`Enter ${name}`}
               onChange={(e) => handleAttributeChange(code, e.target.value)}
               required={isRequired}
@@ -230,14 +365,17 @@ const Fields: React.FC<FieldProps> = React.memo(
               })
             : [];
 
-          const currentValue = field?.value !== undefined ? field.value : field;
-          const currentUnit = field?.unit;
+          const unitValue = isUnitValue(field) ? field : null;
+          const currentValue = unitValue
+            ? unitValue.value
+            : (field as number | "");
+          const currentUnit = unitValue?.unit;
 
           const numberInput = (
             <input
               type="number"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
-              value={currentValue ?? ""}
+              className={INPUT_CLASS}
+              value={asNumberInput(currentValue as NumberFieldValue)}
               onChange={(e) => {
                 const newValue =
                   e.target.value === "" ? "" : Number(e.target.value);
@@ -246,8 +384,6 @@ const Fields: React.FC<FieldProps> = React.memo(
                     value: newValue,
                     unit: currentUnit,
                   });
-                } else if (familyUnits.length > 0) {
-                  handleAttributeChange(code, newValue);
                 } else {
                   handleAttributeChange(code, newValue);
                 }
@@ -262,7 +398,6 @@ const Fields: React.FC<FieldProps> = React.memo(
               value: u.symbol,
               label: u.symbol,
             }));
-
             return (
               <div className="flex gap-2">
                 <div className="flex-1">{numberInput}</div>
@@ -271,7 +406,7 @@ const Fields: React.FC<FieldProps> = React.memo(
                   value={
                     unitOptions.find((opt) => opt.value === currentUnit) || null
                   }
-                  onChange={(opt) => {
+                  onChange={(opt: any) => {
                     const newUnit = opt?.value;
                     const newVal =
                       currentValue !== undefined && newUnit
@@ -285,187 +420,133 @@ const Fields: React.FC<FieldProps> = React.memo(
                   classNamePrefix="react-select"
                   placeholder="Unit"
                   isClearable={!isRequired}
+                  styles={customSelectStyles}
+                  {...PORTAL_PROPS}
                 />
               </div>
             );
           }
-
           return numberInput;
         }
 
         case "select": {
           if (code === "brand") {
-            const brandOptions = brands
-              .filter(Boolean)
-              .map((brand) => ({
-                value: brand?._id ? brand._id.toString() : "",
-                label: brand?.name || "Unnamed brand",
-              }))
-              .filter((brand) => brand.value);
-
-            const selectedBrandId = (() => {
-              const candidate =
-                typeof field === "object" && field !== null
-                  ? (field._id ?? field.id ?? field.value)
-                  : Array.isArray(field)
-                    ? field[0]
-                    : field;
-
-              if (!candidate) return "";
-              if (typeof candidate === "object") {
-                const nested = candidate._id ?? candidate.id ?? candidate.value;
-                return nested ? String(nested) : "";
-              }
-
-              return String(candidate);
-            })();
-
+            const selected =
+              brandOptions.find((o) => o.value === selectedBrandId) ?? null;
             return (
               <Select
                 options={brandOptions}
-                value={
-                  brandOptions.find(
-                    (option) => option.value === selectedBrandId,
-                  ) || null
-                }
-                onChange={(opt: { value: string; label: string } | null) =>
-                  handleAttributeChange(code, opt ? opt.value : null)
-                }
+                value={selected}
+                onChange={handleBrandChange}
                 styles={customSelectStyles}
-                className="react-select-container"
                 classNamePrefix="react-select"
                 required={isRequired}
+                isLoading={brands.length === 0 && !error}
+                {...PORTAL_PROPS}
               />
             );
           }
-
           if (code === "carrier") {
-            const carrierOptions = carriers.map((c) => ({
-              value: c._id,
-              label: c.name,
-            }));
-
-            const rawCarrier = Array.isArray(field)
-              ? field[0]
-              : typeof field === "object" && field !== null
-                ? field._id || field.id || field.value || ""
-                : field || "";
-
             return (
               <Select
                 options={carrierOptions}
                 value={
-                  carrierOptions.find(
-                    (option) => option.value === rawCarrier,
-                  ) || null
+                  carrierOptions.find((o) => o.value === rawCarrier) ?? null
                 }
-                onChange={(opt: { value: string; label: string } | null) =>
-                  handleAttributeChange(code, opt ? opt.value : null)
-                }
+                onChange={handleCarrierChange}
                 styles={customSelectStyles}
-                className="react-select-container"
                 classNamePrefix="react-select"
                 required={isRequired}
                 placeholder="Select carrier..."
+                {...PORTAL_PROPS}
               />
             );
           }
-
-          const selectedValue = Array.isArray(field)
-            ? field[0] || ""
-            : (field ?? "");
-
+          const selectedValue =
+            asStringArray(field)[0] ?? asString(field as StringFieldValue);
+          const current = option.includes(selectedValue)
+            ? { value: selectedValue, label: selectedValue }
+            : null;
           return (
             <Select
-              options={option.map((v) => ({ value: v, label: v }))}
-              value={
-                option
-                  .filter((v) => v === selectedValue)
-                  .map((v) => ({ value: v, label: v }))[0] || null
-              }
-              onChange={(opt: { value: string; label: string } | null) =>
-                handleAttributeChange(code, opt ? opt.value : null)
-              }
+              options={genericOptions}
+              value={current}
+              onChange={handleGenericChange}
               styles={customSelectStyles}
-              className="react-select-container"
               classNamePrefix="react-select"
               required={isRequired}
+              {...PORTAL_PROPS}
             />
           );
         }
 
-        case "checkbox":
+        case "checkbox": {
+          const values = asStringArray(field as ArrayFieldValue);
           return (
             <div className="flex flex-col space-y-3">
-              {option.map((opt) => (
-                <label
-                  key={opt}
-                  className="inline-flex items-center cursor-pointer"
-                >
-                  <div className="relative flex items-center">
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={
-                        Array.isArray(field) ? field.includes(opt) : false
-                      }
-                      onChange={(e) => {
-                        const newVals = Array.isArray(field)
-                          ? e.target.checked
-                            ? [...field, opt]
-                            : field.filter((v: any) => v !== opt)
-                          : e.target.checked
-                            ? [opt]
-                            : [];
-                        handleAttributeChange(code, newVals);
-                      }}
-                      required={
-                        isRequired && option.length > 0
-                          ? field?.length === 0
-                          : false
-                      }
-                    />
-                    <div
-                      className={`w-5 h-5 border rounded-md mr-3 flex-shrink-0 flex items-center justify-center ${
-                        Array.isArray(field) && field.includes(opt)
-                          ? "bg-indigo-500 border-indigo-500"
-                          : "border-gray-300 dark:border-gray-600"
-                      }`}
-                    >
-                      {Array.isArray(field) && field.includes(opt) && (
-                        <svg
-                          className="w-3 h-3 text-white"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      )}
+              {option.map((opt) => {
+                const checked = values.includes(opt);
+                return (
+                  <label
+                    key={opt}
+                    className="inline-flex items-center cursor-pointer"
+                  >
+                    <div className="relative flex items-center">
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={checked}
+                        onChange={(e) => {
+                          const newVals = e.target.checked
+                            ? [...values, opt]
+                            : values.filter((v) => v !== opt);
+                          handleAttributeChange(code, newVals);
+                        }}
+                        required={
+                          isRequired && option.length > 0
+                            ? values.length === 0
+                            : false
+                        }
+                      />
+                      <div
+                        className={`w-5 h-5 border rounded-md mr-3 flex-shrink-0 flex items-center justify-center ${
+                          checked ? CHECK_BG : CHECK_BORDER
+                        }`}
+                      >
+                        {checked && (
+                          <svg
+                            className="w-3 h-3 text-primary-foreground"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <span className="text-gray-700 dark:text-gray-300">
-                    {opt}
-                  </span>
-                </label>
-              ))}
+                    <span className="text-foreground">{opt}</span>
+                  </label>
+                );
+              })}
             </div>
           );
+        }
 
-        case "boolean":
+        case "boolean": {
+          const value = !!field;
           return (
             <label className="inline-flex items-center cursor-pointer">
               <div className="relative">
                 <input
                   type="checkbox"
                   className="sr-only"
-                  checked={!!field}
+                  checked={value}
                   onChange={(e) =>
                     handleAttributeChange(code, e.target.checked)
                   }
@@ -473,65 +554,67 @@ const Fields: React.FC<FieldProps> = React.memo(
                 />
                 <div
                   className={`w-11 h-6 rounded-full ${
-                    field ? "bg-indigo-500" : "bg-gray-300 dark:bg-gray-600"
+                    value ? "bg-primary" : "bg-input"
                   } transition-colors`}
-                ></div>
+                />
                 <div
-                  className={`absolute left-0.5 top-0.5 bg-white border rounded-full w-5 h-5 transition-transform ${
-                    field ? "transform translate-x-5" : ""
+                  className={`absolute left-0.5 top-0.5 bg-background border rounded-full w-5 h-5 transition-transform ${
+                    value ? "transform translate-x-5" : ""
                   }`}
-                ></div>
+                />
               </div>
-              <span className="ml-3 text-gray-700 dark:text-gray-300">
-                {field ? "Yes" : "No"}
+              <span className="ml-3 text-foreground">
+                {value ? "Yes" : "No"}
               </span>
             </label>
           );
+        }
 
-        case "radio":
+        case "radio": {
+          const value = asString(field as StringFieldValue);
           return (
             <div className="flex flex-col space-y-3">
-              {option.map((opt) => (
-                <label
-                  key={opt}
-                  className="inline-flex items-center cursor-pointer"
-                >
-                  <div className="relative flex items-center">
-                    <input
-                      type="radio"
-                      className="sr-only"
-                      value={opt}
-                      checked={field === opt}
-                      onChange={() => handleAttributeChange(code, opt)}
-                      required={isRequired}
-                    />
-                    <div
-                      className={`w-5 h-5 border rounded-full mr-3 flex-shrink-0 flex items-center justify-center ${
-                        field === opt
-                          ? "border-indigo-500"
-                          : "border-gray-300 dark:border-gray-600"
-                      }`}
-                    >
-                      {field === opt && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div>
-                      )}
+              {option.map((opt) => {
+                const checked = value === opt;
+                return (
+                  <label
+                    key={opt}
+                    className="inline-flex items-center cursor-pointer"
+                  >
+                    <div className="relative flex items-center">
+                      <input
+                        type="radio"
+                        className="sr-only"
+                        value={opt}
+                        checked={checked}
+                        onChange={() => handleAttributeChange(code, opt)}
+                        required={isRequired}
+                      />
+                      <div
+                        className={`w-5 h-5 border rounded-full mr-3 flex-shrink-0 flex items-center justify-center ${
+                          checked ? "border-primary" : CHECK_BORDER
+                        }`}
+                      >
+                        {checked && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <span className="text-gray-700 dark:text-gray-300">
-                    {opt}
-                  </span>
-                </label>
-              ))}
+                    <span className="text-foreground">{opt}</span>
+                  </label>
+                );
+              })}
             </div>
           );
+        }
 
         case "date":
           return (
             <input
               title="date"
               type="date"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
-              value={field || ""}
+              className={INPUT_CLASS}
+              value={asString(field as StringFieldValue)}
               onChange={(e) => handleAttributeChange(code, e.target.value)}
               required={isRequired}
             />
@@ -543,13 +626,13 @@ const Fields: React.FC<FieldProps> = React.memo(
               <input
                 title="color"
                 type="color"
-                className="h-10 w-10 p-0 border rounded-lg cursor-pointer"
-                value={field || "#000000"}
+                className="h-10 w-10 p-0 border border-input rounded-lg cursor-pointer bg-background"
+                value={asString(field as StringFieldValue) || "#000000"}
                 onChange={(e) => handleAttributeChange(code, e.target.value)}
                 required={isRequired}
               />
-              <span className="text-gray-700 dark:text-gray-300 font-mono">
-                {field || "#000000"}
+              <span className="text-foreground font-mono">
+                {asString(field as StringFieldValue) || "#000000"}
               </span>
             </div>
           );
@@ -559,8 +642,8 @@ const Fields: React.FC<FieldProps> = React.memo(
             <input
               title="url"
               type="url"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
-              value={field || ""}
+              className={INPUT_CLASS}
+              value={asString(field as StringFieldValue)}
               onChange={(e) => handleAttributeChange(code, e.target.value)}
               required={isRequired}
             />
@@ -570,52 +653,44 @@ const Fields: React.FC<FieldProps> = React.memo(
           return (
             <Select
               isMulti
-              options={option.map((v) => ({ value: v, label: v }))}
-              value={
-                Array.isArray(field)
-                  ? field.map((v) => ({ value: v, label: v }))
-                  : []
-              }
+              options={genericOptions}
+              value={selectedMultiValues}
               onChange={(opts) =>
                 handleAttributeChange(
                   code,
-                  opts.map((o: any) => o.value),
+                  (opts as MultiValue<any>).map((o) => o.value),
                 )
               }
               styles={customSelectStyles}
-              className="react-select-container"
               classNamePrefix="react-select"
               required={isRequired}
+              {...PORTAL_PROPS}
             />
           );
 
+        // Bug 17 from review: explicit unsupported message instead of a silent text input.
         default:
           return (
-            <input
-              type="text"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
-              value={field || ""}
-              placeholder={`Enter ${name}`}
-              onChange={(e) => handleAttributeChange(code, e.target.value)}
-              required={isRequired}
-            />
+            <div className="text-sm text-destructive border border-destructive/40 rounded-md p-3">
+              Unsupported field type: <code>{type ?? "(none)"}</code>
+            </div>
           );
       }
     };
 
     return (
       <div className="mb-5">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        <label className={LABEL_CLASS} htmlFor={`field-${code}`}>
           {name}
-          {isRequired && <span className="text-red-500 ml-1">*</span>}
+          {isRequired && <span className="text-destructive ml-1">*</span>}
         </label>
         <div>{renderField()}</div>
-        {error && (
-          <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>
-        )}
+        {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
       </div>
     );
   },
 );
+
+Fields.displayName = "Fields";
 
 export default Fields;

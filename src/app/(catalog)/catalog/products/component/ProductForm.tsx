@@ -16,11 +16,16 @@ import {
   Stepper,
   Step,
   StepLabel,
-  Snackbar,
 } from "@mui/material";
+import { toast } from "react-hot-toast";
+
 import { getCategoryAttributeSets } from "@/app/actions/category";
 import { getUnits } from "@/app/actions/unit";
-import { createOrUpdateProduct, findProducts } from "@/app/actions/products";
+import {
+  createOrUpdateProduct,
+  findProductById,
+  findProducts,
+} from "@/app/actions/products";
 import {
   saveProductDraft,
   getProductDraft,
@@ -30,6 +35,7 @@ import { AttributeField } from "@/app/(catalog)/catalog/products/component/Attri
 import ManageRelatedProduct from "./ManageRelatedProduct";
 import VariantsManager from "@/app/(catalog)/catalog/products/component/variants/VariantOption";
 import { isValidBarcode } from "@/app/lib/barcode";
+import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 
 // ------------------------------------------------------------------
 // Types
@@ -112,7 +118,6 @@ const toScalarId = (value: any): string | null => {
   return null;
 };
 
-// Normalize variantValues: array of {k, v} -> object { k: [v] }
 function normalizeVariantValues(data: any): Record<string, string[]> {
   if (!data) return {};
   if (Array.isArray(data)) {
@@ -161,7 +166,7 @@ function getGroupRelevantKeys(group: GroupNode): string[] {
 }
 
 // ------------------------------------------------------------------
-// Memoized GroupRenderer (FULL DEFINITION)
+// Memoized GroupRenderer
 // ------------------------------------------------------------------
 interface GroupRendererProps {
   group: GroupNode;
@@ -343,7 +348,7 @@ const GroupRenderer = memo(
 GroupRenderer.displayName = "GroupRenderer";
 
 // ------------------------------------------------------------------
-// Helper: flatten structured fields
+// Flatten structured fields
 // ------------------------------------------------------------------
 function flattenStructuredFields(
   data: Record<string, any>,
@@ -380,6 +385,25 @@ function flattenStructuredFields(
 }
 
 // ------------------------------------------------------------------
+// Draft session helpers (Bug 1)
+// ------------------------------------------------------------------
+const NEW_PRODUCT_SESSION_KEY = "new-product-draft-id";
+
+function getOrCreateNewProductId(): string {
+  if (typeof window === "undefined") return "new";
+  const existing = sessionStorage.getItem(NEW_PRODUCT_SESSION_KEY);
+  if (existing) return existing;
+  const fresh = `new-${crypto.randomUUID()}`;
+  sessionStorage.setItem(NEW_PRODUCT_SESSION_KEY, fresh);
+  return fresh;
+}
+
+function clearNewProductId() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(NEW_PRODUCT_SESSION_KEY);
+}
+
+// ------------------------------------------------------------------
 // Main Component
 // ------------------------------------------------------------------
 interface ProductFormProps {
@@ -392,38 +416,49 @@ const ProductForm: React.FC<ProductFormProps> = ({
   initialCategoryId,
 }) => {
   const router = useRouter();
-  const [productId, setProductId] = useState<string>(initialProductId || "new");
+
+  // BUG 1: stable, per-session draft key for new products so concurrent
+  // drafts don't collide across sessions/tabs.
+  const [productId] = useState<string>(() => {
+    if (initialProductId) return initialProductId;
+    return getOrCreateNewProductId();
+  });
+
   const [productData, setProductData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
   const [isFetchingAttributes, setIsFetchingAttributes] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [redirecting, setRedirecting] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState<AttributeSetStep[]>([]);
   const [validationErrors, setValidationErrors] = useState<{
     [key: string]: string[];
   }>({});
-  const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [units, setUnits] = useState<any[]>([]);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
 
   const currentStepRef = useRef(currentStep);
 
-  // Draft auto-save
+  // Clear the new-product session key after a successful save / discard.
+  const clearNewProductSession = useCallback(() => {
+    if (initialProductId) return;
+    clearNewProductId();
+  }, [initialProductId]);
+
+  // ---------------- Draft auto-save ----------------
   useEffect(() => {
     if (Object.keys(productData).length === 0) return;
     const timer = setTimeout(async () => {
       try {
         await saveProductDraft(productId, productData);
-      } catch (err) {
-        // ignore
+      } catch {
+        // silent
       }
     }, 800);
     return () => clearTimeout(timer);
   }, [productData, productId]);
 
-  // ---------- Load product & draft ----------
+  // ---------------- Load product & draft ----------------
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -431,31 +466,26 @@ const ProductForm: React.FC<ProductFormProps> = ({
         let data: Record<string, any> = {};
 
         if (initialProductId) {
-          const result = await findProducts(initialProductId);
-          console.log("[ProductForm] Raw product data:", result);
+          const result = await findProductById(initialProductId);
           if (result && !result.error) {
             data = result;
           } else {
             setError("Failed to load product");
+            toast.error("Failed to load product");
           }
         }
 
-        // -------- Flatten structured fields into flat keys ----------
         data = flattenStructuredFields(data);
 
-        // Map productCode to type/value for the form
         if (data.productCode) {
           let code = data.productCode;
-          if (Array.isArray(code) && code.length > 0) {
-            code = code[0];
-          }
+          if (Array.isArray(code) && code.length > 0) code = code[0];
           if (code && typeof code === "object") {
             data.type = code.type || "";
             data.value = code.value || "";
           }
         }
 
-        // Normalize variantValues from array to object
         if (data.variantValues) {
           data.variantValues = normalizeVariantValues(data.variantValues);
         }
@@ -467,9 +497,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
           draftData = flattenStructuredFields(draftData);
           if (draftData.productCode) {
             let code = draftData.productCode;
-            if (Array.isArray(code) && code.length > 0) {
-              code = code[0];
-            }
+            if (Array.isArray(code) && code.length > 0) code = code[0];
             if (code && typeof code === "object") {
               draftData.type = code.type || "";
               draftData.value = code.value || "";
@@ -483,15 +511,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
           data = { ...data, ...draftData };
         }
 
-        if (initialProductId) {
-          data._id = initialProductId;
-        }
-
+        if (initialProductId) data._id = initialProductId;
         if (!data.categoryId && initialCategoryId) {
           data.categoryId = initialCategoryId;
         }
 
-        // Normalize reference IDs (ensure they are strings)
         if (data.categoryId) {
           const id = toScalarId(data.categoryId);
           data.categoryId = id || null;
@@ -505,7 +529,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
           data.carrier = id || null;
         }
 
-        // Ensure status is always set (default to 'draft')
         if (data.status) {
           data.status = data.status.trim().toLowerCase();
         } else {
@@ -518,11 +541,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
           );
         }
 
-        console.log("[ProductForm] Final product data after flattening:", data);
         setProductData(data);
       } catch (err) {
         console.error("Error loading product data:", err);
         setError("Failed to load data");
+        toast.error("Failed to load data");
       } finally {
         setLoading(false);
       }
@@ -530,7 +553,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     loadData();
   }, [initialProductId, productId, initialCategoryId]);
 
-  // ---------- Fetch attribute sets and units ----------
+  // ---------------- Fetch attribute sets ----------------
   useEffect(() => {
     const fetchAttributeSets = async () => {
       if (!productData.categoryId) {
@@ -547,6 +570,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
       } catch (err) {
         console.error("Error fetching attribute sets:", err);
         setError("Failed to load product attributes. Please try again.");
+        toast.error("Failed to load product attributes.");
       } finally {
         setIsFetchingAttributes(false);
       }
@@ -554,6 +578,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     fetchAttributeSets();
   }, [productData.categoryId]);
 
+  // ---------------- Fetch units ----------------
   useEffect(() => {
     const fetchUnits = async () => {
       try {
@@ -566,29 +591,41 @@ const ProductForm: React.FC<ProductFormProps> = ({
     fetchUnits();
   }, []);
 
-  // ---------- Visible steps ----------
+  // ---------------- Visible steps (Bug 6) ----------------
+  // BUG 6: derive `hasVariants` from the live variants array so the variant
+  // step is hidden the moment the user removes the last variant, and shown
+  // again when they re-add one — regardless of a stale `hasVariants` flag
+  // from the server payload.
+  const hasVariants = useMemo(
+    () =>
+      Array.isArray(productData.variants) && productData.variants.length > 0,
+    [productData.variants],
+  );
+
   const visibleSteps = useMemo(() => {
     const variantStepIndex = steps.findIndex((step) =>
       step.groups.some((g) => normalizeCode(g.code) === "variantThemes"),
     );
-    if (variantStepIndex === -1 || productData.hasVariants) {
+    if (variantStepIndex === -1 || hasVariants) {
       return steps;
     }
     return steps.filter((_, index) => index !== variantStepIndex);
-  }, [steps, productData.hasVariants]);
+  }, [steps, hasVariants]);
 
+  // BUG 2: only clamp currentStep here. The ref is updated by a dedicated
+  // effect (below) that mirrors the real current step, not the last one.
   useEffect(() => {
     if (currentStep >= visibleSteps.length) {
       setCurrentStep(Math.max(0, visibleSteps.length - 1));
     }
-    currentStepRef.current = Math.max(0, visibleSteps.length - 1);
   }, [visibleSteps, currentStep]);
 
+  // BUG 2: single source of truth for the ref.
   useEffect(() => {
     currentStepRef.current = currentStep;
   }, [currentStep]);
 
-  // ---------- Validation ----------
+  // ---------------- Validation ----------------
   const validateGroup = (group: GroupNode): string[] => {
     const errors: string[] = [];
     group.attributes.forEach((attr) => {
@@ -653,7 +690,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
     return errors;
   };
 
-  const validateAllSteps = (): boolean => {
+  // BUG 3: return both the result AND the freshly computed errors so callers
+  // don't read a stale `validationErrors` from the previous render.
+  const validateAllSteps = (): {
+    ok: boolean;
+    errors: Record<string, string[]>;
+  } => {
     const allErrors: { [key: string]: string[] } = {};
     let hasErrors = false;
     visibleSteps.forEach((step) => {
@@ -676,7 +718,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
       }
     }
     setValidationErrors(allErrors);
-    return !hasErrors;
+    if (hasErrors) {
+      toast.error("Please fix the validation errors before saving.");
+    }
+    return { ok: !hasErrors, errors: allErrors };
   };
 
   const validateCurrentStep = (): boolean => {
@@ -710,13 +755,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
     setValidationErrors(newErrors);
     if (hasErrors) {
-      setShowValidationAlert(true);
+      toast.error("Please fix the errors on this step before continuing.");
       return false;
     }
     return true;
   };
 
-  // ---------- Navigation ----------
+  // ---------------- Navigation ----------------
   const handleNext = () => {
     if (validateCurrentStep() && currentStep < visibleSteps.length - 1) {
       setCurrentStep(currentStep + 1);
@@ -729,7 +774,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
-  // ---------- Change handler ----------
+  // ---------------- Change handler ----------------
   const handleChange = useCallback(
     (field: string, value: any) => {
       const camelField = normalizeCode(field);
@@ -760,7 +805,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     [visibleSteps],
   );
 
-  // ---------- Submit ----------
+  // ---------------- Submit ----------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -769,13 +814,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
       return;
     }
 
-    setIsSubmitting(true);
-
-    if (!validateAllSteps()) {
+    // BUG 3: consume the errors returned by validateAllSteps directly.
+    const { ok, errors } = validateAllSteps();
+    if (!ok) {
       let firstErrorStep = 0;
       for (let i = 0; i < visibleSteps.length; i++) {
         const hasError = visibleSteps[i].groups.some(
-          (g) => validationErrors[g.id] && validationErrors[g.id].length > 0,
+          (g) => (errors[g.id]?.length ?? 0) > 0,
         );
         if (hasError) {
           firstErrorStep = i;
@@ -783,43 +828,36 @@ const ProductForm: React.FC<ProductFormProps> = ({
         }
       }
       setCurrentStep(firstErrorStep);
-      setShowValidationAlert(true);
-      setIsSubmitting(false);
       return;
     }
 
+    // BUG 1: only an existing product counts as an update. The draft session
+    // key ("new-…") must never be sent to the server as `_id`.
+    const isUpdate = Boolean(initialProductId || productData._id);
+    const toastId = toast.loading(
+      isUpdate ? "Updating product..." : "Creating product...",
+    );
+    setIsSubmitting(true);
+
     try {
-      setError(null);
-      setSuccess(null);
-
       const payload = { ...productData };
-
-      // Remove any existing structured fields – the server will rebuild them
       delete payload.keyFeatures;
       delete payload.specifications;
 
-      // Ensure status is always sent
-      if (!payload.status) {
-        payload.status = "draft";
-      }
+      if (!payload.status) payload.status = "draft";
 
-      const productIdToUse =
-        initialProductId ||
-        payload._id ||
-        (productId !== "new" ? productId : undefined);
-
+      // BUG 1: remove the draft-session fallback that used to inject the
+      // (now session-scoped) productId as `_id`.
+      const productIdToUse = initialProductId || payload._id;
       if (productIdToUse) {
         payload._id = productIdToUse;
-        console.log("[ProductForm] Submitting UPDATE with _id:", payload._id);
       } else {
         delete payload._id;
-        console.log("[ProductForm] Submitting CREATE (no _id)");
       }
 
       delete payload.Id;
       delete payload.id;
 
-      // Normalize IDs
       if (payload.categoryId) {
         payload.categoryId = toScalarId(payload.categoryId) || null;
       }
@@ -838,7 +876,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
           .toLowerCase();
       }
 
-      // Ensure variants mainImage and images are properly formatted
       if (Array.isArray(payload.variants)) {
         payload.variants = payload.variants.map((variant: any) => {
           if (!variant || typeof variant !== "object") return variant;
@@ -853,7 +890,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
         });
       }
 
-      // Convert variantValues from object to array of {k, v} if needed
       if (
         payload.variantValues &&
         typeof payload.variantValues === "object" &&
@@ -864,39 +900,57 @@ const ProductForm: React.FC<ProductFormProps> = ({
         );
       }
 
-      console.log(
-        "[ProductForm] Final payload sent to server:",
-        JSON.stringify(payload, null, 2),
-      );
-
       const res = await createOrUpdateProduct(payload);
 
       if (res.success) {
-        setSuccess("Product saved successfully!");
-        await deleteProductDraft(productId);
+        toast.success(
+          isUpdate
+            ? "Product updated successfully!"
+            : "Product created successfully!",
+          { id: toastId },
+        );
+        try {
+          await deleteProductDraft(productId);
+        } catch {
+          // silent — draft already may not exist
+        }
+        // BUG 1: clear the session slot so the *next* create starts fresh.
+        clearNewProductSession();
         setTimeout(() => {
           router.push("/catalog/products");
-        }, 1500);
+        }, 900);
       } else {
-        setError(res.error || "Failed to save product.");
+        toast.error(res.error || "Failed to save product.", { id: toastId });
       }
     } catch (err) {
       console.error(err);
-      setError("An unexpected error occurred.");
+      toast.error("An unexpected error occurred.", { id: toastId });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ---------- Cancel ----------
-  const handleCancel = async () => {
-    if (confirm("You have unsaved changes. Discard draft?")) {
+  // ---------------- Cancel / discard ----------------
+  const handleCancelClick = () => {
+    setIsCancelDialogOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    const toastId = toast.loading("Discarding draft...");
+    try {
       await deleteProductDraft(productId);
+      // BUG 1: free the session slot so the user can start a clean draft.
+      clearNewProductSession();
+      toast.success("Draft discarded", { id: toastId });
+    } catch {
+      toast.error("Failed to discard draft", { id: toastId });
+    } finally {
+      setIsCancelDialogOpen(false);
       router.push("/catalog/products");
     }
   };
 
-  // ---------- Memoized values ----------
+  // ---------------- Memoized ----------------
   const allVariantFields = useMemo(() => {
     for (const step of visibleSteps) {
       const group = step.groups.find(
@@ -913,8 +967,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     return visibleSteps[currentStep].groups;
   }, [visibleSteps, currentStep]);
 
-  // ---------- Early exits ----------
-  if (loading || redirecting) {
+  // ---------------- Early exits ----------------
+  if (loading) {
     return (
       <Box
         display="flex"
@@ -937,16 +991,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
     );
   }
 
-  console.log("[ProductForm] Rendering with productData:", productData);
-
-  // ---------- Main render ----------
+  // ---------------- Main render ----------------
   return (
     <div>
       <form className="flex flex-col max-w-4xl bg-card text-card-foreground p-2 lg:p-4 rounded-lg ">
         <div className="flex-1">
-          {error && !success && <Alert severity="error">{error}</Alert>}
-          {success && !error && <Alert severity="success">{success}</Alert>}
-          {!error && !success && (
+          {error && <Alert severity="error">{error}</Alert>}
+          {!error && (
             <div className="text-xs text-gray-400 mb-2">
               💾 Draft auto-saved
             </div>
@@ -1007,8 +1058,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
           <div>
             <button
               type="button"
-              onClick={handleCancel}
-              className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded transition mr-4"
+              onClick={handleCancelClick}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded transition mr-4 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -1016,7 +1068,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
               <button
                 type="button"
                 onClick={handlePrev}
-                className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded transition"
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded transition disabled:opacity-50"
               >
                 Previous
               </button>
@@ -1050,12 +1103,15 @@ const ProductForm: React.FC<ProductFormProps> = ({
         </div>
       </form>
 
-      <Snackbar
-        open={showValidationAlert}
-        autoHideDuration={6000}
-        onClose={() => setShowValidationAlert(false)}
-        message="Please fix the validation errors before proceeding"
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      <ConfirmDialog
+        isOpen={isCancelDialogOpen}
+        onClose={() => setIsCancelDialogOpen(false)}
+        onConfirm={handleConfirmCancel}
+        title="Discard this draft?"
+        message="Your unsaved changes will be lost and the draft will be deleted. This action cannot be undone."
+        confirmLabel="Discard & exit"
+        cancelLabel="Keep editing"
+        danger
       />
     </div>
   );
