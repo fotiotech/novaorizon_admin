@@ -86,47 +86,11 @@ function sanitizeProductCode(
   return { type, value };
 }
 
-function normalizeKeyValueCollection(value: any): any[] {
-  if (!value) return [];
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => {
-        if (!entry || typeof entry !== "object") return null;
-        const k = entry.k ?? entry.key ?? entry.name ?? "";
-        const key = String(k).trim();
-        if (!key) return null;
-        const result: any = { k: key, v: entry.v ?? entry.value ?? "" };
-        if (entry.unit) result.unit = entry.unit;
-        return result;
-      })
-      .filter(Boolean);
-  }
-  if (typeof value === "object") {
-    return Object.entries(value)
-      .map(([k, v]) => {
-        const key = String(k).trim();
-        return key ? { k: key, v: v ?? "" } : null;
-      })
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function sanitizeSpecifications(specs: any[]): any[] {
-  if (!Array.isArray(specs)) return [];
-  return specs.map((g) => ({
-    ...g,
-    attributes: normalizeKeyValueCollection(g.attributes || []),
-    groups: g.groups ? sanitizeSpecifications(g.groups) : [],
-  }));
-}
-
 /**
- * Normalize `variantValues` into a plain map `{ [themeCode]: string[] }`.
- * Accepts every shape we've ever persisted:
- *   1. Plain object map (current schema).
- *   2. Array of `{ k, v }` (legacy schema).
- *   3. Array wrapping a single object map (Mongoose `[Mixed]` coercion of an object).
+ * Accept any historical `variantValues` shape and normalize to a plain map.
+ *   1. { [code]: string[] }          (current)
+ *   2. [{ k, v }, …]                 (legacy)
+ *   3. [ { [code]: string[] } ]      (Mongoose [Mixed] wrapping an object)
  */
 function normalizeVariantValuesMap(
   data: any,
@@ -163,17 +127,13 @@ function normalizeVariantValuesMap(
       });
       return out;
     }
-    // Array wrapping a single object map.
     if (data.length === 1 && data[0] && typeof data[0] === "object") {
       return absorbObject(data[0]);
     }
     return undefined;
   }
 
-  if (typeof data === "object") {
-    return absorbObject(data);
-  }
-
+  if (typeof data === "object") return absorbObject(data);
   return undefined;
 }
 
@@ -181,125 +141,6 @@ function serialize(doc: any): any {
   if (!doc) return doc;
   const obj = doc.toObject ? doc.toObject() : doc;
   return JSON.parse(JSON.stringify(obj));
-}
-
-async function buildStructuredFields(
-  flatData: Record<string, any>,
-  categoryId: string,
-): Promise<{
-  keyFeatures: any[];
-  specifications: any[];
-  leftover: Record<string, any>;
-}> {
-  const attributeSets = await getCategoryAttributeSets(categoryId);
-  const result: { keyFeatures: any[]; specifications: any[] } = {
-    keyFeatures: [],
-    specifications: [],
-  };
-  const usedKeys = new Set<string>();
-
-  function collectAttributeCodes(group: any, codes: Set<string>) {
-    group.attributes?.forEach((a: any) => codes.add(a.code));
-    group.children?.forEach((c: any) => collectAttributeCodes(c, codes));
-  }
-
-  function buildSpecGroup(g: any): any {
-    const groupName = g.name || g.code;
-    const groupAttrs: any[] = [];
-    const childGroups: any[] = [];
-
-    g.attributes?.forEach((attr: any) => {
-      const camel = attr.code.replace(/_([a-z])/g, (_: any, c: string) =>
-        c.toUpperCase(),
-      );
-      const value = flatData[camel];
-      if (value !== undefined && value !== null && value !== "") {
-        let unit: string | undefined;
-        let finalValue = value;
-        if (
-          value &&
-          typeof value === "object" &&
-          "value" in value &&
-          "unit" in value
-        ) {
-          finalValue = value.value;
-          unit = value.unit;
-        }
-        groupAttrs.push({
-          k: camel,
-          v: finalValue,
-          ...(unit ? { unit } : {}),
-        });
-        usedKeys.add(camel);
-      }
-    });
-
-    g.children?.forEach((child: any) => {
-      const cr = buildSpecGroup(child);
-      if (cr.attributes.length || cr.groups.length) childGroups.push(cr);
-    });
-
-    return {
-      name: groupName,
-      attributes: normalizeKeyValueCollection(groupAttrs),
-      groups: childGroups,
-    };
-  }
-
-  for (const set of attributeSets) {
-    // Classify by the SET's code (e.g. "keyFeatures", "specifications").
-    const setCode = String(set.code || "").replace(/_([a-z])/g, (_, c) =>
-      c.toUpperCase(),
-    );
-
-    if (setCode === "keyFeatures") {
-      const features: any[] = [];
-      for (const group of set.groups || []) {
-        const allAttrCodes = new Set<string>();
-        collectAttributeCodes(group, allAttrCodes);
-
-        for (const code of allAttrCodes) {
-          const camel = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-          const value = flatData[camel];
-          if (value !== undefined && value !== null && value !== "") {
-            let unit: string | undefined;
-            let finalValue = value;
-            if (
-              value &&
-              typeof value === "object" &&
-              "value" in value &&
-              "unit" in value
-            ) {
-              finalValue = value.value;
-              unit = value.unit;
-            }
-            features.push({
-              k: camel,
-              v: finalValue,
-              ...(unit ? { unit } : {}),
-            });
-            usedKeys.add(camel);
-          }
-        }
-      }
-      if (features.length) {
-        result.keyFeatures = normalizeKeyValueCollection(features);
-      }
-    } else if (setCode === "specifications") {
-      for (const group of set.groups || []) {
-        const built = buildSpecGroup(group);
-        if (built.attributes.length || built.groups.length) {
-          result.specifications.push(built);
-        }
-      }
-    }
-  }
-
-  const leftover: Record<string, any> = {};
-  for (const [k, v] of Object.entries(flatData)) {
-    if (!usedKeys.has(k)) leftover[k] = v;
-  }
-  return { ...result, leftover };
 }
 
 async function validateRequiredCategoryAttributes(
@@ -338,7 +179,7 @@ async function validateRequiredCategoryAttributes(
 }
 
 // ==================================================================
-// SHARED PAYLOAD PREPARATION
+// SHARED PAYLOAD PREPARATION — MODEL B: everything flat
 // ==================================================================
 type PrepareResult =
   | {
@@ -354,8 +195,6 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
     return { ok: false, error: `Validation failed: ${validated.error}` };
   }
 
-  // Merge raw form with Zod output — Zod coerces known fields, raw data
-  // keeps anything passthrough didn't touch.
   const data = { ...formData, ...(validated.data ?? {}) };
 
   const providedId = data._id ? toObjectId(data._id) : null;
@@ -365,6 +204,7 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
   const baseData: any = { ...data };
   delete baseData._id;
 
+  // ---- Referenced ids ----
   let categoryId: mongoose.Types.ObjectId | null = null;
   let brand: mongoose.Types.ObjectId | null = null;
 
@@ -385,6 +225,7 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
     }
   }
 
+  // ---- Flat payload: everything the client sent, normalized ----
   const payload: any = {
     ...baseData,
     status: normalizeStatus(data.status),
@@ -395,6 +236,7 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
   if (brand) payload.brand = brand;
   if (data.name) payload.slug = generateSlug(data.name, data.department);
 
+  // productCode → { type, value }
   if (data.type && data.value) {
     payload.productCode = { type: data.type, value: data.value };
     delete payload.type;
@@ -403,33 +245,7 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
     payload.productCode = sanitizeProductCode(data.productCode);
   }
 
-  if (categoryId) {
-    const { keyFeatures, specifications } = await buildStructuredFields(
-      payload,
-      categoryId.toString(),
-    );
-    payload.keyFeatures = keyFeatures;
-    payload.specifications = specifications;
-
-    const usedKeys = new Set<string>();
-    keyFeatures.forEach((i: any) => usedKeys.add(i.k));
-    specifications.forEach((g: any) => {
-      const collect = (gg: any) => {
-        gg.attributes?.forEach((a: any) => usedKeys.add(a.k));
-        gg.groups?.forEach(collect);
-      };
-      collect(g);
-    });
-    for (const key of usedKeys) delete payload[key];
-  }
-
-  if (payload.keyFeatures) {
-    payload.keyFeatures = normalizeKeyValueCollection(payload.keyFeatures);
-  }
-  if (payload.specifications) {
-    payload.specifications = sanitizeSpecifications(payload.specifications);
-  }
-
+  // relatedProducts
   if (
     data.relatedProducts !== undefined &&
     Array.isArray(data.relatedProducts)
@@ -445,8 +261,7 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
       .filter(Boolean);
   }
 
-  // ✅ variantValues: normalize to a clean { [code]: string[] } map and
-  //    send as-is. The schema (Mixed) persists the object verbatim.
+  // variantValues → plain map
   if (payload.variantValues !== undefined) {
     const normalized = normalizeVariantValuesMap(payload.variantValues);
     if (normalized) {
@@ -456,7 +271,7 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
     }
   }
 
-  // ✅ variantThemes: normalize to camelCased codes.
+  // variantThemes → camelCased
   if (Array.isArray(payload.variantThemes)) {
     payload.variantThemes = payload.variantThemes.map((c: any) =>
       String(c).replace(/_([a-z])/g, (_: string, ch: string) =>
@@ -465,7 +280,7 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
     );
   }
 
-  // Normalize variants: unwrap { value } wrappers, fix media, keep theme keys.
+  // variants → unwrap { value } wrappers, sanitize media, keep theme keys
   if (Array.isArray(payload.variants)) {
     payload.variants = payload.variants.map((v: any) => {
       if (!v || typeof v !== "object") return v;
@@ -487,6 +302,11 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
       return next;
     });
   }
+
+  // 🚫 Model B: no structured arrays. Explicitly strip any that leak in
+  //    from legacy drafts or clients.
+  delete payload.keyFeatures;
+  delete payload.specifications;
 
   return { ok: true, payload, providedId };
 }
@@ -670,9 +490,15 @@ export async function updateProduct(
     delete payload.__v;
     payload.updatedAt = new Date();
 
+    // 🚫 Model B migration: strip any legacy structured arrays still
+    //    present on the document, so old products get cleaned up on
+    //    their next save.
     const product = await Product.findByIdAndUpdate(
       objectId,
-      { $set: payload },
+      {
+        $set: payload,
+        $unset: { keyFeatures: "", specifications: "" },
+      },
       { new: true, runValidators: true },
     );
 
@@ -716,6 +542,8 @@ export async function deleteProduct(
       delete clone.__v;
       delete clone.createdAt;
       delete clone.updatedAt;
+      delete clone.keyFeatures;
+      delete clone.specifications;
       clone.status = "draft";
       clone.createdAt = new Date();
       clone.updatedAt = new Date();

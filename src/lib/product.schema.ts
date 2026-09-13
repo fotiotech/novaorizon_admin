@@ -9,25 +9,10 @@ const ProductCodeSchema = z.object({
   value: z.string().trim().min(1, "Product code value is required"),
 });
 
-const KeyValueSchema = z.object({
-  k: z.string().trim().min(1, "Key is required"),
-  v: z.any(),
-  unit: z.string().optional(),
-});
-
-const SpecificationGroupSchema: z.ZodType<any> = z.lazy(() =>
-  z.object({
-    name: z.string().trim().min(1, "Group name is required"),
-    attributes: z.array(KeyValueSchema).default([]),
-    groups: z.array(SpecificationGroupSchema).default([]),
-  }),
-);
-
-// ✅ .passthrough() so top-level theme codes (color, size, …) survive.
-// ✅ sku no longer required at the schema level — the client validates it.
+// ✅ Variants still carry dynamic theme keys (color, size, …) plus their own
+//    sku/price/quantity/media. `.passthrough()` keeps the theme keys.
 const VariantSchema = z
   .object({
-    attributes: z.array(KeyValueSchema).default([]),
     sku: z.string().default(""),
     price: z.number().min(0).default(0),
     quantity: z.number().min(0).default(0),
@@ -36,7 +21,6 @@ const VariantSchema = z
   })
   .passthrough();
 
-// ✅ Accepts scalar id ("…") OR nested object ({ _id: "…" }).
 const RelatedProductEntrySchema = z
   .object({
     product: z.union([z.string(), z.object({ _id: z.string() })]).optional(),
@@ -74,18 +58,16 @@ export const CreateOrUpdateProductSchema = z
     images: z.array(z.string()).default([]).optional(),
     hasVariants: z.boolean().default(false).optional(),
     variantThemes: z.array(z.string()).default([]).optional(),
-    variantValues: z
-      .union([z.array(KeyValueSchema), z.record(z.any())])
-      .optional(),
+    variantValues: z.union([z.array(z.any()), z.record(z.any())]).optional(),
     variants: z.array(VariantSchema).default([]).optional(),
-    keyFeatures: z.array(KeyValueSchema).default([]).optional(),
-    specifications: z.array(SpecificationGroupSchema).default([]).optional(),
     carrier: z.string().optional(),
     relatedProducts: z.array(RelatedProductEntrySchema).default([]).optional(),
     tags: z.array(z.string()).default([]).optional(),
     status: z.enum(["draft", "active", "inactive"]).default("draft").optional(),
     productCode: ProductCodeOrArraySchema,
   })
+  // ✅ Every dynamic category attribute (color, material, weight, …) survives
+  //    because we accept arbitrary keys at the root.
   .passthrough();
 
 // ============================================================================

@@ -4,24 +4,14 @@ interface IProductCode {
   type: "EAN" | "UPC" | "ISBN" | "QR" | "MODEL";
   value: string;
 }
-interface IKeyValue {
-  k: string;
-  v: any;
-  unit?: string;
-}
-interface ISpecificationGroup {
-  name: string;
-  attributes?: IKeyValue[];
-  groups?: ISpecificationGroup[];
-}
 interface IVariant {
-  attributes?: IKeyValue[];
+  attributes?: Record<string, any>;
   sku?: string;
   price?: number;
   quantity?: number;
   mainImage?: string;
   images?: string[];
-  [key: string]: any;
+  [key: string]: any; // dynamic theme keys (color, size, …)
 }
 interface IReview {
   user: mongoose.Types.ObjectId;
@@ -43,8 +33,6 @@ export interface IProduct extends Document {
   hasVariants: boolean;
   variantThemes: string[];
   variantValues: Record<string, string[]>;
-  keyFeatures: IKeyValue[];
-  specifications: ISpecificationGroup[];
   quantity: number;
   lowStockThreshold: number;
   listPrice: number;
@@ -60,41 +48,30 @@ export interface IProduct extends Document {
   status: "draft" | "active" | "inactive";
   createdAt: Date;
   updatedAt: Date;
+  // ✅ Flattened category attributes live here, one key per attribute code.
   [key: string]: any;
 }
 
-const ProductCodeSchema = new Schema<IProductCode>({
-  type: {
-    type: String,
-    enum: ["EAN", "UPC", "ISBN", "QR", "MODEL"],
-    required: true,
-  },
-  value: { type: String, required: true },
-});
-
-const KeyValueSchema = new Schema<IKeyValue>(
+const ProductCodeSchema = new Schema<IProductCode>(
   {
-    k: { type: String, required: true, trim: true },
-    v: { type: Schema.Types.Mixed }, // NOT required — [] is valid (empty theme)
-    unit: { type: String, trim: true },
+    type: {
+      type: String,
+      enum: ["EAN", "UPC", "ISBN", "QR", "MODEL"],
+      required: true,
+    },
+    value: { type: String, required: true },
   },
   { _id: false },
 );
 
-const SpecificationGroupSchema = new Schema<ISpecificationGroup>(
+const ReviewSchema = new Schema<IReview>(
   {
-    name: { type: String, required: true, trim: true },
-    attributes: { type: [KeyValueSchema], default: [] },
-    groups: { type: [Schema.Types.Mixed], default: [] },
+    user: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    rating: { type: Number, min: 1, max: 5, required: true },
+    comment: { type: String, maxlength: 200 },
   },
   { _id: false },
 );
-
-const ReviewSchema = new Schema<IReview>({
-  user: { type: Schema.Types.ObjectId, ref: "User", required: true },
-  rating: { type: Number, min: 1, max: 5, required: true },
-  comment: { type: String, maxlength: 200 },
-});
 
 const ProductSchema = new Schema<IProduct>(
   {
@@ -117,11 +94,9 @@ const ProductSchema = new Schema<IProduct>(
     hasVariants: { type: Boolean, default: false },
     variantThemes: { type: [String], default: [] },
 
-    // ✅ Mixed — preserves { k, v } entries verbatim, including v: [].
+    // Map of { [themeCode]: string[] }, e.g. { color: ["Green","Black"] }
     variantValues: { type: Schema.Types.Mixed, default: {} },
 
-    keyFeatures: { type: [KeyValueSchema], default: [] },
-    specifications: { type: [SpecificationGroupSchema], default: [] },
     quantity: { type: Number, default: 0, min: 0 },
     lowStockThreshold: { type: Number, default: 5, min: 0 },
     listPrice: { type: Number, default: 0, min: 0 },
@@ -130,7 +105,7 @@ const ProductSchema = new Schema<IProduct>(
     description: { type: String, default: "" },
     shortDescription: { type: String, default: "" },
 
-    // ✅ Mixed — bypasses subdoc casting so dynamic theme keys persist.
+    // Mixed — no subdoc casting so dynamic theme keys persist verbatim.
     variants: { type: [Schema.Types.Mixed], default: [] },
 
     carrier: { type: Schema.Types.ObjectId, ref: "Carrier" },
@@ -155,41 +130,38 @@ const ProductSchema = new Schema<IProduct>(
   },
   {
     timestamps: true,
-    strict: false, // dynamic category attributes at the root
+    // ⭐ The whole point of Model B: everything else lives flat at the root.
+    strict: false,
   },
 );
 
+// ==================== INDEXES ====================
+
+// Text search on stable fields only. Attribute-specific filters use
+// dedicated compound indexes you add below as your filter list evolves.
 ProductSchema.index(
   {
     name: "text",
     description: "text",
     shortDescription: "text",
     tags: "text",
-    "keyFeatures.v": "text",
-    "specifications.$**": "text",
   },
   {
-    weights: {
-      name: 10,
-      description: 5,
-      shortDescription: 3,
-      tags: 2,
-      "keyFeatures.v": 1,
-      "specifications.$**": 1,
-    },
+    weights: { name: 10, description: 5, shortDescription: 3, tags: 2 },
     name: "ProductTextIndex",
   },
 );
-ProductSchema.index({ "keyFeatures.k": 1, "keyFeatures.v": 1 });
-ProductSchema.index({
-  "specifications.attributes.k": 1,
-  "specifications.attributes.v": 1,
-});
+
 ProductSchema.index({ categoryId: 1, status: 1, price: 1 });
 ProductSchema.index({ brand: 1, status: 1 });
 ProductSchema.index({ slug: 1 }, { unique: true });
 ProductSchema.index({ sku: 1 });
 ProductSchema.index({ status: 1, createdAt: -1 });
+
+// 👇 Example attribute filters. Add / remove as your filter set evolves.
+ProductSchema.index({ categoryId: 1, status: 1, color: 1, price: 1 });
+ProductSchema.index({ categoryId: 1, status: 1, material: 1 });
+ProductSchema.index({ categoryId: 1, status: 1, size: 1 });
 
 const Product =
   (mongoose.models.Product as mongoose.Model<IProduct>) ||

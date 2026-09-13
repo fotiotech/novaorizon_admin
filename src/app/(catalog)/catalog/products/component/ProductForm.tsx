@@ -334,8 +334,12 @@ const GroupRenderer = memo(
 GroupRenderer.displayName = "GroupRenderer";
 
 // ------------------------------------------------------------------
-// Flatten structured fields
+// Legacy compatibility shim
 // ------------------------------------------------------------------
+// Model B has no structured arrays. But products saved before the switch
+// may still carry `keyFeatures` / `specifications` on the document. This
+// shim flattens them onto the root so the form populates correctly, and
+// the server's `$unset` cleans them out on the next save.
 function flattenStructuredFields(
   data: Record<string, any>,
 ): Record<string, any> {
@@ -343,7 +347,7 @@ function flattenStructuredFields(
 
   if (Array.isArray(result.keyFeatures)) {
     for (const item of result.keyFeatures) {
-      if (item.k && item.v !== undefined) result[item.k] = item.v;
+      if (item?.k && item.v !== undefined) result[item.k] = item.v;
     }
   }
   if (Array.isArray(result.specifications)) {
@@ -351,7 +355,7 @@ function flattenStructuredFields(
       for (const group of specs) {
         if (Array.isArray(group.attributes)) {
           for (const attr of group.attributes) {
-            if (attr.k && attr.v !== undefined) result[attr.k] = attr.v;
+            if (attr?.k && attr.v !== undefined) result[attr.k] = attr.v;
           }
         }
         if (Array.isArray(group.groups)) flattenSpecs(group.groups);
@@ -493,7 +497,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
             }
             data = { ...data, ...draftData };
           } else {
-            // Stale draft → drop it so it stops hiding fresh server data.
             try {
               await deleteProductDraft(productId);
             } catch {
@@ -548,8 +551,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
         setIsFetchingAttributes(true);
         setError(null);
         const sets = await getCategoryAttributeSets(productData.categoryId);
-        console.log("Fetched attribute sets:", sets);
-        console.log("Product data:", productData);
         setSteps(sets);
         setCurrentStep(0);
         setValidationErrors({});
@@ -809,12 +810,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
     try {
       const payload = { ...productData };
+
+      // Model B — no structured arrays in flight.
       delete payload.keyFeatures;
       delete payload.specifications;
 
       if (!payload.status) payload.status = "draft";
 
-      // Server routes by URL/id arg — strip every possible id from the payload.
       delete payload._id;
       delete payload.Id;
       delete payload.id;
