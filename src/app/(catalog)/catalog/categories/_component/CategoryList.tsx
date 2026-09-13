@@ -109,7 +109,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
   );
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 space-y-4">
+    <div className="bg-white dark:bg-gray-800 rounded-xl space-y-4">
       {title && (
         <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
           {title}

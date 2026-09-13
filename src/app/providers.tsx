@@ -21,9 +21,9 @@ const Providers = ({ children }: ProviderProps) => {
       <QueryClientProvider client={queryClient}>
         <ReduxProvider store={store}>
           <PersistGate loading={null} persistor={persistor}>
-            <CartProvider>
-              <UserDataProvider>{children}</UserDataProvider>
-            </CartProvider>
+            <UserDataProvider>
+              <CartProvider>{children}</CartProvider>
+            </UserDataProvider>
           </PersistGate>
         </ReduxProvider>
       </QueryClientProvider>

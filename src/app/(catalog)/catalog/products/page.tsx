@@ -305,7 +305,7 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border">
+      <div className="bg-card text-card-foreground rounded-lg">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">
             Products {total > 0 && `(${total})`}

@@ -4,6 +4,8 @@ export interface ICartItem {
   productId: mongoose.Types.ObjectId;
   variant?: string; // optional variant/sku
   quantity: number;
+  name: string; // snapshot at add time
+  image: string; // snapshot at add time
   price: number; // snapshot at add time
   taxRate?: number;
   discount?: number; // per-item discount
@@ -29,6 +31,8 @@ const CartItemSchema = new Schema<ICartItem>({
   productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
   variant: { type: String },
   quantity: { type: Number, required: true, min: 1 },
+  name: { type: String, required: true },
+  image: { type: String, required: true },
   price: { type: Number, required: true },
   taxRate: { type: Number, default: 0 },
   discount: { type: Number, default: 0 },

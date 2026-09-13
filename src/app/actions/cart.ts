@@ -1,10 +1,11 @@
 "use server";
 
 import { connection } from "@/utils/connection";
-import { revalidatePath } from "next/cache";
-import Cart from "@/models/Cart";
-import Product from "@/models/Product";
 import mongoose from "mongoose";
+import { revalidatePath } from "next/cache";
+import Product from "@/models/Product";
+import Cart from "@/models/Cart";
+import Order from "@/models/Order";
 
 // Types
 export interface CartItemInput {
@@ -14,9 +15,7 @@ export interface CartItemInput {
 }
 
 function getProductQuantity(product: any) {
-  return Number(
-    product?.quantity ?? product?.stock_quantity ?? product?.stockQuantity ?? 0,
-  );
+  return Number(product?.quantity ?? 0);
 }
 
 // Helper to calculate totals
@@ -29,7 +28,7 @@ async function recalculateCart(cart: any) {
     (sum: number, item: any) => sum + item.totalPrice,
     0,
   );
-  const tax = subtotal * 0.08; // example tax rate, could be per-item
+  const tax = subtotal * 0;
   const discount = cart.discount || 0;
   const shippingCost = cart.shippingCost || 0;
   const total = subtotal + tax + shippingCost - discount;
@@ -37,6 +36,12 @@ async function recalculateCart(cart: any) {
   cart.tax = tax;
   cart.total = total;
   return cart;
+}
+
+// Helper to populate product details and convert to plain object
+async function populateAndLean(cart: any) {
+  await cart.populate("items.productId", "name images slug price");
+  return cart.toObject();
 }
 
 // Retrieve current cart (by userId or sessionId)
@@ -53,7 +58,7 @@ export async function getCart(identifier: {
   else query.sessionId = sessionId;
 
   let cart: any = await Cart.findOne(query)
-    .populate("items.productId", "title main_image slug list_price")
+    .populate("items.productId", "name images slug price")
     .lean();
 
   if (!cart) {
@@ -77,10 +82,109 @@ export async function getCart(identifier: {
     items: cart?.items.map((item: any) => ({
       ...item,
       _id: item._id.toString(),
-      name: item.productId?.title || "", // ✅ FIXED
+      name: item.productId?.name || item.name || "",
+      image: item.productId?.images?.[0] || item.image || null,
+      price: item.productId?.price || item.price || 0,
       productId: item.productId?._id?.toString() || item.productId?.toString(),
     })),
   };
+}
+
+export async function mergeGuestSessionData({
+  guestId,
+  sessionId,
+  userId,
+}: {
+  guestId?: string;
+  sessionId?: string;
+  userId: string;
+}) {
+  await connection();
+
+  const identifiers = Array.from(
+    new Set([guestId, sessionId].filter(Boolean) as string[]),
+  );
+
+  if (!identifiers.length) {
+    return { success: true, merged: false };
+  }
+
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  let targetCart = await Cart.findOne({ userId: userObjectId });
+  const guestCarts = await Cart.find({
+    sessionId: { $in: identifiers },
+  }).exec();
+
+  if (!targetCart && guestCarts.length > 0) {
+    targetCart = guestCarts[0];
+    targetCart.userId = userObjectId;
+    targetCart.sessionId = undefined;
+  }
+
+  if (!targetCart) {
+    targetCart = new Cart({
+      userId: userObjectId,
+      items: [],
+      subtotal: 0,
+      tax: 0,
+      discount: 0,
+      shippingCost: 0,
+      total: 0,
+    });
+  }
+
+  for (const guestCart of guestCarts) {
+    if (guestCart._id.toString() === targetCart._id?.toString()) continue;
+
+    for (const item of guestCart.items) {
+      const existingItem = targetCart.items.find(
+        (cartItem: any) =>
+          cartItem.productId.toString() === item.productId.toString() &&
+          (cartItem.variant || null) === (item.variant || null),
+      );
+
+      if (existingItem) {
+        existingItem.quantity += item.quantity;
+        existingItem.price = item.price;
+      } else {
+        targetCart.items.push({
+          productId: item.productId,
+          variant: item.variant,
+          quantity: item.quantity,
+          name: item.name,
+          image: item.image,
+          price: item.price,
+          taxRate: item.taxRate || 0,
+          discount: item.discount || 0,
+        });
+      }
+    }
+
+    await Cart.deleteOne({ _id: guestCart._id });
+  }
+
+  targetCart.userId = userObjectId;
+  targetCart.sessionId = undefined;
+  await recalculateCart(targetCart);
+  await targetCart.save();
+
+  await Order.updateMany(
+    {
+      $or: [
+        { guestId: { $in: identifiers } },
+        { userId: null, guestId: { $ne: null } },
+      ],
+    },
+    {
+      $set: {
+        userId: userObjectId,
+        guestId: null,
+      },
+    },
+  );
+
+  revalidatePath("/cart");
+  return { success: true, merged: true };
 }
 
 // Add item to cart (upsert)
@@ -97,23 +201,30 @@ export async function addToCart(
   }
 
   const product: any = await Product.findById(input.productId)
-    .select("listPrice name quantity stockQuantity lowStockThreshold")
+    .select("price name images quantity lowStockThreshold")
     .lean();
   if (!product) throw new Error("Product not found");
 
-  const availableQty = getProductQuantity(product);
-  const price = product.listPrice ?? product.list_price ?? 0;
+  const availableQty = product.quantity || 0;
+  const price = product.price;
 
   let cart: any = await Cart.findOne({
     ...(userId ? { userId } : { sessionId }),
   });
 
-  const currentQtyInCart =
-    cart?.items.reduce((sum: number, item: any) => {
-      if (item.productId.toString() !== input.productId) return sum;
-      if ((item.variant || null) !== (input.variant || null)) return sum;
-      return sum + Number(item.quantity || 0);
-    }, 0) || 0;
+  if (!cart) {
+    cart = new Cart({
+      userId: userId || undefined,
+      sessionId: sessionId || undefined,
+      items: [],
+    });
+  }
+
+  const currentQtyInCart = cart.items.reduce((sum: number, item: any) => {
+    if (item.productId.toString() !== input.productId) return sum;
+    if ((item.variant || null) !== (input.variant || null)) return sum;
+    return sum + Number(item.quantity || 0);
+  }, 0);
 
   if (availableQty < currentQtyInCart + input.quantity) {
     const remaining = Math.max(0, availableQty - currentQtyInCart);
@@ -124,15 +235,6 @@ export async function addToCart(
     );
   }
 
-  if (!cart) {
-    cart = new Cart({
-      userId: userId || undefined,
-      sessionId: sessionId || undefined,
-      items: [],
-    });
-  }
-
-  // Check if item already exists (by productId and variant)
   const existingItemIndex = cart.items.findIndex(
     (item: any) =>
       item.productId.toString() === input.productId &&
@@ -145,19 +247,21 @@ export async function addToCart(
     cart.items.push({
       productId: new mongoose.Types.ObjectId(input.productId),
       variant: input.variant || undefined,
+      image: product.images?.[0] || null,
+      name: product.name,
       quantity: input.quantity,
       price: price,
-      taxRate: 0, // can be per-product
+      taxRate: 0,
       discount: 0,
     });
   }
 
-  // Recalculate totals
   await recalculateCart(cart);
   await cart.save();
 
+  const cartObject = await populateAndLean(cart);
   revalidatePath("/pos");
-  return { success: true, cart: cart.toObject() };
+  return { success: true, cart: cartObject };
 }
 
 // Update item quantity
@@ -182,9 +286,7 @@ export async function updateCartItem(
     cart.items.pull(itemId);
   } else {
     const product: any = await Product.findById(item.productId)
-      .select(
-        "quantity stock_quantity stockQuantity lowStockThreshold low_stock_threshold",
-      )
+      .select("quantity lowStockThreshold")
       .lean();
     const availableQty = getProductQuantity(product || {});
 
@@ -200,8 +302,9 @@ export async function updateCartItem(
   await recalculateCart(cart);
   await cart.save();
 
+  const cartObject = await populateAndLean(cart);
   revalidatePath("/pos");
-  return { success: true, cart: cart.toObject() };
+  return { success: true, cart: cartObject };
 }
 
 // Remove item
@@ -230,11 +333,12 @@ export async function clearCart(identifier: {
   await recalculateCart(cart);
   await cart.save();
 
+  const cartObject = await populateAndLean(cart);
   revalidatePath("/pos");
-  return { success: true };
+  return { success: true, cart: cartObject };
 }
 
-// Apply discount/coupon (optional)
+// Apply discount/coupon
 export async function applyDiscount(
   identifier: { userId?: string; sessionId?: string },
   discountValue: number,
@@ -249,11 +353,21 @@ export async function applyDiscount(
   });
   if (!cart) throw new Error("Cart not found");
 
-  cart.discount = discountValue;
+  // Recompute subtotal first so we can clamp against it
+  await recalculateCart(cart);
+
+  // Clamp discount between 0 and current subtotal
+  const clamped = Math.max(
+    0,
+    Math.min(Number(discountValue) || 0, cart.subtotal),
+  );
+  cart.discount = clamped;
   if (couponCode) cart.appliedCoupon = couponCode;
+
   await recalculateCart(cart);
   await cart.save();
 
+  const cartObject = await populateAndLean(cart);
   revalidatePath("/pos");
-  return { success: true, cart: cart.toObject() };
+  return { success: true, cart: cartObject };
 }

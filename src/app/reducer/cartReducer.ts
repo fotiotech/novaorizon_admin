@@ -1,57 +1,75 @@
-// context/cartReducer.ts
-
+// reducer/cartReducer.ts
 export interface CartItem {
-    productId?: string;
-    id: string;
-    name: string;
-    imageUrl?: string;
-    price: number;
-    quantity: number;
-  }
-  
-  interface CartState {
-    items: CartItem[];
-  }
-  
-  export type CartAction =
-    | { type: 'ADD_ITEM'; payload: CartItem }
-    | { type: 'REMOVE_ITEM'; payload: string }
-    | { type: 'UPDATE_QUANTITY'; payload: { id: string; quantity: number } }
-    | { type: 'CLEAR_CART' };
-  
-  export const cartReducer = (state: CartState, action: CartAction): CartState => {
-    switch (action.type) {
-      case 'ADD_ITEM': {
-        const itemExists = state.items.find(item => item.id === action.payload.id);
-  
-        if (itemExists) {
-          return {
-            ...state,
-            items: state.items.map(item =>
-              item.id === action.payload.id
-                ? { ...item, quantity: item.quantity + action.payload.quantity }
-                : item
-            ),
-          };
-        }
-        return { ...state, items: [...state.items, action.payload] };
-      }
-      case 'REMOVE_ITEM':
-        return { ...state, items: state.items.filter(item => item.id !== action.payload) };
-  
-      case 'UPDATE_QUANTITY':
-        return {
-          ...state,
-          items: state.items.map(item =>
-            item.id === action.payload.id ? { ...item, quantity: action.payload.quantity } : item
-          ),
-        };
-  
-      case 'CLEAR_CART':
-        return { ...state, items: [] };
-  
-      default:
-        return state;
+  _id: string;
+  productId: string;
+  name: string;
+  image: string;
+  price: number;
+  quantity: number;
+  variant?: string;
+}
+
+export interface CartState {
+  items: CartItem[];
+  subtotal: number;
+  tax: number;
+  discount: number;
+  shippingCost: number;
+  total: number;
+  loading: boolean;
+  error: string | null;
+}
+
+export const initialCartState: CartState = {
+  items: [],
+  subtotal: 0,
+  tax: 0,
+  discount: 0,
+  shippingCost: 0,
+  total: 0,
+  loading: false,
+  error: null,
+};
+
+export type CartAction =
+  | { type: "SET_CART"; payload: any }
+  | { type: "SET_LOADING"; payload: boolean }
+  | { type: "SET_ERROR"; payload: string | null }
+  | { type: "CLEAR_ERROR" };
+
+export function cartReducer(state: CartState, action: CartAction): CartState {
+  switch (action.type) {
+    case "SET_CART": {
+      const cart = action.payload;
+      const items = (cart?.items || []).map((item: any) => ({
+        _id: item._id.toString(),
+        productId:
+          item.productId?._id?.toString() || item.productId?.toString() || "",
+        name: item.productId?.name || item.name || "",
+        image: item.productId?.images?.[0] || item.image || "",
+        price: item.price,
+        quantity: item.quantity,
+        variant: item.variant,
+      }));
+      return {
+        ...state,
+        items,
+        subtotal: cart?.subtotal || 0,
+        tax: cart?.tax || 0,
+        discount: cart?.discount || 0,
+        shippingCost: cart?.shippingCost || 0,
+        total: cart?.total || 0,
+        loading: false,
+        error: null,
+      };
     }
-  };
-  
+    case "SET_LOADING":
+      return { ...state, loading: action.payload };
+    case "SET_ERROR":
+      return { ...state, error: action.payload };
+    case "CLEAR_ERROR":
+      return { ...state, error: null };
+    default:
+      return state;
+  }
+}
