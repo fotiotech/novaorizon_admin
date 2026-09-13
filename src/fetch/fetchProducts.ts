@@ -1,7 +1,7 @@
 // fetch/fetchProducts.ts
 
 import {
-  createOrUpdateProduct,
+  updateProduct,
   findProductById,
   findProducts,
 } from "@/app/actions/products";
@@ -83,8 +83,7 @@ export const updateProductStock =
   (id: string, quantity: number, lowStockThreshold: number) =>
   async (dispatch: AppDispatch) => {
     try {
-      const response = await createOrUpdateProduct({
-        _id: id,
+      const response = await updateProduct(id, {
         quantity,
         lowStockThreshold,
       });

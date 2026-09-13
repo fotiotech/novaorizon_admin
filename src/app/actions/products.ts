@@ -1,4 +1,3 @@
-// app/actions/products.ts
 "use server";
 
 import { connection } from "@/utils/connection";
@@ -25,7 +24,6 @@ export interface ProductListParams {
   sort?: "createdAt" | "name" | "price";
   sortDir?: "asc" | "desc";
 }
-
 export interface ProductListResult {
   products: any[];
   total: number;
@@ -33,18 +31,15 @@ export interface ProductListResult {
   pageSize: number;
   totalPages: number;
 }
-
 interface ProductResponse {
   success: boolean;
   data?: any;
   error?: string;
 }
-
 interface DeleteProductOptions {
   recreate?: boolean;
 }
 
-const UNAUTHORIZED = { success: false as const, error: "Unauthorized" };
 const LIST_UNAUTHORIZED: ProductListResult = {
   products: [],
   total: 0,
@@ -126,6 +121,62 @@ function sanitizeSpecifications(specs: any[]): any[] {
   }));
 }
 
+/**
+ * Normalize `variantValues` into a plain map `{ [themeCode]: string[] }`.
+ * Accepts every shape we've ever persisted:
+ *   1. Plain object map (current schema).
+ *   2. Array of `{ k, v }` (legacy schema).
+ *   3. Array wrapping a single object map (Mongoose `[Mixed]` coercion of an object).
+ */
+function normalizeVariantValuesMap(
+  data: any,
+): Record<string, string[]> | undefined {
+  if (!data) return undefined;
+
+  const normalizeKey = (k: string) =>
+    k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+
+  const absorbObject = (obj: Record<string, any>) => {
+    const out: Record<string, string[]> = {};
+    Object.entries(obj).forEach(([k, v]) => {
+      const key = normalizeKey(k);
+      if (!key) return;
+      out[key] = Array.isArray(v)
+        ? v.filter((x): x is string => typeof x === "string")
+        : v !== undefined && v !== null
+          ? [String(v)]
+          : [];
+    });
+    return out;
+  };
+
+  if (Array.isArray(data)) {
+    const isKvArray =
+      data.length > 0 &&
+      data.every((x) => x && typeof x === "object" && "k" in x && "v" in x);
+    if (isKvArray) {
+      const out: Record<string, string[]> = {};
+      data.forEach((item: any) => {
+        const key = normalizeKey(item.k);
+        if (!key) return;
+        out[key] = Array.isArray(item.v) ? item.v : [item.v];
+      });
+      return out;
+    }
+    // Array wrapping a single object map.
+    if (data.length === 1 && data[0] && typeof data[0] === "object") {
+      return absorbObject(data[0]);
+    }
+    return undefined;
+  }
+
+  if (typeof data === "object") {
+    return absorbObject(data);
+  }
+
+  return undefined;
+}
+
 function serialize(doc: any): any {
   if (!doc) return doc;
   const obj = doc.toObject ? doc.toObject() : doc;
@@ -152,16 +203,61 @@ async function buildStructuredFields(
     group.children?.forEach((c: any) => collectAttributeCodes(c, codes));
   }
 
-  for (const set of attributeSets) {
-    for (const group of set.groups || []) {
-      const groupCode = group.code.replace(/_([a-z])/g, (_, c) =>
+  function buildSpecGroup(g: any): any {
+    const groupName = g.name || g.code;
+    const groupAttrs: any[] = [];
+    const childGroups: any[] = [];
+
+    g.attributes?.forEach((attr: any) => {
+      const camel = attr.code.replace(/_([a-z])/g, (_: any, c: string) =>
         c.toUpperCase(),
       );
-      const allAttrCodes = new Set<string>();
-      collectAttributeCodes(group, allAttrCodes);
+      const value = flatData[camel];
+      if (value !== undefined && value !== null && value !== "") {
+        let unit: string | undefined;
+        let finalValue = value;
+        if (
+          value &&
+          typeof value === "object" &&
+          "value" in value &&
+          "unit" in value
+        ) {
+          finalValue = value.value;
+          unit = value.unit;
+        }
+        groupAttrs.push({
+          k: camel,
+          v: finalValue,
+          ...(unit ? { unit } : {}),
+        });
+        usedKeys.add(camel);
+      }
+    });
 
-      if (groupCode === "keyFeatures") {
-        const features: any[] = [];
+    g.children?.forEach((child: any) => {
+      const cr = buildSpecGroup(child);
+      if (cr.attributes.length || cr.groups.length) childGroups.push(cr);
+    });
+
+    return {
+      name: groupName,
+      attributes: normalizeKeyValueCollection(groupAttrs),
+      groups: childGroups,
+    };
+  }
+
+  for (const set of attributeSets) {
+    // Classify by the SET's code (e.g. "keyFeatures", "specifications").
+    const setCode = String(set.code || "").replace(/_([a-z])/g, (_, c) =>
+      c.toUpperCase(),
+    );
+
+    if (setCode === "keyFeatures") {
+      const features: any[] = [];
+      for (const group of set.groups || []) {
+        const allAttrCodes = new Set<string>();
+        collectAttributeCodes(group, allAttrCodes);
+
         for (const code of allAttrCodes) {
           const camel = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
           const value = flatData[camel];
@@ -185,49 +281,12 @@ async function buildStructuredFields(
             usedKeys.add(camel);
           }
         }
-        if (features.length) {
-          result.keyFeatures = normalizeKeyValueCollection(features);
-        }
-      } else if (groupCode === "specifications") {
-        function buildSpecGroup(g: any): any {
-          const groupName = g.name || g.code;
-          const groupAttrs: any[] = [];
-          const childGroups: any[] = [];
-          g.attributes?.forEach((attr: any) => {
-            const camel = attr.code.replace(/_([a-z])/g, (_: any, c: string) =>
-              c.toUpperCase(),
-            );
-            const value = flatData[camel];
-            if (value !== undefined && value !== null && value !== "") {
-              let unit: string | undefined;
-              let finalValue = value;
-              if (
-                value &&
-                typeof value === "object" &&
-                "value" in value &&
-                "unit" in value
-              ) {
-                finalValue = value.value;
-                unit = value.unit;
-              }
-              groupAttrs.push({
-                k: camel,
-                v: finalValue,
-                ...(unit ? { unit } : {}),
-              });
-              usedKeys.add(camel);
-            }
-          });
-          g.children?.forEach((child: any) => {
-            const cr = buildSpecGroup(child);
-            if (cr.attributes.length || cr.groups.length) childGroups.push(cr);
-          });
-          return {
-            name: groupName,
-            attributes: normalizeKeyValueCollection(groupAttrs),
-            groups: childGroups,
-          };
-        }
+      }
+      if (features.length) {
+        result.keyFeatures = normalizeKeyValueCollection(features);
+      }
+    } else if (setCode === "specifications") {
+      for (const group of set.groups || []) {
         const built = buildSpecGroup(group);
         if (built.attributes.length || built.groups.length) {
           result.specifications.push(built);
@@ -279,10 +338,163 @@ async function validateRequiredCategoryAttributes(
 }
 
 // ==================================================================
+// SHARED PAYLOAD PREPARATION
+// ==================================================================
+type PrepareResult =
+  | {
+      ok: true;
+      payload: Record<string, any>;
+      providedId: mongoose.Types.ObjectId | null;
+    }
+  | { ok: false; error: string };
+
+async function prepareProductPayload(formData: any): Promise<PrepareResult> {
+  const validated = safeValidateProductCreateOrUpdate(formData);
+  if (!validated.success) {
+    return { ok: false, error: `Validation failed: ${validated.error}` };
+  }
+
+  // Merge raw form with Zod output — Zod coerces known fields, raw data
+  // keeps anything passthrough didn't touch.
+  const data = { ...formData, ...(validated.data ?? {}) };
+
+  const providedId = data._id ? toObjectId(data._id) : null;
+  if (data._id && !providedId)
+    return { ok: false, error: "Invalid product id" };
+
+  const baseData: any = { ...data };
+  delete baseData._id;
+
+  let categoryId: mongoose.Types.ObjectId | null = null;
+  let brand: mongoose.Types.ObjectId | null = null;
+
+  if (data.categoryId) {
+    categoryId = toObjectId(data.categoryId);
+    if (!categoryId) return { ok: false, error: "Invalid category" };
+  }
+  if (data.brand) {
+    brand = toObjectId(data.brand);
+    if (!brand) return { ok: false, error: "Invalid brand" };
+  }
+
+  if (categoryId) {
+    try {
+      await validateRequiredCategoryAttributes(categoryId.toString(), data);
+    } catch (e: any) {
+      return { ok: false, error: e.message || "Missing required fields" };
+    }
+  }
+
+  const payload: any = {
+    ...baseData,
+    status: normalizeStatus(data.status),
+    updatedAt: new Date(),
+  };
+
+  if (categoryId) payload.categoryId = categoryId;
+  if (brand) payload.brand = brand;
+  if (data.name) payload.slug = generateSlug(data.name, data.department);
+
+  if (data.type && data.value) {
+    payload.productCode = { type: data.type, value: data.value };
+    delete payload.type;
+    delete payload.value;
+  } else if (data.productCode) {
+    payload.productCode = sanitizeProductCode(data.productCode);
+  }
+
+  if (categoryId) {
+    const { keyFeatures, specifications } = await buildStructuredFields(
+      payload,
+      categoryId.toString(),
+    );
+    payload.keyFeatures = keyFeatures;
+    payload.specifications = specifications;
+
+    const usedKeys = new Set<string>();
+    keyFeatures.forEach((i: any) => usedKeys.add(i.k));
+    specifications.forEach((g: any) => {
+      const collect = (gg: any) => {
+        gg.attributes?.forEach((a: any) => usedKeys.add(a.k));
+        gg.groups?.forEach(collect);
+      };
+      collect(g);
+    });
+    for (const key of usedKeys) delete payload[key];
+  }
+
+  if (payload.keyFeatures) {
+    payload.keyFeatures = normalizeKeyValueCollection(payload.keyFeatures);
+  }
+  if (payload.specifications) {
+    payload.specifications = sanitizeSpecifications(payload.specifications);
+  }
+
+  if (
+    data.relatedProducts !== undefined &&
+    Array.isArray(data.relatedProducts)
+  ) {
+    payload.relatedProducts = data.relatedProducts
+      .map((rp: any) => {
+        if (!rp) return null;
+        const rawId = rp.id ?? rp.product?._id ?? rp.product?.id ?? rp.product;
+        const product = toObjectId(rawId);
+        if (!product) return null;
+        return { product, relationshipType: rp.relationshipType || "" };
+      })
+      .filter(Boolean);
+  }
+
+  // ✅ variantValues: normalize to a clean { [code]: string[] } map and
+  //    send as-is. The schema (Mixed) persists the object verbatim.
+  if (payload.variantValues !== undefined) {
+    const normalized = normalizeVariantValuesMap(payload.variantValues);
+    if (normalized) {
+      payload.variantValues = normalized;
+    } else {
+      delete payload.variantValues;
+    }
+  }
+
+  // ✅ variantThemes: normalize to camelCased codes.
+  if (Array.isArray(payload.variantThemes)) {
+    payload.variantThemes = payload.variantThemes.map((c: any) =>
+      String(c).replace(/_([a-z])/g, (_: string, ch: string) =>
+        ch.toUpperCase(),
+      ),
+    );
+  }
+
+  // Normalize variants: unwrap { value } wrappers, fix media, keep theme keys.
+  if (Array.isArray(payload.variants)) {
+    payload.variants = payload.variants.map((v: any) => {
+      if (!v || typeof v !== "object") return v;
+      const next = { ...v };
+      if (Array.isArray(next.mainImage))
+        next.mainImage = next.mainImage[0] || "";
+      if (Array.isArray(next.images)) next.images = next.images.filter(Boolean);
+      Object.keys(next).forEach((key) => {
+        const val = next[key];
+        if (
+          val &&
+          typeof val === "object" &&
+          "value" in val &&
+          Object.keys(val).length <= 2
+        ) {
+          next[key] = (val as any).value;
+        }
+      });
+      return next;
+    });
+  }
+
+  return { ok: true, payload, providedId };
+}
+
+// ==================================================================
 // SERVER ACTIONS
 // ==================================================================
 
-/** Single product by id (auth required). */
 export async function findProductById(id: string): Promise<any> {
   try {
     await connection();
@@ -295,11 +507,6 @@ export async function findProductById(id: string): Promise<any> {
   }
 }
 
-/**
- * Server-side filtered, sorted, paginated product list.
- * Also supports the legacy "return everything for related-products picker"
- * via `pageSize: 100` (defaults cap at 100).
- */
 export async function findProducts(
   params: ProductListParams = {},
 ): Promise<ProductListResult> {
@@ -311,13 +518,9 @@ export async function findProducts(
   const sortField = params.sort ?? "createdAt";
   const sortDir = params.sortDir === "asc" ? 1 : -1;
 
-  // Build the pipeline match stage from filters.
   const match: Record<string, any> = {};
 
-  if (params.status) {
-    match.status = params.status;
-  }
-
+  if (params.status) match.status = params.status;
   if (params.categoryId && mongoose.Types.ObjectId.isValid(params.categoryId)) {
     match.categoryId = new mongoose.Types.ObjectId(params.categoryId);
   }
@@ -388,7 +591,6 @@ export async function findProducts(
   }
 }
 
-/** Distinct categories for the filter bar (name + id). */
 export async function getProductFilterCategories(): Promise<
   { id: string; name: string }[]
 > {
@@ -417,138 +619,77 @@ export async function getProductFilterCategories(): Promise<
   }
 }
 
-/** Create or update. */
-export async function createOrUpdateProduct(
+export async function createProduct(formData: any): Promise<ProductResponse> {
+  try {
+    await connection();
+
+    const prepared = await prepareProductPayload(formData);
+    if (!prepared.ok) return { success: false, error: prepared.error };
+
+    if (prepared.providedId) {
+      return {
+        success: false,
+        error:
+          "Cannot create a product with an existing _id. Use updateProduct instead.",
+      };
+    }
+
+    const now = new Date();
+    const payload = { ...prepared.payload, createdAt: now, updatedAt: now };
+    const product = new Product(payload);
+    await product.save();
+
+    revalidatePath("/catalog/products");
+    return { success: true, data: serialize(product) };
+  } catch (error: any) {
+    console.error("Error in createProduct:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to create product",
+    };
+  }
+}
+
+export async function updateProduct(
+  id: string,
   formData: any,
 ): Promise<ProductResponse> {
   try {
     await connection();
 
-    const validated = safeValidateProductCreateOrUpdate(formData);
-    if (!validated.success) {
-      return { success: false, error: `Validation failed: ${validated.error}` };
-    }
+    if (!id) return { success: false, error: "Product ID required" };
+    const objectId = toObjectId(id);
+    if (!objectId) return { success: false, error: "Invalid product ID" };
 
-    const data = validated.data || formData;
-    const existingId = data._id ? toObjectId(data._id) : null;
+    const prepared = await prepareProductPayload(formData);
+    if (!prepared.ok) return { success: false, error: prepared.error };
 
-    const baseData: any = { ...data };
-    delete baseData._id;
+    const payload = { ...prepared.payload };
+    delete payload.createdAt;
+    delete payload._id;
+    delete payload.__v;
+    payload.updatedAt = new Date();
 
-    let categoryId: mongoose.Types.ObjectId | null = null;
-    let brand: mongoose.Types.ObjectId | null = null;
+    const product = await Product.findByIdAndUpdate(
+      objectId,
+      { $set: payload },
+      { new: true, runValidators: true },
+    );
 
-    if (data.categoryId) {
-      categoryId = toObjectId(data.categoryId);
-      if (!categoryId) return { success: false, error: "Invalid category" };
-    }
-    if (data.brand) {
-      brand = toObjectId(data.brand);
-      if (!brand) return { success: false, error: "Invalid brand" };
-    }
-
-    if (categoryId) {
-      await validateRequiredCategoryAttributes(categoryId.toString(), data);
-    }
-
-    const productData: any = {
-      ...baseData,
-      status: normalizeStatus(data.status),
-      updatedAt: new Date(),
-    };
-
-    if (categoryId) productData.categoryId = categoryId;
-    if (brand) productData.brand = brand;
-    if (data.name) productData.slug = generateSlug(data.name, data.department);
-
-    if (data.type && data.value) {
-      productData.productCode = { type: data.type, value: data.value };
-      delete productData.type;
-      delete productData.value;
-    } else if (data.productCode) {
-      productData.productCode = sanitizeProductCode(data.productCode);
-    }
-
-    if (categoryId) {
-      const { keyFeatures, specifications } = await buildStructuredFields(
-        productData,
-        categoryId.toString(),
-      );
-      productData.keyFeatures = keyFeatures;
-      productData.specifications = specifications;
-      const usedKeys = new Set<string>();
-      keyFeatures.forEach((i: any) => usedKeys.add(i.k));
-      specifications.forEach((g: any) => {
-        const collect = (gg: any) => {
-          gg.attributes?.forEach((a: any) => usedKeys.add(a.k));
-          gg.groups?.forEach(collect);
-        };
-        collect(g);
-      });
-      for (const key of usedKeys) delete productData[key];
-    }
-
-    if (productData.keyFeatures) {
-      productData.keyFeatures = normalizeKeyValueCollection(
-        productData.keyFeatures,
-      );
-    }
-    if (productData.specifications) {
-      productData.specifications = sanitizeSpecifications(
-        productData.specifications,
-      );
-    }
-
-    if (data.relatedProducts !== undefined) {
-      if (Array.isArray(data.relatedProducts)) {
-        productData.relatedProducts = data.relatedProducts
-          .filter((rp: any) => rp && rp.id)
-          .map((rp: any) => ({
-            product: toObjectId(rp.id),
-            relationshipType: rp.relationshipType || "",
-          }))
-          .filter((rp: any) => rp.product);
-      }
-    }
-
-    let product;
-    let isNew = false;
-
-    if (existingId) {
-      const existing = await Product.findById(existingId);
-      if (existing) {
-        delete productData.createdAt;
-        product = await Product.findByIdAndUpdate(
-          existingId,
-          { $set: productData },
-          { new: true, runValidators: true },
-        );
-        if (!product) return { success: false, error: "Product not found" };
-      } else {
-        isNew = true;
-      }
-    } else {
-      isNew = true;
-    }
-
-    if (isNew) {
-      productData.createdAt = new Date();
-      product = new Product(productData);
-      await product.save();
-    }
+    if (!product) return { success: false, error: "Product not found" };
 
     revalidatePath("/catalog/products");
-    if (existingId) {
-      revalidatePath(`/catalog/products/edit/${existingId.toString()}`);
-    }
+    revalidatePath(`/catalog/products/edit/${id}`);
     return { success: true, data: serialize(product) };
   } catch (error: any) {
-    console.error("Error in createOrUpdateProduct:", error);
-    return { success: false, error: error.message || "Failed to save product" };
+    console.error("Error in updateProduct:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to update product",
+    };
   }
 }
 
-/** Delete (or duplicate-and-delete). */
 export async function deleteProduct(
   id: string,
   options: DeleteProductOptions = {},
@@ -605,7 +746,6 @@ export async function deleteProduct(
   }
 }
 
-/** Delete a product image from storage + product record. */
 export async function deleteProductImages(
   productId?: string,
   imageUrl?: string,

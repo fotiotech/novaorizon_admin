@@ -22,9 +22,9 @@ import { toast } from "react-hot-toast";
 import { getCategoryAttributeSets } from "@/app/actions/category";
 import { getUnits } from "@/app/actions/unit";
 import {
-  createOrUpdateProduct,
+  createProduct,
+  updateProduct,
   findProductById,
-  findProducts,
 } from "@/app/actions/products";
 import {
   saveProductDraft,
@@ -50,7 +50,6 @@ export type AttributeDetail = {
   unitFamily?: { id: string; name: string; baseUnit: string } | null;
   sortOrder: number;
 };
-
 export type GroupNode = {
   id: string;
   code: string;
@@ -60,7 +59,6 @@ export type GroupNode = {
   attributes: AttributeDetail[];
   children: GroupNode[];
 };
-
 type AttributeSetStep = {
   id: string;
   title: string;
@@ -101,14 +99,12 @@ const toScalarId = (value: any): string | null => {
     ) {
       return value.toString();
     }
-
     const nested =
       value._id ?? value.id ?? value.value ?? value.categoryId ?? value.brand;
     if (nested !== undefined && nested !== null && nested !== value) {
       const scalar = toScalarId(nested);
       if (scalar) return scalar;
     }
-
     const candidate =
       Object.prototype.toString.call(value) === "[object Object]"
         ? ""
@@ -147,15 +143,10 @@ function normalizeVariantValues(data: any): Record<string, string[]> {
   return {};
 }
 
-// ------------------------------------------------------------------
-// getGroupRelevantKeys
-// ------------------------------------------------------------------
 function getGroupRelevantKeys(group: GroupNode): string[] {
   const keys: string[] = [];
   group.attributes.forEach((attr) => keys.push(normalizeCode(attr.code)));
-  group.children.forEach((child) => {
-    keys.push(...getGroupRelevantKeys(child));
-  });
+  group.children.forEach((child) => keys.push(...getGroupRelevantKeys(child)));
   if (normalizeCode(group.code) === "variantThemes") {
     keys.push("variantThemes", "variantValues", "variants");
   }
@@ -166,7 +157,7 @@ function getGroupRelevantKeys(group: GroupNode): string[] {
 }
 
 // ------------------------------------------------------------------
-// Memoized GroupRenderer
+// GroupRenderer
 // ------------------------------------------------------------------
 interface GroupRendererProps {
   group: GroupNode;
@@ -313,30 +304,26 @@ const GroupRenderer = memo(
       </section>
     );
   },
-  (prevProps, nextProps) => {
-    if (prevProps.productId !== nextProps.productId) return false;
-    if (prevProps.units !== nextProps.units) return false;
-    if (prevProps.allVariantFields !== nextProps.allVariantFields) return false;
-    if (prevProps.handleChange !== nextProps.handleChange) return false;
-    if (prevProps.group.id !== nextProps.group.id) return false;
+  (prev, next) => {
+    if (prev.productId !== next.productId) return false;
+    if (prev.units !== next.units) return false;
+    if (prev.allVariantFields !== next.allVariantFields) return false;
+    if (prev.handleChange !== next.handleChange) return false;
+    if (prev.group.id !== next.group.id) return false;
 
-    const relevantKeys = getGroupRelevantKeys(prevProps.group);
+    const relevantKeys = getGroupRelevantKeys(prev.group);
     for (const key of relevantKeys) {
-      if (prevProps.productData[key] !== nextProps.productData[key]) {
-        return false;
-      }
+      if (prev.productData[key] !== next.productData[key]) return false;
     }
 
-    const prevGroupErrors =
-      prevProps.validationErrors[prevProps.group.id] || [];
-    const nextGroupErrors =
-      nextProps.validationErrors[nextProps.group.id] || [];
+    const prevGroupErrors = prev.validationErrors[prev.group.id] || [];
+    const nextGroupErrors = next.validationErrors[next.group.id] || [];
     if (prevGroupErrors.length !== nextGroupErrors.length) return false;
     if (prevGroupErrors.some((e, i) => e !== nextGroupErrors[i])) return false;
 
-    if (normalizeCode(prevProps.group.code) === "variantThemes") {
-      const prevVariantErrors = prevProps.validationErrors["variants"] || [];
-      const nextVariantErrors = nextProps.validationErrors["variants"] || [];
+    if (normalizeCode(prev.group.code) === "variantThemes") {
+      const prevVariantErrors = prev.validationErrors["variants"] || [];
+      const nextVariantErrors = next.validationErrors["variants"] || [];
       if (prevVariantErrors.length !== nextVariantErrors.length) return false;
       if (prevVariantErrors.some((e, i) => e !== nextVariantErrors[i]))
         return false;
@@ -344,7 +331,6 @@ const GroupRenderer = memo(
     return true;
   },
 );
-
 GroupRenderer.displayName = "GroupRenderer";
 
 // ------------------------------------------------------------------
@@ -357,35 +343,27 @@ function flattenStructuredFields(
 
   if (Array.isArray(result.keyFeatures)) {
     for (const item of result.keyFeatures) {
-      if (item.k && item.v !== undefined) {
-        result[item.k] = item.v;
-      }
+      if (item.k && item.v !== undefined) result[item.k] = item.v;
     }
   }
-
   if (Array.isArray(result.specifications)) {
     const flattenSpecs = (specs: any[]) => {
       for (const group of specs) {
         if (Array.isArray(group.attributes)) {
           for (const attr of group.attributes) {
-            if (attr.k && attr.v !== undefined) {
-              result[attr.k] = attr.v;
-            }
+            if (attr.k && attr.v !== undefined) result[attr.k] = attr.v;
           }
         }
-        if (Array.isArray(group.groups)) {
-          flattenSpecs(group.groups);
-        }
+        if (Array.isArray(group.groups)) flattenSpecs(group.groups);
       }
     };
     flattenSpecs(result.specifications);
   }
-
   return result;
 }
 
 // ------------------------------------------------------------------
-// Draft session helpers (Bug 1)
+// Draft session helpers
 // ------------------------------------------------------------------
 const NEW_PRODUCT_SESSION_KEY = "new-product-draft-id";
 
@@ -397,7 +375,6 @@ function getOrCreateNewProductId(): string {
   sessionStorage.setItem(NEW_PRODUCT_SESSION_KEY, fresh);
   return fresh;
 }
-
 function clearNewProductId() {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(NEW_PRODUCT_SESSION_KEY);
@@ -417,12 +394,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
 }) => {
   const router = useRouter();
 
-  // BUG 1: stable, per-session draft key for new products so concurrent
-  // drafts don't collide across sessions/tabs.
-  const [productId] = useState<string>(() => {
-    if (initialProductId) return initialProductId;
-    return getOrCreateNewProductId();
-  });
+  const [productId] = useState<string>(
+    () => initialProductId || getOrCreateNewProductId(),
+  );
 
   const [productData, setProductData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
@@ -439,7 +413,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   const currentStepRef = useRef(currentStep);
 
-  // Clear the new-product session key after a successful save / discard.
   const clearNewProductSession = useCallback(() => {
     if (initialProductId) return;
     clearNewProductId();
@@ -452,7 +425,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
       try {
         await saveProductDraft(productId, productData);
       } catch {
-        // silent
+        /* silent */
       }
     }, 800);
     return () => clearTimeout(timer);
@@ -485,30 +458,48 @@ const ProductForm: React.FC<ProductFormProps> = ({
             data.value = code.value || "";
           }
         }
-
         if (data.variantValues) {
           data.variantValues = normalizeVariantValues(data.variantValues);
         }
 
+        // ---- DRAFT MERGE (timestamp-gated) ----
         const draft = await getProductDraft(productId);
-        if (draft) {
-          let draftData = { ...draft };
-          delete draftData._id;
-          draftData = flattenStructuredFields(draftData);
-          if (draftData.productCode) {
-            let code = draftData.productCode;
-            if (Array.isArray(code) && code.length > 0) code = code[0];
-            if (code && typeof code === "object") {
-              draftData.type = code.type || "";
-              draftData.value = code.value || "";
+        if (draft && draft.data) {
+          const draftTime = draft.updatedAt
+            ? new Date(draft.updatedAt).getTime()
+            : 0;
+          const productTime = data.updatedAt
+            ? new Date(data.updatedAt).getTime()
+            : 0;
+          const isNewProduct = !initialProductId;
+          const shouldUseDraft = isNewProduct || draftTime > productTime;
+
+          if (shouldUseDraft) {
+            let draftData: any = { ...draft.data };
+            delete draftData._id;
+            draftData = flattenStructuredFields(draftData);
+            if (draftData.productCode) {
+              let code = draftData.productCode;
+              if (Array.isArray(code) && code.length > 0) code = code[0];
+              if (code && typeof code === "object") {
+                draftData.type = code.type || "";
+                draftData.value = code.value || "";
+              }
+            }
+            if (draftData.variantValues) {
+              draftData.variantValues = normalizeVariantValues(
+                draftData.variantValues,
+              );
+            }
+            data = { ...data, ...draftData };
+          } else {
+            // Stale draft → drop it so it stops hiding fresh server data.
+            try {
+              await deleteProductDraft(productId);
+            } catch {
+              /* silent */
             }
           }
-          if (draftData.variantValues) {
-            draftData.variantValues = normalizeVariantValues(
-              draftData.variantValues,
-            );
-          }
-          data = { ...data, ...draftData };
         }
 
         if (initialProductId) data._id = initialProductId;
@@ -517,23 +508,16 @@ const ProductForm: React.FC<ProductFormProps> = ({
         }
 
         if (data.categoryId) {
-          const id = toScalarId(data.categoryId);
-          data.categoryId = id || null;
+          data.categoryId = toScalarId(data.categoryId) || null;
         }
         if (data.brand) {
-          const id = toScalarId(data.brand);
-          data.brand = id || null;
+          data.brand = toScalarId(data.brand) || null;
         }
         if (Array.isArray(data.carrier)) {
-          const id = toScalarId(data.carrier);
-          data.carrier = id || null;
+          data.carrier = toScalarId(data.carrier) || null;
         }
 
-        if (data.status) {
-          data.status = data.status.trim().toLowerCase();
-        } else {
-          data.status = "draft";
-        }
+        data.status = data.status ? data.status.trim().toLowerCase() : "draft";
 
         if (Array.isArray(data.images)) {
           data.images = data.images.map((img) =>
@@ -564,6 +548,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
         setIsFetchingAttributes(true);
         setError(null);
         const sets = await getCategoryAttributeSets(productData.categoryId);
+        console.log("Fetched attribute sets:", sets);
+        console.log("Product data:", productData);
         setSteps(sets);
         setCurrentStep(0);
         setValidationErrors({});
@@ -580,22 +566,17 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   // ---------------- Fetch units ----------------
   useEffect(() => {
-    const fetchUnits = async () => {
+    (async () => {
       try {
         const allUnits = await getUnits();
         setUnits(allUnits);
       } catch (err) {
         console.error("Failed to fetch units", err);
       }
-    };
-    fetchUnits();
+    })();
   }, []);
 
-  // ---------------- Visible steps (Bug 6) ----------------
-  // BUG 6: derive `hasVariants` from the live variants array so the variant
-  // step is hidden the moment the user removes the last variant, and shown
-  // again when they re-add one — regardless of a stale `hasVariants` flag
-  // from the server payload.
+  // ---------------- Visible steps ----------------
   const hasVariants = useMemo(
     () =>
       Array.isArray(productData.variants) && productData.variants.length > 0,
@@ -606,21 +587,16 @@ const ProductForm: React.FC<ProductFormProps> = ({
     const variantStepIndex = steps.findIndex((step) =>
       step.groups.some((g) => normalizeCode(g.code) === "variantThemes"),
     );
-    if (variantStepIndex === -1 || hasVariants) {
-      return steps;
-    }
+    if (variantStepIndex === -1 || hasVariants) return steps;
     return steps.filter((_, index) => index !== variantStepIndex);
   }, [steps, hasVariants]);
 
-  // BUG 2: only clamp currentStep here. The ref is updated by a dedicated
-  // effect (below) that mirrors the real current step, not the last one.
   useEffect(() => {
     if (currentStep >= visibleSteps.length) {
       setCurrentStep(Math.max(0, visibleSteps.length - 1));
     }
   }, [visibleSteps, currentStep]);
 
-  // BUG 2: single source of truth for the ref.
   useEffect(() => {
     currentStepRef.current = currentStep;
   }, [currentStep]);
@@ -631,8 +607,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     group.attributes.forEach((attr) => {
       if (!attr.isRequired) return;
       const camelCode = normalizeCode(attr.code);
-      const value = productData[camelCode];
-      if (isEmptyValue(value)) {
+      if (isEmptyValue(productData[camelCode])) {
         errors.push(`${attr.name} is required`);
       }
     });
@@ -648,8 +623,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         const codeType = productData.type;
         const codeValue = productData.value;
         if (!isEmptyValue(codeType) && !isEmptyValue(codeValue)) {
-          const valid = isValidBarcode(codeValue, codeType);
-          if (!valid) {
+          if (!isValidBarcode(codeValue, codeType)) {
             errors.push(
               `${valueAttr.name} is not a valid ${codeType} barcode.`,
             );
@@ -676,13 +650,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
       }
     }
     if (variantFields.length === 0) return errors;
-    const requiredVariantFields = variantFields.filter((f) => f.isRequired);
+    const required = variantFields.filter((f) => f.isRequired);
 
     variants.forEach((variant: any, index: number) => {
-      requiredVariantFields.forEach((field) => {
+      required.forEach((field) => {
         const camelCode = normalizeCode(field.code);
-        const value = variant[camelCode];
-        if (isEmptyValue(value)) {
+        if (isEmptyValue(variant[camelCode])) {
           errors.push(`Variant #${index + 1}: ${field.name} is required`);
         }
       });
@@ -690,8 +663,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
     return errors;
   };
 
-  // BUG 3: return both the result AND the freshly computed errors so callers
-  // don't read a stale `validationErrors` from the previous render.
   const validateAllSteps = (): {
     ok: boolean;
     errors: Record<string, string[]>;
@@ -767,11 +738,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
       setCurrentStep(currentStep + 1);
     }
   };
-
   const handlePrev = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
+    if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
 
   // ---------------- Change handler ----------------
@@ -780,25 +748,24 @@ const ProductForm: React.FC<ProductFormProps> = ({
       const camelField = normalizeCode(field);
       setProductData((prev) => ({ ...prev, [camelField]: value }));
 
-      const stepIndex = currentStepRef.current;
-      const stepData = visibleSteps[stepIndex];
+      const stepData = visibleSteps[currentStepRef.current];
       if (stepData) {
         const group = stepData.groups.find((g) =>
           g.attributes.some((a) => normalizeCode(a.code) === camelField),
         );
         if (group) {
           setValidationErrors((prev) => {
-            const newErrors = { ...prev };
-            delete newErrors[group.id];
-            return newErrors;
+            const next = { ...prev };
+            delete next[group.id];
+            return next;
           });
         }
       }
       if (camelField === "variants") {
         setValidationErrors((prev) => {
-          const newErrors = { ...prev };
-          delete newErrors["variants"];
-          return newErrors;
+          const next = { ...prev };
+          delete next["variants"];
+          return next;
         });
       }
     },
@@ -814,7 +781,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
       return;
     }
 
-    // BUG 3: consume the errors returned by validateAllSteps directly.
     const { ok, errors } = validateAllSteps();
     if (!ok) {
       let firstErrorStep = 0;
@@ -831,9 +797,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
       return;
     }
 
-    // BUG 1: only an existing product counts as an update. The draft session
-    // key ("new-…") must never be sent to the server as `_id`.
-    const isUpdate = Boolean(initialProductId || productData._id);
+    const existingId =
+      initialProductId ||
+      (typeof productData._id === "string" ? productData._id : "");
+    const isUpdate = Boolean(existingId);
+
     const toastId = toast.loading(
       isUpdate ? "Updating product..." : "Creating product...",
     );
@@ -846,27 +814,18 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
       if (!payload.status) payload.status = "draft";
 
-      // BUG 1: remove the draft-session fallback that used to inject the
-      // (now session-scoped) productId as `_id`.
-      const productIdToUse = initialProductId || payload._id;
-      if (productIdToUse) {
-        payload._id = productIdToUse;
-      } else {
-        delete payload._id;
-      }
-
+      // Server routes by URL/id arg — strip every possible id from the payload.
+      delete payload._id;
       delete payload.Id;
       delete payload.id;
 
-      if (payload.categoryId) {
+      if (payload.categoryId)
         payload.categoryId = toScalarId(payload.categoryId) || null;
-      }
-      if (payload.brand) {
-        payload.brand = toScalarId(payload.brand) || null;
-      }
+      if (payload.brand) payload.brand = toScalarId(payload.brand) || null;
       if (payload.carrier && Array.isArray(payload.carrier)) {
         payload.carrier = toScalarId(payload.carrier) || null;
       }
+
       if (typeof payload.status === "string") {
         payload.status = payload.status.trim().toLowerCase();
       } else if (Array.isArray(payload.status)) {
@@ -879,14 +838,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
       if (Array.isArray(payload.variants)) {
         payload.variants = payload.variants.map((variant: any) => {
           if (!variant || typeof variant !== "object") return variant;
-          const nextVariant = { ...variant };
-          if (Array.isArray(nextVariant.mainImage)) {
-            nextVariant.mainImage = nextVariant.mainImage[0] || "";
-          }
-          if (Array.isArray(nextVariant.images)) {
-            nextVariant.images = nextVariant.images.filter(Boolean);
-          }
-          return nextVariant;
+          const next = { ...variant };
+          if (Array.isArray(next.mainImage))
+            next.mainImage = next.mainImage[0] || "";
+          if (Array.isArray(next.images))
+            next.images = next.images.filter(Boolean);
+          return next;
         });
       }
 
@@ -900,7 +857,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
         );
       }
 
-      const res = await createOrUpdateProduct(payload);
+      const res = isUpdate
+        ? await updateProduct(existingId, payload)
+        : await createProduct(payload);
 
       if (res.success) {
         toast.success(
@@ -912,13 +871,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
         try {
           await deleteProductDraft(productId);
         } catch {
-          // silent — draft already may not exist
+          /* silent */
         }
-        // BUG 1: clear the session slot so the *next* create starts fresh.
         clearNewProductSession();
-        setTimeout(() => {
-          router.push("/catalog/products");
-        }, 900);
+        setTimeout(() => router.push("/catalog/products"), 900);
       } else {
         toast.error(res.error || "Failed to save product.", { id: toastId });
       }
@@ -930,16 +886,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
-  // ---------------- Cancel / discard ----------------
-  const handleCancelClick = () => {
-    setIsCancelDialogOpen(true);
-  };
-
+  // ---------------- Cancel ----------------
+  const handleCancelClick = () => setIsCancelDialogOpen(true);
   const handleConfirmCancel = async () => {
     const toastId = toast.loading("Discarding draft...");
     try {
       await deleteProductDraft(productId);
-      // BUG 1: free the session slot so the user can start a clean draft.
       clearNewProductSession();
       toast.success("Draft discarded", { id: toastId });
     } catch {
@@ -991,7 +943,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
     );
   }
 
-  // ---------------- Main render ----------------
   return (
     <div>
       <form className="flex flex-col max-w-4xl bg-card text-card-foreground p-2 lg:p-4 rounded-lg ">
@@ -1018,7 +969,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 activeStep={currentStep}
                 className="whitespace-nowrap mb-6 w-full overflow-auto"
               >
-                {visibleSteps.map((step, index) => {
+                {visibleSteps.map((step) => {
                   const hasError = step.groups.some(
                     (g) =>
                       validationErrors[g.id] &&

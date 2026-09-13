@@ -1,23 +1,16 @@
-// app/actions/drafts.ts (or append to products.ts)
-
 "use server";
 
 import { connection } from "@/utils/connection";
-import Draft from "@/models/Draft"; // we'll define the model below
+import Draft from "@/models/Draft";
 import { auth } from "../auth";
-
-// ---------- Server Actions ----------
 
 export async function saveProductDraft(productId: string, data: any) {
   try {
     await connection();
     const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Unauthorized");
-    }
+    if (!session?.user?.id) throw new Error("Unauthorized");
     const userId = session.user.id;
 
-    // Upsert draft
     await Draft.findOneAndUpdate(
       { userId, productId },
       { data, updatedAt: new Date() },
@@ -31,18 +24,25 @@ export async function saveProductDraft(productId: string, data: any) {
   }
 }
 
-export async function getProductDraft(productId: string) {
+/**
+ * Returns `{ data, updatedAt }` (or null). Caller uses `updatedAt` to decide
+ * whether the draft is newer than the last server-side save of the product.
+ */
+export async function getProductDraft(
+  productId: string,
+): Promise<{ data: any; updatedAt: Date } | null> {
   try {
     await connection();
     const session = await auth();
-    if (!session?.user?.id) {
-      return null;
-    }
+    if (!session?.user?.id) return null;
     const userId = session.user.id;
 
-    const draft = await Draft.findOne({ userId, productId });
+    const draft = await Draft.findOne({ userId, productId }).lean();
     if (!draft) return null;
-    return draft.data;
+    return {
+      data: (draft as any).data,
+      updatedAt: (draft as any).updatedAt,
+    };
   } catch (error) {
     console.error("Error fetching draft:", error);
     return null;
@@ -53,9 +53,7 @@ export async function deleteProductDraft(productId: string) {
   try {
     await connection();
     const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Unauthorized");
-    }
+    if (!session?.user?.id) throw new Error("Unauthorized");
     const userId = session.user.id;
 
     await Draft.deleteOne({ userId, productId });

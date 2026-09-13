@@ -1,40 +1,33 @@
-import mongoose, { Schema, Document, Model } from "mongoose";
-
-// ==================== INTERFACES ====================
+import mongoose, { Schema, Document } from "mongoose";
 
 interface IProductCode {
   type: "EAN" | "UPC" | "ISBN" | "QR" | "MODEL";
   value: string;
 }
-
 interface IKeyValue {
   k: string;
   v: any;
   unit?: string;
 }
-
 interface ISpecificationGroup {
   name: string;
   attributes?: IKeyValue[];
   groups?: ISpecificationGroup[];
 }
-
 interface IVariant {
-  attributes: IKeyValue[];
-  sku: string;
-  price: number;
-  quantity: number;
+  attributes?: IKeyValue[];
+  sku?: string;
+  price?: number;
+  quantity?: number;
   mainImage?: string;
   images?: string[];
+  [key: string]: any;
 }
-
 interface IReview {
   user: mongoose.Types.ObjectId;
   rating: number;
   comment?: string;
 }
-
-// Related product now an array of objects
 interface IRelatedProduct {
   product: mongoose.Types.ObjectId;
   relationshipType?: string;
@@ -49,28 +42,26 @@ export interface IProduct extends Document {
   brand: mongoose.Types.ObjectId;
   hasVariants: boolean;
   variantThemes: string[];
-  variantValues: IKeyValue[];
+  variantValues: Record<string, string[]>;
   keyFeatures: IKeyValue[];
   specifications: ISpecificationGroup[];
   quantity: number;
   lowStockThreshold: number;
   listPrice: number;
   price: number;
-  mainImage: string;
   images: string[];
   description: string;
   shortDescription: string;
   variants: IVariant[];
   carrier?: mongoose.Types.ObjectId;
-  relatedProducts: IRelatedProduct[]; // changed
+  relatedProducts: IRelatedProduct[];
   reviewsRatings: IReview[];
   tags: string[];
   status: "draft" | "active" | "inactive";
   createdAt: Date;
   updatedAt: Date;
+  [key: string]: any;
 }
-
-// ==================== SUB‑SCHEMAS ====================
 
 const ProductCodeSchema = new Schema<IProductCode>({
   type: {
@@ -81,34 +72,29 @@ const ProductCodeSchema = new Schema<IProductCode>({
   value: { type: String, required: true },
 });
 
-const KeyValueSchema = new Schema<IKeyValue>({
-  k: { type: String, required: true, trim: true },
-  v: { type: Schema.Types.Mixed, required: true },
-  unit: { type: String, trim: true },
-});
+const KeyValueSchema = new Schema<IKeyValue>(
+  {
+    k: { type: String, required: true, trim: true },
+    v: { type: Schema.Types.Mixed }, // NOT required — [] is valid (empty theme)
+    unit: { type: String, trim: true },
+  },
+  { _id: false },
+);
 
-const SpecificationGroupSchema = new Schema<ISpecificationGroup>({
-  name: { type: String, required: true, trim: true },
-  attributes: { type: [KeyValueSchema], default: [] },
-  groups: { type: [Schema.Types.Mixed], default: [] },
-});
-
-const VariantSchema = new Schema<IVariant>({
-  attributes: { type: [KeyValueSchema], default: [] },
-  sku: { type: String, required: true, trim: true },
-  price: { type: Number, required: true, min: 0 },
-  quantity: { type: Number, required: true, min: 0, default: 0 },
-  mainImage: { type: String, default: "" },
-  images: { type: [String], default: [] },
-});
+const SpecificationGroupSchema = new Schema<ISpecificationGroup>(
+  {
+    name: { type: String, required: true, trim: true },
+    attributes: { type: [KeyValueSchema], default: [] },
+    groups: { type: [Schema.Types.Mixed], default: [] },
+  },
+  { _id: false },
+);
 
 const ReviewSchema = new Schema<IReview>({
   user: { type: Schema.Types.ObjectId, ref: "User", required: true },
   rating: { type: Number, min: 1, max: 5, required: true },
   comment: { type: String, maxlength: 200 },
 });
-
-// ==================== MAIN SCHEMA ====================
 
 const ProductSchema = new Schema<IProduct>(
   {
@@ -130,7 +116,10 @@ const ProductSchema = new Schema<IProduct>(
     brand: { type: Schema.Types.ObjectId, ref: "Brand", required: true },
     hasVariants: { type: Boolean, default: false },
     variantThemes: { type: [String], default: [] },
-    variantValues: { type: [KeyValueSchema], default: [] },
+
+    // ✅ Mixed — preserves { k, v } entries verbatim, including v: [].
+    variantValues: { type: Schema.Types.Mixed, default: {} },
+
     keyFeatures: { type: [KeyValueSchema], default: [] },
     specifications: { type: [SpecificationGroupSchema], default: [] },
     quantity: { type: Number, default: 0, min: 0 },
@@ -140,11 +129,15 @@ const ProductSchema = new Schema<IProduct>(
     images: { type: [String], default: [] },
     description: { type: String, default: "" },
     shortDescription: { type: String, default: "" },
-    variants: { type: [VariantSchema], default: [] },
+
+    // ✅ Mixed — bypasses subdoc casting so dynamic theme keys persist.
+    variants: { type: [Schema.Types.Mixed], default: [] },
+
     carrier: { type: Schema.Types.ObjectId, ref: "Carrier" },
     relatedProducts: {
       type: [
         {
+          _id: false,
           product: { type: Schema.Types.ObjectId, ref: "Product" },
           relationshipType: { type: String },
         },
@@ -162,11 +155,9 @@ const ProductSchema = new Schema<IProduct>(
   },
   {
     timestamps: true,
-    strict: false, // allow dynamic category attributes as top‑level fields
+    strict: false, // dynamic category attributes at the root
   },
 );
-
-// ==================== INDEXES ====================
 
 ProductSchema.index(
   {
@@ -189,7 +180,6 @@ ProductSchema.index(
     name: "ProductTextIndex",
   },
 );
-
 ProductSchema.index({ "keyFeatures.k": 1, "keyFeatures.v": 1 });
 ProductSchema.index({
   "specifications.attributes.k": 1,
@@ -200,10 +190,6 @@ ProductSchema.index({ brand: 1, status: 1 });
 ProductSchema.index({ slug: 1 }, { unique: true });
 ProductSchema.index({ sku: 1 });
 ProductSchema.index({ status: 1, createdAt: -1 });
-ProductSchema.index(
-  { "keyFeatures.k": 1, "keyFeatures.v": 1 },
-  { partialFilterExpression: { status: "active" } },
-);
 
 const Product =
   (mongoose.models.Product as mongoose.Model<IProduct>) ||
