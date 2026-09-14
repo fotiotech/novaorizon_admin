@@ -1,5 +1,7 @@
 // components/AdminSideBar.tsx
-import React, { LegacyRef, useState } from "react";
+"use client";
+
+import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -8,50 +10,33 @@ import {
   BarChart,
   Category,
   Chat,
-  CheckCircle,
-  CollectionsBookmark,
-  Dashboard,
+  Code,
   Discount,
   Email,
   GetAppRounded,
-  Group,
   Inventory,
+  Inventory2,
   LocalShipping,
   Person2,
   Replay,
   Settings,
   ShoppingBag,
-  ShoppingCart,
-  Store,
   Tag,
-  Notifications,
-  Receipt,
-  AttachMoney,
   Segment,
-  History,
-  ReceiptLong,
   Campaign,
-  Public,
-  Code,
   Assessment,
-  Inventory2,
-  ManageAccounts,
-  Payment,
-  Language,
-  Room,
-  MarkEmailUnread,
+  BarChart as BarChartIcon,
 } from "@mui/icons-material";
 import { useUnreadMessages } from "@/app/(customers)/customers/chat/_component/useUnreadMessages";
 import { useNewContactCount } from "@/hooks/useNewContactCount";
+import LeftSheet from "@/components/ux/LeftSheet";
 
 export interface MenuLink {
   name: string;
   href: string;
   icon?: React.ReactNode;
   showUnreadCount?: boolean;
-  /** Show badge with count of new contact messages */
   showContactCount?: boolean;
-  /** Skip the section-slug prefix when building the final href */
   absolute?: boolean;
 }
 
@@ -62,20 +47,17 @@ export interface MenuSection {
 }
 
 interface AdminSideBarProps {
-  domNode?: LegacyRef<HTMLDivElement>;
   sideBarToggle: boolean;
   screenSize: number;
   setSideBarToggle: (open: boolean) => void;
 }
 
-// Helper to slugify a section title
 const slugify = (title: string) =>
   title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
-// Original menu configuration (without href prefixes)
 export const rawMenuConfig = [
   {
     title: "Analytics",
@@ -140,18 +122,12 @@ export const rawMenuConfig = [
   },
 ];
 
-// Build the final menu with section‑prefixed hrefs and slugs
 const menuConfig: MenuSection[] = rawMenuConfig.map((section) => {
   const slug = slugify(section.title);
   const links = section.links.map((link) => {
-    // Links flagged as absolute keep their href untouched
-    // if ("absolute" in link && link.absolute) return link;
-
     let newHref = link.href;
     const prefix = `/${slug}`;
-    if (!newHref.startsWith(prefix)) {
-      newHref = `${prefix}${newHref}`;
-    }
+    if (!newHref.startsWith(prefix)) newHref = `${prefix}${newHref}`;
     return { ...link, href: newHref };
   });
   return { ...section, slug, links };
@@ -160,7 +136,6 @@ const menuConfig: MenuSection[] = rawMenuConfig.map((section) => {
 const settingsLink: MenuLink = { name: "Settings", href: "/settings" };
 
 const AdminSideBar: React.FC<AdminSideBarProps> = ({
-  domNode,
   sideBarToggle,
   screenSize,
   setSideBarToggle,
@@ -169,7 +144,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   const unreadCount = useUnreadMessages();
   const newContactCount = useNewContactCount();
 
-  // All sections expanded by default
+  // Expanded state — collapsed by default; the header row is always clickable.
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
   >(() => {
@@ -181,155 +156,158 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   });
 
   const toggleSection = (title: string) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [title]: !prev[title],
-    }));
+    setExpandedSections((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
+  // Same close behaviour used everywhere inside the sidebar.
   const handleClose = () => {
     if (screenSize <= 1024) setSideBarToggle(false);
   };
 
   const isLargeScreen = screenSize > 1024;
-  const shouldShow = sideBarToggle || isLargeScreen;
 
-  return (
+  // ── Inner content — shared between the desktop sidebar and the mobile sheet ──
+  const content = (
     <>
-      {/* Backdrop for mobile only */}
-      {sideBarToggle && !isLargeScreen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border bg-card/40 p-4 shrink-0">
+        <Link
+          href="/"
+          className="flex items-center gap-3"
           onClick={handleClose}
-        />
-      )}
-
-      <aside
-        ref={domNode}
-        className={`
-          fixed lg:relative inset-y-0 left-0 z-50
-          transform transition-transform duration-300 ease-in-out
-          ${shouldShow ? "translate-x-0" : "-translate-x-full"}
-          lg:translate-x-0
-          w-3/5
-           lg:w-56 h-full overflow-y-auto
-          bg-background/95 text-foreground border-r border-border shadow-[0_18px_45px_rgba(15,23,42,0.12)]
-          flex flex-col justify-between backdrop-blur-md
-        `}
-      >
-        <div>
-          <div className="flex items-center justify-between border-b border-border bg-card/40 p-4">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="rounded-xl bg-primary/10 p-2">
-                <Image src="/logo.png" alt="logo" width={42} height={28} />
-              </div>
-              <span className="text-lg font-bold text-foreground">
-                Admin Panel
-              </span>
-            </Link>
-            {!isLargeScreen && (
-              <button
-                title="Close sidebar"
-                type="button"
-                onClick={handleClose}
-                className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            )}
+        >
+          <div className="rounded-xl bg-primary/10 p-2">
+            <Image src="/logo.png" alt="logo" width={42} height={28} />
           </div>
-          <nav className="p-4  overflow-y-auto">
-            {menuConfig.map((section) => {
-              const isExpanded = expandedSections[section.title] ?? true;
-              return (
-                <div key={section.title} className="">
-                  <div className="flex items-center justify-between">
-                    <Link
-                      href={`/${section.slug}`}
-                      onClick={handleClose}
-                      className="text-xs uppercase font-semibold text-muted-foreground hover:text-foreground transition-colors tracking-wide"
-                    >
-                      {section.title}
-                    </Link>
-                    <button
-                      onClick={() => toggleSection(section.title)}
-                      className="text-muted-foreground hover:text-foreground p-1 transition-colors"
-                      aria-label={isExpanded ? "Collapse" : "Expand"}
-                    >
-                      {isExpanded ? "▾" : "▸"}
-                    </button>
-                  </div>
-                  {isExpanded && (
-                    <ul className="space-y-1 mt-1">
-                      {section.links.map((link) => (
-                        <li key={link.href}>
-                          <Link
-                            href={link.href}
-                            onClick={handleClose}
-                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl border transition-all duration-200 ${
-                              pathname === link.href ||
-                              pathname?.startsWith(link.href)
-                                ? "border-primary/20 bg-primary/10 text-primary shadow-sm"
-                                : "border-transparent text-foreground hover:border-border hover:bg-muted/70"
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="text-muted-foreground">
-                                {link.icon}
-                              </span>
-                              <span className="font-medium text-sm">
-                                {link.name}
-                              </span>
-                            </div>
+          <span className="text-lg font-bold text-foreground">Admin Panel</span>
+        </Link>
 
-                            {/* Chat unread badge */}
-                            {link.showUnreadCount && unreadCount > 0 && (
-                              <span className="bg-destructive text-destructive-foreground rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
-                                {unreadCount > 99 ? "99+" : unreadCount}
-                              </span>
-                            )}
-
-                            {/* Contact messages badge */}
-                            {link.showContactCount && newContactCount > 0 && (
-                              <span className="bg-blue-600 text-white rounded-full px-2 py-0.5 text-xs font-medium min-w-5 text-center">
-                                {newContactCount > 99 ? "99+" : newContactCount}
-                              </span>
-                            )}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
-        </div>
-        <div className="p-4 border-t border-border">
-          <Link
-            href={settingsLink.href}
+        {/* Close button only makes sense on mobile — the sheet. */}
+        {!isLargeScreen && (
+          <button
+            title="Close sidebar"
+            type="button"
             onClick={handleClose}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors duration-200 font-medium"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <Settings />
-            <span>{settingsLink.name}</span>
-          </Link>
-        </div>
-      </aside>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Navigation — scrolls when it overflows */}
+      <nav className="flex-1 overflow-y-auto p-4 scrollbar-hide">
+        {menuConfig.map((section) => {
+          const isExpanded = expandedSections[section.title] ?? false;
+          return (
+            <div key={section.title} className="">
+              <div className="flex items-center justify-between">
+                <Link
+                  href={`/${section.slug}`}
+                  onClick={handleClose}
+                  className="text-xs uppercase font-semibold text-muted-foreground hover:text-foreground transition-colors tracking-wide"
+                >
+                  {section.title}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => toggleSection(section.title)}
+                  className="text-muted-foreground hover:text-foreground p-1 transition-colors"
+                  aria-label={isExpanded ? "Collapse" : "Expand"}
+                >
+                  {isExpanded ? "▾" : "▸"}
+                </button>
+              </div>
+
+              {isExpanded && (
+                <ul className="space-y-1 mt-1">
+                  {section.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        onClick={handleClose}
+                        className={`flex items-center justify-between px-3 py-1.5 rounded-xl border transition-all duration-200 ${
+                          pathname === link.href ||
+                          pathname?.startsWith(link.href)
+                            ? "border-primary/20 bg-primary/10 text-primary shadow-sm"
+                            : "border-transparent text-foreground hover:border-border hover:bg-muted/70"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-muted-foreground">
+                            {link.icon}
+                          </span>
+                          <span className="font-medium text-sm">
+                            {link.name}
+                          </span>
+                        </div>
+
+                        {link.showUnreadCount && unreadCount > 0 && (
+                          <span className="bg-destructive text-destructive-foreground rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </span>
+                        )}
+
+                        {link.showContactCount && newContactCount > 0 && (
+                          <span className="bg-blue-600 text-white rounded-full px-2 py-0.5 text-xs font-medium min-w-5 text-center">
+                            {newContactCount > 99 ? "99+" : newContactCount}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="p-4 border-t border-border shrink-0">
+        <Link
+          href={settingsLink.href}
+          onClick={handleClose}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors duration-200 font-medium"
+        >
+          <Settings />
+          <span>{settingsLink.name}</span>
+        </Link>
+      </div>
     </>
+  );
+
+  // ── Desktop: static sidebar (flex child of AdminLayout) ──────────
+  if (isLargeScreen) {
+    return (
+      <aside className="relative w-56 h-full flex flex-col overflow-hidden bg-background/95 text-foreground border-r border-border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-md">
+        {content}
+      </aside>
+    );
+  }
+
+  // ── Mobile: left sheet ──────────────────────────────────────────
+  return (
+    <LeftSheet
+      open={sideBarToggle}
+      onClose={() => setSideBarToggle(false)}
+      width="w-3/5 max-w-xs"
+    >
+      {content}
+    </LeftSheet>
   );
 };
 

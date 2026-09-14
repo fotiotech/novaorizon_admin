@@ -3,11 +3,9 @@
 
 import React, { ReactNode, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import AdminSideBar from "./AdminSideBar";
 import AdminTopBar from "./AdminTopBar";
 
-// Extend the User type to include 'role'
 declare module "next-auth" {
   interface User {
     role?: string;
@@ -21,14 +19,8 @@ interface AdminLayoutProps {
 const AdminLayout = ({ children }: AdminLayoutProps) => {
   const [sideBarToggle, setSideBarToggle] = useState(false);
   const [screenSize, setScreenSize] = useState(0);
-  const { data: session, status } = useSession();
-  const router = useRouter();
+  const { status } = useSession();
 
-  const handleClickOutside = () => {
-    if (screenSize <= 1024) setSideBarToggle(false);
-  };
-
-  // Handle screen resize
   useEffect(() => {
     const handleResize = () => setScreenSize(window.innerWidth);
     window.addEventListener("resize", handleResize);
