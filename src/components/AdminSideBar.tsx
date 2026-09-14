@@ -281,10 +281,17 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
         <Link
           href={settingsLink.href}
           onClick={handleClose}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors duration-200 font-medium"
+          className={`flex items-center gap-3 px-3 py-1.5 rounded-xl border transition-all duration-200 ${
+            pathname === settingsLink.href ||
+            pathname?.startsWith(settingsLink.href)
+              ? "border-primary/20 bg-primary/10 shadow-sm"
+              : "border-transparent hover:border-border hover:bg-muted/70"
+          }`}
         >
-          <Settings />
-          <span>{settingsLink.name}</span>
+          <Settings className="text-primary" />
+          <span className="font-medium text-sm text-foreground">
+            {settingsLink.name}
+          </span>
         </Link>
       </div>
     </>
