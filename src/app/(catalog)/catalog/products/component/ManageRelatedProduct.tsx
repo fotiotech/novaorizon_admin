@@ -1,6 +1,6 @@
 "use client";
 
-import { findProducts } from "@/app/actions/products";
+import { findProducts, findProductById } from "@/app/actions/products";
 import Image from "next/image";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import Select from "react-select";
@@ -24,6 +24,31 @@ const readProductValue = (obj: any, ...keys: string[]) => {
   if (!obj) return undefined;
   for (const key of keys) if (obj[key] !== undefined) return obj[key];
   return undefined;
+};
+
+/**
+ * Extract a product id from any historical relatedProducts shape:
+ *   { id: "oid" }                      ← what this component writes back
+ *   { product: "oid" }                 ← what the DB stores (serialized)
+ *   { product: { _id: "oid" } }        ← populated document
+ *   { productId | product_id: "oid" }  ← alternate legacy keys
+ *   "oid"                              ← bare string
+ *   { _id: "oid" }                     ← full product object
+ */
+const extractRelatedProductId = (rp: any): string => {
+  if (!rp) return "";
+  if (typeof rp === "string") return rp;
+
+  if (typeof rp.id === "string" && rp.id) return rp.id;
+  if (typeof rp._id === "string" && rp._id) return rp._id;
+
+  const product = rp.product ?? rp.productId ?? rp.product_id;
+  if (typeof product === "string" && product) return product;
+  if (product && typeof product === "object") {
+    if (typeof product._id === "string" && product._id) return product._id;
+    if (typeof product.id === "string" && product.id) return product.id;
+  }
+  return "";
 };
 
 const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
@@ -70,20 +95,36 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     );
 
     let initial: RelatedProduct[] = [];
+
     if (Array.isArray(relatedProductsData)) {
-      initial = relatedProductsData.map((rp: any) => ({
-        id: rp.id,
-        relationshipType: rp.relationshipType || rp.relationship_type || "",
-      }));
+      // Map → extract id → drop unresolved → dedupe by id.
+      const seen = new Set<string>();
+      initial = relatedProductsData
+        .map((rp: any) => ({
+          id: extractRelatedProductId(rp),
+          relationshipType: rp.relationshipType || rp.relationship_type || "",
+        }))
+        .filter((rp) => {
+          if (!rp.id) return false;
+          if (seen.has(rp.id)) return false;
+          seen.add(rp.id);
+          return true;
+        });
     } else if (relatedProductsData?.ids) {
       const defaultType =
         relatedProductsData.relationshipType ||
         relatedProductsData.relationship_type ||
         "";
-      initial = relatedProductsData.ids.map((pid: string) => ({
-        id: pid,
-        relationshipType: defaultType,
-      }));
+      const seen = new Set<string>();
+      initial = (relatedProductsData.ids as any[])
+        .map((pid) => extractRelatedProductId(pid))
+        .filter((pid) => {
+          if (!pid) return false;
+          if (seen.has(pid)) return false;
+          seen.add(pid);
+          return true;
+        })
+        .map((pid) => ({ id: pid, relationshipType: defaultType }));
     }
 
     setRelatedProducts((prev) => {
@@ -96,8 +137,56 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
         );
       return same ? prev : initial;
     });
+
     isInitializing.current = false;
   }, [product]);
+
+  // ---------------------------------------------------------------
+  // Ensure every related product has a row in `products`.
+  //
+  // `findProducts({ pageSize: 100 })` only returns the newest 100, so a
+  // related product outside that window would be counted in the badge
+  // but never rendered (no checkmark, no remove button). Fetch the
+  // missing ones individually and merge them in.
+  // ---------------------------------------------------------------
+  useEffect(() => {
+    if (!relatedProducts.length) return;
+    if (products.length === 0) return; // wait for the initial list first
+
+    const known = new Set(products.map((p) => String(p._id)));
+    const missing = Array.from(new Set(relatedProducts.map((rp) => rp.id)))
+      .filter(Boolean)
+      .filter((id) => !known.has(id));
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const results = await Promise.all(
+          missing.map((pid) => findProductById(pid).catch(() => null)),
+        );
+        if (cancelled) return;
+
+        const valid = results.filter(
+          (r: any) => r && r._id && r.success !== false && !r.error,
+        );
+        if (valid.length === 0) return;
+
+        setProducts((prev) => {
+          const existing = new Set(prev.map((p) => String(p._id)));
+          const toAdd = valid.filter((p: any) => !existing.has(String(p._id)));
+          return toAdd.length ? [...prev, ...toAdd] : prev;
+        });
+      } catch {
+        /* silent — missing products simply won't render */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [relatedProducts, products]);
 
   useEffect(() => {
     if (isFirstRender.current) {

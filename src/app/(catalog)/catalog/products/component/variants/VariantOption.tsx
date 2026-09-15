@@ -128,7 +128,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
           const key = normalizeCode(k);
           if (!key || reserved.has(key)) return;
           if (attrCodes.size > 0 && !attrCodes.has(key)) return;
-          const val = (v as any)[k];
+          const val = (v as any)[key];
           if (typeof val === "string" && val) seen.add(key);
         });
       });
@@ -148,6 +148,10 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
     }, [productThemes, themesFromVariants, attributes]);
 
     // ---- Theme value lists: variantValues, with fallback to variants ----
+    //
+    // FIX: fallback derivation from `variants` only fires when the theme key
+    // is ABSENT from `variantValues`. If the user has explicitly set an empty
+    // array (e.g. cleared the input), we respect that and do NOT re-derive.
     const savedValues = useMemo<Record<string, string[]>>(() => {
       const raw = readProductValue(product, "variantValues", "variant_values");
       const out: Record<string, string[]> = {};
@@ -188,8 +192,10 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       }
 
       selectedThemeCodes.forEach((theme) => {
-        const current = out[theme];
-        if (current && current.length > 0) return;
+        // ⬇ Only fall back when the key is entirely missing — not when the
+        //   user has explicitly set it to an empty array.
+        if (Object.prototype.hasOwnProperty.call(out, theme)) return;
+
         const uniq = new Set<string>();
         savedVariants.forEach((v: any) => {
           const val = v?.[theme];
@@ -313,7 +319,33 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       onUpdate,
     ]);
 
+    // ---- Refs for debounced / race-free writes -------------------------
+    const savedValuesRef = useRef(savedValues);
+    useEffect(() => {
+      savedValuesRef.current = savedValues;
+    }, [savedValues]);
+
+    const savedVariantsRef = useRef<any[]>(savedVariants);
+    useEffect(() => {
+      savedVariantsRef.current = savedVariants;
+    }, [savedVariants]);
+
+    const valuesDebounceRef = useRef<
+      Record<string, ReturnType<typeof setTimeout>>
+    >({});
+
+    // Cancel any pending debounced writes on unmount.
+    useEffect(() => {
+      const timers = valuesDebounceRef.current;
+      return () => {
+        Object.values(timers).forEach(clearTimeout);
+      };
+    }, []);
+
     // ---- Handlers -----------------------------------------------------
+    //
+    // Theme select (add/remove) writes IMMEDIATELY — it's a discrete action
+    // and the regenerator must see it right away.
     const handleThemeSelect = useCallback(
       (selectedOptions: any) => {
         const codes = Array.isArray(selectedOptions)
@@ -324,23 +356,27 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       [onUpdate],
     );
 
+    // Theme values (free text) is DEBOUNCED — typing "Red, Blue" used to
+    // fire onUpdate per keystroke, causing the regenerator to churn the
+    // variant table and lose in-flight edits.
     const handleThemeValuesChange = useCallback(
       (themeCode: string, valuesString: string) => {
         const key = normalizeCode(themeCode);
         setThemeValueInputs((prev) => ({ ...prev, [key]: valuesString }));
-        const parsed = parseCommaInput(valuesString);
-        const next = { ...savedValues, [key]: parsed };
-        onUpdate("variantValues", next);
+
+        const timers = valuesDebounceRef.current;
+        if (timers[key]) clearTimeout(timers[key]);
+        timers[key] = setTimeout(() => {
+          delete timers[key];
+          const parsed = parseCommaInput(valuesString);
+          const next = { ...savedValuesRef.current, [key]: parsed };
+          onUpdate("variantValues", next);
+        }, 400);
       },
-      [onUpdate, savedValues],
+      [onUpdate],
     );
 
     // ✅ Read/write through a ref so rapid successive edits never race.
-    const savedVariantsRef = useRef<any[]>(savedVariants);
-    useEffect(() => {
-      savedVariantsRef.current = savedVariants;
-    }, [savedVariants]);
-
     const handleVariantChange = useCallback(
       (index: number, field: string, value: any) => {
         const key = normalizeCode(field);
