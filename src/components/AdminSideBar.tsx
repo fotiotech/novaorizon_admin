@@ -311,7 +311,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     <LeftSheet
       open={sideBarToggle}
       onClose={() => setSideBarToggle(false)}
-      width="w-3/5 max-w-xs"
+      width="w-3/4 max-w-xs"
     >
       {content}
     </LeftSheet>

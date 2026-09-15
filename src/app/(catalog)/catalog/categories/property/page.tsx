@@ -260,7 +260,7 @@ export default function CategoryPropertiesPage() {
   }
 
   return (
-    <div className="p-3 max-w-6xl">
+    <div className=" max-w-6xl">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold text-foreground">

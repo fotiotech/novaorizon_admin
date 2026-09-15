@@ -295,7 +295,7 @@ export default function ProductsPage() {
   );
 
   return (
-    <div className="max-w-7xl py-6 px-3 lg:px-8">
+    <div className="max-w-7xl py-6 lg:px-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-3xl font-bold text-foreground">All Products</h1>
         <div className="flex items-center gap-2 w-full sm:w-auto">
