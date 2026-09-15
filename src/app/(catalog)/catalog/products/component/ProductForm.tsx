@@ -16,6 +16,8 @@ import {
   Stepper,
   Step,
   StepLabel,
+  FormControlLabel,
+  Switch,
 } from "@mui/material";
 import { toast } from "react-hot-toast";
 
@@ -85,6 +87,31 @@ const normalizeCode = (code?: string): string => {
   return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
 };
 
+/** Depth-first search for a group by normalized code, including children. */
+const findGroupByCode = (
+  groups: GroupNode[],
+  code: string,
+): GroupNode | null => {
+  for (const g of groups) {
+    if (normalizeCode(g.code) === code) return g;
+    const found = findGroupByCode(g.children || [], code);
+    if (found) return found;
+  }
+  return null;
+};
+
+/** Search every step's tree for a group by normalized code. */
+const findGroupInSteps = (
+  steps: AttributeSetStep[],
+  code: string,
+): GroupNode | null => {
+  for (const step of steps) {
+    const found = findGroupByCode(step.groups, code);
+    if (found) return found;
+  }
+  return null;
+};
+
 const toScalarId = (value: any): string | null => {
   if (!value) return null;
   if (typeof value === "string") return value;
@@ -148,7 +175,7 @@ function getGroupRelevantKeys(group: GroupNode): string[] {
   group.attributes.forEach((attr) => keys.push(normalizeCode(attr.code)));
   group.children.forEach((child) => keys.push(...getGroupRelevantKeys(child)));
   if (normalizeCode(group.code) === "variantThemes") {
-    keys.push("variantThemes", "variantValues", "variants");
+    keys.push("variantThemes", "variantValues", "variants", "hasVariants");
   }
   if (normalizeCode(group.code) === "productRelationships") {
     keys.push("relatedProducts");
@@ -336,10 +363,6 @@ GroupRenderer.displayName = "GroupRenderer";
 // ------------------------------------------------------------------
 // Legacy compatibility shim
 // ------------------------------------------------------------------
-// Model B has no structured arrays. But products saved before the switch
-// may still carry `keyFeatures` / `specifications` on the document. This
-// shim flattens them onto the root so the form populates correctly, and
-// the server's `$unset` cleans them out on the next save.
 function flattenStructuredFields(
   data: Record<string, any>,
 ): Record<string, any> {
@@ -528,6 +551,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
           );
         }
 
+        // ---- hasVariants: explicit boolean, derived once on load ----
+        // If the draft / document already says so, keep that.
+        // Otherwise infer from whether variants exist.
+        if (typeof data.hasVariants !== "boolean") {
+          data.hasVariants =
+            Array.isArray(data.variants) && data.variants.length > 0;
+        }
+
         setProductData(data);
       } catch (err) {
         console.error("Error loading product data:", err);
@@ -577,19 +608,23 @@ const ProductForm: React.FC<ProductFormProps> = ({
     })();
   }, []);
 
-  // ---------------- Visible steps ----------------
-  const hasVariants = useMemo(
-    () =>
-      Array.isArray(productData.variants) && productData.variants.length > 0,
-    [productData.variants],
-  );
+  // ------------------------------------------------------------------
+  // Variants toggle — SOLE source of truth for step visibility.
+  //
+  //   • true  → variant step is visible (editable / creatable)
+  //   • false → variant step filtered out, no variant data in payload
+  //
+  //   Initial value comes from the loaded doc/draft (see loadData), and
+  //   falls back to "has variants" when absent.
+  // ------------------------------------------------------------------
+  const hasVariants = productData.hasVariants === true;
 
   const visibleSteps = useMemo(() => {
-    const variantStepIndex = steps.findIndex((step) =>
-      step.groups.some((g) => normalizeCode(g.code) === "variantThemes"),
+    if (hasVariants) return steps;
+    return steps.filter(
+      (step) =>
+        !step.groups.some((g) => normalizeCode(g.code) === "variantThemes"),
     );
-    if (variantStepIndex === -1 || hasVariants) return steps;
-    return steps.filter((_, index) => index !== variantStepIndex);
   }, [steps, hasVariants]);
 
   useEffect(() => {
@@ -601,6 +636,42 @@ const ProductForm: React.FC<ProductFormProps> = ({
   useEffect(() => {
     currentStepRef.current = currentStep;
   }, [currentStep]);
+
+  // ---------------- Variant fields (recursive, from all steps) ----
+  const variantFieldsGroup = useMemo(
+    () => findGroupInSteps(steps, "variantFields"),
+    [steps],
+  );
+
+  const allVariantFields = useMemo(
+    () => variantFieldsGroup?.attributes || [],
+    [variantFieldsGroup],
+  );
+
+  // ---------------- Toggle handler ----------------
+  const handleToggleVariants = useCallback((enabled: boolean) => {
+    setProductData((prev) => {
+      const next: Record<string, any> = { ...prev, hasVariants: enabled };
+      if (!enabled) {
+        // Clear variant-related data so nothing stale lingers in
+        // the payload or re-appears when re-enabled.
+        delete next.variants;
+        delete next.variantThemes;
+        delete next.variantValues;
+      }
+      return next;
+    });
+
+    // Drop variant validation errors when toggling off.
+    if (!enabled) {
+      setValidationErrors((prev) => {
+        if (!("variants" in prev)) return prev;
+        const next = { ...prev };
+        delete next["variants"];
+        return next;
+      });
+    }
+  }, []);
 
   // ---------------- Validation ----------------
   const validateGroup = (group: GroupNode): string[] => {
@@ -637,19 +708,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   const validateVariants = (): string[] => {
     const errors: string[] = [];
+    if (!hasVariants) return errors;
     const variants = productData.variants || [];
     if (variants.length === 0) return errors;
 
-    let variantFields: AttributeDetail[] = [];
-    for (const step of visibleSteps) {
-      const group = step.groups.find(
-        (g) => normalizeCode(g.code) === "variantFields",
-      );
-      if (group) {
-        variantFields = group.attributes || [];
-        break;
-      }
-    }
+    const variantFields: AttributeDetail[] = allVariantFields;
     if (variantFields.length === 0) return errors;
     const required = variantFields.filter((f) => f.isRequired);
 
@@ -679,10 +742,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         }
       });
     });
-    const hasVariantStep = visibleSteps.some((step) =>
-      step.groups.some((g) => normalizeCode(g.code) === "variantThemes"),
-    );
-    if (hasVariantStep) {
+    if (hasVariants) {
       const variantErrors = validateVariants();
       if (variantErrors.length > 0) {
         allErrors["variants"] = variantErrors;
@@ -821,6 +881,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
       delete payload.Id;
       delete payload.id;
 
+      // Ensure variant fields are dropped when the toggle is off.
+      if (!hasVariants) {
+        delete payload.variants;
+        delete payload.variantThemes;
+        delete payload.variantValues;
+      }
+
       if (payload.categoryId)
         payload.categoryId = toScalarId(payload.categoryId) || null;
       if (payload.brand) payload.brand = toScalarId(payload.brand) || null;
@@ -905,16 +972,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
   };
 
   // ---------------- Memoized ----------------
-  const allVariantFields = useMemo(() => {
-    for (const step of visibleSteps) {
-      const group = step.groups.find(
-        (g) => normalizeCode(g.code) === "variantFields",
-      );
-      if (group) return group.attributes || [];
-    }
-    return [];
-  }, [visibleSteps]);
-
   const currentStepGroups = useMemo(() => {
     if (visibleSteps.length === 0 || currentStep >= visibleSteps.length)
       return [];
@@ -965,45 +1022,68 @@ const ProductForm: React.FC<ProductFormProps> = ({
             >
               <CircularProgress />
             </Box>
-          ) : visibleSteps.length > 0 ? (
-            <>
-              <Stepper
-                activeStep={currentStep}
-                className="whitespace-nowrap mb-6 w-full overflow-auto"
-              >
-                {visibleSteps.map((step) => {
-                  const hasError = step.groups.some(
-                    (g) =>
-                      validationErrors[g.id] &&
-                      validationErrors[g.id].length > 0,
-                  );
-                  return (
-                    <Step key={step.id} className="inline-block">
-                      <StepLabel error={hasError}>{step.title}</StepLabel>
-                    </Step>
-                  );
-                })}
-              </Stepper>
-
-              <div>
-                {currentStepGroups.map((group) => (
-                  <GroupRenderer
-                    key={group.id}
-                    group={group}
-                    productId={productId}
-                    productData={productData}
-                    validationErrors={validationErrors}
-                    handleChange={handleChange}
-                    units={units}
-                    allVariantFields={allVariantFields}
-                  />
-                ))}
-              </div>
-            </>
-          ) : (
+          ) : steps.length === 0 ? (
             <Alert severity="info">
               No attribute sets mapped to this category.
             </Alert>
+          ) : (
+            <>
+              {/* Variants toggle — the sole control for enabling the
+                  variant step and its fields. */}
+              <div className="flex items-center justify-end mb-4">
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={hasVariants}
+                      onChange={(e) => handleToggleVariants(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label="This product has variants"
+                />
+              </div>
+
+              {visibleSteps.length > 0 ? (
+                <>
+                  <Stepper
+                    activeStep={currentStep}
+                    className="whitespace-nowrap mb-6 w-full overflow-auto"
+                  >
+                    {visibleSteps.map((step) => {
+                      const hasError = step.groups.some(
+                        (g) =>
+                          validationErrors[g.id] &&
+                          validationErrors[g.id].length > 0,
+                      );
+                      return (
+                        <Step key={step.id} className="inline-block">
+                          <StepLabel error={hasError}>{step.title}</StepLabel>
+                        </Step>
+                      );
+                    })}
+                  </Stepper>
+
+                  <div>
+                    {currentStepGroups.map((group) => (
+                      <GroupRenderer
+                        key={group.id}
+                        group={group}
+                        productId={productId}
+                        productData={productData}
+                        validationErrors={validationErrors}
+                        handleChange={handleChange}
+                        units={units}
+                        allVariantFields={allVariantFields}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <Alert severity="info">
+                  Turn on the variants toggle above to configure variants.
+                </Alert>
+              )}
+            </>
           )}
         </div>
 
@@ -1051,9 +1131,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
           </div>
         </div>
 
-        <div className="mt-4 text-center text-sm text-muted-foreground">
-          Step {currentStep + 1} of {visibleSteps.length}
-        </div>
+        {visibleSteps.length > 0 && (
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            Step {currentStep + 1} of {visibleSteps.length}
+          </div>
+        )}
       </form>
 
       <ConfirmDialog

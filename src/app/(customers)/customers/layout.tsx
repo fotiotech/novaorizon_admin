@@ -5,7 +5,7 @@ const customersLinks = [
   { name: "Customer List", href: "/customers/customers" },
   { name: "Segmentation", href: "/customers/segmentation" },
   { name: "Messages", href: "/customers/messages" },
-  { name: "Communication History", href: "/customers/chat" },
+  { name: "Chat", href: "/customers/chat" },
   { name: "Reviews", href: "/customers/reviews" },
 ];
 

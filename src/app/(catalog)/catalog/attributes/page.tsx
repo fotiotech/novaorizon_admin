@@ -2,13 +2,14 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Select from "react-select";
-import { Delete, Edit } from "@mui/icons-material";
+import { Delete, Edit, FilterList } from "@mui/icons-material";
 import {
   deleteAttribute,
   findAttributesAndValues,
 } from "@/app/actions/attributes";
 import { AttributeFormModal } from "./_component/AttributeFormModal";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import { BottomSheet } from "@/components/ux/BottomSheet";
 
 type AttributeType = {
   _id?: string;
@@ -42,6 +43,9 @@ const Attributes = () => {
   const [deleteTargetId, setDeleteTargetId] = useState<string>("");
   const [deleteTargetName, setDeleteTargetName] = useState<string>("");
   const [loading, setLoading] = useState(true);
+
+  // Mobile bottom-sheet
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
   useEffect(() => {
     fetchAttributes();
@@ -192,6 +196,18 @@ const Attributes = () => {
     }),
   };
 
+  const hasActiveFilters =
+    filterText.trim() !== "" || sortAttrOrder.value !== "asc";
+
+  const activeFilterCount =
+    (filterText.trim() !== "" ? 1 : 0) +
+    (sortAttrOrder.value !== "asc" ? 1 : 0);
+
+  const handleClearFilters = () => {
+    setFilterText("");
+    setSortAttrOrder({ value: "asc", label: "A → Z" });
+  };
+
   if (loading) {
     return (
       <div className="max-w-4xl w-full">
@@ -218,17 +234,58 @@ const Attributes = () => {
     );
   }
 
+  // Shared filter controls — reused in desktop bar and mobile sheet
+  const filterInputEl = (
+    <input
+      type="text"
+      placeholder="Filter attributes..."
+      value={filterText}
+      onChange={(e) => setFilterText(e.target.value)}
+      className="w-full p-2 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent outline-none"
+    />
+  );
+
+  const sortSelectEl = (
+    <Select
+      options={sortOptions}
+      value={sortAttrOrder}
+      onChange={(opt) => setSortAttrOrder(opt as Option)}
+      classNamePrefix="react-select"
+      styles={selectStyles}
+      isSearchable={false}
+      instanceId="attribute-sort"
+    />
+  );
+
   return (
     <div className="max-w-4xl w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
         <h2 className="font-bold text-xl text-foreground my-2">Attributes</h2>
-        <button
-          onClick={handleNewAttribute}
-          className="btn inline-flex items-center gap-1"
-        >
-          <span>+</span> Attribute
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {/* Mobile-only: opens the bottom-sheet filter UI */}
+          <button
+            type="button"
+            onClick={() => setIsMobileFiltersOpen(true)}
+            className="sm:hidden relative inline-flex items-center justify-center gap-2 flex-1 px-3 py-2 text-sm font-medium bg-card border border-border rounded-lg hover:bg-muted transition text-foreground"
+            aria-label="Open filters"
+          >
+            <FilterList fontSize="small" />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={handleNewAttribute}
+            className="btn inline-flex items-center gap-1 flex-1 sm:flex-initial justify-center"
+          >
+            <span>+</span> Attribute
+          </button>
+        </div>
       </div>
 
       {/* Error Display */}
@@ -247,27 +304,61 @@ const Attributes = () => {
         </div>
       )}
 
-      {/* Filter & Sort */}
-      <div className="my-3 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <input
-          type="text"
-          placeholder="Filter attributes..."
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
-          className="w-full sm:w-1/2 p-2 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent outline-none"
-        />
-        <div className="w-full sm:w-1/4">
-          <Select
-            options={sortOptions}
-            value={sortAttrOrder}
-            onChange={(opt) => setSortAttrOrder(opt as Option)}
-            classNamePrefix="react-select"
-            styles={selectStyles}
-            isSearchable={false}
-            instanceId="attribute-sort"
-          />
-        </div>
+      {/* Desktop-only inline filter & sort */}
+      <div className="my-3 hidden sm:flex gap-3 items-center">
+        <div className="w-1/2">{filterInputEl}</div>
+        <div className="w-1/4">{sortSelectEl}</div>
+        {hasActiveFilters && (
+          <button
+            onClick={handleClearFilters}
+            className="shrink-0 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border rounded-md transition-colors"
+            title="Clear filters"
+          >
+            Clear
+          </button>
+        )}
       </div>
+
+      {/* Mobile-only filter bottom-sheet */}
+      <BottomSheet
+        isOpen={isMobileFiltersOpen}
+        onClose={() => setIsMobileFiltersOpen(false)}
+        title="Filter & Sort"
+      >
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              Filter
+            </label>
+            {filterInputEl}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              Sort by name
+            </label>
+            {sortSelectEl}
+          </div>
+
+          <div className="flex items-center gap-2 pt-2 border-t border-border">
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              disabled={!hasActiveFilters}
+              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-border bg-background text-foreground hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Clear all
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMobileFiltersOpen(false)}
+              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
 
       {/* Table */}
       <div className="bg-card text-card-foreground rounded-lg shadow-md border border-border overflow-hidden">

@@ -310,7 +310,7 @@ export async function getCategory(
 }
 
 // ========================================================================
-//  COLLECT ANCESTOR PROPERTIES – now supports both parentId and parent_id
+//  COLLECT ANCESTOR PROPERTIES
 // ========================================================================
 async function collectAncestorProperties(categoryId: string): Promise<{
   mappings: any[];
@@ -346,7 +346,7 @@ async function collectAncestorProperties(categoryId: string): Promise<{
     }
 
     // ✅ Support both parentId and parent_id
-    const parentId = current.parentId ?? current.parent_id;
+    const parentId = current.parentId;
     if (!parentId) break;
 
     current = await Category.findById(parentId).populate("property").lean();

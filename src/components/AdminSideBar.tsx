@@ -150,7 +150,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   >(() => {
     const initial: Record<string, boolean> = {};
     menuConfig.forEach((section) => {
-      initial[section.title] = false;
+      initial[section.title] = true;
     });
     return initial;
   });

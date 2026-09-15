@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   findProducts,
   deleteProduct,
   getProductFilterCategories,
 } from "@/app/actions/products";
-import { Delete } from "@mui/icons-material";
+import { Delete, FilterList } from "@mui/icons-material";
 import { useDebouncedCallback } from "use-debounce";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import { BottomSheet } from "@/components/ux/BottomSheet";
 import { toast } from "react-hot-toast";
 
 interface Product {
@@ -59,6 +60,9 @@ export default function ProductsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Mobile bottom-sheet
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
 
@@ -155,6 +159,11 @@ export default function ProductsPage() {
   const hasActiveFilters =
     !!filters.search || !!filters.categoryId || !!filters.status;
 
+  const activeFilterCount =
+    (filters.search ? 1 : 0) +
+    (filters.categoryId ? 1 : 0) +
+    (filters.status ? 1 : 0);
+
   const getCategoryName = (cat: Product["categoryId"]): string => {
     if (!cat) return "Uncategorized";
     if (typeof cat === "string") return cat;
@@ -228,71 +237,99 @@ export default function ProductsPage() {
     );
   }
 
+  // Shared filter inputs — used by desktop bar and mobile sheet.
+  const searchInputEl = (
+    <div className="relative flex-1 min-w-0">
+      <svg
+        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"
+        />
+      </svg>
+      <input
+        type="text"
+        value={searchInput}
+        onChange={handleSearchChange}
+        placeholder="Search name, SKU, tags..."
+        className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+      />
+    </div>
+  );
+
+  const categorySelectEl = (
+    <select
+      name="categoryId"
+      value={filters.categoryId}
+      onChange={handleSelectChange}
+      className="w-full md:w-48 px-2.5 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground capitalize"
+    >
+      <option value="">All Categories</option>
+      {categories.map((cat) => (
+        <option key={cat.id} value={cat.id}>
+          {cat.name}
+        </option>
+      ))}
+    </select>
+  );
+
+  const statusSelectEl = (
+    <select
+      name="status"
+      value={filters.status}
+      onChange={handleSelectChange}
+      className="w-full md:w-32 px-2.5 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground capitalize"
+    >
+      <option value="">All Status</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+      <option value="draft">Draft</option>
+    </select>
+  );
+
   return (
-    <div className="max-w-7xl mx-auto py-8">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-3xl font-bold text-foreground">All Products</h1>
-        <Link
-          href="/catalog/products/new"
-          className="btn inline-flex items-center gap-2"
-        >
-          <span>+</span> New Product
-        </Link>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {/* Mobile-only: opens the bottom-sheet filter UI */}
+          <button
+            type="button"
+            onClick={() => setIsMobileFiltersOpen(true)}
+            className="md:hidden relative inline-flex items-center justify-center gap-2 flex-1 sm:flex-initial px-3 py-2 text-sm font-medium bg-card border border-input rounded-md hover:bg-muted transition text-foreground"
+            aria-label="Open filters"
+          >
+            <FilterList fontSize="small" />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          <Link
+            href="/catalog/products/new"
+            className="btn inline-flex items-center justify-center gap-2 flex-1 sm:flex-initial"
+          >
+            <span>+</span> New Product
+          </Link>
+        </div>
       </div>
 
-      {/* Compact filter bar */}
-      <div className="bg-card text-card-foreground rounded-lg shadow-sm border border-border mb-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-2">
-          <div className="relative flex-1 min-w-0">
-            <svg
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"
-              />
-            </svg>
-            <input
-              type="text"
-              value={searchInput}
-              onChange={handleSearchChange}
-              placeholder="Search name, SKU, tags..."
-              className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-            />
-          </div>
-
-          <select
-            name="categoryId"
-            value={filters.categoryId}
-            onChange={handleSelectChange}
-            className="w-full sm:w-48 px-2.5 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground capitalize"
-          >
-            <option value="">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            name="status"
-            value={filters.status}
-            onChange={handleSelectChange}
-            className="w-full sm:w-32 px-2.5 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground capitalize"
-          >
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="draft">Draft</option>
-          </select>
-
+      {/* Desktop-only inline filter bar */}
+      <div className="hidden md:block bg-card text-card-foreground rounded-lg shadow-sm border border-border mb-4">
+        <div className="flex items-center gap-2 p-2">
+          {searchInputEl}
+          {categorySelectEl}
+          {statusSelectEl}
           {hasActiveFilters && (
             <button
               onClick={handleClearFilters}
@@ -304,6 +341,54 @@ export default function ProductsPage() {
           )}
         </div>
       </div>
+
+      {/* Mobile-only filter bottom-sheet */}
+      <BottomSheet
+        isOpen={isMobileFiltersOpen}
+        onClose={() => setIsMobileFiltersOpen(false)}
+        title="Search & Filters"
+      >
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              Search
+            </label>
+            {searchInputEl}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              Category
+            </label>
+            {categorySelectEl}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              Status
+            </label>
+            {statusSelectEl}
+          </div>
+
+          <div className="flex items-center gap-2 pt-2 border-t border-border">
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              disabled={!hasActiveFilters}
+              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-input bg-background text-foreground hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Clear all
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMobileFiltersOpen(false)}
+              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
 
       <div className="bg-card text-card-foreground rounded-lg">
         <div className="flex justify-between items-center mb-4">

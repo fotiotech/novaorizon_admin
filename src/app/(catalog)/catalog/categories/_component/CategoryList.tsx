@@ -20,6 +20,22 @@ interface CategoryListProps {
   onDeleteCategory: (category: CategoryNode) => void;
   showFilter?: boolean;
   filterPlaceholder?: string;
+
+  /**
+   * Optional controlled filter. When provided, CategoryList no longer
+   * maintains its own filter state — the parent owns it. This lets the
+   * same value drive the desktop inline input AND a mobile bottom-sheet
+   * input without duplicating state.
+   */
+  filterValue?: string;
+  onFilterChange?: (value: string) => void;
+
+  /**
+   * When true, the built-in filter input is not rendered. The parent is
+   * expected to render its own (e.g. in a mobile bottom sheet). Filtering
+   * still works via `filterValue` / `onFilterChange`.
+   */
+  hideFilter?: boolean;
 }
 
 const CategoryList: React.FC<CategoryListProps> = ({
@@ -30,9 +46,19 @@ const CategoryList: React.FC<CategoryListProps> = ({
   onDeleteCategory,
   showFilter = true,
   filterPlaceholder = "Search categories...",
+  filterValue,
+  onFilterChange,
+  hideFilter = false,
 }) => {
-  const [filter, setFilter] = useState("");
+  const [internalFilter, setInternalFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Controlled vs uncontrolled filter
+  const isFilterControlled = filterValue !== undefined;
+  const filter = isFilterControlled ? filterValue! : internalFilter;
+  const setFilter = isFilterControlled
+    ? (onFilterChange ?? (() => {}))
+    : setInternalFilter;
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -46,7 +72,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
     });
   };
 
-  // Recursive filter by name (case‑insensitive)
+  // Recursive filter by name (case-insensitive)
   const filterTree = (
     nodes: CategoryNode[],
     query: string,
@@ -116,7 +142,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
         </h3>
       )}
 
-      {showFilter && (
+      {showFilter && !hideFilter && (
         <div className="relative">
           <input
             type="text"
@@ -172,7 +198,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                       row.visible ? "" : "hidden"
                     }`}
                   >
-                    {/* Category name + slug (stacked) with indent */}
                     <td
                       className="px-4 py-2"
                       style={{ paddingLeft: `${row.level * 1.5 + 1}rem` }}
@@ -191,7 +216,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                       </div>
                     </td>
 
-                    {/* Actions */}
                     <td className="px-4 py-2 text-right">
                       <div className="flex justify-end gap-2">
                         <button

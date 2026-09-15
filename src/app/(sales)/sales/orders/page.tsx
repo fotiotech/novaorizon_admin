@@ -6,13 +6,14 @@ import {
   findOrders,
   updateOrderStatus,
 } from "@/app/actions/order";
-import { Delete } from "@mui/icons-material";
+import { Delete, FilterList } from "@mui/icons-material";
 import Link from "next/link";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { SkeletonLoader } from "./_component/SkeletonLoader";
 import SearchFilter from "../../components/SearchFilter";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { Modal } from "@/components/ux/Modal";
+import { BottomSheet } from "@/components/ux/BottomSheet";
 
 type OrderStatus =
   | "pending"
@@ -68,6 +69,9 @@ const AllOrderPage = () => {
     dateFrom: "",
     dateTo: "",
   });
+
+  // Mobile bottom sheet
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
   const limit = 10;
 
@@ -145,7 +149,7 @@ const AllOrderPage = () => {
     setUpdatingStatus(true);
     try {
       const result = await updateOrderStatus(statusUpdateOrder.orderNumber, {
-        orderStatus: selectedNewStatus, // now properly typed
+        orderStatus: selectedNewStatus,
       });
       if (result.success) {
         fetchOrders(page, filters);
@@ -166,6 +170,28 @@ const AllOrderPage = () => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
     }
+  };
+
+  // Active filter count for the mobile badge
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (filters.search.trim()) n++;
+    if (filters.orderStatus) n++;
+    if (filters.paymentStatus) n++;
+    if (filters.dateFrom) n++;
+    if (filters.dateTo) n++;
+    return n;
+  }, [filters]);
+
+  const handleClearFilters = () => {
+    setFilters({
+      search: "",
+      orderStatus: "",
+      paymentStatus: "",
+      dateFrom: "",
+      dateTo: "",
+    });
+    setPage(1);
   };
 
   // Badge classes (unchanged)
@@ -208,18 +234,81 @@ const AllOrderPage = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto py-8">
-      <div className="mb-6 flex justify-between items-center">
+    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      {/* Header */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <h2 className="text-3xl font-bold text-foreground">All Orders</h2>
-        <Link href="/orders/chat" className="btn">
-          Chats
-        </Link>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {/* Mobile-only: opens the bottom-sheet filter UI */}
+          <button
+            type="button"
+            onClick={() => setIsMobileFiltersOpen(true)}
+            className="md:hidden relative inline-flex items-center justify-center gap-2 flex-1 px-3 py-2 text-sm font-medium bg-card border border-border rounded-lg hover:bg-muted transition text-foreground"
+            aria-label="Open filters"
+          >
+            <FilterList fontSize="small" />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          <Link
+            href="/orders/chat"
+            className="btn inline-flex items-center justify-center flex-1 sm:flex-initial"
+          >
+            Chats
+          </Link>
+        </div>
       </div>
 
-      <SearchFilter
-        onFilterChange={handleFilterChange}
-        initialFilters={filters}
-      />
+      {/* Desktop-only inline filter bar */}
+      <div className="hidden md:block">
+        <SearchFilter
+          onFilterChange={handleFilterChange}
+          initialFilters={filters}
+        />
+      </div>
+
+      {/* Mobile-only filter bottom sheet */}
+      <BottomSheet
+        isOpen={isMobileFiltersOpen}
+        onClose={() => setIsMobileFiltersOpen(false)}
+        title="Search & Filters"
+      >
+        <div className="flex flex-col gap-4">
+          {/*
+            Remount on every open (via `key`) so the component's internal
+            state re-initializes from the current `filters`, keeping
+            desktop and mobile inputs in sync.
+          */}
+          <SearchFilter
+            key={isMobileFiltersOpen ? "sheet-open" : "sheet-closed"}
+            onFilterChange={handleFilterChange}
+            initialFilters={filters}
+          />
+
+          <div className="flex items-center gap-2 pt-2 border-t border-border">
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              disabled={activeFilterCount === 0}
+              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-border bg-background text-foreground hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Clear all
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMobileFiltersOpen(false)}
+              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
 
       <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border mt-6">
         <div className="flex justify-between items-center mb-4">

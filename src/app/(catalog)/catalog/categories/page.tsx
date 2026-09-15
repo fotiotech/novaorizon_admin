@@ -8,7 +8,9 @@ import CategoryList from "./_component/CategoryList";
 import Link from "next/link";
 import { Modal } from "@/components/ux/Modal";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import { BottomSheet } from "@/components/ux/BottomSheet";
 import { Toaster, toast } from "sonner";
+import { FilterList, Search } from "@mui/icons-material";
 
 const Categories = () => {
   const [categories, setCategories] = useState<Cat[]>([]);
@@ -19,6 +21,10 @@ const Categories = () => {
   const [deleteTarget, setDeleteTarget] = useState<Cat | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
+  // Shared filter state — drives both desktop input and mobile sheet input.
+  const [filterText, setFilterText] = useState("");
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+
   useEffect(() => {
     fetchCategories();
   }, []);
@@ -27,7 +33,6 @@ const Categories = () => {
     try {
       setLoading(true);
       const res = await getCategory();
-      console.log("first category:", res[0]);
       setCategories(res || []);
       setError(null);
     } catch (err) {
@@ -89,13 +94,15 @@ const Categories = () => {
     toast.success(editId ? "Category updated" : "Category created");
   };
 
+  const hasActiveFilters = filterText.trim() !== "";
+  const activeFilterCount = hasActiveFilters ? 1 : 0;
+
   // ---------- SAFE TREE BUILDER (prevents infinite recursion) ----------
   const buildSafeSubtree = (
     parentId: string,
     visited: Set<string> = new Set(),
     depth = 0,
   ): any[] => {
-    // Stop if depth too high or we've seen this node already (cycle)
     if (depth > 10 || visited.has(parentId)) return [];
     visited.add(parentId);
 
@@ -111,9 +118,7 @@ const Categories = () => {
       }));
   };
 
-  // Build flat list with subcategories attached safely
   const categoriesWithSubcategories = categories.map((category) => {
-    // Only build subcategories for root categories (no parent) to avoid duplication
     if (!category.parentId) {
       return {
         ...category,
@@ -123,12 +128,22 @@ const Categories = () => {
 
     return {
       ...category,
-      subcategories: [], // subcategories will be built from the root
+      subcategories: [],
     };
   });
 
-  const rootCategories = categoriesWithSubcategories.filter(
-    (cat) => !cat.parentId,
+  // Shared filter input — reused in desktop bar and mobile sheet.
+  const filterInputEl = (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 !h-4 !w-4 text-muted-foreground" />
+      <input
+        type="text"
+        placeholder="Search categories..."
+        value={filterText}
+        onChange={(e) => setFilterText(e.target.value)}
+        className="w-full p-2 pl-8 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent outline-none"
+      />
+    </div>
   );
 
   return (
@@ -146,6 +161,22 @@ const Categories = () => {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* Mobile-only: opens the bottom-sheet filter UI */}
+          <button
+            type="button"
+            onClick={() => setIsMobileFiltersOpen(true)}
+            className="lg:hidden relative inline-flex items-center gap-2 px-4 py-2 font-semibold bg-card border border-border rounded-lg hover:bg-muted transition text-foreground"
+            aria-label="Open filters"
+          >
+            <FilterList fontSize="small" />
+            <span>Search</span>
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
           <Link
             href="/catalog/categories/property"
             className="px-4 py-2 font-semibold bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded-lg transition-colors"
@@ -172,6 +203,43 @@ const Categories = () => {
           </button>
         </div>
       )}
+
+      {/* Desktop-only inline filter */}
+      <div className="hidden lg:block">{filterInputEl}</div>
+
+      {/* Mobile-only filter bottom-sheet */}
+      <BottomSheet
+        isOpen={isMobileFiltersOpen}
+        onClose={() => setIsMobileFiltersOpen(false)}
+        title="Search Categories"
+      >
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              Search
+            </label>
+            {filterInputEl}
+          </div>
+
+          <div className="flex items-center gap-2 pt-2 border-t border-border">
+            <button
+              type="button"
+              onClick={() => setFilterText("")}
+              disabled={!hasActiveFilters}
+              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-border bg-background text-foreground hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMobileFiltersOpen(false)}
+              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
 
       {/* Loading State */}
       {loading && (
@@ -212,7 +280,7 @@ const Categories = () => {
         />
       </Modal>
 
-      {/* Category List (with safe data) */}
+      {/* Category List — filter is controlled from above */}
       {!loading && (
         <CategoryList
           categories={categoriesWithSubcategories as any[]}
@@ -221,6 +289,9 @@ const Categories = () => {
           onEditCategory={handleEditClick as any}
           onDeleteCategory={handleDeleteClick as any}
           showFilter={true}
+          hideFilter={true}
+          filterValue={filterText}
+          onFilterChange={setFilterText}
           filterPlaceholder="Search categories..."
         />
       )}
