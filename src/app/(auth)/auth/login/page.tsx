@@ -6,11 +6,12 @@ import Link from "next/link";
 const SIGNIN_ERROR_URL = "/auth/error";
 
 export default async function SignInPage(props: {
-  searchParams: Promise<{ callbackUrl: string | undefined; error: string | undefined }>;
+  searchParams: Promise<{
+    callbackUrl: string | undefined;
+    error: string | undefined;
+  }>;
 }) {
   const session = await auth();
-
-  console.log('Session in login:', session);
 
   // If user is already authenticated, redirect to callbackUrl or home
   if (session) {
@@ -125,12 +126,13 @@ export default async function SignInPage(props: {
                     "use server";
                     try {
                       await signIn(provider.id, {
-                        redirectTo: (await props.searchParams)?.callbackUrl || "/",
+                        redirectTo:
+                          (await props.searchParams)?.callbackUrl || "/",
                       });
                     } catch (error) {
                       if (error instanceof AuthError) {
                         return redirect(
-                          `${SIGNIN_ERROR_URL}?error=${error.type}`
+                          `${SIGNIN_ERROR_URL}?error=${error.type}`,
                         );
                       }
                       throw error;

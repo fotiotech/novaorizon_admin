@@ -4,30 +4,43 @@ import { FormState, SignupFormSchema } from "./definitions";
 import User from "@/models/User";
 import { connection } from "@/utils/connection";
 import crypto from "crypto";
-import { Resend } from "resend";
-import { VerificationTemplate } from "../(auth)/components/VerificationTemplate";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function signup(state: FormState, formData: FormData) {
-  // Validate form fields
   const validatedFields = SignupFormSchema.safeParse({
-    name: formData.get("name"),
     email: formData.get("email"),
     password: formData.get("password"),
+    fullName: formData.get("fullName"),
+    phoneCountryCode: formData.get("phoneCountryCode"),
+    phoneNumber: formData.get("phoneNumber"),
+    notifyEmail: formData.get("notifyEmail") === "on",
+    notifySms: formData.get("notifySms") === "on",
+    notifyPush: formData.get("notifyPush") === "on",
+    notifyWhatsapp: formData.get("notifyWhatsapp") === "on",
+    marketingEmail: formData.get("marketingEmail") === "on",
+    orderUpdates: formData.get("orderUpdates") === "on",
+    newsletter: formData.get("newsletter") === "on",
   });
 
-  // If any form fields are invalid, return early
   if (!validatedFields.success) {
     return {
       errors: validatedFields.error.flatten().fieldErrors,
     };
   }
 
-  // Call the provider or db to create a user...
-
-  // 2. Prepare data for insertion into database
-  const { name, email, password } = validatedFields.data;
+  const {
+    email,
+    password,
+    fullName,
+    phoneCountryCode,
+    phoneNumber,
+    notifyEmail,
+    notifySms,
+    notifyPush,
+    notifyWhatsapp,
+    marketingEmail,
+    orderUpdates,
+    newsletter,
+  } = validatedFields.data;
 
   try {
     await connection();
@@ -36,19 +49,56 @@ export async function signup(state: FormState, formData: FormData) {
     if (existingUser) {
       return { error: "Email is already registered." };
     }
-    // 2. Hash password and generate token
-    const token = crypto.randomBytes(32).toString("hex");
-    const expires = new Date(Date.now() + 3600000); // 1 hour expiry
 
-    // 3. Insert the user into the database or call an Auth Library's API
+    const token = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 3600000);
+
+    const cc = (phoneCountryCode ?? "").trim();
+    const num = (phoneNumber ?? "").trim();
+    const e164 = cc && num ? `${cc}${num.replace(/\s+/g, "")}` : null;
+
+    const hasName = Boolean(fullName?.trim());
+    const hasPhone = Boolean(num);
+
+    // language / currency / theme use model defaults now;
+    // the user can edit them from /profile via the modal.
     const newUser = new User({
-      name: name,
-      email: email,
-      password: password,
+      name: fullName,
+      fullName,
+      email,
+      password,
+
+      isVerified: true,
+      emailVerified: new Date(),
+      status: "active",
+
+      phone: {
+        countryCode: cc || null,
+        number: num || null,
+        e164,
+      },
+
+      preferences: {
+        // language/currency/theme intentionally omitted → use schema defaults
+        notifications: {
+          email: notifyEmail,
+          sms: notifySms,
+          push: notifyPush,
+          whatsapp: notifyWhatsapp,
+        },
+        marketing: {
+          email: marketingEmail,
+        },
+        orderUpdates,
+        newsletter,
+        consentedAt: new Date(),
+      },
+
       verificationToken: token,
       tokenExpiry: expires,
-      role: "customer",
-      status: "inactive",
+
+      role: "user",
+      profileCompleted: hasName && hasPhone,
     });
 
     const user = await newUser.save();
@@ -59,17 +109,9 @@ export async function signup(state: FormState, formData: FormData) {
       };
     }
 
-    // 4. Send the verification link
-    const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify?token=${token}`;
-
-    await resend.emails.send({
-      from: "Novaorizon <fotiodev1g@gmail.com>",
-      to: email,
-      subject: "Verify your email address",
-      react: VerificationTemplate({ verificationUrl }),
-    });
-
-    return { success: "Verification email sent! Please check your inbox." };
+    return {
+      message: "Account created successfully. Please log in to your account.",
+    };
   } catch (error: any) {
     console.error(error);
     return { error: "Registration failed. Try again." };

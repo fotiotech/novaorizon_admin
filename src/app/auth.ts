@@ -28,15 +28,9 @@ const providers: Provider[] = [
           throw new Error("Invalid credentials");
         }
 
-        // if (!user.isVerified) {
-        //   throw new Error(
-        //     "Your email address is unverified. Please check your inbox for the activation link.",
-        //   );
-        // }
-
         return {
           id: user._id.toString(),
-          name: user.name,
+          name: user.fullName || user.name,
           email: user.email,
           role: user.role,
           image: user.image,
@@ -92,14 +86,14 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   pages: {
     signIn: "/auth/login",
     error: "/auth/error",
-    newUser: "/auth/sign_up", // Consider adding this
+    newUser: "/auth/sign_up",
   },
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, trigger, session }: any) {
       // Add user info to token on sign in
       if (user) {
         token.id = user.id;
@@ -113,7 +107,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: any) {
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;

@@ -480,7 +480,7 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl py-8 ">
+    <div className=" max-w-7xl py-8 ">
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
