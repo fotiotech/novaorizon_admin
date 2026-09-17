@@ -15,9 +15,8 @@ interface Carrier {
 }
 
 // ------------------------------------------------------------------
-// Field value shapes (see #26 — discriminated value helpers)
-// ------------------------------------------------------------------
 // Field value shapes — one per "field kind" the form supports.
+// ------------------------------------------------------------------
 type UnitValue = { value: number | ""; unit?: string };
 type NumberFieldValue = number | "" | UnitValue | null | undefined;
 type StringFieldValue = string | null | undefined;
@@ -55,13 +54,13 @@ interface FieldProps {
 // consistent and there is a single source of truth.
 // ------------------------------------------------------------------
 const INPUT_CLASS =
-  "w-full p-3 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground transition-colors";
-const LABEL_CLASS = "block text-sm font-medium text-foreground mb-2";
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50";
+const LABEL_CLASS = "mb-1.5 block text-xs font-medium text-muted-foreground";
 const CHECK_BORDER = "border-input";
 const CHECK_BG = "bg-primary border-primary";
 
 // ------------------------------------------------------------------
-// Static select styles (theme-aware) — unchanged from prior pass
+// Static select styles (theme-aware)
 // ------------------------------------------------------------------
 const customSelectStyles = {
   control: (provided: any, state: any) => ({
@@ -70,7 +69,8 @@ const customSelectStyles = {
     borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--input))",
     borderRadius: "0.5rem",
     boxShadow: state.isFocused ? "0 0 0 2px hsl(var(--ring) / 0.25)" : "none",
-    minHeight: "44px",
+    minHeight: "38px",
+    fontSize: "0.875rem",
     transition: "border-color 150ms ease, box-shadow 150ms ease",
     "&:hover": {
       borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--border))",
@@ -89,6 +89,7 @@ const customSelectStyles = {
   menuList: (provided: any) => ({ ...provided, padding: 4 }),
   option: (provided: any, state: any) => ({
     ...provided,
+    fontSize: "0.875rem",
     backgroundColor: state.isSelected
       ? "hsl(var(--primary))"
       : state.isFocused
@@ -98,7 +99,7 @@ const customSelectStyles = {
       ? "hsl(var(--primary-foreground))"
       : "hsl(var(--popover-foreground))",
     cursor: "pointer",
-    borderRadius: "0.25rem",
+    borderRadius: "0.375rem",
   }),
   singleValue: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
   placeholder: (p: any) => ({ ...p, color: "hsl(var(--muted-foreground))" }),
@@ -111,6 +112,7 @@ const customSelectStyles = {
   multiValueLabel: (p: any) => ({
     ...p,
     color: "hsl(var(--secondary-foreground))",
+    fontSize: "0.8125rem",
   }),
   multiValueRemove: (p: any) => ({
     ...p,
@@ -141,6 +143,7 @@ const customSelectStyles = {
   noOptionsMessage: (p: any) => ({
     ...p,
     color: "hsl(var(--muted-foreground))",
+    fontSize: "0.875rem",
   }),
 } as const;
 
@@ -314,10 +317,10 @@ const Fields: React.FC<FieldProps> = React.memo(
               />
             );
           }
-          // Bug 18 from review: don't silently render nothing for unknown file fields.
           return (
-            <div className="text-sm text-destructive border border-destructive/40 rounded-md p-3">
-              File field <code>{code}</code> has no uploader configured.
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              File field <code className="font-mono">{code}</code> has no
+              uploader configured.
             </div>
           );
 
@@ -347,7 +350,7 @@ const Fields: React.FC<FieldProps> = React.memo(
           }
           return (
             <textarea
-              className={INPUT_CLASS}
+              className={`${INPUT_CLASS} resize-y`}
               value={asString(field as StringFieldValue)}
               placeholder={`Enter ${name}`}
               onChange={(e) => handleAttributeChange(code, e.target.value)}
@@ -400,7 +403,7 @@ const Fields: React.FC<FieldProps> = React.memo(
             }));
             return (
               <div className="flex gap-2">
-                <div className="flex-1">{numberInput}</div>
+                <div className="min-w-0 flex-1">{numberInput}</div>
                 <Select
                   options={unitOptions}
                   value={
@@ -416,7 +419,7 @@ const Fields: React.FC<FieldProps> = React.memo(
                           : "";
                     handleAttributeChange(code, newVal);
                   }}
-                  className="w-32"
+                  className="w-28"
                   classNamePrefix="react-select"
                   placeholder="Unit"
                   isClearable={!isRequired}
@@ -441,6 +444,7 @@ const Fields: React.FC<FieldProps> = React.memo(
                 styles={customSelectStyles}
                 classNamePrefix="react-select"
                 required={isRequired}
+                placeholder="Select brand…"
                 isLoading={brands.length === 0 && !error}
                 {...PORTAL_PROPS}
               />
@@ -457,7 +461,7 @@ const Fields: React.FC<FieldProps> = React.memo(
                 styles={customSelectStyles}
                 classNamePrefix="react-select"
                 required={isRequired}
-                placeholder="Select carrier..."
+                placeholder="Select carrier…"
                 {...PORTAL_PROPS}
               />
             );
@@ -475,6 +479,7 @@ const Fields: React.FC<FieldProps> = React.memo(
               styles={customSelectStyles}
               classNamePrefix="react-select"
               required={isRequired}
+              placeholder="Select…"
               {...PORTAL_PROPS}
             />
           );
@@ -483,54 +488,53 @@ const Fields: React.FC<FieldProps> = React.memo(
         case "checkbox": {
           const values = asStringArray(field as ArrayFieldValue);
           return (
-            <div className="flex flex-col space-y-3">
+            <div className="flex flex-col gap-2.5">
               {option.map((opt) => {
                 const checked = values.includes(opt);
                 return (
                   <label
                     key={opt}
-                    className="inline-flex items-center cursor-pointer"
+                    className="inline-flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-2 py-1.5 transition hover:bg-muted"
                   >
-                    <div className="relative flex items-center">
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={checked}
-                        onChange={(e) => {
-                          const newVals = e.target.checked
-                            ? [...values, opt]
-                            : values.filter((v) => v !== opt);
-                          handleAttributeChange(code, newVals);
-                        }}
-                        required={
-                          isRequired && option.length > 0
-                            ? values.length === 0
-                            : false
-                        }
-                      />
-                      <div
-                        className={`w-5 h-5 border rounded-md mr-3 flex-shrink-0 flex items-center justify-center ${
-                          checked ? CHECK_BG : CHECK_BORDER
-                        }`}
-                      >
-                        {checked && (
-                          <svg
-                            className="w-3 h-3 text-primary-foreground"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        )}
-                      </div>
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={checked}
+                      onChange={(e) => {
+                        const newVals = e.target.checked
+                          ? [...values, opt]
+                          : values.filter((v) => v !== opt);
+                        handleAttributeChange(code, newVals);
+                      }}
+                      required={
+                        isRequired && option.length > 0
+                          ? values.length === 0
+                          : false
+                      }
+                    />
+                    <div
+                      className={`flex h-4.5 w-4.5 flex-none items-center justify-center rounded border transition-colors ${
+                        checked ? CHECK_BG : CHECK_BORDER
+                      }`}
+                      style={{ width: 18, height: 18 }}
+                    >
+                      {checked && (
+                        <svg
+                          className="h-3 w-3 text-primary-foreground"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2.5"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      )}
                     </div>
-                    <span className="text-foreground">{opt}</span>
+                    <span className="text-sm text-foreground">{opt}</span>
                   </label>
                 );
               })}
@@ -541,7 +545,7 @@ const Fields: React.FC<FieldProps> = React.memo(
         case "boolean": {
           const value = !!field;
           return (
-            <label className="inline-flex items-center cursor-pointer">
+            <label className="inline-flex cursor-pointer items-center gap-3">
               <div className="relative">
                 <input
                   type="checkbox"
@@ -553,17 +557,17 @@ const Fields: React.FC<FieldProps> = React.memo(
                   required={isRequired}
                 />
                 <div
-                  className={`w-11 h-6 rounded-full ${
+                  className={`h-6 w-11 rounded-full transition-colors ${
                     value ? "bg-primary" : "bg-input"
-                  } transition-colors`}
+                  }`}
                 />
                 <div
-                  className={`absolute left-0.5 top-0.5 bg-background border rounded-full w-5 h-5 transition-transform ${
-                    value ? "transform translate-x-5" : ""
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full border border-border bg-background shadow-sm transition-transform ${
+                    value ? "translate-x-5" : ""
                   }`}
                 />
               </div>
-              <span className="ml-3 text-foreground">
+              <span className="text-sm text-foreground">
                 {value ? "Yes" : "No"}
               </span>
             </label>
@@ -573,34 +577,33 @@ const Fields: React.FC<FieldProps> = React.memo(
         case "radio": {
           const value = asString(field as StringFieldValue);
           return (
-            <div className="flex flex-col space-y-3">
+            <div className="flex flex-col gap-2.5">
               {option.map((opt) => {
                 const checked = value === opt;
                 return (
                   <label
                     key={opt}
-                    className="inline-flex items-center cursor-pointer"
+                    className="inline-flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-2 py-1.5 transition hover:bg-muted"
                   >
-                    <div className="relative flex items-center">
-                      <input
-                        type="radio"
-                        className="sr-only"
-                        value={opt}
-                        checked={checked}
-                        onChange={() => handleAttributeChange(code, opt)}
-                        required={isRequired}
-                      />
-                      <div
-                        className={`w-5 h-5 border rounded-full mr-3 flex-shrink-0 flex items-center justify-center ${
-                          checked ? "border-primary" : CHECK_BORDER
-                        }`}
-                      >
-                        {checked && (
-                          <div className="w-2.5 h-2.5 rounded-full bg-primary" />
-                        )}
-                      </div>
+                    <input
+                      type="radio"
+                      className="sr-only"
+                      value={opt}
+                      checked={checked}
+                      onChange={() => handleAttributeChange(code, opt)}
+                      required={isRequired}
+                    />
+                    <div
+                      className={`flex flex-none items-center justify-center rounded-full border transition-colors ${
+                        checked ? "border-primary" : CHECK_BORDER
+                      }`}
+                      style={{ width: 18, height: 18 }}
+                    >
+                      {checked && (
+                        <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+                      )}
                     </div>
-                    <span className="text-foreground">{opt}</span>
+                    <span className="text-sm text-foreground">{opt}</span>
                   </label>
                 );
               })}
@@ -622,16 +625,16 @@ const Fields: React.FC<FieldProps> = React.memo(
 
         case "color":
           return (
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-3">
               <input
                 title="color"
                 type="color"
-                className="h-10 w-10 p-0 border border-input rounded-lg cursor-pointer bg-background"
+                className="h-9 w-9 cursor-pointer rounded-lg border border-input bg-background p-0.5"
                 value={asString(field as StringFieldValue) || "#000000"}
                 onChange={(e) => handleAttributeChange(code, e.target.value)}
                 required={isRequired}
               />
-              <span className="text-foreground font-mono">
+              <span className="font-mono text-xs text-muted-foreground">
                 {asString(field as StringFieldValue) || "#000000"}
               </span>
             </div>
@@ -645,6 +648,7 @@ const Fields: React.FC<FieldProps> = React.memo(
               className={INPUT_CLASS}
               value={asString(field as StringFieldValue)}
               onChange={(e) => handleAttributeChange(code, e.target.value)}
+              placeholder="https://…"
               required={isRequired}
             />
           );
@@ -664,15 +668,16 @@ const Fields: React.FC<FieldProps> = React.memo(
               styles={customSelectStyles}
               classNamePrefix="react-select"
               required={isRequired}
+              placeholder="Select…"
               {...PORTAL_PROPS}
             />
           );
 
-        // Bug 17 from review: explicit unsupported message instead of a silent text input.
         default:
           return (
-            <div className="text-sm text-destructive border border-destructive/40 rounded-md p-3">
-              Unsupported field type: <code>{type ?? "(none)"}</code>
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              Unsupported field type:{" "}
+              <code className="font-mono">{type ?? "(none)"}</code>
             </div>
           );
       }
@@ -682,10 +687,10 @@ const Fields: React.FC<FieldProps> = React.memo(
       <div className="mb-5">
         <label className={LABEL_CLASS} htmlFor={`field-${code}`}>
           {name}
-          {isRequired && <span className="text-destructive ml-1">*</span>}
+          {isRequired && <span className="ml-0.5 text-destructive">*</span>}
         </label>
         <div>{renderField()}</div>
-        {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
+        {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
       </div>
     );
   },

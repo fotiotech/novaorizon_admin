@@ -191,13 +191,27 @@ export default function CatalogPage() {
         <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
           <div className="flex items-center">
             <div className="rounded-full bg-pri-500/10 text-pri-500 p-3">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                />
               </svg>
             </div>
             <div className="ml-4">
-              <h2 className="text-lg font-semibold text-muted-foreground">Total Products</h2>
-              <p className="text-2xl font-bold">{productData?.totalProducts || 0}</p>
+              <h2 className="text-lg font-semibold text-muted-foreground">
+                Total Products
+              </h2>
+              <p className="text-2xl font-bold">
+                {productData?.totalProducts || 0}
+              </p>
             </div>
           </div>
         </div>
@@ -205,13 +219,27 @@ export default function CatalogPage() {
         <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
           <div className="flex items-center">
             <div className="rounded-full bg-thir-500/10 text-thir-500 p-3">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
             </div>
             <div className="ml-4">
-              <h2 className="text-lg font-semibold text-muted-foreground">Active Products</h2>
-              <p className="text-2xl font-bold">{productData?.activeProducts || 0}</p>
+              <h2 className="text-lg font-semibold text-muted-foreground">
+                Active Products
+              </h2>
+              <p className="text-2xl font-bold">
+                {productData?.activeProducts || 0}
+              </p>
             </div>
           </div>
         </div>
@@ -219,13 +247,27 @@ export default function CatalogPage() {
         <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
           <div className="flex items-center">
             <div className="rounded-full bg-destructive/10 text-destructive p-3">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </div>
             <div className="ml-4">
-              <h2 className="text-lg font-semibold text-muted-foreground">Out of Stock</h2>
-              <p className="text-2xl font-bold">{productData?.outOfStock || 0}</p>
+              <h2 className="text-lg font-semibold text-muted-foreground">
+                Out of Stock
+              </h2>
+              <p className="text-2xl font-bold">
+                {productData?.outOfStock || 0}
+              </p>
             </div>
           </div>
         </div>
@@ -233,12 +275,24 @@ export default function CatalogPage() {
         <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
           <div className="flex items-center">
             <div className="rounded-full bg-sec-500/10 text-sec-500 p-3">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
             </div>
             <div className="ml-4">
-              <h2 className="text-lg font-semibold text-muted-foreground">Low Stock</h2>
+              <h2 className="text-lg font-semibold text-muted-foreground">
+                Low Stock
+              </h2>
               <p className="text-2xl font-bold">{productData?.lowStock || 0}</p>
             </div>
           </div>
@@ -254,7 +308,9 @@ export default function CatalogPage() {
           </div>
         </div>
         <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">Monthly Product Additions</h2>
+          <h2 className="text-xl font-semibold mb-4">
+            Monthly Product Additions
+          </h2>
           <div className="h-80">
             <Line data={monthlyAdditionsData} options={chartOptions} />
           </div>
@@ -265,7 +321,10 @@ export default function CatalogPage() {
       <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Recent Products</h2>
-          <Link href="/catalog/products" className="text-sm text-primary hover:text-primary/80 transition-colors">
+          <Link
+            href="/catalog/products"
+            className="text-sm text-primary hover:text-primary/80 transition-colors"
+          >
             View All Products
           </Link>
         </div>
@@ -273,44 +332,74 @@ export default function CatalogPage() {
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted/50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Product</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">SKU</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Price</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Stock Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Category</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Product
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  SKU
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Price
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Stock Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Category
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
               {productData?.recentProducts?.length ? (
-                productData.recentProducts.map((product:any) => (
+                productData.recentProducts.map((product: any) => (
                   <tr key={product._id}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
                           <div className="h-10 w-10 rounded-lg bg-pri-500/10 flex items-center justify-center overflow-hidden">
                             {product.main_image ? (
-                              <img src={product.main_image} alt={product.title} className="h-full w-full object-cover" />
+                              <img
+                                src={product.main_image}
+                                alt={product.title}
+                                className="h-full w-full object-cover"
+                              />
                             ) : (
-                              <span className="font-medium text-pri-500">{product.title?.charAt(0).toUpperCase() || "P"}</span>
+                              <span className="font-medium text-pri-500">
+                                {product.title?.charAt(0).toUpperCase() || "P"}
+                              </span>
                             )}
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-foreground">{product.title || "Untitled Product"}</div>
-                          <div className="text-sm text-muted-foreground">{product.model}</div>
+                          <div className="text-sm font-medium text-foreground">
+                            {product.title || "Untitled Product"}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {product.model}
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">{product.sku}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                      {product.sku}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                       ${product.sale_price || product.list_price || 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                        ${product.stock_status?.includes("In Stock") ? "bg-thir-500/20 text-thir-700 dark:text-thir-400"
-                        : product.stock_status?.includes("Low Stock") ? "bg-sec-500/20 text-sec-700 dark:text-sec-400"
-                        : "bg-destructive/20 text-destructive"}`}>
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                        ${
+                          product.stock_status?.includes("In Stock")
+                            ? "bg-thir-500/20 text-thir-700 dark:text-thir-400"
+                            : product.stock_status?.includes("Low Stock")
+                              ? "bg-sec-500/20 text-sec-700 dark:text-sec-400"
+                              : "bg-destructive/20 text-destructive"
+                        }`}
+                      >
                         {product.stock_status?.join(", ") || "N/A"}
                       </span>
                     </td>
@@ -321,15 +410,30 @@ export default function CatalogPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <Link href={`/catalog/products/edit?id=${product._id}`} className="text-pri-500 hover:text-pri-600">Edit</Link>
-                        <Link href={`/catalog/products/delete?id=${product._id}`} className="text-destructive hover:text-destructive/80">Delete</Link>
+                        <Link
+                          href={`/catalog/products/edit?id=${product._id}`}
+                          className="text-pri-500 hover:text-pri-600"
+                        >
+                          Edit
+                        </Link>
+                        <Link
+                          href={`/catalog/products/delete?id=${product._id}`}
+                          className="text-destructive hover:text-destructive/80"
+                        >
+                          Delete
+                        </Link>
                       </div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-muted-foreground">No recent products</td>
+                  <td
+                    colSpan={6}
+                    className="px-6 py-4 text-center text-sm text-muted-foreground"
+                  >
+                    No recent products
+                  </td>
                 </tr>
               )}
             </tbody>

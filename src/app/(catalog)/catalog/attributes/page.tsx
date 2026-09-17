@@ -2,7 +2,17 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Select from "react-select";
-import { Delete, Edit, FilterList } from "@mui/icons-material";
+import {
+  Delete,
+  Edit,
+  FilterList,
+  Search,
+  SearchOff,
+  Tune,
+  MoreVert,
+  Add,
+  Close,
+} from "@mui/icons-material";
 import {
   deleteAttribute,
   findAttributesAndValues,
@@ -10,6 +20,7 @@ import {
 import { AttributeFormModal } from "./_component/AttributeFormModal";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { BottomSheet } from "@/components/ux/BottomSheet";
+import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 
 type AttributeType = {
   _id?: string;
@@ -25,6 +36,74 @@ interface Option {
   value: string;
   label: string;
 }
+
+// ------------------------------------------------------------------
+// Shared class tokens
+// ------------------------------------------------------------------
+const INPUT_CLASS =
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+
+// ------------------------------------------------------------------
+// Theme-aware react-select styles (matches the rest of the app)
+// ------------------------------------------------------------------
+const SELECT_STYLES = {
+  control: (provided: any, state: any) => ({
+    ...provided,
+    backgroundColor: "hsl(var(--background))",
+    borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--input))",
+    borderRadius: "0.5rem",
+    boxShadow: state.isFocused ? "0 0 0 2px hsl(var(--ring) / 0.25)" : "none",
+    minHeight: "38px",
+    fontSize: "0.875rem",
+    transition: "border-color 150ms ease, box-shadow 150ms ease",
+    "&:hover": {
+      borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--border))",
+    },
+  }),
+  menu: (provided: any) => ({
+    ...provided,
+    backgroundColor: "hsl(var(--popover))",
+    color: "hsl(var(--popover-foreground))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "0.5rem",
+    overflow: "hidden",
+    boxShadow: "0 8px 24px hsl(var(--foreground) / 0.08)",
+  }),
+  menuPortal: (provided: any) => ({ ...provided, zIndex: 9999 }),
+  menuList: (provided: any) => ({ ...provided, padding: 4 }),
+  option: (provided: any, state: any) => ({
+    ...provided,
+    fontSize: "0.875rem",
+    backgroundColor: state.isSelected
+      ? "hsl(var(--primary))"
+      : state.isFocused
+        ? "hsl(var(--accent))"
+        : "hsl(var(--popover))",
+    color: state.isSelected
+      ? "hsl(var(--primary-foreground))"
+      : "hsl(var(--popover-foreground))",
+    cursor: "pointer",
+    borderRadius: "0.375rem",
+  }),
+  singleValue: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
+  placeholder: (p: any) => ({ ...p, color: "hsl(var(--muted-foreground))" }),
+  input: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
+  indicatorSeparator: (p: any) => ({
+    ...p,
+    backgroundColor: "hsl(var(--border))",
+  }),
+  dropdownIndicator: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    "&:hover": { color: "hsl(var(--foreground))" },
+  }),
+} as const;
+
+const PORTAL_PROPS = {
+  menuPortalTarget: typeof document !== "undefined" ? document.body : undefined,
+  menuPosition: "fixed" as const,
+  menuShouldScrollIntoView: false,
+} as const;
 
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
@@ -44,7 +123,6 @@ const Attributes = () => {
   const [deleteTargetName, setDeleteTargetName] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
-  // Mobile bottom-sheet
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
   useEffect(() => {
@@ -121,7 +199,7 @@ const Attributes = () => {
     const filtered = attributes.filter((a) =>
       a.name.toLowerCase().includes(filterText.toLowerCase()),
     );
-    const sorted = filtered.sort((a, b) =>
+    const sorted = [...filtered].sort((a, b) =>
       sortAttrOrder.value === "asc"
         ? a.name.localeCompare(b.name)
         : b.name.localeCompare(a.name),
@@ -130,9 +208,9 @@ const Attributes = () => {
   }, [attributes, filterText, sortAttrOrder]);
 
   const formatOptions = (option: any): string => {
-    if (!option) return "-";
+    if (!option) return "—";
     if (Array.isArray(option)) {
-      if (option.length === 0) return "-";
+      if (option.length === 0) return "—";
       if (typeof option[0] === "object" && option[0] !== null) {
         return option
           .map(
@@ -155,47 +233,6 @@ const Attributes = () => {
     return String(option);
   };
 
-  // Theme-aware react-select styles using CSS variables
-  const selectStyles = {
-    control: (base: any) => ({
-      ...base,
-      backgroundColor: "hsl(var(--background))",
-      borderColor: "hsl(var(--border))",
-      color: "hsl(var(--foreground))",
-      borderRadius: "0.5rem",
-      boxShadow: "none",
-      "&:hover": { borderColor: "hsl(var(--primary))" },
-      minHeight: "42px",
-    }),
-    menu: (base: any) => ({
-      ...base,
-      backgroundColor: "hsl(var(--card))",
-      color: "hsl(var(--card-foreground))",
-    }),
-    option: (base: any, state: any) => ({
-      ...base,
-      backgroundColor: state.isFocused
-        ? "hsl(var(--muted))"
-        : "hsl(var(--card))",
-      color: "hsl(var(--card-foreground))",
-      "&:active": {
-        backgroundColor: "hsl(var(--primary) / 0.2)",
-      },
-    }),
-    singleValue: (base: any) => ({
-      ...base,
-      color: "hsl(var(--foreground))",
-    }),
-    input: (base: any) => ({
-      ...base,
-      color: "hsl(var(--foreground))",
-    }),
-    placeholder: (base: any) => ({
-      ...base,
-      color: "hsl(var(--muted-foreground))",
-    }),
-  };
-
   const hasActiveFilters =
     filterText.trim() !== "" || sortAttrOrder.value !== "asc";
 
@@ -208,24 +245,41 @@ const Attributes = () => {
     setSortAttrOrder({ value: "asc", label: "A → Z" });
   };
 
+  const getMenuItems = (attr: AttributeType): PopoverMenuItem[] => [
+    {
+      key: "edit",
+      label: "Edit attribute",
+      icon: <Edit fontSize="small" />,
+      onClick: () => handleEditClick(attr._id!),
+    },
+    {
+      key: "delete",
+      label: "Delete",
+      icon: <Delete fontSize="small" />,
+      danger: true,
+      onClick: () => handleDeleteClick(attr._id!, attr.name),
+    },
+  ];
+
+  // ---------------- Early exits ----------------
   if (loading) {
     return (
-      <div className="max-w-4xl w-full">
-        <div className="flex justify-between items-center mb-4">
-          <div className="h-8 w-32 bg-muted animate-pulse rounded"></div>
-          <div className="h-10 w-28 bg-muted animate-pulse rounded"></div>
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-6 flex items-center justify-between">
+          <div className="h-8 w-40 animate-pulse rounded bg-muted" />
+          <div className="h-10 w-32 animate-pulse rounded bg-muted" />
         </div>
-        <div className="bg-card p-6 rounded-lg shadow-md border border-border">
-          <div className="space-y-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="flex items-center space-x-4">
-                <div className="h-6 w-24 bg-muted animate-pulse rounded"></div>
-                <div className="h-6 w-20 bg-muted animate-pulse rounded"></div>
-                <div className="h-6 w-28 bg-muted animate-pulse rounded"></div>
-                <div className="h-6 w-16 bg-muted animate-pulse rounded"></div>
-                <div className="h-6 w-12 bg-muted animate-pulse rounded"></div>
-                <div className="h-6 w-32 bg-muted animate-pulse rounded"></div>
-                <div className="h-6 w-20 bg-muted animate-pulse rounded"></div>
+        <div className="mb-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="h-9 w-full animate-pulse rounded bg-muted" />
+        </div>
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="space-y-3 p-5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex items-center gap-4">
+                <div className="h-4 w-1/4 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-1/6 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-1/6 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-1/6 animate-pulse rounded bg-muted" />
               </div>
             ))}
           </div>
@@ -236,13 +290,19 @@ const Attributes = () => {
 
   // Shared filter controls — reused in desktop bar and mobile sheet
   const filterInputEl = (
-    <input
-      type="text"
-      placeholder="Filter attributes..."
-      value={filterText}
-      onChange={(e) => setFilterText(e.target.value)}
-      className="w-full p-2 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent outline-none"
-    />
+    <div className="relative">
+      <Search
+        fontSize="small"
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+      />
+      <input
+        type="text"
+        placeholder="Filter attributes…"
+        value={filterText}
+        onChange={(e) => setFilterText(e.target.value)}
+        className={`${INPUT_CLASS} pl-9`}
+      />
+    </div>
   );
 
   const sortSelectEl = (
@@ -251,29 +311,36 @@ const Attributes = () => {
       value={sortAttrOrder}
       onChange={(opt) => setSortAttrOrder(opt as Option)}
       classNamePrefix="react-select"
-      styles={selectStyles}
+      styles={SELECT_STYLES}
       isSearchable={false}
       instanceId="attribute-sort"
+      {...PORTAL_PROPS}
     />
   );
 
   return (
-    <div className="max-w-4xl w-full">
+    <div className="mx-auto max-w-6xl py-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-        <h2 className="font-bold text-xl text-foreground my-2">Attributes</h2>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          {/* Mobile-only: opens the bottom-sheet filter UI */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Attributes
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Manage product attribute definitions and their options
+          </p>
+        </div>
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="sm:hidden relative inline-flex items-center justify-center gap-2 flex-1 px-3 py-2 text-sm font-medium bg-card border border-border rounded-lg hover:bg-muted transition text-foreground"
+            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:hidden"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
             <span>Filters</span>
             {activeFilterCount > 0 && (
-              <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground">
+              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
                 {activeFilterCount}
               </span>
             )}
@@ -281,45 +348,68 @@ const Attributes = () => {
 
           <button
             onClick={handleNewAttribute}
-            className="btn inline-flex items-center gap-1 flex-1 sm:flex-initial justify-center"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 sm:flex-initial"
           >
-            <span>+</span> Attribute
+            <Add fontSize="small" />
+            New attribute
           </button>
         </div>
       </div>
 
-      {/* Error Display */}
+      {/* Error */}
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded relative mb-4">
-          <strong className="font-bold">Error:</strong>
-          <span className="block sm:inline"> {error}</span>
-        </div>
-      )}
-
-      {/* Success Display */}
-      {success && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
-          <strong className="font-bold">Success:</strong>
-          <span className="block sm:inline"> {success}</span>
-        </div>
-      )}
-
-      {/* Desktop-only inline filter & sort */}
-      <div className="my-3 hidden sm:flex gap-3 items-center">
-        <div className="w-1/2">{filterInputEl}</div>
-        <div className="w-1/4">{sortSelectEl}</div>
-        {hasActiveFilters && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>
+            <strong className="font-medium">Error:</strong> {error}
+          </span>
           <button
-            onClick={handleClearFilters}
-            className="shrink-0 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border rounded-md transition-colors"
-            title="Clear filters"
+            onClick={() => setError(null)}
+            className="rounded p-0.5 transition hover:bg-destructive/10"
+            aria-label="Dismiss error"
           >
-            Clear
+            <Close fontSize="small" />
           </button>
-        )}
+        </div>
+      )}
+
+      {/* Success */}
+      {success && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+          <span>
+            <strong className="font-medium">Success:</strong> {success}
+          </span>
+          <button
+            onClick={() => setSuccess(null)}
+            className="rounded p-0.5 transition hover:bg-emerald-500/10"
+            aria-label="Dismiss"
+          >
+            <Close fontSize="small" />
+          </button>
+        </div>
+      )}
+
+      {/* Desktop filter bar */}
+      <div className="hidden sm:block">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+            <div className="lg:col-span-6">{filterInputEl}</div>
+            <div className="lg:col-span-3">{sortSelectEl}</div>
+          </div>
+          {hasActiveFilters && (
+            <div className="mt-3 flex justify-end border-t border-border pt-3">
+              <button
+                onClick={handleClearFilters}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <Close fontSize="small" />
+                Clear filters
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Mobile-only filter bottom-sheet */}
+      {/* Mobile filter sheet */}
       <BottomSheet
         isOpen={isMobileFiltersOpen}
         onClose={() => setIsMobileFiltersOpen(false)}
@@ -327,32 +417,32 @@ const Attributes = () => {
       >
         <div className="flex flex-col gap-4">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               Filter
             </label>
             {filterInputEl}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               Sort by name
             </label>
             {sortSelectEl}
           </div>
 
-          <div className="flex items-center gap-2 pt-2 border-t border-border">
+          <div className="flex items-center gap-2 border-t border-border pt-2">
             <button
               type="button"
               onClick={handleClearFilters}
               disabled={!hasActiveFilters}
-              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-border bg-background text-foreground hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               Clear all
             </button>
             <button
               type="button"
               onClick={() => setIsMobileFiltersOpen(false)}
-              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition"
+              className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
               Done
             </button>
@@ -361,104 +451,129 @@ const Attributes = () => {
       </BottomSheet>
 
       {/* Table */}
-      <div className="bg-card text-card-foreground rounded-lg shadow-md border border-border overflow-hidden">
+      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+        {/* Card header */}
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">
+              All attributes
+            </h2>
+            {visibleAttributes.length > 0 && (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {visibleAttributes.length}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Table body */}
         <div className="overflow-x-auto">
-          <table className="w-full divide-y divide-border">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Code
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Unit Family
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Unit family
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Type
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Sort Order
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Sort order
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Options
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Actions
+                <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-card divide-y divide-border">
-              {visibleAttributes.map((attr) => (
-                <tr
-                  key={attr._id}
-                  className="hover:bg-muted/50 transition-colors"
-                >
-                  <td className="px-6 py-4 max-w-[150px] truncate">
-                    <div className="text-sm font-medium text-foreground">
-                      {attr.name}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 max-w-[150px] truncate">
-                    <div className="text-sm text-muted-foreground">
-                      {attr.code}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-muted-foreground">
-                      {attr.unitFamily?.name || "—"}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-muted-foreground">
-                      {attr.type}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-muted-foreground">
-                      {attr.sort_order}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 max-w-[200px] truncate">
-                    <div
-                      className="text-sm text-muted-foreground"
-                      title={formatOptions(attr.option)}
-                    >
-                      {formatOptions(attr.option)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium">
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={() => handleEditClick(attr._id!)}
-                        className="text-primary hover:text-primary/80 transition-colors"
-                        aria-label={`Edit attribute ${attr.name}`}
-                      >
-                        <Edit fontSize="small" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(attr._id!, attr.name)}
-                        className="text-destructive hover:text-destructive/80 transition-colors"
-                        aria-label={`Delete attribute ${attr.name}`}
-                      >
-                        <Delete fontSize="small" />
-                      </button>
+            <tbody className="divide-y divide-border">
+              {visibleAttributes.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-16">
+                    <div className="flex flex-col items-center justify-center text-center">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                        {filterText.trim() ? (
+                          <SearchOff className="text-muted-foreground" />
+                        ) : (
+                          <Tune className="text-muted-foreground" />
+                        )}
+                      </div>
+                      <p className="text-sm font-medium text-foreground">
+                        {filterText.trim()
+                          ? "No attributes match your search"
+                          : "No attributes yet"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {filterText.trim()
+                          ? "Try adjusting or clearing your filter."
+                          : "Create your first attribute to get started."}
+                      </p>
                     </div>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                visibleAttributes.map((attr) => (
+                  <tr
+                    key={attr._id}
+                    className="group transition-colors hover:bg-muted/40"
+                  >
+                    <td className="px-5 py-4">
+                      <div className="max-w-[180px] truncate text-sm font-medium text-foreground">
+                        {attr.name}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className="max-w-[180px] truncate font-mono text-xs text-muted-foreground">
+                        {attr.code}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="text-sm text-muted-foreground">
+                        {attr.unitFamily?.name || "—"}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium capitalize text-muted-foreground">
+                        {attr.type}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="text-sm text-muted-foreground">
+                        {attr.sort_order}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div
+                        className="max-w-[220px] truncate text-sm text-muted-foreground"
+                        title={formatOptions(attr.option)}
+                      >
+                        {formatOptions(attr.option)}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex justify-end">
+                        <PopoverMenu
+                          items={getMenuItems(attr)}
+                          ariaLabel={`Actions for ${attr.name}`}
+                          trigger={<MoreVert fontSize="small" />}
+                          align="right"
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-
-        {visibleAttributes.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            {filterText
-              ? "No attributes match your search"
-              : "No attributes found"}
-          </div>
-        )}
       </div>
 
       {/* Attribute Form Modal */}
@@ -481,7 +596,7 @@ const Attributes = () => {
           setDeleteTargetName("");
         }}
         onConfirm={handleConfirmDelete}
-        title="Delete Attribute"
+        title="Delete attribute"
         message={`Are you sure you want to delete the attribute "${deleteTargetName}"? This action cannot be undone.`}
         confirmLabel="Delete"
         danger={true}

@@ -9,6 +9,12 @@ import React, {
   useCallback,
 } from "react";
 import { getCategories } from "@/app/actions/category";
+import {
+  Check,
+  Close,
+  Search,
+  Category as CategoryIcon,
+} from "@mui/icons-material";
 
 interface CategorySelectorProps {
   initialCategoryId?: string;
@@ -33,7 +39,7 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({
         setLoading(true);
         const data = await getCategories();
         setCategories(data);
-      } catch (err) {
+      } catch {
         setError("Failed to load categories.");
       } finally {
         setLoading(false);
@@ -78,6 +84,8 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({
         const cat = filteredCategories[focusedIndex];
         if (cat) handleSelect(cat._id);
       }
+    } else if (e.key === "Escape") {
+      setFilter("");
     }
   };
 
@@ -89,39 +97,92 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({
     if (focusedIndex >= 0 && listRef.current) {
       const items = listRef.current.querySelectorAll('[role="option"]');
       if (items[focusedIndex]) {
-        items[focusedIndex].scrollIntoView({ block: "nearest" });
+        (items[focusedIndex] as HTMLElement).scrollIntoView({
+          block: "nearest",
+        });
       }
     }
   }, [focusedIndex]);
 
-  if (loading)
-    return <div className="animate-pulse h-64 bg-gray-200 rounded" />;
-  if (error) return <div className="text-red-500">{error}</div>;
+  if (loading) {
+    return (
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="border-b border-border px-5 py-4">
+          <div className="h-5 w-32 animate-pulse rounded bg-muted" />
+        </div>
+        <div className="space-y-2 p-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-center text-sm text-destructive">
+        {error}
+      </div>
+    );
+  }
 
   const selectedCategory = categories.find((c) => c._id === selectedId);
 
   return (
-    <div className="bg-card text-card-foreground rounded-lg shadow-md p-4">
-      <h3 className="text-xl font-semibold mb-4">Select Category</h3>
+    <div className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">
+            Select category
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Choose a category to load its attributes
+          </p>
+        </div>
+        {selectedCategory && (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          >
+            <Close fontSize="small" />
+            Clear
+          </button>
+        )}
+      </div>
 
-      <input
-        type="text"
-        placeholder="Filter categories..."
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        onKeyDown={handleKeyDown}
-        className="mb-4 p-3 w-full border border-border rounded-md focus:ring-2 focus:ring-pri-500 bg-background text-foreground"
-      />
+      {/* Search */}
+      <div className="border-b border-border p-3">
+        <div className="relative">
+          <Search
+            fontSize="small"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="text"
+            placeholder="Search categories…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+            aria-label="Filter categories"
+          />
+        </div>
+      </div>
 
+      {/* List */}
       <div
-        className="bg-muted rounded-lg p-3 h-[500px] overflow-y-auto"
+        className="max-h-[420px] overflow-y-auto p-2"
         role="listbox"
         ref={listRef}
         tabIndex={0}
         onKeyDown={handleKeyDown}
+        aria-label="Categories"
       >
         {filteredCategories.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {filteredCategories.map((cat, index) => {
               const isSelected = selectedId === cat._id;
               const isFocused = focusedIndex === index;
@@ -130,98 +191,88 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({
                   key={cat._id}
                   role="option"
                   aria-selected={isSelected}
-                  className={`flex justify-between items-start gap-3 p-3 rounded-lg transition-all duration-200 cursor-pointer
-                    ${isSelected ? "bg-pri-500/10 border-2 border-pri-500" : "bg-card hover:bg-muted/50"}
-                    ${isFocused ? "ring-2 ring-pri-400" : ""}
-                    shadow-sm hover:shadow-md`}
+                  className={`flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors ${
+                    isSelected
+                      ? "bg-primary/10"
+                      : isFocused
+                        ? "bg-muted"
+                        : "hover:bg-muted"
+                  }`}
                   onClick={() => handleSelect(cat._id)}
                   onMouseEnter={() => setFocusedIndex(index)}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-foreground">
-                      {cat.name}
-                    </div>
-                    {cat.url_slug && (
-                      <div className="text-xs text-gray-400 line-clamp-1">
-                        {cat.url_slug}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {isSelected && (
-                      <svg
-                        className="w-5 h-5 text-pri-500"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelect(cat._id);
-                      }}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div
+                      className={`flex h-8 w-8 flex-none items-center justify-center rounded-lg ${
                         isSelected
-                          ? "bg-pri-500 text-white"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                          ? "bg-primary/15 text-primary"
+                          : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {isSelected ? "Selected" : "Select"}
-                    </button>
+                      {isSelected ? (
+                        <Check fontSize="small" />
+                      ) : (
+                        <CategoryIcon fontSize="small" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-foreground">
+                        {cat.name}
+                      </div>
+                      {cat.url_slug && (
+                        <div className="truncate text-xs text-muted-foreground">
+                          {cat.url_slug}
+                        </div>
+                      )}
+                    </div>
                   </div>
+                  {isSelected && (
+                    <span className="inline-flex flex-none items-center rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
+                      Selected
+                    </span>
+                  )}
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            No categories found
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <Search className="text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground">
+              No categories found
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {filter
+                ? "Try a different search term."
+                : "No categories available."}
+            </p>
           </div>
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 mt-6 pt-4 border-t border-border">
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          {selectedId ? (
-            <>
-              <span className="inline-flex items-center gap-1">
-                <svg
-                  className="w-4 h-4 text-thir-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                Selected:{" "}
-                <strong className="text-foreground">
-                  {selectedCategory?.name}
-                </strong>
-              </span>
-              <button
-                onClick={handleClear}
-                className="text-destructive hover:text-destructive/80 transition-colors underline-offset-2 hover:underline"
-              >
-                Clear
-              </button>
-            </>
-          ) : (
-            "Please select a category to continue"
-          )}
-        </div>
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs">
+        {selectedCategory ? (
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <Check fontSize="small" className="text-primary" />
+            Selected:{" "}
+            <span className="font-medium text-foreground">
+              {selectedCategory.name}
+            </span>
+          </span>
+        ) : (
+          <span className="text-muted-foreground">
+            Select a category to continue
+          </span>
+        )}
+        {filteredCategories.length > 0 && (
+          <span className="text-muted-foreground">
+            {filteredCategories.length}{" "}
+            {filteredCategories.length === 1 ? "category" : "categories"}
+          </span>
+        )}
       </div>
     </div>
   );

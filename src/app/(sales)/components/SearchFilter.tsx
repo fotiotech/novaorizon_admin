@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
+import { Close, Search } from "@mui/icons-material";
 
 interface FilterOptions {
   search: string;
@@ -17,6 +18,11 @@ interface SearchFilterProps {
   showOrderStatus?: boolean; // default: true
 }
 
+const inputClass =
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+
+const labelClass = "mb-1.5 block text-xs font-medium text-muted-foreground";
+
 export default function SearchFilter({
   onFilterChange,
   initialFilters = {},
@@ -30,12 +36,9 @@ export default function SearchFilter({
     dateTo: initialFilters.dateTo || "",
   });
 
-  const debouncedSearch = useDebouncedCallback(
-    (value: string) => {
-      onFilterChange({ ...filters, search: value });
-    },
-    500
-  );
+  const debouncedSearch = useDebouncedCallback((value: string) => {
+    onFilterChange({ ...filters, search: value });
+  }, 500);
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -58,7 +61,7 @@ export default function SearchFilter({
   };
 
   const handleClear = () => {
-    const cleared = {
+    const cleared: FilterOptions = {
       search: "",
       orderStatus: "",
       paymentStatus: "",
@@ -69,33 +72,54 @@ export default function SearchFilter({
     onFilterChange(cleared);
   };
 
+  const isDirty = useMemo(
+    () =>
+      Boolean(
+        filters.search ||
+        filters.orderStatus ||
+        filters.paymentStatus ||
+        filters.dateFrom ||
+        filters.dateTo,
+      ),
+    [filters],
+  );
+
   return (
-    <div className="w-full overflow-x-auto bg-card p-4 rounded-lg shadow-md border border-border">
-      <div className="min-w-[640px] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="col-span-1 md:col-span-2">
-          <label className="block text-sm font-medium text-muted-foreground mb-1">
+    <div className="w-full rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
+        {/* Search */}
+        <div className="sm:col-span-2 lg:col-span-4">
+          <label htmlFor="filter-search" className={labelClass}>
             Search
           </label>
-          <input
-            type="text"
-            name="search"
-            value={filters.search}
-            onChange={handleSearchChange}
-            placeholder="Order #, email, name..."
-            className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-          />
+          <div className="relative">
+            <Search
+              fontSize="small"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              id="filter-search"
+              type="text"
+              name="search"
+              value={filters.search}
+              onChange={handleSearchChange}
+              placeholder="Order #, email, name…"
+              className={`${inputClass} pl-9`}
+            />
+          </div>
         </div>
 
         {showOrderStatus && (
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">
-              Order Status
+          <div className="lg:col-span-2">
+            <label htmlFor="filter-order-status" className={labelClass}>
+              Order status
             </label>
             <select
+              id="filter-order-status"
               name="orderStatus"
               value={filters.orderStatus}
               onChange={handleSelectChange}
-              className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+              className={inputClass}
             >
               <option value="">All</option>
               <option value="pending">Pending</option>
@@ -109,15 +133,16 @@ export default function SearchFilter({
           </div>
         )}
 
-        <div>
-          <label className="block text-sm font-medium text-muted-foreground mb-1">
-            Payment Status
+        <div className="lg:col-span-2">
+          <label htmlFor="filter-payment-status" className={labelClass}>
+            Payment status
           </label>
           <select
+            id="filter-payment-status"
             name="paymentStatus"
             value={filters.paymentStatus}
             onChange={handleSelectChange}
-            className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+            className={inputClass}
           >
             <option value="">All</option>
             <option value="pending">Pending</option>
@@ -128,42 +153,47 @@ export default function SearchFilter({
           </select>
         </div>
 
-        <div className="flex gap-2 min-w-0">
-          <div className="flex-1 min-w-0">
-            <label className="block text-sm font-medium text-muted-foreground mb-1">
-              From
-            </label>
-            <input
-              type="date"
-              name="dateFrom"
-              value={filters.dateFrom}
-              onChange={handleDateChange}
-              className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <label className="block text-sm font-medium text-muted-foreground mb-1">
-              To
-            </label>
-            <input
-              type="date"
-              name="dateTo"
-              value={filters.dateTo}
-              onChange={handleDateChange}
-              className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+        <div className="lg:col-span-2">
+          <label htmlFor="filter-date-from" className={labelClass}>
+            From
+          </label>
+          <input
+            id="filter-date-from"
+            type="date"
+            name="dateFrom"
+            value={filters.dateFrom}
+            onChange={handleDateChange}
+            className={inputClass}
+          />
+        </div>
+
+        <div className="lg:col-span-2">
+          <label htmlFor="filter-date-to" className={labelClass}>
+            To
+          </label>
+          <input
+            id="filter-date-to"
+            type="date"
+            name="dateTo"
+            value={filters.dateTo}
+            onChange={handleDateChange}
+            className={inputClass}
+          />
         </div>
       </div>
 
-      <div className="flex justify-end mt-4">
-        <button
-          onClick={handleClear}
-          className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Clear Filters
-        </button>
-      </div>
+      {isDirty && (
+        <div className="mt-3 flex justify-end border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={handleClear}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          >
+            <Close fontSize="small" />
+            Clear filters
+          </button>
+        </div>
+      )}
     </div>
   );
 }

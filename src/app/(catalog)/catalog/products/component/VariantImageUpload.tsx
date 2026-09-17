@@ -23,11 +23,6 @@ const VariantImageUploader: React.FC<VariantImageUploaderProps> = React.memo(
     const { files, loading, addFiles, removeFile, progressByName } =
       useFileUploader(productId, safeInitialFiles, subfolder);
 
-    // BUG 5: pin the callback to a ref. The parent recreates
-    // `handleVariantChange` whenever the selected themes change, which used
-    // to make this effect fire on every variant row and clobber uncommitted
-    // edits in other rows. With the ref, the effect only fires when `files`
-    // actually changes.
     const cbRef = useRef(handleVariantChange);
     useEffect(() => {
       cbRef.current = handleVariantChange;
@@ -43,6 +38,7 @@ const VariantImageUploader: React.FC<VariantImageUploaderProps> = React.memo(
 
     return (
       <FilesUploader
+        compact
         files={files}
         loading={loading}
         addFiles={addFiles}

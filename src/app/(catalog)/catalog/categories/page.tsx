@@ -10,7 +10,13 @@ import { Modal } from "@/components/ux/Modal";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { BottomSheet } from "@/components/ux/BottomSheet";
 import { Toaster, toast } from "sonner";
-import { FilterList, Search } from "@mui/icons-material";
+import {
+  FilterList,
+  Search,
+  Add,
+  Close,
+  FolderOpen,
+} from "@mui/icons-material";
 
 const Categories = () => {
   const [categories, setCategories] = useState<Cat[]>([]);
@@ -21,7 +27,6 @@ const Categories = () => {
   const [deleteTarget, setDeleteTarget] = useState<Cat | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
-  // Shared filter state — drives both desktop input and mobile sheet input.
   const [filterText, setFilterText] = useState("");
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
@@ -97,7 +102,7 @@ const Categories = () => {
   const hasActiveFilters = filterText.trim() !== "";
   const activeFilterCount = hasActiveFilters ? 1 : 0;
 
-  // ---------- SAFE TREE BUILDER (prevents infinite recursion) ----------
+  // ---------- SAFE TREE BUILDER ----------
   const buildSafeSubtree = (
     parentId: string,
     visited: Set<string> = new Set(),
@@ -125,53 +130,53 @@ const Categories = () => {
         subcategories: buildSafeSubtree(category._id as string),
       };
     }
-
     return {
       ...category,
       subcategories: [],
     };
   });
 
-  // Shared filter input — reused in desktop bar and mobile sheet.
   const filterInputEl = (
     <div className="relative">
-      <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 !h-4 !w-4 text-muted-foreground" />
+      <Search
+        fontSize="small"
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+      />
       <input
         type="text"
-        placeholder="Search categories..."
+        placeholder="Search categories…"
         value={filterText}
         onChange={(e) => setFilterText(e.target.value)}
-        className="w-full p-2 pl-8 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent outline-none"
+        className="w-full rounded-lg border border-input bg-background px-3 py-2 pl-9 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
       />
     </div>
   );
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 py-8 ">
       <Toaster position="top-right" richColors />
 
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl lg:text-3xl font-bold text-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Categories
-          </h2>
-          <p className="text-muted-foreground mt-1">
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Manage your product categories and subcategories
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {/* Mobile-only: opens the bottom-sheet filter UI */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="lg:hidden relative inline-flex items-center gap-2 px-4 py-2 font-semibold bg-card border border-border rounded-lg hover:bg-muted transition text-foreground"
+            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted lg:hidden"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
             <span>Search</span>
             {activeFilterCount > 0 && (
-              <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground">
+              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
                 {activeFilterCount}
               </span>
             )}
@@ -179,61 +184,66 @@ const Categories = () => {
 
           <Link
             href="/catalog/categories/property"
-            className="px-4 py-2 font-semibold bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:flex-initial"
           >
-            + Property
+            Properties
           </Link>
-          <button onClick={handleNewCategory} className="btn">
-            + New Category
+          <button
+            onClick={handleNewCategory}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 sm:flex-initial"
+          >
+            <Add fontSize="small" />
+            New category
           </button>
         </div>
       </div>
 
-      {/* Error Display */}
+      {/* Error */}
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg">
-          <strong className="font-bold">Error:</strong>
-          <span className="ml-2">{error}</span>
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>
+            <strong className="font-medium">Error:</strong> {error}
+          </span>
           <button
             onClick={() => setError(null)}
-            className="float-right text-destructive hover:text-destructive/80"
+            className="rounded p-0.5 transition hover:bg-destructive/10"
             aria-label="Dismiss error"
           >
-            ✕
+            <Close fontSize="small" />
           </button>
         </div>
       )}
 
-      {/* Desktop-only inline filter */}
+      {/* Desktop filter */}
       <div className="hidden lg:block">{filterInputEl}</div>
 
-      {/* Mobile-only filter bottom-sheet */}
+      {/* Mobile filter sheet */}
       <BottomSheet
         isOpen={isMobileFiltersOpen}
         onClose={() => setIsMobileFiltersOpen(false)}
-        title="Search Categories"
+        title="Search categories"
       >
         <div className="flex flex-col gap-4">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               Search
             </label>
             {filterInputEl}
           </div>
 
-          <div className="flex items-center gap-2 pt-2 border-t border-border">
+          <div className="flex items-center gap-2 border-t border-border pt-2">
             <button
               type="button"
               onClick={() => setFilterText("")}
               disabled={!hasActiveFilters}
-              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-border bg-background text-foreground hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               Clear
             </button>
             <button
               type="button"
               onClick={() => setIsMobileFiltersOpen(false)}
-              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition"
+              className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
               Done
             </button>
@@ -241,34 +251,32 @@ const Categories = () => {
         </div>
       </BottomSheet>
 
-      {/* Loading State */}
+      {/* Loading skeleton */}
       {loading && (
-        <div className="space-y-4">
-          <div className="bg-card p-6 rounded-lg shadow-md border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <div className="h-6 w-32 bg-muted animate-pulse rounded"></div>
-              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
-            </div>
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center space-x-4">
-                  <div className="h-4 w-32 bg-muted animate-pulse rounded"></div>
-                  <div className="h-4 w-24 bg-muted animate-pulse rounded"></div>
-                  <div className="h-4 w-16 bg-muted animate-pulse rounded"></div>
-                  <div className="flex-1"></div>
-                  <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="border-b border-border px-5 py-4">
+            <div className="h-5 w-32 animate-pulse rounded bg-muted" />
+          </div>
+          <div className="divide-y divide-border">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex items-center gap-4 px-5 py-4">
+                <div className="h-9 w-9 flex-none animate-pulse rounded-lg bg-muted" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-1/4 animate-pulse rounded bg-muted" />
                 </div>
-              ))}
-            </div>
+                <div className="h-8 w-16 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Category Form in Modal */}
+      {/* Form modal */}
       <Modal
         isOpen={showForm || !!editId}
         onClose={handleCancelEdit}
-        title={editId ? "Edit Category" : "Create Category"}
+        title={editId ? "Edit category" : "Create category"}
         size="xl"
       >
         <CategoryForm
@@ -280,11 +288,11 @@ const Categories = () => {
         />
       </Modal>
 
-      {/* Category List — filter is controlled from above */}
+      {/* List */}
       {!loading && (
         <CategoryList
           categories={categoriesWithSubcategories as any[]}
-          title="All Categories"
+          title="All categories"
           emptyMessage="No categories found. Create your first category!"
           onEditCategory={handleEditClick as any}
           onDeleteCategory={handleDeleteClick as any}
@@ -292,16 +300,16 @@ const Categories = () => {
           hideFilter={true}
           filterValue={filterText}
           onFilterChange={setFilterText}
-          filterPlaceholder="Search categories..."
+          filterPlaceholder="Search categories…"
         />
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete confirmation */}
       <ConfirmDialog
         isOpen={isDeleteOpen}
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={confirmDelete}
-        title="Delete Category"
+        title="Delete category"
         message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.${
           (deleteTarget as any)?.subcategories?.length
             ? ` It has ${(deleteTarget as any).subcategories.length} subcategory(ies) that will also be removed.`

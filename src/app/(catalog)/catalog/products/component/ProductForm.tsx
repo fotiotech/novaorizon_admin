@@ -33,11 +33,16 @@ import {
   getProductDraft,
   deleteProductDraft,
 } from "@/app/actions/drafts";
+
 import { AttributeField } from "@/app/(catalog)/catalog/products/component/AttributeFields";
 import ManageRelatedProduct from "./ManageRelatedProduct";
 import VariantsManager from "@/app/(catalog)/catalog/products/component/variants/VariantOption";
-import { isValidBarcode } from "@/app/lib/barcode";
+import { isValidBarcode } from "@/app/lib/products/barcode";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import {
+  getOrCreateNewProductDraftKey,
+  clearNewProductDraftKey,
+} from "@/app/lib/products/draftKeys";
 
 // ------------------------------------------------------------------
 // Types
@@ -219,8 +224,8 @@ const GroupRenderer = memo(
     if (isSpecialGroup) {
       if (normalizedCode === "variantThemes") {
         return (
-          <section key={id} className="mb-2">
-            <h2 className="text-sm font-semibold text-muted-foreground pb-2">
+          <section key={id} className="mb-6">
+            <h2 className="mb-3 text-sm font-semibold text-foreground">
               {name}
             </h2>
             <VariantsManager
@@ -257,8 +262,8 @@ const GroupRenderer = memo(
       }
       if (normalizedCode === "productRelationships") {
         return (
-          <section key={id} className="mb-2">
-            <h2 className="text-sm font-semibold text-muted-foreground pb-2">
+          <section key={id} className="mb-6">
+            <h2 className="mb-3 text-sm font-semibold text-foreground">
               {name}
             </h2>
             <ManageRelatedProduct
@@ -289,10 +294,8 @@ const GroupRenderer = memo(
     }
 
     return (
-      <section key={id} className="mb-2">
-        <h2 className="text-sm font-semibold text-muted-foreground pb-2">
-          {name}
-        </h2>
+      <section key={id} className="mb-6">
+        <h2 className="mb-3 text-sm font-semibold text-foreground">{name}</h2>
         <div className="flex flex-col gap-4">
           {attributes.map((a) => (
             <div key={a.id}>
@@ -390,24 +393,6 @@ function flattenStructuredFields(
 }
 
 // ------------------------------------------------------------------
-// Draft session helpers
-// ------------------------------------------------------------------
-const NEW_PRODUCT_SESSION_KEY = "new-product-draft-id";
-
-function getOrCreateNewProductId(): string {
-  if (typeof window === "undefined") return "new";
-  const existing = sessionStorage.getItem(NEW_PRODUCT_SESSION_KEY);
-  if (existing) return existing;
-  const fresh = `new-${crypto.randomUUID()}`;
-  sessionStorage.setItem(NEW_PRODUCT_SESSION_KEY, fresh);
-  return fresh;
-}
-function clearNewProductId() {
-  if (typeof window === "undefined") return;
-  sessionStorage.removeItem(NEW_PRODUCT_SESSION_KEY);
-}
-
-// ------------------------------------------------------------------
 // Main Component
 // ------------------------------------------------------------------
 interface ProductFormProps {
@@ -421,8 +406,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
 }) => {
   const router = useRouter();
 
+  // Draft key is shared with `recreateProduct` via lib/draftKeys so a
+  // staged recreate lands where this form looks for it.
   const [productId] = useState<string>(
-    () => initialProductId || getOrCreateNewProductId(),
+    () => initialProductId || getOrCreateNewProductDraftKey(),
   );
 
   const [productData, setProductData] = useState<Record<string, any>>({});
@@ -442,10 +429,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   const clearNewProductSession = useCallback(() => {
     if (initialProductId) return;
-    clearNewProductId();
+    clearNewProductDraftKey();
   }, [initialProductId]);
 
-  // ---------------- Draft auto-save ----------------
+  // ---------------- Draft auto-save ---------------- //
   useEffect(() => {
     if (Object.keys(productData).length === 0) return;
     const timer = setTimeout(async () => {
@@ -458,7 +445,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     return () => clearTimeout(timer);
   }, [productData, productId]);
 
-  // ---------------- Load product & draft ----------------
+  // ---------------- Load product & draft ---------------- //
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -503,8 +490,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
           if (shouldUseDraft) {
             let draftData: any = { ...draft.data };
+            const recreateSourceId = draftData._recreateSourceId;
             delete draftData._id;
             draftData = flattenStructuredFields(draftData);
+            if (recreateSourceId !== undefined) {
+              draftData._recreateSourceId = recreateSourceId;
+            }
             if (draftData.productCode) {
               let code = draftData.productCode;
               if (Array.isArray(code) && code.length > 0) code = code[0];
@@ -551,9 +542,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
           );
         }
 
-        // ---- hasVariants: explicit boolean, derived once on load ----
-        // If the draft / document already says so, keep that.
-        // Otherwise infer from whether variants exist.
         if (typeof data.hasVariants !== "boolean") {
           data.hasVariants =
             Array.isArray(data.variants) && data.variants.length > 0;
@@ -571,7 +559,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     loadData();
   }, [initialProductId, productId, initialCategoryId]);
 
-  // ---------------- Fetch attribute sets ----------------
+  // ---------------- Fetch attribute sets ---------------- //
   useEffect(() => {
     const fetchAttributeSets = async () => {
       if (!productData.categoryId) {
@@ -596,7 +584,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     fetchAttributeSets();
   }, [productData.categoryId]);
 
-  // ---------------- Fetch units ----------------
+  // ---------------- Fetch units ---------------- //
   useEffect(() => {
     (async () => {
       try {
@@ -608,15 +596,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
     })();
   }, []);
 
-  // ------------------------------------------------------------------
-  // Variants toggle — SOLE source of truth for step visibility.
-  //
-  //   • true  → variant step is visible (editable / creatable)
-  //   • false → variant step filtered out, no variant data in payload
-  //
-  //   Initial value comes from the loaded doc/draft (see loadData), and
-  //   falls back to "has variants" when absent.
-  // ------------------------------------------------------------------
+  // ------------------------------------------------------------------ //
+  // Variants toggle — SOLE source of truth for step visibility.        //
+  // ------------------------------------------------------------------ //
   const hasVariants = productData.hasVariants === true;
 
   const visibleSteps = useMemo(() => {
@@ -637,7 +619,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     currentStepRef.current = currentStep;
   }, [currentStep]);
 
-  // ---------------- Variant fields (recursive, from all steps) ----
+  // ---------------- Variant fields (recursive, from all steps) ---- //
   const variantFieldsGroup = useMemo(
     () => findGroupInSteps(steps, "variantFields"),
     [steps],
@@ -648,13 +630,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
     [variantFieldsGroup],
   );
 
-  // ---------------- Toggle handler ----------------
+  // ---------------- Toggle handler ---------------- //
   const handleToggleVariants = useCallback((enabled: boolean) => {
     setProductData((prev) => {
       const next: Record<string, any> = { ...prev, hasVariants: enabled };
       if (!enabled) {
-        // Clear variant-related data so nothing stale lingers in
-        // the payload or re-appears when re-enabled.
         delete next.variants;
         delete next.variantThemes;
         delete next.variantValues;
@@ -662,7 +642,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
       return next;
     });
 
-    // Drop variant validation errors when toggling off.
     if (!enabled) {
       setValidationErrors((prev) => {
         if (!("variants" in prev)) return prev;
@@ -673,7 +652,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   }, []);
 
-  // ---------------- Validation ----------------
+  // ---------------- Validation ---------------- //
   const validateGroup = (group: GroupNode): string[] => {
     const errors: string[] = [];
     group.attributes.forEach((attr) => {
@@ -793,7 +772,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     return true;
   };
 
-  // ---------------- Navigation ----------------
+  // ---------------- Navigation ---------------- //
   const handleNext = () => {
     if (validateCurrentStep() && currentStep < visibleSteps.length - 1) {
       setCurrentStep(currentStep + 1);
@@ -803,7 +782,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
 
-  // ---------------- Change handler ----------------
+  // ---------------- Change handler ---------------- //
   const handleChange = useCallback(
     (field: string, value: any) => {
       const camelField = normalizeCode(field);
@@ -833,7 +812,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     [visibleSteps],
   );
 
-  // ---------------- Submit ----------------
+  // ---------------- Submit ---------------- //
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -871,7 +850,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
     try {
       const payload = { ...productData };
 
-      // Model B — no structured arrays in flight.
       delete payload.keyFeatures;
       delete payload.specifications;
 
@@ -881,7 +859,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
       delete payload.Id;
       delete payload.id;
 
-      // Ensure variant fields are dropped when the toggle is off.
       if (!hasVariants) {
         delete payload.variants;
         delete payload.variantThemes;
@@ -955,7 +932,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
-  // ---------------- Cancel ----------------
+  // ---------------- Cancel ---------------- //
   const handleCancelClick = () => setIsCancelDialogOpen(true);
   const handleConfirmCancel = async () => {
     const toastId = toast.loading("Discarding draft...");
@@ -971,129 +948,152 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
-  // ---------------- Memoized ----------------
+  // ---------------- Memoized ---------------- //
   const currentStepGroups = useMemo(() => {
     if (visibleSteps.length === 0 || currentStep >= visibleSteps.length)
       return [];
     return visibleSteps[currentStep].groups;
   }, [visibleSteps, currentStep]);
 
-  // ---------------- Early exits ----------------
+  // ---------------- Early exits ---------------- //
   if (loading) {
     return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="64px"
-      >
-        <CircularProgress />
-      </Box>
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="border-b border-border px-5 py-4">
+            <div className="h-5 w-40 animate-pulse rounded bg-muted" />
+          </div>
+          <div className="space-y-3 p-5">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-12 animate-pulse rounded-lg bg-muted" />
+            ))}
+          </div>
+        </div>
+      </div>
     );
   }
 
   if (!productData.categoryId && !loading) {
     return (
-      <div className="flex flex-col max-w-3xl bg-card text-card-foreground mx-auto p-4 rounded-lg">
-        <Alert severity="warning">
+      <div className="mx-auto max-w-3xl px-4 py-8">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-50/60 p-5 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
           Please select a category first to load product attributes.
-        </Alert>
+        </div>
       </div>
     );
   }
 
   return (
-    <div>
-      <form className="flex flex-col max-w-4xl bg-card text-card-foreground p-2 lg:p-4 rounded-lg ">
-        <div className="flex-1">
-          {error && <Alert severity="error">{error}</Alert>}
-          {!error && (
-            <div className="text-xs text-gray-400 mb-2">
-              💾 Draft auto-saved
+    <div className=" max-w-4xl py-8 ">
+      <form
+        onSubmit={handleSubmit}
+        className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+      >
+        {/* Form header */}
+        <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-sm font-semibold text-foreground">
+              {initialProductId ? "Edit product" : "New product"}
+            </h1>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {visibleSteps.length > 0
+                ? `Step ${currentStep + 1} of ${visibleSteps.length}`
+                : "Fill in product details"}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {!error && (
+              <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:inline-flex">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                Auto-saved
+              </span>
+            )}
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={hasVariants}
+                  onChange={(e) => handleToggleVariants(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label={
+                <span className="text-xs text-muted-foreground">
+                  Has variants
+                </span>
+              }
+              sx={{ mr: 0 }}
+            />
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-5">
+          {error && (
+            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-sm text-destructive">
+              {error}
             </div>
           )}
 
           {isFetchingAttributes ? (
-            <Box
-              display="flex"
-              justifyContent="center"
-              alignItems="center"
-              minHeight="200px"
-            >
+            <div className="flex min-h-[200px] items-center justify-center">
               <CircularProgress />
-            </Box>
+            </div>
           ) : steps.length === 0 ? (
-            <Alert severity="info">
+            <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
               No attribute sets mapped to this category.
-            </Alert>
-          ) : (
+            </div>
+          ) : visibleSteps.length > 0 ? (
             <>
-              {/* Variants toggle — the sole control for enabling the
-                  variant step and its fields. */}
-              <div className="flex items-center justify-end mb-4">
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={hasVariants}
-                      onChange={(e) => handleToggleVariants(e.target.checked)}
-                      color="primary"
-                    />
-                  }
-                  label="This product has variants"
-                />
+              <Stepper
+                activeStep={currentStep}
+                className="mb-6 w-full overflow-auto whitespace-nowrap"
+              >
+                {visibleSteps.map((step) => {
+                  const hasError = step.groups.some(
+                    (g) =>
+                      validationErrors[g.id] &&
+                      validationErrors[g.id].length > 0,
+                  );
+                  return (
+                    <Step key={step.id} className="inline-block">
+                      <StepLabel error={hasError}>{step.title}</StepLabel>
+                    </Step>
+                  );
+                })}
+              </Stepper>
+
+              <div className="space-y-6">
+                {currentStepGroups.map((group) => (
+                  <GroupRenderer
+                    key={group.id}
+                    group={group}
+                    productId={productId}
+                    productData={productData}
+                    validationErrors={validationErrors}
+                    handleChange={handleChange}
+                    units={units}
+                    allVariantFields={allVariantFields}
+                  />
+                ))}
               </div>
-
-              {visibleSteps.length > 0 ? (
-                <>
-                  <Stepper
-                    activeStep={currentStep}
-                    className="whitespace-nowrap mb-6 w-full overflow-auto"
-                  >
-                    {visibleSteps.map((step) => {
-                      const hasError = step.groups.some(
-                        (g) =>
-                          validationErrors[g.id] &&
-                          validationErrors[g.id].length > 0,
-                      );
-                      return (
-                        <Step key={step.id} className="inline-block">
-                          <StepLabel error={hasError}>{step.title}</StepLabel>
-                        </Step>
-                      );
-                    })}
-                  </Stepper>
-
-                  <div>
-                    {currentStepGroups.map((group) => (
-                      <GroupRenderer
-                        key={group.id}
-                        group={group}
-                        productId={productId}
-                        productData={productData}
-                        validationErrors={validationErrors}
-                        handleChange={handleChange}
-                        units={units}
-                        allVariantFields={allVariantFields}
-                      />
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <Alert severity="info">
-                  Turn on the variants toggle above to configure variants.
-                </Alert>
-              )}
             </>
+          ) : (
+            <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              Turn on the variants toggle above to configure variants.
+            </div>
           )}
         </div>
 
-        <div className="flex justify-between mt-6 items-center">
-          <div>
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/20 px-4 py-4 sm:px-5">
+          {/* Secondary actions */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCancelClick}
               disabled={isSubmitting}
-              className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded transition mr-4 disabled:opacity-50"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 sm:px-3.5"
             >
               Cancel
             </button>
@@ -1102,40 +1102,43 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 type="button"
                 onClick={handlePrev}
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded transition disabled:opacity-50"
+                className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 sm:px-3.5"
               >
                 Previous
               </button>
             )}
           </div>
 
-          <div>
-            {currentStep < visibleSteps.length - 1 ? (
-              <button
-                type="button"
-                onClick={handleNext}
-                className="px-6 py-2 bg-primary hover:bg-primary-600 text-white rounded transition"
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="px-6 py-2 bg-primary hover:bg-primary-600 text-white rounded transition disabled:bg-muted disabled:text-muted-foreground"
-              >
-                {isSubmitting ? "Saving..." : "Save Product"}
-              </button>
-            )}
-          </div>
-        </div>
+          {/* Step indicator — visible only when there's room */}
+          {visibleSteps.length > 1 && (
+            <span className="hidden text-xs text-muted-foreground md:inline">
+              Step {currentStep + 1} of {visibleSteps.length}
+            </span>
+          )}
 
-        {visibleSteps.length > 0 && (
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            Step {currentStep + 1} of {visibleSteps.length}
-          </div>
-        )}
+          {/* Primary action */}
+          {currentStep < visibleSteps.length - 1 ? (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+            >
+              Continue
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting && (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+              )}
+              {isSubmitting ? "Saving…" : "Save product"}
+            </button>
+          )}
+        </div>
       </form>
 
       <ConfirmDialog

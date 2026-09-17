@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import VariantImageUploader from "../VariantImageUpload";
 import Select from "react-select";
+import { Layers, Info } from "@mui/icons-material";
 
 interface Attribute {
   id: string;
@@ -59,8 +60,93 @@ const builtInVariantFields: Attribute[] = [
   },
 ];
 
+// ------------------------------------------------------------------
+// Shared class tokens
+// ------------------------------------------------------------------
 const INPUT_SM =
-  "w-full p-1 border border-input rounded bg-background text-foreground";
+  "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+const LABEL_CLASS = "mb-1.5 block text-xs font-medium text-muted-foreground";
+
+const SELECT_STYLES = {
+  control: (provided: any, state: any) => ({
+    ...provided,
+    backgroundColor: "hsl(var(--background))",
+    borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--input))",
+    borderRadius: "0.5rem",
+    boxShadow: state.isFocused ? "0 0 0 2px hsl(var(--ring) / 0.25)" : "none",
+    minHeight: "38px",
+    fontSize: "0.875rem",
+    transition: "border-color 150ms ease, box-shadow 150ms ease",
+    "&:hover": {
+      borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--border))",
+    },
+  }),
+  menu: (provided: any) => ({
+    ...provided,
+    backgroundColor: "hsl(var(--popover))",
+    color: "hsl(var(--popover-foreground))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "0.5rem",
+    overflow: "hidden",
+    boxShadow: "0 8px 24px hsl(var(--foreground) / 0.08)",
+  }),
+  menuPortal: (provided: any) => ({ ...provided, zIndex: 9999 }),
+  menuList: (provided: any) => ({ ...provided, padding: 4 }),
+  option: (provided: any, state: any) => ({
+    ...provided,
+    fontSize: "0.875rem",
+    backgroundColor: state.isSelected
+      ? "hsl(var(--primary))"
+      : state.isFocused
+        ? "hsl(var(--accent))"
+        : "hsl(var(--popover))",
+    color: state.isSelected
+      ? "hsl(var(--primary-foreground))"
+      : "hsl(var(--popover-foreground))",
+    cursor: "pointer",
+    borderRadius: "0.375rem",
+  }),
+  multiValue: (p: any) => ({
+    ...p,
+    backgroundColor: "hsl(var(--secondary))",
+    borderRadius: "0.375rem",
+  }),
+  multiValueLabel: (p: any) => ({
+    ...p,
+    color: "hsl(var(--secondary-foreground))",
+    fontSize: "0.8125rem",
+  }),
+  multiValueRemove: (p: any) => ({
+    ...p,
+    color: "hsl(var(--secondary-foreground))",
+    "&:hover": {
+      backgroundColor: "hsl(var(--destructive))",
+      color: "hsl(var(--destructive-foreground))",
+    },
+  }),
+  placeholder: (p: any) => ({ ...p, color: "hsl(var(--muted-foreground))" }),
+  input: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
+  singleValue: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
+  indicatorSeparator: (p: any) => ({
+    ...p,
+    backgroundColor: "hsl(var(--border))",
+  }),
+  dropdownIndicator: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    "&:hover": { color: "hsl(var(--foreground))" },
+  }),
+  clearIndicator: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    "&:hover": { color: "hsl(var(--foreground))" },
+  }),
+  noOptionsMessage: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    fontSize: "0.875rem",
+  }),
+} as const;
 
 const parseCommaInput = (s: string): string[] =>
   s
@@ -71,14 +157,14 @@ const parseCommaInput = (s: string): string[] =>
 const ImagePreviewGrid: React.FC<{ files: string[] }> = ({ files }) => {
   if (!files.length) return null;
   return (
-    <div className="flex flex-wrap gap-1 mt-1">
+    <div className="mt-1.5 flex flex-wrap gap-1.5">
       {files.map((url, i) => (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           key={`${url}-${i}`}
           src={url}
           alt={`Variant ${i + 1}`}
-          className="w-12 h-12 object-cover border border-border rounded"
+          className="h-10 w-10 rounded-md border border-border object-cover"
         />
       ))}
     </div>
@@ -148,10 +234,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
     }, [productThemes, themesFromVariants, attributes]);
 
     // ---- Theme value lists: variantValues, with fallback to variants ----
-    //
-    // FIX: fallback derivation from `variants` only fires when the theme key
-    // is ABSENT from `variantValues`. If the user has explicitly set an empty
-    // array (e.g. cleared the input), we respect that and do NOT re-derive.
     const savedValues = useMemo<Record<string, string[]>>(() => {
       const raw = readProductValue(product, "variantValues", "variant_values");
       const out: Record<string, string[]> = {};
@@ -192,8 +274,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       }
 
       selectedThemeCodes.forEach((theme) => {
-        // ⬇ Only fall back when the key is entirely missing — not when the
-        //   user has explicitly set it to an empty array.
         if (Object.prototype.hasOwnProperty.call(out, theme)) return;
 
         const uniq = new Set<string>();
@@ -238,16 +318,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
     }, [savedValues]);
 
     // ---------------------------------------------------------------------
-    // Regenerator — with POSITIONAL PATCHING for legacy variants that are
-    // missing theme keys.
-    //
-    // 1. For every existing variant lacking one or more theme keys, patch
-    //    the missing keys using the combination at the same index. This
-    //    recovers legacy data (theme keys stripped by older schemas) and
-    //    preserves every other property (price, sku, images, …).
-    // 2. Rebuild the key-based lookup from the patched set.
-    // 3. If the desired combination set matches, bail — no update needed.
-    // 4. Otherwise add/remove variants, preserving objects by reference.
+    // Regenerator — with POSITIONAL PATCHING for legacy variants
     // ---------------------------------------------------------------------
     useEffect(() => {
       if (selectedThemeCodes.length === 0) return;
@@ -290,7 +361,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
         existingKeys.length === desiredKeys.length &&
         existingKeys.every((k) => desiredKeySet.has(k));
 
-      // If nothing needed patching AND the key set matches, we're done.
       if (sameSet && !anyPatched) return;
 
       // ---- Pass 3: add missing, drop orphans, preserve by reference ----
@@ -334,7 +404,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       Record<string, ReturnType<typeof setTimeout>>
     >({});
 
-    // Cancel any pending debounced writes on unmount.
     useEffect(() => {
       const timers = valuesDebounceRef.current;
       return () => {
@@ -343,9 +412,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
     }, []);
 
     // ---- Handlers -----------------------------------------------------
-    //
-    // Theme select (add/remove) writes IMMEDIATELY — it's a discrete action
-    // and the regenerator must see it right away.
     const handleThemeSelect = useCallback(
       (selectedOptions: any) => {
         const codes = Array.isArray(selectedOptions)
@@ -356,9 +422,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       [onUpdate],
     );
 
-    // Theme values (free text) is DEBOUNCED — typing "Red, Blue" used to
-    // fire onUpdate per keystroke, causing the regenerator to churn the
-    // variant table and lose in-flight edits.
     const handleThemeValuesChange = useCallback(
       (themeCode: string, valuesString: string) => {
         const key = normalizeCode(themeCode);
@@ -376,7 +439,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
       [onUpdate],
     );
 
-    // ✅ Read/write through a ref so rapid successive edits never race.
     const handleVariantChange = useCallback(
       (index: number, field: string, value: any) => {
         const key = normalizeCode(field);
@@ -421,7 +483,7 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
                   handleVariantChange(index, field.code, e.target.value)
                 }
               >
-                <option value="">Select...</option>
+                <option value="">Select…</option>
                 {(field.options || []).map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
@@ -441,7 +503,6 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
                   initialFiles={files}
                   handleVariantChange={handleVariantChange}
                 />
-                <ImagePreviewGrid files={files} />
               </div>
             );
           }
@@ -480,33 +541,42 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
 
     if (!hasThemes && !hasVariants) {
       return (
-        <div className="text-sm text-muted-foreground">
+        <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
           No variant themes defined for this group.
         </div>
       );
     }
 
     return (
-      <div className="flex flex-col gap-4 w-full overflow-auto">
+      <div className="flex w-full flex-col gap-5">
+        {/* Theme selector */}
         {attributes.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
-              Select themes to use for variants
-            </label>
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <label className={LABEL_CLASS}>Themes</label>
             <Select
               isMulti
               options={themeOptions}
               value={selectedOptions}
               onChange={handleThemeSelect}
-              placeholder="Choose themes..."
-              className="basic-multi-select"
-              classNamePrefix="select"
+              placeholder="Choose themes to generate variants…"
+              styles={SELECT_STYLES}
+              classNamePrefix="react-select"
+              menuPortalTarget={
+                typeof document !== "undefined" ? document.body : undefined
+              }
+              menuPosition="fixed"
+              menuShouldScrollIntoView={false}
             />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Variants will be generated from the cartesian product of each
+              theme's values.
+            </p>
           </div>
         )}
 
+        {/* Theme value inputs */}
         {selectedThemeCodes.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {selectedThemeCodes.map((code) => {
               const attr = attributes.find(
                 (a) => normalizeCode(a.code) === code,
@@ -514,21 +584,40 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
               const displayName = attr?.name || code;
               return (
                 <div key={code}>
-                  <label className="block text-sm font-medium capitalize text-foreground mb-1">
-                    {displayName} values
+                  <label className={LABEL_CLASS}>
+                    <span className="capitalize">{displayName}</span> values
                   </label>
                   <input
                     type="text"
-                    className="w-full border border-input rounded p-2 bg-background text-foreground"
-                    placeholder={`Enter ${displayName} values, comma-separated`}
+                    className={INPUT_SM}
+                    placeholder={`e.g. ${attr?.options?.slice(0, 3).join(", ") || "comma, separated, values"}`}
                     value={themeValueInputs[code] ?? ""}
                     onChange={(e) =>
                       handleThemeValuesChange(code, e.target.value)
                     }
                   />
                   {attr?.options && attr.options.length > 0 && (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Suggested: {attr.options.join(", ")}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">
+                        Suggested:
+                      </span>
+                      {attr.options.slice(0, 6).map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            const current = parseCommaInput(
+                              themeValueInputs[code] ?? "",
+                            );
+                            if (current.includes(opt)) return;
+                            const next = [...current, opt].join(", ");
+                            handleThemeValuesChange(code, next);
+                          }}
+                          className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                        >
+                          + {opt}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -537,51 +626,57 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
           </div>
         )}
 
+        {/* Variant table */}
         {hasVariants && (
           <>
-            <div className="overflow-x-auto mt-4">
-              <table className="min-w-full border-collapse">
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-muted">
+                  <tr className="border-b border-border bg-muted/40">
                     {selectedThemeCodes.map((code) => (
                       <th
                         key={code}
-                        className="border border-border p-2 text-left capitalize text-foreground"
+                        className="px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
                       >
-                        {attributes.find((a) => normalizeCode(a.code) === code)
-                          ?.name || code}
+                        <span className="capitalize">
+                          {attributes.find(
+                            (a) => normalizeCode(a.code) === code,
+                          )?.name || code}
+                        </span>
                       </th>
                     ))}
                     {allVariantFields.map((field) => (
                       <th
                         key={field.code}
-                        className="border border-border p-2 text-left capitalize text-foreground"
+                        className="px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
                       >
                         {field.name || field.code}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border">
                   {savedVariants.map((variant, index) => {
                     const rowKey = selectedThemeCodes
                       .map((code) => variant?.[code] as string)
                       .join("|");
                     return (
-                      <tr key={`${rowKey}-${index}`}>
+                      <tr
+                        key={`${rowKey}-${index}`}
+                        className="transition-colors hover:bg-muted/30"
+                      >
                         {selectedThemeCodes.map((code) => (
                           <td
                             key={code}
-                            className="border border-border p-2 text-foreground"
+                            className="whitespace-nowrap px-3 py-2.5"
                           >
-                            {(variant?.[code] as string) ?? ""}
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
+                              {(variant?.[code] as string) ?? "—"}
+                            </span>
                           </td>
                         ))}
                         {allVariantFields.map((field) => (
-                          <td
-                            key={field.code}
-                            className="border border-border p-2"
-                          >
+                          <td key={field.code} className="px-3 py-2.5">
                             {renderFieldInput(field, variant, index)}
                           </td>
                         ))}
@@ -592,23 +687,29 @@ const VariantsManager: React.FC<VariantsManagerProps> = memo(
               </table>
             </div>
 
-            <div className="mt-4 p-3 bg-muted/50 rounded border border-border">
-              <div className="text-sm font-medium text-foreground">
-                Variant Summary
+            {/* Summary */}
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Layers fontSize="small" className="text-muted-foreground" />
+                  <span className="text-sm font-semibold text-foreground">
+                    Variant summary
+                  </span>
+                </div>
+                <span className="inline-flex items-center rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">
+                  {savedVariants.length}{" "}
+                  {savedVariants.length === 1 ? "variant" : "variants"}
+                </span>
               </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Total variants:{" "}
-                <span className="font-semibold">{savedVariants.length}</span>
-              </div>
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="mt-3 flex flex-wrap gap-1.5">
                 {savedVariants.map((v, idx) => {
                   const label = selectedThemeCodes
                     .map((code) => v?.[code] as string)
-                    .join(" - ");
+                    .join(" · ");
                   return (
                     <span
                       key={idx}
-                      className="px-2 py-0.5 bg-primary/15 text-primary rounded text-xs"
+                      className="inline-flex items-center rounded-md bg-background px-2 py-1 text-xs font-medium text-foreground ring-1 ring-inset ring-border"
                     >
                       {label || "(unlabeled)"}
                     </span>

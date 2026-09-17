@@ -13,7 +13,7 @@ const DeleteProduct = () => {
   useEffect(() => {
     const deleteItem = async () => {
       try {
-        const response = id ? await deleteProduct(id, { recreate }) : null;
+        const response = id ? await deleteProduct(id) : null;
         if (!response) {
           throw new Error("Failed to delete product");
         }

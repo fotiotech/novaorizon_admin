@@ -10,7 +10,19 @@ import Select from "react-select";
 import { AttributeGroupFormModal } from "./_component/AttributeGroupFormModal";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { BottomSheet } from "@/components/ux/BottomSheet";
-import { Edit, Delete, FilterList } from "@mui/icons-material";
+import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
+import {
+  Edit,
+  Delete,
+  FilterList,
+  Search,
+  SearchOff,
+  AccountTree,
+  MoreVert,
+  Add,
+  Close,
+  KeyboardArrowRight,
+} from "@mui/icons-material";
 
 // Types
 type AttributeType = {
@@ -40,7 +52,71 @@ interface SortOption {
   label: string;
 }
 
-// Main Group Component
+// ------------------------------------------------------------------
+// Shared class tokens
+// ------------------------------------------------------------------
+const INPUT_CLASS =
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+
+const SELECT_STYLES = {
+  control: (provided: any, state: any) => ({
+    ...provided,
+    backgroundColor: "hsl(var(--background))",
+    borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--input))",
+    borderRadius: "0.5rem",
+    boxShadow: state.isFocused ? "0 0 0 2px hsl(var(--ring) / 0.25)" : "none",
+    minHeight: "38px",
+    fontSize: "0.875rem",
+    transition: "border-color 150ms ease, box-shadow 150ms ease",
+    "&:hover": {
+      borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--border))",
+    },
+  }),
+  menu: (provided: any) => ({
+    ...provided,
+    backgroundColor: "hsl(var(--popover))",
+    color: "hsl(var(--popover-foreground))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "0.5rem",
+    overflow: "hidden",
+    boxShadow: "0 8px 24px hsl(var(--foreground) / 0.08)",
+  }),
+  menuPortal: (provided: any) => ({ ...provided, zIndex: 9999 }),
+  menuList: (provided: any) => ({ ...provided, padding: 4 }),
+  option: (provided: any, state: any) => ({
+    ...provided,
+    fontSize: "0.875rem",
+    backgroundColor: state.isSelected
+      ? "hsl(var(--primary))"
+      : state.isFocused
+        ? "hsl(var(--accent))"
+        : "hsl(var(--popover))",
+    color: state.isSelected
+      ? "hsl(var(--primary-foreground))"
+      : "hsl(var(--popover-foreground))",
+    cursor: "pointer",
+    borderRadius: "0.375rem",
+  }),
+  singleValue: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
+  placeholder: (p: any) => ({ ...p, color: "hsl(var(--muted-foreground))" }),
+  input: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
+  indicatorSeparator: (p: any) => ({
+    ...p,
+    backgroundColor: "hsl(var(--border))",
+  }),
+  dropdownIndicator: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    "&:hover": { color: "hsl(var(--foreground))" },
+  }),
+} as const;
+
+const PORTAL_PROPS = {
+  menuPortalTarget: typeof document !== "undefined" ? document.body : undefined,
+  menuPosition: "fixed" as const,
+  menuShouldScrollIntoView: false,
+} as const;
+
 const Group = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
@@ -54,17 +130,14 @@ const Group = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
-  // Filter / sort
   const [filterText, setFilterText] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<SortOption>({
     value: "name_asc",
     label: "Name A → Z",
   });
 
-  // Mobile bottom sheet
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
-  // Fetch data on component mount
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -145,7 +218,6 @@ const Group = () => {
     }
   };
 
-  // Toggle group expansion in overview
   const toggleGroupExpansion = (id: string) => {
     setExpandedGroups((prev) => {
       const newSet = new Set(prev);
@@ -158,25 +230,12 @@ const Group = () => {
     });
   };
 
-  // Get the parent group name
   const getParentGroupName = (parentId: string) => {
-    if (!parentId) return "-";
+    if (!parentId) return "—";
     const parent = groups.find((g) => g._id === parentId);
     return parent ? parent.name : parentId;
   };
 
-  // Get attribute names for display
-  const getAttributeNames = (attributeIds: string[] = []) => {
-    return attributeIds
-      .map((id) => {
-        const attr = attributes.find((a) => a._id === id);
-        return attr ? attr.name : null;
-      })
-      .filter(Boolean)
-      .join(", ");
-  };
-
-  // Sort options
   const sortOptions: SortOption[] = [
     { value: "name_asc", label: "Name A → Z" },
     { value: "name_desc", label: "Name Z → A" },
@@ -184,7 +243,6 @@ const Group = () => {
     { value: "oldest", label: "Oldest first" },
   ];
 
-  // Helper: extract creation timestamp from a Mongo ObjectId (first 4 bytes).
   const objectIdTimestamp = (id: string): number => {
     try {
       return parseInt(id.substring(0, 8), 16);
@@ -193,7 +251,6 @@ const Group = () => {
     }
   };
 
-  // Flatten groups for table display with hierarchy information
   const flattenedGroups = useMemo(() => {
     const matchesFilter = (g: AttributesGroup): boolean => {
       if (!filterText.trim()) return true;
@@ -225,10 +282,6 @@ const Group = () => {
 
     const flatten = (groupList: AttributesGroup[], level = 0): any[] => {
       let result: any[] = [];
-
-      // When a filter is active, we force-expand everything below a
-      // matching node so the user can actually see the matches inside
-      // collapsed trees.
       const filterActive = filterText.trim() !== "";
 
       groupList.forEach((group) => {
@@ -241,7 +294,6 @@ const Group = () => {
             })(group)
           : false;
 
-        // Skip non-matching leaves entirely.
         if (filterActive && !selfMatches && !childMatchesAny) return;
 
         result.push({
@@ -268,7 +320,6 @@ const Group = () => {
     return flatten(sortList(rootGroups));
   }, [groups, expandedGroups, filterText, sortOrder]);
 
-  // Active filter state
   const hasActiveFilters =
     filterText.trim() !== "" || sortOrder.value !== "name_asc";
   const activeFilterCount =
@@ -280,57 +331,37 @@ const Group = () => {
     setSortOrder({ value: "name_asc", label: "Name A → Z" });
   };
 
-  // Theme-aware react-select styles (consistent with Attributes page)
-  const selectStyles = {
-    control: (base: any) => ({
-      ...base,
-      backgroundColor: "hsl(var(--background))",
-      borderColor: "hsl(var(--border))",
-      color: "hsl(var(--foreground))",
-      borderRadius: "0.5rem",
-      boxShadow: "none",
-      "&:hover": { borderColor: "hsl(var(--primary))" },
-      minHeight: "42px",
-    }),
-    menu: (base: any) => ({
-      ...base,
-      backgroundColor: "hsl(var(--card))",
-      color: "hsl(var(--card-foreground))",
-    }),
-    option: (base: any, state: any) => ({
-      ...base,
-      backgroundColor: state.isFocused
-        ? "hsl(var(--muted))"
-        : "hsl(var(--card))",
-      color: "hsl(var(--card-foreground))",
-      "&:active": {
-        backgroundColor: "hsl(var(--primary) / 0.2)",
-      },
-    }),
-    singleValue: (base: any) => ({
-      ...base,
-      color: "hsl(var(--foreground))",
-    }),
-    input: (base: any) => ({
-      ...base,
-      color: "hsl(var(--foreground))",
-    }),
-    placeholder: (base: any) => ({
-      ...base,
-      color: "hsl(var(--muted-foreground))",
-    }),
-    menuPortal: (base: any) => ({ ...base, zIndex: 9999 }),
-  };
+  const getMenuItems = (group: any): PopoverMenuItem[] => [
+    {
+      key: "edit",
+      label: "Edit group",
+      icon: <Edit fontSize="small" />,
+      onClick: () => handleOpenEditModal(group._id),
+    },
+    {
+      key: "delete",
+      label: "Delete",
+      icon: <Delete fontSize="small" />,
+      danger: true,
+      onClick: () => handleDeleteClick(group._id, group.name),
+    },
+  ];
 
-  // Shared filter controls — reused in desktop bar and mobile sheet
+  // Shared filter controls
   const filterInputEl = (
-    <input
-      type="text"
-      placeholder="Search groups by name or code..."
-      value={filterText}
-      onChange={(e) => setFilterText(e.target.value)}
-      className="w-full p-2 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent outline-none"
-    />
+    <div className="relative">
+      <Search
+        fontSize="small"
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+      />
+      <input
+        type="text"
+        placeholder="Search groups by name or code…"
+        value={filterText}
+        onChange={(e) => setFilterText(e.target.value)}
+        className={`${INPUT_CLASS} pl-9`}
+      />
+    </div>
   );
 
   const sortSelectEl = (
@@ -339,33 +370,36 @@ const Group = () => {
       value={sortOrder}
       onChange={(opt) => opt && setSortOrder(opt as SortOption)}
       classNamePrefix="react-select"
-      styles={selectStyles}
+      styles={SELECT_STYLES}
       isSearchable={false}
       instanceId="attribute-group-sort"
-      menuPortalTarget={
-        typeof document !== "undefined" ? document.body : undefined
-      }
-      menuPosition="fixed"
+      {...PORTAL_PROPS}
     />
   );
 
   return (
-    <div className="max-w-7xl mx-auto lg:px-8 w-full">
+    <div className="mx-auto max-w-7xl py-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
-        <h2 className="font-bold text-2xl text-foreground">Attribute Groups</h2>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          {/* Mobile-only: opens the bottom-sheet filter UI */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Attribute groups
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Organize attributes into hierarchical groups
+          </p>
+        </div>
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="sm:hidden relative inline-flex items-center justify-center gap-2 flex-1 px-3 py-2 text-sm font-medium bg-card border border-border rounded-lg hover:bg-muted transition text-foreground"
+            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:hidden"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
             <span>Filters</span>
             {activeFilterCount > 0 && (
-              <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground">
+              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
                 {activeFilterCount}
               </span>
             )}
@@ -373,43 +407,68 @@ const Group = () => {
 
           <button
             onClick={handleOpenCreateModal}
-            className="btn inline-flex items-center gap-1 flex-1 sm:flex-initial justify-center"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 sm:flex-initial"
           >
-            <span>+</span> New Group
+            <Add fontSize="small" />
+            New group
           </button>
         </div>
       </div>
 
+      {/* Error */}
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded relative mb-4">
-          <strong className="font-bold">Error:</strong>
-          <span className="block sm:inline"> {error}</span>
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
-          <strong className="font-bold">Success:</strong>
-          <span className="block sm:inline"> {success}</span>
-        </div>
-      )}
-
-      {/* Desktop-only inline filter & sort */}
-      <div className="mb-3 hidden sm:flex gap-3 items-center">
-        <div className="flex-1">{filterInputEl}</div>
-        <div className="w-56">{sortSelectEl}</div>
-        {hasActiveFilters && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>
+            <strong className="font-medium">Error:</strong> {error}
+          </span>
           <button
-            onClick={handleClearFilters}
-            className="shrink-0 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border rounded-md transition-colors"
-            title="Clear filters"
+            onClick={() => setError(null)}
+            className="rounded p-0.5 transition hover:bg-destructive/10"
+            aria-label="Dismiss error"
           >
-            Clear
+            <Close fontSize="small" />
           </button>
-        )}
+        </div>
+      )}
+
+      {/* Success */}
+      {success && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+          <span>
+            <strong className="font-medium">Success:</strong> {success}
+          </span>
+          <button
+            onClick={() => setSuccess(null)}
+            className="rounded p-0.5 transition hover:bg-emerald-500/10"
+            aria-label="Dismiss"
+          >
+            <Close fontSize="small" />
+          </button>
+        </div>
+      )}
+
+      {/* Desktop filter bar */}
+      <div className="hidden sm:block">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+            <div className="lg:col-span-6">{filterInputEl}</div>
+            <div className="lg:col-span-3">{sortSelectEl}</div>
+          </div>
+          {hasActiveFilters && (
+            <div className="mt-3 flex justify-end border-t border-border pt-3">
+              <button
+                onClick={handleClearFilters}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <Close fontSize="small" />
+                Clear filters
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Mobile-only filter bottom sheet */}
+      {/* Mobile filter sheet */}
       <BottomSheet
         isOpen={isMobileFiltersOpen}
         onClose={() => setIsMobileFiltersOpen(false)}
@@ -417,32 +476,32 @@ const Group = () => {
       >
         <div className="flex flex-col gap-4">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               Search
             </label>
             {filterInputEl}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               Sort by
             </label>
             {sortSelectEl}
           </div>
 
-          <div className="flex items-center gap-2 pt-2 border-t border-border">
+          <div className="flex items-center gap-2 border-t border-border pt-2">
             <button
               type="button"
               onClick={handleClearFilters}
               disabled={!hasActiveFilters}
-              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-border bg-background text-foreground hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               Clear all
             </button>
             <button
               type="button"
               onClick={() => setIsMobileFiltersOpen(false)}
-              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition"
+              className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
               Done
             </button>
@@ -450,128 +509,180 @@ const Group = () => {
         </div>
       </BottomSheet>
 
-      {/* Groups Table */}
-      <div className="bg-card p-4 rounded-lg shadow-md border border-border overflow-x-auto">
-        {isLoading && groups.length === 0 ? (
-          <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      {/* Card */}
+      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+        {/* Card header */}
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">
+              All groups
+            </h2>
+            {flattenedGroups.length > 0 && (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {flattenedGroups.length}
+              </span>
+            )}
           </div>
-        ) : groups.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">
-            No groups created yet. Click the "New Group" button to create one.
-          </p>
-        ) : flattenedGroups.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <p>No groups match your search.</p>
-            <button
-              onClick={handleClearFilters}
-              className="text-primary hover:underline text-sm mt-2"
-            >
-              Clear filters
-            </button>
-          </div>
-        ) : (
-          <table className="min-w-full divide-y divide-border">
-            <thead className="bg-muted">
-              <tr>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                >
+          {isLoading && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+              Loading…
+            </span>
+          )}
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Name
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                >
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Code
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                >
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Parent
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                >
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Attributes
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                >
-                  Actions
+                <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {flattenedGroups.map((group) => (
-                <tr key={group._id} className="hover:bg-muted/50 transition">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      {group.hasChildren && (
-                        <button
-                          type="button"
-                          onClick={() => toggleGroupExpansion(group._id)}
-                          className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-foreground"
-                        >
-                          {group.isExpanded ? "−" : "+"}
-                        </button>
-                      )}
-                      <span
-                        style={{ marginLeft: `${group.level * 20}px` }}
-                        className="text-sm font-medium text-foreground"
-                      >
-                        {group.name}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-muted-foreground">
-                      {group.code}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-muted-foreground">
-                      {getParentGroupName(
-                        group.parent_id || group.parentId || "",
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-muted-foreground">
-                      {group.attributes && group.attributes.length > 0
-                        ? `${group.attributes.length} attribute(s)`
-                        : "-"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleOpenEditModal(group._id)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition"
-                        title="Edit group"
-                      >
-                        <Edit className="w-4 h-4" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(group._id, group.name)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition"
-                        title="Delete group"
-                      >
-                        <Delete className="w-4 h-4" />
-                        Delete
-                      </button>
+              {isLoading && groups.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-16">
+                    <div className="flex justify-center">
+                      <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
                     </div>
                   </td>
                 </tr>
-              ))}
+              ) : flattenedGroups.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-16">
+                    <div className="flex flex-col items-center justify-center text-center">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                        {filterText.trim() ? (
+                          <SearchOff className="text-muted-foreground" />
+                        ) : (
+                          <AccountTree className="text-muted-foreground" />
+                        )}
+                      </div>
+                      <p className="text-sm font-medium text-foreground">
+                        {filterText.trim()
+                          ? "No groups match your search"
+                          : "No groups yet"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {filterText.trim()
+                          ? "Try adjusting or clearing your search."
+                          : "Create your first group to organize attributes."}
+                      </p>
+                      <div className="mt-4">
+                        {filterText.trim() ? (
+                          <button
+                            onClick={handleClearFilters}
+                            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+                          >
+                            Clear filters
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleOpenCreateModal}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
+                          >
+                            <Add fontSize="small" />
+                            New group
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                flattenedGroups.map((group) => (
+                  <tr
+                    key={group._id}
+                    className="group transition-colors hover:bg-muted/40"
+                  >
+                    <td className="px-5 py-3">
+                      <div
+                        className="flex items-center gap-2"
+                        style={{ paddingLeft: `${group.level * 1.25}rem` }}
+                      >
+                        {group.hasChildren ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleGroupExpansion(group._id)}
+                            className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                            aria-label={
+                              group.isExpanded ? "Collapse" : "Expand"
+                            }
+                            aria-expanded={group.isExpanded}
+                          >
+                            <KeyboardArrowRight
+                              fontSize="small"
+                              className={`transition-transform duration-200 ${
+                                group.isExpanded ? "rotate-90" : ""
+                              }`}
+                            />
+                          </button>
+                        ) : (
+                          <span className="inline-flex h-6 w-6 flex-none items-center justify-center">
+                            <span className="h-1.5 w-1.5 rounded-full bg-border" />
+                          </span>
+                        )}
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {group.name}
+                        </span>
+                        {group.hasChildren && (
+                          <span className="ml-1 inline-flex flex-none items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                            {group.children.length}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3">
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {group.code}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3 text-sm text-muted-foreground">
+                      {getParentGroupName(
+                        group.parent_id || group.parentId || "",
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3">
+                      {group.attributes && group.attributes.length > 0 ? (
+                        <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                          {group.attributes.length} attribute
+                          {group.attributes.length === 1 ? "" : "s"}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3 text-right">
+                      <div className="flex justify-end">
+                        <PopoverMenu
+                          items={getMenuItems(group)}
+                          ariaLabel={`Actions for ${group.name}`}
+                          trigger={<MoreVert fontSize="small" />}
+                          align="right"
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
-        )}
+        </div>
       </div>
 
       {/* Form Modal */}
@@ -596,7 +707,7 @@ const Group = () => {
           setDeleteTargetName("");
         }}
         onConfirm={handleConfirmDelete}
-        title="Delete Attribute Group"
+        title="Delete attribute group"
         message={`Are you sure you want to delete the group "${deleteTargetName}"? This action cannot be undone.`}
         confirmLabel="Delete"
         danger={true}

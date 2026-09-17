@@ -6,7 +6,14 @@ import {
   findOrders,
   updateOrderStatus,
 } from "@/app/actions/order";
-import { Delete, FilterList } from "@mui/icons-material";
+import {
+  Delete,
+  FilterList,
+  Visibility,
+  Edit,
+  MoreVert,
+  SearchOff,
+} from "@mui/icons-material";
 import Link from "next/link";
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { SkeletonLoader } from "./_component/SkeletonLoader";
@@ -14,6 +21,7 @@ import SearchFilter from "../../components/SearchFilter";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { Modal } from "@/components/ux/Modal";
 import { BottomSheet } from "@/components/ux/BottomSheet";
+import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 
 type OrderStatus =
   | "pending"
@@ -49,13 +57,11 @@ const AllOrderPage = () => {
   const [totalOrders, setTotalOrders] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Delete confirmation modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteOrderNumber, setDeleteOrderNumber] = useState<string | null>(
     null,
   );
 
-  // Status update modal
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [statusUpdateOrder, setStatusUpdateOrder] = useState<any | null>(null);
   const [selectedNewStatus, setSelectedNewStatus] =
@@ -70,7 +76,6 @@ const AllOrderPage = () => {
     dateTo: "",
   });
 
-  // Mobile bottom sheet
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
   const limit = 10;
@@ -117,7 +122,6 @@ const AllOrderPage = () => {
     setPage(1);
   };
 
-  // Delete handlers
   const handleDeleteClick = (orderNumber: string) => {
     setDeleteOrderNumber(orderNumber);
     setIsDeleteModalOpen(true);
@@ -137,7 +141,6 @@ const AllOrderPage = () => {
     setIsDeleteModalOpen(false);
   };
 
-  // Status update handlers
   const openStatusModal = (order: any) => {
     setStatusUpdateOrder(order);
     setSelectedNewStatus((order.orderStatus as OrderStatus) || "pending");
@@ -172,7 +175,6 @@ const AllOrderPage = () => {
     }
   };
 
-  // Active filter count for the mobile badge
   const activeFilterCount = useMemo(() => {
     let n = 0;
     if (filters.search.trim()) n++;
@@ -194,39 +196,87 @@ const AllOrderPage = () => {
     setPage(1);
   };
 
-  // Badge classes (unchanged)
-  const getStatusBadgeClass = (status: string) => {
-    const base =
-      "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
-    switch (status?.toLowerCase()) {
-      case "completed":
-        return `${base} bg-secondary/20 text-secondary-foreground dark:text-secondary`;
-      case "processing":
-      case "shipped":
-        return `${base} bg-primary/20 text-primary-foreground dark:text-primary`;
-      case "in transit":
-        return `${base} bg-accent/20 text-accent-foreground dark:text-accent`;
-      case "cancelled":
-        return `${base} bg-destructive/20 text-destructive-foreground dark:text-destructive`;
-      default:
-        return `${base} bg-muted text-muted-foreground`;
-    }
+  const getOrderMenuItems = (order: any): PopoverMenuItem[] => [
+    {
+      key: "view",
+      label: "View details",
+      icon: <Visibility fontSize="small" />,
+      href: `/sales/orders/${order.orderNumber}`,
+    },
+    {
+      key: "status",
+      label: "Update status",
+      icon: <Edit fontSize="small" />,
+      onClick: () => openStatusModal(order),
+    },
+    {
+      key: "delete",
+      label: deletingId === order.orderNumber ? "Deleting…" : "Delete order",
+      icon: <Delete fontSize="small" />,
+      onClick: () => handleDeleteClick(order.orderNumber),
+      danger: true,
+      disabled: deletingId === order.orderNumber,
+    },
+  ];
+
+  // Refined status pill — subtle bg, ring, and colored dot
+  const statusStyles: Record<string, string> = {
+    completed:
+      "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+    processing:
+      "bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/20",
+    shipped:
+      "bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:ring-indigo-500/20",
+    "in transit":
+      "bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-500/20",
+    pending:
+      "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
+    cancelled:
+      "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+    return_requested:
+      "bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-400 dark:ring-orange-500/20",
+    returned:
+      "bg-slate-100 text-slate-700 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
   };
 
-  const getPaymentBadgeClass = (status: string) => {
-    const base =
-      "px-2 inline-flex text-xs leading-5 font-semibold rounded-full";
-    switch (status?.toLowerCase()) {
-      case "paid":
-        return `${base} bg-secondary/20 text-secondary-foreground dark:text-secondary`;
-      case "refunded":
-        return `${base} bg-accent/20 text-accent-foreground dark:text-accent`;
-      case "failed":
-      case "cancelled":
-        return `${base} bg-destructive/20 text-destructive-foreground dark:text-destructive`;
-      default:
-        return `${base} bg-muted text-muted-foreground`;
-    }
+  const paymentStyles: Record<string, string> = {
+    paid: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+    cod_pending:
+      "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
+    pending:
+      "bg-slate-100 text-slate-700 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
+    failed:
+      "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+    cancelled:
+      "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+    refunded:
+      "bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-500/20",
+  };
+
+  const StatusBadge = ({ status }: { status: string }) => {
+    const key = status?.toLowerCase() ?? "pending";
+    const cls = statusStyles[key] ?? statusStyles.pending;
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${cls}`}
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+        {status?.replace(/_/g, " ") || "pending"}
+      </span>
+    );
+  };
+
+  const PaymentBadge = ({ status }: { status: string }) => {
+    const key = status?.toLowerCase() ?? "pending";
+    const cls = paymentStyles[key] ?? paymentStyles.pending;
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${cls}`}
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+        {status?.replace(/_/g, " ") || "pending"}
+      </span>
+    );
   };
 
   if (loading && orders.length === 0) {
@@ -234,22 +284,28 @@ const AllOrderPage = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-        <h2 className="text-3xl font-bold text-foreground">All Orders</h2>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          {/* Mobile-only: opens the bottom-sheet filter UI */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Orders
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Manage and track all incoming orders
+          </p>
+        </div>
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="md:hidden relative inline-flex items-center justify-center gap-2 flex-1 px-3 py-2 text-sm font-medium bg-card border border-border rounded-lg hover:bg-muted transition text-foreground"
+            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted md:hidden"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
             <span>Filters</span>
             {activeFilterCount > 0 && (
-              <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground">
+              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
                 {activeFilterCount}
               </span>
             )}
@@ -257,14 +313,14 @@ const AllOrderPage = () => {
 
           <Link
             href="/orders/chat"
-            className="btn inline-flex items-center justify-center flex-1 sm:flex-initial"
+            className="inline-flex flex-1 items-center justify-center rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:flex-initial"
           >
             Chats
           </Link>
         </div>
       </div>
 
-      {/* Desktop-only inline filter bar */}
+      {/* Desktop filter bar */}
       <div className="hidden md:block">
         <SearchFilter
           onFilterChange={handleFilterChange}
@@ -272,37 +328,31 @@ const AllOrderPage = () => {
         />
       </div>
 
-      {/* Mobile-only filter bottom sheet */}
+      {/* Mobile filter sheet */}
       <BottomSheet
         isOpen={isMobileFiltersOpen}
         onClose={() => setIsMobileFiltersOpen(false)}
         title="Search & Filters"
       >
         <div className="flex flex-col gap-4">
-          {/*
-            Remount on every open (via `key`) so the component's internal
-            state re-initializes from the current `filters`, keeping
-            desktop and mobile inputs in sync.
-          */}
           <SearchFilter
             key={isMobileFiltersOpen ? "sheet-open" : "sheet-closed"}
             onFilterChange={handleFilterChange}
             initialFilters={filters}
           />
-
-          <div className="flex items-center gap-2 pt-2 border-t border-border">
+          <div className="flex items-center gap-2 border-t border-border pt-2">
             <button
               type="button"
               onClick={handleClearFilters}
               disabled={activeFilterCount === 0}
-              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-border bg-background text-foreground hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               Clear all
             </button>
             <button
               type="button"
               onClick={() => setIsMobileFiltersOpen(false)}
-              className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition"
+              className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
               Done
             </button>
@@ -310,106 +360,130 @@ const AllOrderPage = () => {
         </div>
       </BottomSheet>
 
-      <div className="bg-card text-card-foreground p-6 rounded-lg shadow-md border border-border mt-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold text-foreground">
-            Orders {totalOrders > 0 && `(${totalOrders})`}
-          </h3>
+      {/* Card */}
+      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+        {/* Card header */}
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">
+              All orders
+            </h2>
+            {totalOrders > 0 && (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {totalOrders}
+              </span>
+            )}
+          </div>
           {loading && (
-            <span className="text-sm text-muted-foreground">Loading...</span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+              Loading…
+            </span>
           )}
         </div>
 
+        {/* Table */}
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-border">
-            <thead className="bg-muted">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Order #
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Order
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Customer
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Total
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Payment
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Order Status
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Date
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Actions
+                <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-card divide-y divide-border">
+            <tbody className="divide-y divide-border">
               {orders.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-6 py-4 text-center text-muted-foreground"
-                  >
-                    No orders found.
+                  <td colSpan={7} className="px-5 py-16">
+                    <div className="flex flex-col items-center justify-center text-center">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                        <SearchOff className="text-muted-foreground" />
+                      </div>
+                      <p className="text-sm font-medium text-foreground">
+                        No orders found
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {activeFilterCount > 0
+                          ? "Try adjusting your filters."
+                          : "Orders will appear here once customers start buying."}
+                      </p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 orders.map((order: any) => (
-                  <tr key={order._id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-foreground font-medium">
-                      #{order.orderNumber}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-foreground">
-                      {order.firstName} {order.lastName}
-                      <br />
-                      <span className="text-xs text-muted-foreground">
-                        {order.email}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-foreground">
-                      CFA {order.total?.toFixed(2) || "0.00"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={getPaymentBadgeClass(order.paymentStatus)}
-                      >
-                        {order.paymentStatus || "pending"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={getStatusBadgeClass(order.orderStatus)}>
-                        {order.orderStatus || "pending"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-foreground text-sm">
-                      {new Date(order.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap space-x-2">
+                  <tr
+                    key={order._id}
+                    className="group transition-colors hover:bg-muted/40"
+                  >
+                    <td className="whitespace-nowrap px-5 py-4">
                       <Link
                         href={`/sales/orders/${order.orderNumber}`}
-                        className="text-primary hover:text-primary/80 transition-colors text-sm"
+                        className="font-medium text-foreground transition hover:text-primary"
                       >
-                        View
+                        #{order.orderNumber}
                       </Link>
-                      <button
-                        onClick={() => openStatusModal(order)}
-                        className="text-foreground hover:text-foreground/80 transition-colors text-sm"
-                      >
-                        Update Status
-                      </button>
-                      <button
-                        title="Delete Order"
-                        type="button"
-                        onClick={() => handleDeleteClick(order.orderNumber)}
-                        disabled={deletingId === order.orderNumber}
-                        className="text-destructive hover:text-destructive/80 disabled:opacity-50 text-sm"
-                      >
-                        <Delete fontSize="small" />
-                      </button>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase text-muted-foreground">
+                          {`${order.firstName?.[0] ?? ""}${order.lastName?.[0] ?? ""}` ||
+                            "?"}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {order.firstName} {order.lastName}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {order.email}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4 font-medium text-foreground">
+                      CFA {order.total?.toFixed(2) || "0.00"}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4">
+                      <PaymentBadge status={order.paymentStatus} />
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4">
+                      <StatusBadge status={order.orderStatus} />
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4 text-muted-foreground">
+                      {new Date(order.createdAt).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4 text-right">
+                      <div className="flex justify-end">
+                        <PopoverMenu
+                          items={getOrderMenuItems(order)}
+                          ariaLabel={`Actions for order ${order.orderNumber}`}
+                          trigger={<MoreVert fontSize="small" />}
+                          align="right"
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -418,26 +492,34 @@ const AllOrderPage = () => {
           </table>
         </div>
 
+        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              Showing {orders.length} of {totalOrders} orders
-            </div>
-            <div className="flex gap-2">
+          <div className="flex items-center justify-between gap-4 border-t border-border px-5 py-3">
+            <p className="text-xs text-muted-foreground">
+              Showing{" "}
+              <span className="font-medium text-foreground">
+                {orders.length}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-foreground">{totalOrders}</span>{" "}
+              orders
+            </p>
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => goToPage(page - 1)}
                 disabled={page === 1}
-                className="px-3 py-1 border border-input rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition text-foreground"
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Previous
               </button>
-              <span className="px-3 py-1 text-foreground">
-                Page {page} of {totalPages}
+              <span className="px-3 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{page}</span> /{" "}
+                {totalPages}
               </span>
               <button
                 onClick={() => goToPage(page + 1)}
                 disabled={page === totalPages}
-                className="px-3 py-1 border border-input rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition text-foreground"
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next
               </button>
@@ -446,7 +528,7 @@ const AllOrderPage = () => {
         )}
       </div>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete confirmation */}
       <ConfirmDialog
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
@@ -458,7 +540,7 @@ const AllOrderPage = () => {
         danger={true}
       />
 
-      {/* Status Update Modal */}
+      {/* Status update modal */}
       <Modal
         isOpen={isStatusModalOpen}
         onClose={() => setIsStatusModalOpen(false)}
@@ -500,7 +582,7 @@ const AllOrderPage = () => {
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition"
+              className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
               onClick={() => setIsStatusModalOpen(false)}
               disabled={updatingStatus}
             >
@@ -508,7 +590,7 @@ const AllOrderPage = () => {
             </button>
             <button
               type="button"
-              className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition disabled:opacity-50"
+              className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
               onClick={handleStatusUpdate}
               disabled={updatingStatus || !selectedNewStatus}
             >

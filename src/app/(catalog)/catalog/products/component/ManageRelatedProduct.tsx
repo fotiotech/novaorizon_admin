@@ -4,6 +4,7 @@ import { findProducts, findProductById } from "@/app/actions/products";
 import Image from "next/image";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import Select from "react-select";
+import { Search, Close, Link as LinkIcon, Check } from "@mui/icons-material";
 
 interface ManageRelatedProductProps {
   id: string;
@@ -27,13 +28,7 @@ const readProductValue = (obj: any, ...keys: string[]) => {
 };
 
 /**
- * Extract a product id from any historical relatedProducts shape:
- *   { id: "oid" }                      ← what this component writes back
- *   { product: "oid" }                 ← what the DB stores (serialized)
- *   { product: { _id: "oid" } }        ← populated document
- *   { productId | product_id: "oid" }  ← alternate legacy keys
- *   "oid"                              ← bare string
- *   { _id: "oid" }                     ← full product object
+ * Extract a product id from any historical relatedProducts shape.
  */
 const extractRelatedProductId = (rp: any): string => {
   if (!rp) return "";
@@ -50,6 +45,91 @@ const extractRelatedProductId = (rp: any): string => {
   }
   return "";
 };
+
+// ------------------------------------------------------------------
+// Shared class tokens
+// ------------------------------------------------------------------
+const INPUT_CLASS =
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+
+const SELECT_STYLES = {
+  control: (provided: any, state: any) => ({
+    ...provided,
+    backgroundColor: "hsl(var(--background))",
+    borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--input))",
+    borderRadius: "0.5rem",
+    boxShadow: state.isFocused ? "0 0 0 2px hsl(var(--ring) / 0.25)" : "none",
+    minHeight: "34px",
+    fontSize: "0.8125rem",
+    transition: "border-color 150ms ease, box-shadow 150ms ease",
+    "&:hover": {
+      borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--border))",
+    },
+  }),
+  menu: (provided: any) => ({
+    ...provided,
+    backgroundColor: "hsl(var(--popover))",
+    color: "hsl(var(--popover-foreground))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "0.5rem",
+    overflow: "hidden",
+    boxShadow: "0 8px 24px hsl(var(--foreground) / 0.08)",
+  }),
+  menuPortal: (provided: any) => ({ ...provided, zIndex: 9999 }),
+  menuList: (provided: any) => ({ ...provided, padding: 4 }),
+  option: (provided: any, state: any) => ({
+    ...provided,
+    fontSize: "0.8125rem",
+    backgroundColor: state.isSelected
+      ? "hsl(var(--primary))"
+      : state.isFocused
+        ? "hsl(var(--accent))"
+        : "hsl(var(--popover))",
+    color: state.isSelected
+      ? "hsl(var(--primary-foreground))"
+      : "hsl(var(--popover-foreground))",
+    cursor: "pointer",
+    borderRadius: "0.375rem",
+  }),
+  singleValue: (p: any) => ({
+    ...p,
+    color: "hsl(var(--foreground))",
+    fontSize: "0.8125rem",
+  }),
+  placeholder: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    fontSize: "0.8125rem",
+  }),
+  input: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
+  indicatorSeparator: (p: any) => ({
+    ...p,
+    backgroundColor: "hsl(var(--border))",
+  }),
+  dropdownIndicator: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    padding: 6,
+    "&:hover": { color: "hsl(var(--foreground))" },
+  }),
+  clearIndicator: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    padding: 6,
+    "&:hover": { color: "hsl(var(--foreground))" },
+  }),
+  noOptionsMessage: (p: any) => ({
+    ...p,
+    color: "hsl(var(--muted-foreground))",
+    fontSize: "0.8125rem",
+  }),
+} as const;
+
+const PORTAL_PROPS = {
+  menuPortalTarget: typeof document !== "undefined" ? document.body : undefined,
+  menuPosition: "fixed" as const,
+  menuShouldScrollIntoView: false,
+} as const;
 
 const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   id,
@@ -73,7 +153,6 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
 
   useEffect(() => {
     async function fetchProducts() {
-      // Server-side filtering is handled in products.ts; keep pageSize small.
       const res = await findProducts({ pageSize: 100 });
       if (res && Array.isArray(res.products)) setProducts(res.products);
     }
@@ -97,7 +176,6 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     let initial: RelatedProduct[] = [];
 
     if (Array.isArray(relatedProductsData)) {
-      // Map → extract id → drop unresolved → dedupe by id.
       const seen = new Set<string>();
       initial = relatedProductsData
         .map((rp: any) => ({
@@ -143,15 +221,10 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
 
   // ---------------------------------------------------------------
   // Ensure every related product has a row in `products`.
-  //
-  // `findProducts({ pageSize: 100 })` only returns the newest 100, so a
-  // related product outside that window would be counted in the badge
-  // but never rendered (no checkmark, no remove button). Fetch the
-  // missing ones individually and merge them in.
   // ---------------------------------------------------------------
   useEffect(() => {
     if (!relatedProducts.length) return;
-    if (products.length === 0) return; // wait for the initial list first
+    if (products.length === 0) return;
 
     const known = new Set(products.map((p) => String(p._id)));
     const missing = Array.from(new Set(relatedProducts.map((rp) => rp.id)))
@@ -179,7 +252,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
           return toAdd.length ? [...prev, ...toAdd] : prev;
         });
       } catch {
-        /* silent — missing products simply won't render */
+        /* silent */
       }
     })();
 
@@ -244,47 +317,50 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   if (!relatedAttr) return null;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-foreground">
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <LinkIcon fontSize="small" className="text-muted-foreground" />
+          <span className="text-sm font-semibold text-foreground">
             {relatedAttr.name}
           </span>
-          <span className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full">
+          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
             {relatedProducts.length} selected
           </span>
         </div>
-        <div className="relative w-full sm:w-64">
+
+        <div className="relative w-full sm:w-72">
+          <Search
+            fontSize="small"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
           <input
             type="text"
-            placeholder="Search products..."
+            placeholder="Search products…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-2 pl-8 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground text-sm"
+            className={`${INPUT_CLASS} pl-9`}
           />
-          <svg
-            className="absolute left-2 top-2.5 w-4 h-4 text-muted-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
         </div>
       </div>
 
-      <div className="h-72 overflow-y-auto space-y-2 pr-1">
+      {/* Product list */}
+      <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
         {filteredProducts.length === 0 ? (
-          <p className="text-center text-muted-foreground py-4 text-sm">
-            {searchTerm
-              ? "No products match your search."
-              : "No products found."}
-          </p>
+          <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-muted/40 py-10 text-center">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+              <Search className="text-muted-foreground" fontSize="small" />
+            </div>
+            <p className="text-sm font-medium text-foreground">
+              {searchTerm ? "No matches" : "No products found"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {searchTerm
+                ? "Try a different search term."
+                : "Products will appear here once available."}
+            </p>
+          </div>
         ) : (
           filteredProducts.map((item) => {
             const selected = relatedProducts.find((rp) => rp.id === item._id);
@@ -294,59 +370,47 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
             return (
               <div
                 key={item._id}
-                className={`group flex flex-wrap items-center gap-3 p-3 rounded-lg border transition-all duration-200 ${
+                className={`group flex flex-wrap items-center gap-3 rounded-lg border p-2.5 transition-colors ${
                   isSelected
-                    ? "border-primary/60 bg-primary/10 shadow-sm"
-                    : "border-border hover:border-input hover:shadow-sm bg-card"
+                    ? "border-primary/40 bg-primary/5"
+                    : "border-border bg-card hover:bg-muted/40"
                 }`}
               >
-                <div
-                  className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                <button
+                  type="button"
                   onClick={() => handleProductSelect(item._id)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
-                  <div className="w-12 h-12 relative flex-shrink-0">
+                  <div className="relative h-11 w-11 flex-none overflow-hidden rounded-lg bg-muted">
                     <Image
                       src={
                         item.mainImage || item.main_image || "/placeholder.png"
                       }
                       alt={item.name || item.title || "Product"}
                       fill
-                      className="object-cover rounded-lg"
-                      sizes="48px"
+                      className="object-cover"
+                      sizes="44px"
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-medium text-foreground truncate">
-                      {item.name || item.title || "Untitled Product"}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-medium text-foreground">
+                      {item.name || item.title || "Untitled product"}
                     </h3>
                     {item.sku && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        SKU: {item.sku}
+                      <p className="truncate font-mono text-xs text-muted-foreground">
+                        {item.sku}
                       </p>
                     )}
                   </div>
                   {isSelected && (
-                    <svg
-                      className="w-5 h-5 text-primary flex-shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
+                    <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <Check style={{ fontSize: 14 }} />
+                    </span>
                   )}
-                </div>
+                </button>
 
                 {isSelected && (
-                  <div
-                    className="flex items-center gap-2 flex-shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <div className="flex flex-none items-center gap-1.5">
                     {relationOptions.length > 0 ? (
                       <Select
                         options={relationOptions}
@@ -364,12 +428,14 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                         placeholder="Type"
                         className="w-36"
                         classNamePrefix="react-select"
+                        styles={SELECT_STYLES}
                         isClearable
+                        {...PORTAL_PROPS}
                       />
                     ) : (
                       <input
                         type="text"
-                        className="w-36 p-1.5 border border-input rounded text-sm bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                        className="w-36 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
                         value={relationshipType}
                         placeholder="Relation type"
                         onChange={(e) =>
@@ -380,22 +446,10 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRemoveProduct(item._id)}
-                      className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
                       aria-label="Remove"
                     >
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
+                      <Close fontSize="small" />
                     </button>
                   </div>
                 )}

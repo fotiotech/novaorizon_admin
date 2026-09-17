@@ -10,9 +10,11 @@ import Category from "@/models/Category";
 import "@/models/Attribute";
 import "@/models/User";
 import { getCategoryAttributeSets } from "@/app/actions/category";
-import { safeValidateProductCreateOrUpdate } from "@/lib/product.schema";
+import { safeValidateProductCreateOrUpdate } from "@/app/lib/products/product.schema";
+import { saveProductDraft } from "@/app/actions/drafts";
 import { ref, deleteObject } from "firebase/storage";
 import { storage } from "@/utils/firebaseConfig";
+import { NEW_PRODUCT_DRAFT_KEY } from "../lib/products/draftKeys";
 
 // ---------- Types ----------
 export interface ProductListParams {
@@ -36,9 +38,6 @@ interface ProductResponse {
   data?: any;
   error?: string;
 }
-interface DeleteProductOptions {
-  recreate?: boolean;
-}
 
 const LIST_UNAUTHORIZED: ProductListResult = {
   products: [],
@@ -48,6 +47,16 @@ const LIST_UNAUTHORIZED: ProductListResult = {
   totalPages: 0,
 };
 
+/**
+ * Field embedded in a staged draft to mark it as a "recreate" of an
+ * existing product. When `createProduct` sees it, it deletes that
+ * source product *before* saving the new one — so unique fields
+ * (slug, sku, …) are freed up for the insert.
+ */
+const RECREATE_SOURCE_FIELD = "_recreateSourceId";
+
+const HEX_24 = /^[a-f0-9]{24}$/i;
+
 // ---------- Helpers ----------
 function toObjectId(value: any): mongoose.Types.ObjectId | null {
   if (!value) return null;
@@ -56,6 +65,54 @@ function toObjectId(value: any): mongoose.Types.ObjectId | null {
   } catch {
     return null;
   }
+}
+
+function coerceRef(value: any): mongoose.Types.ObjectId | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+
+  if (typeof value === "string") {
+    const t = value.trim();
+    if (!HEX_24.test(t)) return null;
+    return toObjectId(t);
+  }
+
+  if (
+    value instanceof mongoose.Types.ObjectId ||
+    value?._bsontype === "ObjectId" ||
+    typeof value?.toHexString === "function"
+  ) {
+    try {
+      const hex = value.toHexString();
+      return HEX_24.test(hex) ? new mongoose.Types.ObjectId(hex) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (value?._id !== undefined && value?._id !== null) {
+    return coerceRef(value._id);
+  }
+
+  return null;
+}
+
+function preSanitizeRefs<T extends Record<string, any>>(input: T): T {
+  if (!input || typeof input !== "object") return input;
+  const out: any = { ...input };
+  for (const key of ["brand", "categoryId", "carrier"]) {
+    if (key in out) {
+      const coerced = coerceRef(out[key]);
+      if (coerced instanceof mongoose.Types.ObjectId) {
+        out[key] = coerced.toString();
+      } else if (coerced === null) {
+        out[key] = null;
+      } else {
+        out[key] = undefined;
+      }
+    }
+  }
+  return out;
 }
 
 function escapeRegex(s: string) {
@@ -77,21 +134,18 @@ function normalizeStatus(status: unknown): "draft" | "active" | "inactive" {
 function sanitizeProductCode(
   code: any,
 ): { type: string; value: string } | null {
-  if (!code) return null;
-  const raw = Array.isArray(code) ? code[0] : code;
+  if (code === undefined || code === null) return null;
+  let raw = code;
+  for (let i = 0; i < 5 && Array.isArray(raw); i++) {
+    raw = raw[0];
+  }
   if (!raw || typeof raw !== "object") return null;
   const type = raw.type || "";
   const value = raw.value || "";
   if (!type || !value) return null;
-  return { type, value };
+  return { type: String(type), value: String(value) };
 }
 
-/**
- * Accept any historical `variantValues` shape and normalize to a plain map.
- *   1. { [code]: string[] }          (current)
- *   2. [{ k, v }, …]                 (legacy)
- *   3. [ { [code]: string[] } ]      (Mongoose [Mixed] wrapping an object)
- */
 function normalizeVariantValuesMap(
   data: any,
 ): Record<string, string[]> | undefined {
@@ -178,8 +232,32 @@ async function validateRequiredCategoryAttributes(
   }
 }
 
+function stripRecreateMarker<T extends Record<string, any>>(payload: T): T {
+  if (payload && typeof payload === "object") {
+    delete (payload as any)[RECREATE_SOURCE_FIELD];
+  }
+  return payload;
+}
+
+/**
+ * Delete a product and detach every `relatedProducts` pointer that
+ * referenced it. Safe to call with `session` for transactional use.
+ */
+async function hardDeleteProduct(
+  objectId: mongoose.Types.ObjectId,
+  session?: mongoose.ClientSession,
+): Promise<boolean> {
+  await Product.updateMany(
+    { "relatedProducts.product": objectId },
+    { $pull: { relatedProducts: { product: objectId } } },
+    { session },
+  );
+  const removed = await Product.findByIdAndDelete(objectId, { session });
+  return !!removed;
+}
+
 // ==================================================================
-// SHARED PAYLOAD PREPARATION — MODEL B: everything flat
+// SHARED PAYLOAD PREPARATION
 // ==================================================================
 type PrepareResult =
   | {
@@ -190,12 +268,14 @@ type PrepareResult =
   | { ok: false; error: string };
 
 async function prepareProductPayload(formData: any): Promise<PrepareResult> {
-  const validated = safeValidateProductCreateOrUpdate(formData);
+  const sanitized = preSanitizeRefs(formData ?? {});
+
+  const validated = safeValidateProductCreateOrUpdate(sanitized);
   if (!validated.success) {
     return { ok: false, error: `Validation failed: ${validated.error}` };
   }
 
-  const data = { ...formData, ...(validated.data ?? {}) };
+  const data = { ...sanitized, ...(validated.data ?? {}) };
 
   const providedId = data._id ? toObjectId(data._id) : null;
   if (data._id && !providedId)
@@ -204,48 +284,60 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
   const baseData: any = { ...data };
   delete baseData._id;
 
-  // ---- Referenced ids ----
-  let categoryId: mongoose.Types.ObjectId | null = null;
-  let brand: mongoose.Types.ObjectId | null = null;
+  const nextCategory = coerceRef(data.categoryId);
+  const nextBrand = coerceRef(data.brand);
+  const nextCarrier = coerceRef(data.carrier);
 
-  if (data.categoryId) {
-    categoryId = toObjectId(data.categoryId);
-    if (!categoryId) return { ok: false, error: "Invalid category" };
+  if (
+    nextCategory === null &&
+    data.categoryId != null &&
+    data.categoryId !== ""
+  ) {
+    return { ok: false, error: "Invalid category" };
   }
-  if (data.brand) {
-    brand = toObjectId(data.brand);
-    if (!brand) return { ok: false, error: "Invalid brand" };
+  if (nextBrand === null && data.brand != null && data.brand !== "") {
+    return { ok: false, error: "Invalid brand" };
   }
 
-  if (categoryId) {
+  if (nextCategory) {
     try {
-      await validateRequiredCategoryAttributes(categoryId.toString(), data);
+      await validateRequiredCategoryAttributes(nextCategory.toString(), data);
     } catch (e: any) {
       return { ok: false, error: e.message || "Missing required fields" };
     }
   }
 
-  // ---- Flat payload: everything the client sent, normalized ----
   const payload: any = {
     ...baseData,
     status: normalizeStatus(data.status),
     updatedAt: new Date(),
   };
 
-  if (categoryId) payload.categoryId = categoryId;
-  if (brand) payload.brand = brand;
+  delete payload.brand;
+  delete payload.carrier;
+  delete payload.categoryId;
+
+  // Never let the recreate marker leak onto the Product document.
+  delete payload[RECREATE_SOURCE_FIELD];
+
+  if (nextCategory !== undefined) payload.categoryId = nextCategory;
+  if (nextBrand !== undefined) payload.brand = nextBrand;
+  if (nextCarrier !== undefined) payload.carrier = nextCarrier;
+
   if (data.name) payload.slug = generateSlug(data.name, data.department);
 
-  // productCode → { type, value }
+  // productCode → single object or null
   if (data.type && data.value) {
     payload.productCode = { type: data.type, value: data.value };
     delete payload.type;
     delete payload.value;
-  } else if (data.productCode) {
+  } else if (data.productCode !== undefined) {
     payload.productCode = sanitizeProductCode(data.productCode);
   }
+  if (payload.productCode !== undefined && payload.productCode !== null) {
+    payload.productCode = sanitizeProductCode(payload.productCode);
+  }
 
-  // relatedProducts
   if (
     data.relatedProducts !== undefined &&
     Array.isArray(data.relatedProducts)
@@ -261,7 +353,6 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
       .filter(Boolean);
   }
 
-  // variantValues → plain map
   if (payload.variantValues !== undefined) {
     const normalized = normalizeVariantValuesMap(payload.variantValues);
     if (normalized) {
@@ -271,7 +362,6 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
     }
   }
 
-  // variantThemes → camelCased
   if (Array.isArray(payload.variantThemes)) {
     payload.variantThemes = payload.variantThemes.map((c: any) =>
       String(c).replace(/_([a-z])/g, (_: string, ch: string) =>
@@ -280,7 +370,6 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
     );
   }
 
-  // variants → unwrap { value } wrappers, sanitize media, keep theme keys
   if (Array.isArray(payload.variants)) {
     payload.variants = payload.variants.map((v: any) => {
       if (!v || typeof v !== "object") return v;
@@ -303,8 +392,6 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
     });
   }
 
-  // 🚫 Model B: no structured arrays. Explicitly strip any that leak in
-  //    from legacy drafts or clients.
   delete payload.keyFeatures;
   delete payload.specifications;
 
@@ -439,9 +526,30 @@ export async function getProductFilterCategories(): Promise<
   }
 }
 
+// ==================================================================
+// CREATE — deletes the recreate source FIRST, then saves
+// ==================================================================
+/**
+ * Creates a new product.
+ *
+ * If `formData[RECREATE_SOURCE_FIELD]` is present, this is a finalized
+ * recreate. The source product is deleted **before** the new product
+ * is saved, so unique indexes (slug, sku, …) are freed for the insert.
+ *
+ * Wrapped in a MongoDB transaction when the deployment supports it
+ * (replica set / mongos). On standalone MongoDB the transaction call
+ * is caught and the operations run sequentially — the delete still
+ * happens first so duplicate-key errors can't occur.
+ */
 export async function createProduct(formData: any): Promise<ProductResponse> {
   try {
     await connection();
+
+    // Grab the marker BEFORE sanitization strips it.
+    const rawSourceId =
+      formData && typeof formData === "object"
+        ? formData[RECREATE_SOURCE_FIELD]
+        : undefined;
 
     const prepared = await prepareProductPayload(formData);
     if (!prepared.ok) return { success: false, error: prepared.error };
@@ -455,12 +563,85 @@ export async function createProduct(formData: any): Promise<ProductResponse> {
     }
 
     const now = new Date();
-    const payload = { ...prepared.payload, createdAt: now, updatedAt: now };
-    const product = new Product(payload);
-    await product.save();
+    const payload = stripRecreateMarker({
+      ...prepared.payload,
+      createdAt: now,
+      updatedAt: now,
+    });
 
+    // Resolve the source id, if any.
+    let sourceObjectId: mongoose.Types.ObjectId | null = null;
+    if (typeof rawSourceId === "string" && HEX_24.test(rawSourceId.trim())) {
+      sourceObjectId = new mongoose.Types.ObjectId(rawSourceId.trim());
+    }
+
+    // ---- Preferred path: atomic transaction ------------------------
+    let usedTransaction = false;
+    let deletedSourceId: string | null = null;
+    let product: any = null;
+
+    try {
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          if (sourceObjectId) {
+            await hardDeleteProduct(sourceObjectId, session);
+            deletedSourceId = sourceObjectId.toString();
+          }
+          const doc = new Product(payload);
+          product = await doc.save({ session });
+        });
+        usedTransaction = true;
+      } finally {
+        await session.endSession();
+      }
+    } catch (txError: any) {
+      // Standalone MongoDB (or any other reason transactions aren't
+      // available) — fall through to sequential execution.
+      const msg = String(txError?.message ?? "");
+      const txUnsupported =
+        /Transaction numbers are only allowed/i.test(msg) ||
+        /replica set/i.test(msg) ||
+        /mongos/i.test(msg) ||
+        txError?.codeName === "IllegalOperation" ||
+        txError?.code === 20;
+
+      if (!txUnsupported) throw txError;
+
+      console.warn(
+        "[createProduct] Transactions unavailable — running sequentially.",
+      );
+    }
+
+    // ---- Fallback: sequential (delete first, then save) ------------
+    if (!usedTransaction) {
+      if (sourceObjectId) {
+        const removed = await hardDeleteProduct(sourceObjectId);
+        if (removed) deletedSourceId = sourceObjectId.toString();
+      }
+      const doc = new Product(payload);
+      product = await doc.save();
+    }
+
+    if (!product) {
+      return {
+        success: false,
+        error: "Failed to create product (no document returned)",
+      };
+    }
+
+    if (deletedSourceId) {
+      revalidatePath(`/catalog/products/edit/${deletedSourceId}`);
+    }
     revalidatePath("/catalog/products");
-    return { success: true, data: serialize(product) };
+
+    return {
+      success: true,
+      data: {
+        product: serialize(product),
+        ...(deletedSourceId ? { deletedSourceId } : {}),
+      },
+    };
   } catch (error: any) {
     console.error("Error in createProduct:", error);
     return {
@@ -484,15 +665,20 @@ export async function updateProduct(
     const prepared = await prepareProductPayload(formData);
     if (!prepared.ok) return { success: false, error: prepared.error };
 
-    const payload = { ...prepared.payload };
+    const payload = stripRecreateMarker({ ...prepared.payload });
     delete payload.createdAt;
     delete payload._id;
     delete payload.__v;
     payload.updatedAt = new Date();
 
-    // 🚫 Model B migration: strip any legacy structured arrays still
-    //    present on the document, so old products get cleaned up on
-    //    their next save.
+    if (payload.productCode !== undefined) {
+      payload.productCode = sanitizeProductCode(payload.productCode);
+    }
+
+    if (payload.brand === undefined) delete payload.brand;
+    if (payload.categoryId === undefined) delete payload.categoryId;
+    if (payload.carrier === undefined) delete payload.carrier;
+
     const product = await Product.findByIdAndUpdate(
       objectId,
       {
@@ -516,10 +702,146 @@ export async function updateProduct(
   }
 }
 
-export async function deleteProduct(
-  id: string,
-  options: DeleteProductOptions = {},
+// ==================================================================
+// LIGHTWEIGHT CATEGORY-ONLY UPDATE
+// ==================================================================
+export async function updateProductCategory(
+  productId: string,
+  categoryId: string | null,
 ): Promise<ProductResponse> {
+  try {
+    await connection();
+    if (!productId) return { success: false, error: "Product ID required" };
+
+    const pid = toObjectId(productId);
+    if (!pid) return { success: false, error: "Invalid product ID" };
+
+    if (!categoryId) {
+      return { success: false, error: "Category is required" };
+    }
+    const nextCategory = toObjectId(categoryId);
+    if (!nextCategory) {
+      return { success: false, error: "Invalid category ID" };
+    }
+
+    const category = await Category.findById(nextCategory).select("_id");
+    if (!category) return { success: false, error: "Category not found" };
+
+    const product = await Product.findByIdAndUpdate(
+      pid,
+      { $set: { categoryId: nextCategory, updatedAt: new Date() } },
+      { new: true },
+    );
+    if (!product) return { success: false, error: "Product not found" };
+
+    revalidatePath("/catalog/products");
+    revalidatePath(`/catalog/products/edit/${productId}`);
+    return { success: true, data: serialize(product) };
+  } catch (error: any) {
+    console.error("Error updating product category:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to update category",
+    };
+  }
+}
+
+// ==================================================================
+// RECREATE — stage as draft; deletion happens on save
+// ==================================================================
+
+export async function recreateProduct(
+  id: string,
+  draftKey: string = NEW_PRODUCT_DRAFT_KEY,
+): Promise<ProductResponse> {
+  try {
+    await connection();
+    if (!id) return { success: false, error: "Product ID required" };
+    if (!draftKey) return { success: false, error: "Draft key required" };
+
+    const objectId = toObjectId(id);
+    if (!objectId) return { success: false, error: "Invalid product ID" };
+
+    const original: any = await Product.findById(objectId).lean();
+    if (!original) return { success: false, error: "Product not found" };
+
+    // ---- Build a clean draft payload -------------------------------
+    const draftData: any = { ...original };
+
+    // Strip identity / server-managed metadata
+    delete draftData._id;
+    delete draftData.__v;
+    delete draftData.createdAt;
+    delete draftData.updatedAt;
+    delete draftData.keyFeatures;
+    delete draftData.specifications;
+
+    // Slug is regenerated by createProduct — drop it here.
+    delete draftData.slug;
+
+    // Refs → plain strings (Draft is JSON-only, no casting).
+    const brandId = coerceRef(original.brand);
+    const categoryId = coerceRef(original.categoryId);
+    const carrierId = coerceRef(original.carrier);
+    draftData.brand = brandId ? brandId.toString() : "";
+    draftData.categoryId = categoryId ? categoryId.toString() : "";
+    draftData.carrier = carrierId ? carrierId.toString() : "";
+
+    // productCode → single object or null (never an array)
+    draftData.productCode = sanitizeProductCode(original.productCode);
+
+    // relatedProducts → plain string ids for the form
+    if (Array.isArray(draftData.relatedProducts)) {
+      draftData.relatedProducts = draftData.relatedProducts
+        .map((rp: any) => {
+          const pid = coerceRef(rp?.product);
+          if (!pid) return null;
+          return {
+            product: pid.toString(),
+            relationshipType: rp?.relationshipType || "",
+          };
+        })
+        .filter(Boolean);
+    }
+
+    draftData.status = "draft";
+    draftData.reviewsRatings = [];
+
+    // 🎯 Marker: source product to delete once the user clicks Save.
+    draftData[RECREATE_SOURCE_FIELD] = id;
+
+    // ---- Persist as a Draft under the caller's key -----------------
+    const draftResult = await saveProductDraft(draftKey, draftData);
+    if (!draftResult.success) {
+      return {
+        success: false,
+        error: draftResult.error || "Failed to stage draft",
+      };
+    }
+
+    // Original is intentionally NOT deleted here.
+    revalidatePath("/catalog/products/new");
+
+    return {
+      success: true,
+      data: {
+        sourceProductId: id, // still alive
+        draftKey,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error recreating product:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to recreate product",
+    };
+  }
+}
+
+// ==================================================================
+// DELETE
+// ==================================================================
+export async function deleteProduct(id: string): Promise<ProductResponse> {
   try {
     await connection();
     if (!id) return { success: false, error: "Product ID required" };
@@ -536,32 +858,8 @@ export async function deleteProduct(
       },
     );
 
-    if (options.recreate) {
-      const clone: any = product.toObject();
-      delete clone._id;
-      delete clone.__v;
-      delete clone.createdAt;
-      delete clone.updatedAt;
-      delete clone.keyFeatures;
-      delete clone.specifications;
-      clone.status = "draft";
-      clone.createdAt = new Date();
-      clone.updatedAt = new Date();
-      const recreated = new Product(clone);
-      await recreated.save();
-      await Product.findByIdAndDelete(id);
-      revalidatePath("/catalog/products");
-      return {
-        success: true,
-        data: {
-          deletedId: id,
-          recreatedId: recreated._id.toString(),
-          product: serialize(recreated),
-        },
-      };
-    }
-
     await Product.findByIdAndDelete(id);
+
     revalidatePath("/catalog/products");
     revalidatePath(`/catalog/products/edit/${id}`);
     return { success: true, data: "Product deleted successfully" };

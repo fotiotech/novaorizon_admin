@@ -4,6 +4,29 @@ import { connection } from "@/utils/connection";
 import Draft from "@/models/Draft";
 import { auth } from "../auth";
 
+/**
+ * Force any payload through JSON before persisting.
+ *
+ * Guarantees the Draft collection never receives:
+ *   - Mongoose ObjectIds  → becomes hex string
+ *   - Buffers             → becomes { type: 'Buffer', data: [...] }
+ *   - Dates               → becomes ISO string
+ *   - circular refs       → becomes {}
+ *
+ * This protects every draft caller (edit autosave, "recreate as draft",
+ * new-product staging, …) from silently persisting a shape that later
+ * fails Mongoose casting when it's re-read and merged into a product
+ * payload.
+ */
+function toSerializable<T>(value: T): T {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (err) {
+    console.warn("[drafts] JSON round-trip failed; dropping payload", err);
+    return {} as T;
+  }
+}
+
 export async function saveProductDraft(productId: string, data: any) {
   try {
     await connection();
@@ -11,9 +34,11 @@ export async function saveProductDraft(productId: string, data: any) {
     if (!session?.user?.id) throw new Error("Unauthorized");
     const userId = session.user.id;
 
+    const safeData = toSerializable(data);
+
     await Draft.findOneAndUpdate(
       { userId, productId },
-      { data, updatedAt: new Date() },
+      { data: safeData, updatedAt: new Date() },
       { upsert: true, new: true },
     );
 
