@@ -14,6 +14,73 @@ import "@/models/UnitFamily";
 import { revalidatePath } from "next/cache";
 import { deleteS3Object } from "./s3";
 
+// ========================================================================
+//  toPlain – deep-convert Mongoose / BSON values into client-safe JSON.
+//  Strips ObjectId, Buffer, and anything with a toJSON method so that
+//  server actions can safely return query results to client components.
+// ========================================================================
+function toPlain<T>(value: T): T {
+  if (value === null || value === undefined) return value;
+
+  const t = typeof value;
+  if (t === "string" || t === "number" || t === "boolean") return value;
+  if (t === "bigint") return String(value) as any;
+  if (t === "function") return undefined as any;
+
+  if (value instanceof Date) return value.toISOString() as any;
+
+  if (Array.isArray(value)) return value.map((v) => toPlain(v)) as any;
+
+  if (typeof value === "object") {
+    const anyVal = value as any;
+
+    // BSON ObjectId
+    if (
+      anyVal._bsontype === "ObjectId" ||
+      anyVal.constructor?.name === "ObjectId" ||
+      typeof anyVal.toHexString === "function"
+    ) {
+      try {
+        return anyVal.toString() as any;
+      } catch {
+        return null as any;
+      }
+    }
+
+    // Node Buffer
+    if (typeof Buffer !== "undefined" && Buffer.isBuffer(anyVal)) {
+      return anyVal.toString("hex") as any;
+    }
+
+    // Decimal128 / Long / other BSON wrappers with a JS value
+    if (
+      anyVal._bsontype &&
+      typeof anyVal.toString === "function" &&
+      anyVal.constructor?.name !== "Object"
+    ) {
+      try {
+        return anyVal.toString() as any;
+      } catch {
+        // fall through
+      }
+    }
+
+    // Mongoose document → plain object, then recurse
+    if (typeof anyVal.toObject === "function") {
+      return toPlain(anyVal.toObject()) as any;
+    }
+
+    // Plain object → recurse
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(anyVal)) {
+      out[k] = toPlain(v);
+    }
+    return out as any;
+  }
+
+  return value;
+}
+
 // ---------- Helper: Slug ----------
 function generateSlug(name: string) {
   return slugify(name, { lower: true });
@@ -76,7 +143,6 @@ function safeIdString(
     if (visited.has(value)) return null;
     visited.add(value);
 
-    // Mongoose ObjectId or similar
     if (
       value instanceof mongoose.Types.ObjectId ||
       value._bsontype === "ObjectId" ||
@@ -85,7 +151,6 @@ function safeIdString(
       return value.toString();
     }
 
-    // Try common ID keys
     const candidates = [value._id, value.id, value.value];
     for (const candidate of candidates) {
       if (candidate !== undefined && candidate !== null) {
@@ -94,7 +159,6 @@ function safeIdString(
       }
     }
 
-    // Fallback: if the object itself has a valid toString
     try {
       if (typeof value.toString === "function") {
         const str = value.toString();
@@ -117,7 +181,7 @@ function safeIdString(
 export async function getCategories() {
   await connection();
   const categories = await Category.find().populate("property").lean();
-  return categories;
+  return toPlain(categories);
 }
 
 // ---------- Category Property CRUD ----------
@@ -126,10 +190,10 @@ export async function getCategoryProperty(id?: string): Promise<any> {
   if (id) {
     const property = await CategoryProperty.findById(id).lean();
     if (!property) return null;
-    return property;
+    return toPlain(property);
   } else {
     const properties = await CategoryProperty.find().lean();
-    return properties;
+    return toPlain(properties);
   }
 }
 
@@ -201,7 +265,7 @@ export async function createCategoryPropertyWithMappings(data: {
 
   revalidatePath("/catalog/categories/property");
 
-  const plain = property.toObject();
+  const plain = toPlain(property.toObject());
   return { success: true, property: plain };
 }
 
@@ -255,7 +319,7 @@ export async function updateCategoryPropertyWithMappings(
   await property.save();
   revalidatePath("/catalog/categories/property");
 
-  const plain = property.toObject();
+  const plain = toPlain(property.toObject());
   return { success: true, property: plain };
 }
 
@@ -290,27 +354,31 @@ export async function getCategory(
     const category = await Category.findOne({ name });
     if (category) {
       const subCategories = await Category.find({ parentId: category._id });
-      return subCategories;
+      return toPlain(subCategories);
     }
     return [];
   } else if (id) {
     const category = await Category.findById(id).populate("property").lean();
     if (!category) return null;
-    return category;
+    return toPlain(category);
   } else if (parentId) {
     const subCategories = await Category.find({ parentId })
       .populate("property")
       .lean();
-    return subCategories;
+    return toPlain(subCategories);
   } else {
     const categories = await Category.find().populate("property").lean();
-    console.log(categories);
-    return categories;
+    return toPlain(categories);
   }
 }
 
 // ========================================================================
 //  COLLECT ANCESTOR PROPERTIES
+//
+//  Walks the parent chain starting from `categoryId` itself. The first
+//  iteration contributes the category's own property, subsequent
+//  iterations contribute its ancestors'. This is intentional: an
+//  "inherited" property is the merge of self + ancestors.
 // ========================================================================
 async function collectAncestorProperties(categoryId: string): Promise<{
   mappings: any[];
@@ -345,7 +413,6 @@ async function collectAncestorProperties(categoryId: string): Promise<{
       propertyIds.push(propertyId);
     }
 
-    // ✅ Support both parentId and parent_id
     const parentId = current.parentId;
     if (!parentId) break;
 
@@ -489,7 +556,7 @@ async function ensureCategoryPropertyFromMappings(
 }
 
 // ========================================================================
-//  createCategory – with all fixes, no reliance on serialize recursion
+//  createCategory
 // ========================================================================
 export async function createCategory(
   formData: {
@@ -546,6 +613,13 @@ export async function createCategory(
       id || undefined,
     );
 
+    // ---- Inheritance is only valid when the category has a parent ------
+    // The root ("All Category") has nothing above it. If a client sends
+    // `inheritProperty: true` for it anyway, we coerce it to false so the
+    // DB can never hold a self-inheriting root.
+    const canInherit = !!resolvedParentId;
+    const wantsInherit = inheritProperty === true && canInherit;
+
     let categoryId: string | null = null;
     const existingCategory = id ? await Category.findById(id) : null;
 
@@ -559,15 +633,11 @@ export async function createCategory(
         imageUrl: imageUrl || [],
       };
 
-      if (inheritProperty === true) {
+      if (wantsInherit) {
         updateData.inheritProperty = true;
       } else {
         updateData.inheritProperty = false;
-        if (propertyId) {
-          updateData.property = propertyId;
-        } else {
-          updateData.property = null;
-        }
+        updateData.property = propertyId || null;
       }
 
       await Category.findOneAndUpdate(
@@ -583,21 +653,17 @@ export async function createCategory(
         parentId: resolvedParentId,
         description,
         imageUrl: imageUrl || [],
-        inheritProperty: inheritProperty ?? false,
+        inheritProperty: wantsInherit,
       };
 
-      if (inheritProperty === true) {
-        newCategoryData.property = null;
-      } else {
-        newCategoryData.property = propertyId || null;
-      }
+      newCategoryData.property = wantsInherit ? null : propertyId || null;
 
       const newCategory = new Category(newCategoryData);
       const saved = await newCategory.save();
       categoryId = saved._id.toString();
     }
 
-    if (inheritProperty && categoryId) {
+    if (wantsInherit && categoryId) {
       const { mappings } = await collectAncestorProperties(categoryId);
 
       if (mappings.length === 0) {
@@ -672,7 +738,7 @@ export async function createCategory(
 }
 
 // ========================================================================
-//  deleteCategory – removed invalid $pull
+//  deleteCategory
 // ========================================================================
 export async function deleteCategory(id: string) {
   try {
@@ -855,56 +921,37 @@ async function buildAttributeSetsFromMappings(
 }
 
 // ========================================================================
-//  getCategoryAttributeSets – with debug logs and parent_id support
+//  getCategoryAttributeSets
+//
+//  ROOT GUARD: the root category has no parent, so "inheritance" is
+//  meaningless for it. Even if `inheritProperty` is true in the DB
+//  (from a bad earlier write), we skip the inheritance branch and
+//  return the category's own property unchanged. This prevents the
+//  root's `property` field from being replaced with an auto-generated
+//  `{name}_inherited` property on every read.
 // ========================================================================
 export async function getCategoryAttributeSets(
   categoryId: string,
 ): Promise<AttributeSetResult[]> {
   await connection();
 
-  console.log("[getCategoryAttributeSets] Called with categoryId:", categoryId);
-
   if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
-    console.warn("[getCategoryAttributeSets] Invalid categoryId:", categoryId);
     return [];
   }
 
   const category: any = await Category.findById(categoryId)
-    .select("inheritProperty property")
+    .select("inheritProperty property parentId")
     .lean();
-  if (!category) {
-    console.warn(
-      "[getCategoryAttributeSets] Category not found for ID:",
-      categoryId,
-    );
-    return [];
-  }
 
-  console.log("[getCategoryAttributeSets] Category found:", {
-    id: category._id,
-    inheritProperty: category.inheritProperty,
-    property: category.property,
-  });
+  if (!category) return [];
 
-  if (category.inheritProperty === true) {
-    console.log(
-      "[getCategoryAttributeSets] Inheritance enabled – collecting ancestors",
-    );
-    const { mappings, propertyIds } =
-      await collectAncestorProperties(categoryId);
-    console.log(
-      "[getCategoryAttributeSets] Ancestor mappings count:",
-      mappings.length,
-    );
-    console.log(
-      "[getCategoryAttributeSets] Ancestor property IDs:",
-      propertyIds,
-    );
+  const isRoot = !category.parentId;
+  const wantsInheritance = category.inheritProperty === true && !isRoot;
+
+  if (wantsInheritance) {
+    const { mappings } = await collectAncestorProperties(categoryId);
 
     if (mappings.length === 0) {
-      console.warn(
-        "[getCategoryAttributeSets] No ancestor mappings – clearing property",
-      );
       await Category.findByIdAndUpdate(categoryId, {
         $set: { property: null },
       });
@@ -915,71 +962,41 @@ export async function getCategoryAttributeSets(
       categoryId,
       mappings,
     );
-    if (!propId) {
-      console.error(
-        "[getCategoryAttributeSets] Failed to ensure category property",
-      );
-      return [];
-    }
+    if (!propId) return [];
 
     const property: any = await CategoryProperty.findById(propId).lean();
-    if (!property) {
-      console.error(
-        "[getCategoryAttributeSets] Property not found after ensure:",
-        propId,
-      );
-      return [];
-    }
+    if (!property) return [];
 
-    console.log(
-      "[getCategoryAttributeSets] Final property mappings:",
-      JSON.stringify(property.mappings, null, 2),
-    );
-    return buildAttributeSetsFromMappings(property.mappings);
-  } else {
-    console.log(
-      "[getCategoryAttributeSets] Inheritance disabled – using own property",
-    );
-    if (!category.property) {
-      console.warn(
-        "[getCategoryAttributeSets] No property linked and inheritance disabled",
-      );
-      return [];
-    }
-    const property: any = await CategoryProperty.findById(
-      category.property,
-    ).lean();
-    if (!property) {
-      console.error(
-        "[getCategoryAttributeSets] Category property not found:",
-        category.property,
-      );
-      return [];
-    }
-    console.log(
-      "[getCategoryAttributeSets] Direct property mappings:",
-      JSON.stringify(property.mappings, null, 2),
-    );
     return buildAttributeSetsFromMappings(property.mappings);
   }
+
+  // ---- Own property only ----------------------------------------------
+  if (!category.property) return [];
+
+  const property: any = await CategoryProperty.findById(
+    category.property,
+  ).lean();
+  if (!property) return [];
+
+  return buildAttributeSetsFromMappings(property.mappings);
 }
 
 export async function getAllAttributeSets() {
   await connection();
   const sets = await AttributeSet.find().select("_id title code").lean();
-  return sets;
+  return toPlain(sets);
 }
 
 export async function getAllAttributeGroups() {
   await connection();
   const groups = await AttributeGroup.find().select("_id name code").lean();
-  return groups;
+  return toPlain(groups);
 }
 
 export async function getAllAttributes() {
   await connection();
   const attrs = await Attribute.find().select("_id name code type").lean();
-  return attrs;
+  return toPlain(attrs);
 }
 
 export async function deleteCategoryImage(
@@ -1011,7 +1028,7 @@ export async function deleteCategoryImage(
 
     revalidatePath("/categories");
 
-    return { success: true, data: category.imageUrl };
+    return { success: true, data: toPlain(category.imageUrl) };
   } catch (error) {
     console.error("Error deleting category image:", error);
     return { success: false, error: "Failed to delete image" };

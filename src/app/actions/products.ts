@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import slugify from "slugify";
 import mongoose from "mongoose";
 import Product from "@/models/Product";
-import Brand from "@/models/Brand";
+import "@/models/Brand";
 import Category from "@/models/Category";
 import "@/models/Attribute";
 import "@/models/User";
@@ -32,6 +32,7 @@ export interface ProductListResult {
   page: number;
   pageSize: number;
   totalPages: number;
+  error?: string;
 }
 interface ProductResponse {
   success: boolean;
@@ -414,6 +415,10 @@ export async function findProductById(id: string): Promise<any> {
   }
 }
 
+// ==================================================================
+// FIND PRODUCTS
+// ==================================================================
+
 export async function findProducts(
   params: ProductListParams = {},
 ): Promise<ProductListResult> {
@@ -422,68 +427,94 @@ export async function findProducts(
   const page = Math.max(1, Number(params.page) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(params.pageSize) || 10));
   const skip = (page - 1) * pageSize;
-  const sortField = params.sort ?? "createdAt";
-  const sortDir = params.sortDir === "asc" ? 1 : -1;
 
-  const match: Record<string, any> = {};
+  const sortField: string = params.sort ?? "createdAt";
+  const sortDir: 1 | -1 = params.sortDir === "asc" ? 1 : -1;
 
-  if (params.status) match.status = params.status;
+  // ---- Filter ------------------------------------------------------
+  const filter: Record<string, any> = {};
+
+  if (params.status) filter.status = params.status;
+
   if (params.categoryId && mongoose.Types.ObjectId.isValid(params.categoryId)) {
-    match.categoryId = new mongoose.Types.ObjectId(params.categoryId);
+    filter.categoryId = new mongoose.Types.ObjectId(params.categoryId);
   }
 
   const q = (params.q ?? "").trim();
   if (q) {
-    const rx = new RegExp(escapeRegex(q), "i");
-    match.$or = [
-      { name: rx },
-      { sku: rx },
-      { tags: rx },
-      { shortDescription: rx },
-    ];
+    // $text uses ProductTextIndex. Never fall back to a regex here —
+    // that's what forced the COLLSCAN in the old code.
+    filter.$text = { $search: q };
   }
 
-  try {
-    const pipeline: any[] = [];
-    if (Object.keys(match).length > 0) pipeline.push({ $match: match });
+  const sort: Record<string, any> = { [sortField]: sortDir };
 
-    pipeline.push({
-      $facet: {
-        rows: [
-          { $sort: { [sortField]: sortDir } },
-          { $skip: skip },
-          { $limit: pageSize },
-          {
-            $lookup: {
-              from: "categories",
-              localField: "categoryId",
-              foreignField: "_id",
-              as: "category",
-            },
-          },
-          {
-            $lookup: {
-              from: "brands",
-              localField: "brand",
-              foreignField: "_id",
-              as: "brandDoc",
-            },
-          },
-          {
-            $addFields: {
-              categoryId: { $arrayElemAt: ["$category", 0] },
-              brand: { $arrayElemAt: ["$brandDoc", 0] },
-            },
-          },
-          { $project: { category: 0, brandDoc: 0 } },
-        ],
-        total: [{ $count: "count" }],
+  // ---- Aggregation pipeline ---------------------------------------
+  const pipeline: any[] = [
+    { $match: filter },
+    { $sort: sort },
+    { $skip: skip },
+    { $limit: pageSize },
+
+    // categoryId → { _id, name } | null
+    {
+      $lookup: {
+        from: "categories",
+        localField: "categoryId",
+        foreignField: "_id",
+        as: "_cat",
       },
-    });
+    },
+    { $unwind: { path: "$_cat", preserveNullAndEmptyArrays: true } },
 
-    const [facet] = await Product.aggregate(pipeline);
-    const rows: any[] = facet?.rows ?? [];
-    const total: number = facet?.total?.[0]?.count ?? 0;
+    // brand → { _id, name } | null  (safe against corrupt refs)
+    {
+      $lookup: {
+        from: "brands",
+        localField: "brand",
+        foreignField: "_id",
+        as: "_brand",
+      },
+    },
+    { $unwind: { path: "$_brand", preserveNullAndEmptyArrays: true } },
+
+    {
+      $project: {
+        _id: 1,
+        name: 1,
+        sku: 1,
+        slug: 1,
+        images: 1,
+        tags: 1,
+        status: 1,
+        quantity: 1,
+        lowStockThreshold: 1,
+        listPrice: 1,
+        price: 1,
+        createdAt: 1,
+        categoryId: {
+          $cond: [
+            { $ifNull: ["$_cat._id", false] },
+            { _id: "$_cat._id", name: "$_cat.name" },
+            null,
+          ],
+        },
+        brand: {
+          $cond: [
+            { $ifNull: ["$_brand._id", false] },
+            { _id: "$_brand._id", name: "$_brand.name" },
+            null,
+          ],
+        },
+      },
+    },
+  ];
+
+  try {
+    const [rows, total] = await Promise.all([
+      Product.aggregate(pipeline).exec(),
+      Product.countDocuments(filter),
+    ]);
 
     return {
       products: rows.map(serialize),
@@ -494,7 +525,12 @@ export async function findProducts(
     };
   } catch (error) {
     console.error("Error finding products:", error);
-    return { ...LIST_UNAUTHORIZED, page, pageSize };
+    return {
+      ...LIST_UNAUTHORIZED,
+      page,
+      pageSize,
+      error: "Failed to load products",
+    };
   }
 }
 
@@ -529,18 +565,7 @@ export async function getProductFilterCategories(): Promise<
 // ==================================================================
 // CREATE — deletes the recreate source FIRST, then saves
 // ==================================================================
-/**
- * Creates a new product.
- *
- * If `formData[RECREATE_SOURCE_FIELD]` is present, this is a finalized
- * recreate. The source product is deleted **before** the new product
- * is saved, so unique indexes (slug, sku, …) are freed for the insert.
- *
- * Wrapped in a MongoDB transaction when the deployment supports it
- * (replica set / mongos). On standalone MongoDB the transaction call
- * is caught and the operations run sequentially — the delete still
- * happens first so duplicate-key errors can't occur.
- */
+
 export async function createProduct(formData: any): Promise<ProductResponse> {
   try {
     await connection();
@@ -742,6 +767,50 @@ export async function updateProductCategory(
     return {
       success: false,
       error: error.message || "Failed to update category",
+    };
+  }
+}
+
+// ==================================================================
+// LIGHTWEIGHT STATUS-ONLY UPDATE
+// ==================================================================
+export async function updateProductStatus(
+  productId: string,
+  status: "active" | "inactive" | "draft",
+): Promise<ProductResponse> {
+  try {
+    await connection();
+    if (!productId) return { success: false, error: "Product ID required" };
+
+    const pid = toObjectId(productId);
+    if (!pid) return { success: false, error: "Invalid product ID" };
+
+    const normalized = String(status ?? "")
+      .trim()
+      .toLowerCase();
+    if (
+      normalized !== "active" &&
+      normalized !== "inactive" &&
+      normalized !== "draft"
+    ) {
+      return { success: false, error: "Invalid status" };
+    }
+
+    const product = await Product.findByIdAndUpdate(
+      pid,
+      { $set: { status: normalized, updatedAt: new Date() } },
+      { new: true },
+    );
+    if (!product) return { success: false, error: "Product not found" };
+
+    revalidatePath("/catalog/products");
+    revalidatePath(`/catalog/products/edit/${productId}`);
+    return { success: true, data: serialize(product) };
+  } catch (error: any) {
+    console.error("Error updating product status:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to update status",
     };
   }
 }

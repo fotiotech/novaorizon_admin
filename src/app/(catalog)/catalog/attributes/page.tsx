@@ -105,6 +105,64 @@ const PORTAL_PROPS = {
   menuShouldScrollIntoView: false,
 } as const;
 
+// ------------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------------
+function formatOptions(option: any): string {
+  if (!option) return "—";
+  if (Array.isArray(option)) {
+    if (option.length === 0) return "—";
+    if (typeof option[0] === "object" && option[0] !== null) {
+      return option
+        .map(
+          (item) =>
+            item.name || item.value || item.label || JSON.stringify(item),
+        )
+        .join(", ");
+    }
+    return option.join(", ");
+  }
+  if (typeof option === "string") {
+    if (option.includes(",")) {
+      return option
+        .split(",")
+        .map((s) => s.trim())
+        .join(", ");
+    }
+    return option;
+  }
+  return String(option);
+}
+
+// ------------------------------------------------------------------
+// Shared empty state — used by both the desktop table and mobile list
+// ------------------------------------------------------------------
+const EmptyState = React.memo(function EmptyState({
+  isFiltering,
+}: {
+  isFiltering: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        {isFiltering ? (
+          <SearchOff className="text-muted-foreground" />
+        ) : (
+          <Tune className="text-muted-foreground" />
+        )}
+      </div>
+      <p className="text-sm font-medium text-foreground">
+        {isFiltering ? "No attributes match your search" : "No attributes yet"}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {isFiltering
+          ? "Try adjusting or clearing your filter."
+          : "Create your first attribute to get started."}
+      </p>
+    </div>
+  );
+});
+
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
   const [editingAttributeId, setEditingAttributeId] = useState<string | null>(
@@ -207,32 +265,6 @@ const Attributes = () => {
     return sorted;
   }, [attributes, filterText, sortAttrOrder]);
 
-  const formatOptions = (option: any): string => {
-    if (!option) return "—";
-    if (Array.isArray(option)) {
-      if (option.length === 0) return "—";
-      if (typeof option[0] === "object" && option[0] !== null) {
-        return option
-          .map(
-            (item) =>
-              item.name || item.value || item.label || JSON.stringify(item),
-          )
-          .join(", ");
-      }
-      return option.join(", ");
-    }
-    if (typeof option === "string") {
-      if (option.includes(",")) {
-        return option
-          .split(",")
-          .map((s) => s.trim())
-          .join(", ");
-      }
-      return option;
-    }
-    return String(option);
-  };
-
   const hasActiveFilters =
     filterText.trim() !== "" || sortAttrOrder.value !== "asc";
 
@@ -264,7 +296,7 @@ const Attributes = () => {
   // ---------------- Early exits ----------------
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="w-full max-w-6xl overflow-x-clip py-6">
         <div className="mb-6 flex items-center justify-between">
           <div className="h-8 w-40 animate-pulse rounded bg-muted" />
           <div className="h-10 w-32 animate-pulse rounded bg-muted" />
@@ -318,11 +350,13 @@ const Attributes = () => {
     />
   );
 
+  const isFiltering = filterText.trim() !== "";
+
   return (
-    <div className="mx-auto max-w-6xl py-8">
+    <div className="w-full max-w-6xl overflow-x-clip py-6">
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Attributes
           </h1>
@@ -392,8 +426,8 @@ const Attributes = () => {
       <div className="hidden sm:block">
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-            <div className="lg:col-span-6">{filterInputEl}</div>
-            <div className="lg:col-span-3">{sortSelectEl}</div>
+            <div className="min-w-0 lg:col-span-6">{filterInputEl}</div>
+            <div className="min-w-0 lg:col-span-3">{sortSelectEl}</div>
           </div>
           {hasActiveFilters && (
             <div className="mt-3 flex justify-end border-t border-border pt-3">
@@ -450,8 +484,8 @@ const Attributes = () => {
         </div>
       </BottomSheet>
 
-      {/* Table */}
-      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+      {/* Card */}
+      <div className="mt-6 min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
         {/* Card header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
@@ -466,100 +500,154 @@ const Attributes = () => {
           </div>
         </div>
 
-        {/* Table body */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Name
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Code
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Unit family
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Type
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Sort order
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Options
-                </th>
-                <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {visibleAttributes.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-16">
-                    <div className="flex flex-col items-center justify-center text-center">
-                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                        {filterText.trim() ? (
-                          <SearchOff className="text-muted-foreground" />
-                        ) : (
-                          <Tune className="text-muted-foreground" />
+        {/* ----------------------- DESKTOP TABLE ----------------------- */}
+        <div className="hidden md:block">
+          <div className="w-full min-w-0 overflow-x-auto">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "8%" }} />
+                <col style={{ width: "26%" }} />
+                <col style={{ width: "6%" }} />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Name
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Code
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Unit family
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Type
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Sort order
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Options
+                  </th>
+                  <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {visibleAttributes.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>
+                      <EmptyState isFiltering={isFiltering} />
+                    </td>
+                  </tr>
+                ) : (
+                  visibleAttributes.map((attr) => (
+                    <tr
+                      key={attr._id}
+                      className="group transition-colors hover:bg-muted/40"
+                    >
+                      <td className="px-5 py-4">
+                        <div className="truncate text-sm font-medium text-foreground">
+                          {attr.name}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate font-mono text-xs text-muted-foreground">
+                          {attr.code}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate text-sm text-muted-foreground">
+                          {attr.unitFamily?.name || "—"}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate">
+                          <span className="inline-flex max-w-full items-center truncate rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium capitalize text-muted-foreground">
+                            {attr.type}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate text-sm text-muted-foreground">
+                          {attr.sort_order}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div
+                          className="truncate text-sm text-muted-foreground"
+                          title={formatOptions(attr.option)}
+                        >
+                          {formatOptions(attr.option)}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex justify-end">
+                          <PopoverMenu
+                            items={getMenuItems(attr)}
+                            ariaLabel={`Actions for ${attr.name}`}
+                            trigger={<MoreVert fontSize="small" />}
+                            align="right"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ------------------------ MOBILE CARDS ----------------------- */}
+        <div className="md:hidden">
+          {visibleAttributes.length === 0 ? (
+            <EmptyState isFiltering={isFiltering} />
+          ) : (
+            <ul className="divide-y divide-border">
+              {visibleAttributes.map((attr) => {
+                const optionsPreview = formatOptions(attr.option);
+                return (
+                  <li key={attr._id} className="p-4">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-sm font-medium text-foreground">
+                          {attr.name}
+                        </h3>
+                        <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                          {attr.code}
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium capitalize text-muted-foreground">
+                            {attr.type}
+                          </span>
+                          {attr.unitFamily?.name && (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              {attr.unitFamily.name}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            Sort #{attr.sort_order}
+                          </span>
+                        </div>
+
+                        {optionsPreview !== "—" && (
+                          <p className="mt-2 truncate text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground/70">
+                              Options:
+                            </span>{" "}
+                            {optionsPreview}
+                          </p>
                         )}
                       </div>
-                      <p className="text-sm font-medium text-foreground">
-                        {filterText.trim()
-                          ? "No attributes match your search"
-                          : "No attributes yet"}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {filterText.trim()
-                          ? "Try adjusting or clearing your filter."
-                          : "Create your first attribute to get started."}
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                visibleAttributes.map((attr) => (
-                  <tr
-                    key={attr._id}
-                    className="group transition-colors hover:bg-muted/40"
-                  >
-                    <td className="px-5 py-4">
-                      <div className="max-w-[180px] truncate text-sm font-medium text-foreground">
-                        {attr.name}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="max-w-[180px] truncate font-mono text-xs text-muted-foreground">
-                        {attr.code}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="text-sm text-muted-foreground">
-                        {attr.unitFamily?.name || "—"}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium capitalize text-muted-foreground">
-                        {attr.type}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="text-sm text-muted-foreground">
-                        {attr.sort_order}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div
-                        className="max-w-[220px] truncate text-sm text-muted-foreground"
-                        title={formatOptions(attr.option)}
-                      >
-                        {formatOptions(attr.option)}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex justify-end">
+
+                      <div className="flex-none">
                         <PopoverMenu
                           items={getMenuItems(attr)}
                           ariaLabel={`Actions for ${attr.name}`}
@@ -567,12 +655,12 @@ const Attributes = () => {
                           align="right"
                         />
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </div>
 

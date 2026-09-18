@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -9,6 +9,7 @@ import {
   recreateProduct,
   getProductFilterCategories,
   updateProductCategory,
+  updateProductStatus,
 } from "@/app/actions/products";
 import { getCategories } from "@/app/actions/category";
 import { getProductDraft, deleteProductDraft } from "@/app/actions/drafts";
@@ -28,6 +29,7 @@ import {
   Add,
   SearchOff,
   Inventory2,
+  ToggleOn,
 } from "@mui/icons-material";
 import { useDebouncedCallback } from "use-debounce";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
@@ -48,7 +50,7 @@ interface Product {
   price: number;
   images: string[];
   tags: string[];
-  status: "draft" | "active" | "inactive";
+  status: "draft" | "active" | "inactive" | string | { value?: string } | null;
   createdAt: string;
 }
 
@@ -72,6 +74,134 @@ const ITEMS_PER_PAGE = 10;
 
 const inputClass =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+
+/* ------------------------------------------------------------------ */
+/* Module-scope helpers                                                */
+/* ------------------------------------------------------------------ */
+const stockStyles: Record<string, string> = {
+  "in stock":
+    "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+  "low stock":
+    "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
+  "out of stock":
+    "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+};
+
+const statusStyles: Record<string, string> = {
+  active:
+    "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+  inactive:
+    "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
+  draft:
+    "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
+};
+
+function getStockBadge(product: Product) {
+  const qty = product.quantity || 0;
+  const threshold = product.lowStockThreshold || 5;
+  if (qty === 0) return { label: "Out of stock", key: "out of stock" };
+  if (qty <= threshold) return { label: "Low stock", key: "low stock" };
+  return { label: "In stock", key: "in stock" };
+}
+
+const StockBadge = memo(function StockBadge({ product }: { product: Product }) {
+  const { label, key } = getStockBadge(product);
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${stockStyles[key]}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {label}
+    </span>
+  );
+});
+
+const StatusBadge = memo(function StatusBadge({
+  status,
+}: {
+  status: Product["status"];
+}) {
+  // `status` can occasionally arrive as a non-string (BSON wrapper,
+  // array from a bad write, `{ value: "active" }`, etc). Coerce
+  // defensively so a single corrupt row can't crash the list.
+  const raw =
+    typeof status === "string"
+      ? status
+      : status == null
+        ? ""
+        : typeof status === "object" && "value" in (status as any)
+          ? String((status as any).value ?? "")
+          : Array.isArray(status)
+            ? String(status[0] ?? "")
+            : String(status);
+
+  const key = (raw || "draft").trim().toLowerCase();
+  const label = key.charAt(0).toUpperCase() + key.slice(1);
+  const cls = statusStyles[key] ?? statusStyles.draft;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${cls}`}
+    >
+      {label}
+    </span>
+  );
+});
+
+function getCategoryName(cat: Product["categoryId"]): string {
+  if (!cat) return "Uncategorized";
+  if (typeof cat === "string") return cat;
+  return cat.name || "Uncategorized";
+}
+
+/* Shared empty-state block — used in both the desktop table and the
+   mobile card list. Kept at module scope so it can't be re-created. */
+const EmptyState = memo(function EmptyState({
+  hasActiveFilters,
+  onClearFilters,
+}: {
+  hasActiveFilters: boolean;
+  onClearFilters: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        {hasActiveFilters ? (
+          <SearchOff className="text-muted-foreground" />
+        ) : (
+          <Inventory2 className="text-muted-foreground" />
+        )}
+      </div>
+      <p className="text-sm font-medium text-foreground">
+        {hasActiveFilters
+          ? "No products match your filters"
+          : "No products yet"}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {hasActiveFilters
+          ? "Try adjusting or clearing your filters."
+          : "Add your first product to get started."}
+      </p>
+      <div className="mt-4">
+        {hasActiveFilters ? (
+          <button
+            onClick={onClearFilters}
+            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+          >
+            Clear filters
+          </button>
+        ) : (
+          <Link
+            href="/catalog/products/new"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            <Add fontSize="small" />
+            New product
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+});
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -107,7 +237,15 @@ export default function ProductsPage() {
   const [newCategoryId, setNewCategoryId] = useState("");
   const [isSavingCategory, setIsSavingCategory] = useState(false);
 
+  const [statusTarget, setStatusTarget] = useState<Product | null>(null);
+  const [newStatus, setNewStatus] = useState<"active" | "inactive">("active");
+  const [isSavingStatus, setIsSavingStatus] = useState(false);
+
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+
+  // Prevent stale responses (from a superseded page/filter change) from
+  // clobbering newer results.
+  const requestIdRef = useRef(0);
 
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
 
@@ -156,6 +294,7 @@ export default function ProductsPage() {
   }, []);
 
   const fetchProducts = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -168,23 +307,35 @@ export default function ProductsPage() {
         sort: "createdAt",
         sortDir: "desc",
       });
-      setProducts(res.products as Product[]);
-      setTotal(res.total);
+
+      // A newer request has been issued — drop this stale response.
+      if (requestId !== requestIdRef.current) return;
+
+      if (res.error) {
+        setError(res.error);
+        setProducts([]);
+        setTotal(0);
+        return;
+      }
+
+      setProducts((res.products as Product[]) ?? []);
+      setTotal(res.total ?? 0);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Error fetching products:", err);
       setError("Failed to load products.");
+      setProducts([]);
+      setTotal(0);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [filters, page]);
 
   useEffect(() => {
     void fetchProducts();
   }, [fetchProducts]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [filters]);
 
   /* ------------------------------------------------------------------ */
   /* Draft banner                                                        */
@@ -313,10 +464,46 @@ export default function ProductsPage() {
   };
 
   /* ------------------------------------------------------------------ */
+  /* Edit Status                                                         */
+  /* ------------------------------------------------------------------ */
+  const openStatusEditor = (product: Product) => {
+    setStatusTarget(product);
+    setNewStatus(product.status === "inactive" ? "inactive" : "active");
+  };
+
+  const confirmStatusChange = async () => {
+    if (!statusTarget) return;
+    setIsSavingStatus(true);
+    const toastId = toast.loading("Updating status...");
+    try {
+      const result = await updateProductStatus(statusTarget._id, newStatus);
+      if (result.success) {
+        toast.success(`Status set to ${newStatus}`, { id: toastId });
+        await fetchProducts();
+        setStatusTarget(null);
+      } else {
+        toast.error(result.error || "Failed to update status", {
+          id: toastId,
+        });
+      }
+    } catch (err: any) {
+      console.error("Status update error:", err);
+      toast.error(err?.message || "An error occurred", { id: toastId });
+    } finally {
+      setIsSavingStatus(false);
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
   /* Filters                                                             */
   /* ------------------------------------------------------------------ */
+  const applyFilters = useCallback((patch: Partial<FilterOptions>) => {
+    setPage(1);
+    setFilters((prev) => ({ ...prev, ...patch }));
+  }, []);
+
   const debouncedSearch = useDebouncedCallback((value: string) => {
-    setFilters((prev) => ({ ...prev, search: value }));
+    applyFilters({ search: value });
   }, 400);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -326,14 +513,14 @@ export default function ProductsPage() {
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFilters((prev) => ({ ...prev, [name]: value }));
+    applyFilters({ [name]: value } as Partial<FilterOptions>);
   };
 
   const handleClearFilters = () => {
     setSearchInput("");
     debouncedSearch.cancel();
-    setFilters({ search: "", categoryId: "", status: "" });
     setPage(1);
+    setFilters({ search: "", categoryId: "", status: "" });
   };
 
   const goToPage = (p: number) => {
@@ -348,45 +535,45 @@ export default function ProductsPage() {
     (filters.categoryId ? 1 : 0) +
     (filters.status ? 1 : 0);
 
-  const getCategoryName = (cat: Product["categoryId"]): string => {
-    if (!cat) return "Uncategorized";
-    if (typeof cat === "string") return cat;
-    return cat.name || "Uncategorized";
-  };
-
-  /* Refined stock pill — subtle bg, ring, colored dot */
-  const stockStyles: Record<string, string> = {
-    "in stock":
-      "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
-    "low stock":
-      "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
-    "out of stock":
-      "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
-  };
-
-  const getStockBadge = (product: Product) => {
-    const qty = product.quantity || 0;
-    const threshold = product.lowStockThreshold || 5;
-    if (qty === 0) return { label: "Out of stock", key: "out of stock" };
-    if (qty <= threshold) return { label: "Low stock", key: "low stock" };
-    return { label: "In stock", key: "in stock" };
-  };
-
-  const StockBadge = ({ product }: { product: Product }) => {
-    const { label, key } = getStockBadge(product);
-    const cls = stockStyles[key];
-    return (
-      <span
-        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${cls}`}
-      >
-        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
-        {label}
-      </span>
-    );
-  };
+  const buildActionItems = (product: Product) => [
+    {
+      key: "edit",
+      label: "Edit product",
+      icon: <Edit fontSize="small" />,
+      href: `/catalog/products/edit/${product._id}`,
+    },
+    {
+      key: "recreate",
+      label: "Recreate as draft",
+      icon: <Autorenew fontSize="small" />,
+      onClick: () => setRecreateTarget(product),
+    },
+    {
+      key: "category",
+      label: "Edit category",
+      icon: <CategoryIcon fontSize="small" />,
+      onClick: () => openCategoryEditor(product),
+    },
+    {
+      key: "status",
+      label: "Change status",
+      icon: <ToggleOn fontSize="small" />,
+      onClick: () => openStatusEditor(product),
+    },
+    {
+      key: "delete",
+      label: "Delete",
+      icon: <Delete fontSize="small" />,
+      danger: true,
+      onClick: () => {
+        setDeleteTarget(product);
+        setIsDeleteOpen(true);
+      },
+    },
+  ];
 
   /* ------------------------------------------------------------------ */
-  /* Filter inputs — shared by desktop bar and mobile sheet              */
+  /* Filter inputs                                                       */
   /* ------------------------------------------------------------------ */
   const searchInputEl = (
     <div className="relative w-full">
@@ -434,9 +621,12 @@ export default function ProductsPage() {
     </select>
   );
 
-  if (loading && products.length === 0) {
+  // Only show the full-page skeleton on a truly empty first load.
+  const showSkeleton = loading && products.length === 0 && !error;
+
+  if (showSkeleton) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="w-full max-w-7xl overflow-x-clip py-6">
         <div className="mb-6 flex items-center justify-between">
           <div className="h-8 w-48 animate-pulse rounded bg-muted" />
           <div className="h-10 w-32 animate-pulse rounded bg-muted" />
@@ -480,10 +670,10 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className=" max-w-7xl py-8 ">
+    <div className="w-full max-w-7xl overflow-x-clip py-6">
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Products
           </h1>
@@ -563,9 +753,9 @@ export default function ProductsPage() {
       <div className="hidden md:block">
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-            <div className="lg:col-span-6">{searchInputEl}</div>
-            <div className="lg:col-span-3">{categorySelectEl}</div>
-            <div className="lg:col-span-3">{statusSelectEl}</div>
+            <div className="min-w-0 lg:col-span-6">{searchInputEl}</div>
+            <div className="min-w-0 lg:col-span-3">{categorySelectEl}</div>
+            <div className="min-w-0 lg:col-span-3">{statusSelectEl}</div>
           </div>
           {hasActiveFilters && (
             <div className="mt-3 flex justify-end border-t border-border pt-3">
@@ -628,7 +818,7 @@ export default function ProductsPage() {
       </BottomSheet>
 
       {/* Card */}
-      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+      <div className="mt-6 min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
         {/* Card header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
@@ -649,168 +839,215 @@ export default function ProductsPage() {
           )}
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Product
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  SKU
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Price
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Stock
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Category
-                </th>
-                <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {products.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-16">
-                    <div className="flex flex-col items-center justify-center text-center">
-                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                        {hasActiveFilters ? (
-                          <SearchOff className="text-muted-foreground" />
-                        ) : (
-                          <Inventory2 className="text-muted-foreground" />
-                        )}
-                      </div>
-                      <p className="text-sm font-medium text-foreground">
-                        {hasActiveFilters
-                          ? "No products match your filters"
-                          : "No products yet"}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {hasActiveFilters
-                          ? "Try adjusting or clearing your filters."
-                          : "Add your first product to get started."}
-                      </p>
-                      <div className="mt-4">
-                        {hasActiveFilters ? (
-                          <button
-                            onClick={handleClearFilters}
-                            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
-                          >
-                            Clear filters
-                          </button>
-                        ) : (
-                          <Link
-                            href="/catalog/products/new"
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
-                          >
-                            <Add fontSize="small" />
-                            New product
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  </td>
+        {/* ----------------------- DESKTOP TABLE ----------------------- */}
+        <div className="hidden md:block">
+          <div className="w-full min-w-0 overflow-x-auto">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col style={{ width: "36%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "6%" }} />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Product
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    SKU
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Price
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Stock
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Category
+                  </th>
+                  <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
-              ) : (
-                products.map((product) => (
-                  <tr
-                    key={product._id}
-                    className="group transition-colors hover:bg-muted/40"
-                  >
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-lg bg-muted">
-                          {product.images?.[0] ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={product.images[0]}
-                              alt={product.name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <Inventory2
-                              fontSize="small"
-                              className="text-muted-foreground"
-                            />
-                          )}
+              </thead>
+              <tbody className="divide-y divide-border">
+                {products.length === 0 ? (
+                  <tr>
+                    <td colSpan={6}>
+                      {loading ? (
+                        <div className="flex items-center justify-center px-5 py-16">
+                          <span className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
                         </div>
-                        <div className="min-w-0">
-                          <Link
-                            href={`/catalog/products/edit/${product._id}`}
-                            className="block truncate text-sm font-medium text-foreground transition hover:text-primary"
-                          >
-                            {product.name || "Untitled"}
-                          </Link>
-                          {product.tags?.length > 0 && (
-                            <p className="truncate text-xs text-muted-foreground">
-                              {product.tags.slice(0, 3).join(" · ")}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4 font-mono text-xs text-muted-foreground">
-                      {product.sku || "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4 font-medium text-foreground">
-                      CFA {(product.listPrice || product.price || 0).toFixed(2)}
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4">
-                      <StockBadge product={product} />
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4">
-                      <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                        {getCategoryName(product.categoryId)}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4 text-right">
-                      <div className="flex justify-end">
-                        <PopoverMenu
-                          ariaLabel={`Actions for ${product.name}`}
-                          items={[
-                            {
-                              key: "edit",
-                              label: "Edit product",
-                              icon: <Edit fontSize="small" />,
-                              href: `/catalog/products/edit/${product._id}`,
-                            },
-                            {
-                              key: "recreate",
-                              label: "Recreate as draft",
-                              icon: <Autorenew fontSize="small" />,
-                              onClick: () => setRecreateTarget(product),
-                            },
-                            {
-                              key: "category",
-                              label: "Edit category",
-                              icon: <CategoryIcon fontSize="small" />,
-                              onClick: () => openCategoryEditor(product),
-                            },
-                            {
-                              key: "delete",
-                              label: "Delete",
-                              icon: <Delete fontSize="small" />,
-                              danger: true,
-                              onClick: () => {
-                                setDeleteTarget(product);
-                                setIsDeleteOpen(true);
-                              },
-                            },
-                          ]}
+                      ) : (
+                        <EmptyState
+                          hasActiveFilters={hasActiveFilters}
+                          onClearFilters={handleClearFilters}
                         />
-                      </div>
+                      )}
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  products.map((product) => (
+                    <tr
+                      key={product._id}
+                      className="group transition-colors hover:bg-muted/40"
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-lg bg-muted">
+                            {product.images?.[0] ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={product.images[0]}
+                                alt={product.name}
+                                loading="lazy"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <Inventory2
+                                fontSize="small"
+                                className="text-muted-foreground"
+                              />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <Link
+                                href={`/catalog/products/edit/${product._id}`}
+                                className="block truncate text-sm font-medium text-foreground transition hover:text-primary"
+                              >
+                                {product.name || "Untitled"}
+                              </Link>
+                              <StatusBadge status={product.status} />
+                            </div>
+                            {product.tags?.length > 0 && (
+                              <p className="truncate text-xs text-muted-foreground">
+                                {product.tags.slice(0, 3).join(" · ")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate font-mono text-xs text-muted-foreground">
+                          {product.sku || "—"}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate font-medium text-foreground">
+                          CFA{" "}
+                          {(product.listPrice || product.price || 0).toFixed(2)}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate">
+                          <StockBadge product={product} />
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate">
+                          <span className="inline-flex max-w-full items-center truncate rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                            {getCategoryName(product.categoryId)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex justify-end">
+                          <PopoverMenu
+                            ariaLabel={`Actions for ${product.name}`}
+                            items={buildActionItems(product)}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ------------------------ MOBILE CARDS ----------------------- */}
+        <div className="md:hidden">
+          {products.length === 0 ? (
+            loading ? (
+              <div className="flex items-center justify-center px-5 py-16">
+                <span className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+              </div>
+            ) : (
+              <EmptyState
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={handleClearFilters}
+              />
+            )
+          ) : (
+            <ul className="divide-y divide-border">
+              {products.map((product) => (
+                <li key={product._id} className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-lg bg-muted">
+                      {product.images?.[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={product.images[0]}
+                          alt={product.name}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Inventory2
+                          fontSize="small"
+                          className="text-muted-foreground"
+                        />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Link
+                          href={`/catalog/products/edit/${product._id}`}
+                          className="block truncate text-sm font-medium text-foreground transition hover:text-primary"
+                        >
+                          {product.name || "Untitled"}
+                        </Link>
+                        <StatusBadge status={product.status} />
+                      </div>
+                      {product.tags?.length > 0 && (
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {product.tags.slice(0, 3).join(" · ")}
+                        </p>
+                      )}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {getCategoryName(product.categoryId)}
+                        </span>
+                        <StockBadge product={product} />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span className="font-mono text-[11px] text-muted-foreground">
+                          {product.sku || "—"}
+                        </span>
+                        <span className="text-sm font-semibold text-foreground">
+                          CFA{" "}
+                          {(product.listPrice || product.price || 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex-none">
+                      <PopoverMenu
+                        ariaLabel={`Actions for ${product.name}`}
+                        items={buildActionItems(product)}
+                      />
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Pagination */}
@@ -827,7 +1064,7 @@ export default function ProductsPage() {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => goToPage(page - 1)}
-                disabled={page === 1}
+                disabled={page === 1 || loading}
                 className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Previous
@@ -838,7 +1075,7 @@ export default function ProductsPage() {
               </span>
               <button
                 onClick={() => goToPage(page + 1)}
-                disabled={page === totalPages}
+                disabled={page === totalPages || loading}
                 className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next
@@ -936,6 +1173,68 @@ export default function ProductsPage() {
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSavingCategory ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Status dialog */}
+      {statusTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          onClick={() => {
+            if (!isSavingStatus) setStatusTarget(null);
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold tracking-tight">
+              Change status
+            </h3>
+            <p className="mb-4 mt-1 text-sm text-muted-foreground">
+              Update the status for{" "}
+              <span className="font-medium text-foreground">
+                {statusTarget.name || "this product"}
+              </span>
+              .
+            </p>
+
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Status
+            </label>
+            <select
+              value={newStatus}
+              onChange={(e) =>
+                setNewStatus(e.target.value as "active" | "inactive")
+              }
+              disabled={isSavingStatus}
+              className={`${inputClass} mb-5 capitalize`}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setStatusTarget(null)}
+                disabled={isSavingStatus}
+                className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmStatusChange}
+                disabled={isSavingStatus}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSavingStatus ? "Saving…" : "Save"}
               </button>
             </div>
           </div>

@@ -142,26 +142,38 @@ const ProductSchema = new Schema<IProduct>(
 ProductSchema.index(
   {
     name: "text",
+    sku: "text", // ← added
     description: "text",
     shortDescription: "text",
     tags: "text",
   },
   {
-    weights: { name: 10, description: 5, shortDescription: 3, tags: 2 },
+    weights: {
+      name: 10,
+      sku: 8, // sku weighted high, after name
+      description: 5,
+      shortDescription: 3,
+      tags: 2,
+    },
     name: "ProductTextIndex",
   },
 );
 
-ProductSchema.index({ categoryId: 1, status: 1, price: 1 });
-ProductSchema.index({ brand: 1, status: 1 });
-ProductSchema.index({ slug: 1 }, { unique: true });
+// ---- SKU lookup (exact / prefix) -------------------------------
 ProductSchema.index({ sku: 1 });
-ProductSchema.index({ status: 1, createdAt: -1 });
 
-// 👇 Example attribute filters. Add / remove as your filter set evolves.
-ProductSchema.index({ categoryId: 1, status: 1, color: 1, price: 1 });
-ProductSchema.index({ categoryId: 1, status: 1, material: 1 });
-ProductSchema.index({ categoryId: 1, status: 1, size: 1 });
+// ---- List-view sorts -------------------------------------------
+ProductSchema.index({ createdAt: -1 }); // no filter, newest first
+ProductSchema.index({ status: 1, createdAt: -1 }); // filter by status only
+ProductSchema.index({ status: 1, categoryId: 1, createdAt: -1 }); // filter by status + category
+
+// ---- Price-sorted browsing (ONLY if the UI offers price sort) --
+ProductSchema.index({ status: 1, categoryId: 1, price: 1 });
+
+// ---- Attribute filters -----------------------------------------
+// Add these one at a time, as you actually ship each filter.
+// Example shape: { status, categoryId, <attrCode>, <sortField> }
+ProductSchema.index({ status: 1, categoryId: 1, color: 1, price: 1 });
 
 const Product =
   (mongoose.models.Product as mongoose.Model<IProduct>) ||

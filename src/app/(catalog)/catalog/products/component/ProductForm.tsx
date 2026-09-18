@@ -853,7 +853,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
       delete payload.keyFeatures;
       delete payload.specifications;
 
-      if (!payload.status) payload.status = "draft";
+      // Force the product to "active" on save so it's finalized and
+      // no longer sits in a draft/editable state.
+      payload.status = "active";
 
       delete payload._id;
       delete payload.Id;
@@ -875,7 +877,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
       if (typeof payload.status === "string") {
         payload.status = payload.status.trim().toLowerCase();
       } else if (Array.isArray(payload.status)) {
-        payload.status = (payload.status[0] || "draft")
+        payload.status = (payload.status[0] || "active")
           .toString()
           .trim()
           .toLowerCase();
@@ -984,14 +986,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
   }
 
   return (
-    <div className=" max-w-4xl py-8 ">
+    <div className=" max-w-4xl py-6 ">
       <form
         onSubmit={handleSubmit}
         className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
       >
         {/* Form header */}
-        <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4 ">
+          <div className="min-w-0 flex items-center gap-3">
             <h1 className="text-sm font-semibold text-foreground">
               {initialProductId ? "Edit product" : "New product"}
             </h1>

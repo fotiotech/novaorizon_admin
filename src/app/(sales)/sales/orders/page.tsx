@@ -15,7 +15,7 @@ import {
   SearchOff,
 } from "@mui/icons-material";
 import Link from "next/link";
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, memo } from "react";
 import { SkeletonLoader } from "./_component/SkeletonLoader";
 import SearchFilter from "../../components/SearchFilter";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
@@ -47,6 +47,106 @@ interface FilterOptions {
   paymentStatus: string;
   dateFrom: string;
   dateTo: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Module-scope styles + badges                                        */
+/* ------------------------------------------------------------------ */
+const statusStyles: Record<string, string> = {
+  completed:
+    "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+  processing:
+    "bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/20",
+  shipped:
+    "bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:ring-indigo-500/20",
+  "in transit":
+    "bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-500/20",
+  pending:
+    "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
+  cancelled:
+    "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+  return_requested:
+    "bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-400 dark:ring-orange-500/20",
+  returned:
+    "bg-slate-100 text-slate-700 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
+};
+
+const paymentStyles: Record<string, string> = {
+  paid: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+  cod_pending:
+    "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
+  pending:
+    "bg-slate-100 text-slate-700 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
+  failed:
+    "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+  cancelled:
+    "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+  refunded:
+    "bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-500/20",
+};
+
+const StatusBadge = memo(function StatusBadge({ status }: { status: string }) {
+  const key = status?.toLowerCase() ?? "pending";
+  const cls = statusStyles[key] ?? statusStyles.pending;
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${cls}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {status?.replace(/_/g, " ") || "pending"}
+    </span>
+  );
+});
+
+const PaymentBadge = memo(function PaymentBadge({
+  status,
+}: {
+  status: string;
+}) {
+  const key = status?.toLowerCase() ?? "pending";
+  const cls = paymentStyles[key] ?? paymentStyles.pending;
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${cls}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {status?.replace(/_/g, " ") || "pending"}
+    </span>
+  );
+});
+
+const EmptyState = memo(function EmptyState({
+  hasActiveFilters,
+}: {
+  hasActiveFilters: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        <SearchOff className="text-muted-foreground" />
+      </div>
+      <p className="text-sm font-medium text-foreground">No orders found</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {hasActiveFilters
+          ? "Try adjusting your filters."
+          : "Orders will appear here once customers start buying."}
+      </p>
+    </div>
+  );
+});
+
+function initials(order: any): string {
+  const a = order?.firstName?.[0] ?? "";
+  const b = order?.lastName?.[0] ?? "";
+  return `${a}${b}`.toUpperCase() || "?";
+}
+
+function formatDate(iso: string | Date): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 const AllOrderPage = () => {
@@ -219,75 +319,17 @@ const AllOrderPage = () => {
     },
   ];
 
-  // Refined status pill — subtle bg, ring, and colored dot
-  const statusStyles: Record<string, string> = {
-    completed:
-      "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
-    processing:
-      "bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/20",
-    shipped:
-      "bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:ring-indigo-500/20",
-    "in transit":
-      "bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-500/20",
-    pending:
-      "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
-    cancelled:
-      "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
-    return_requested:
-      "bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-400 dark:ring-orange-500/20",
-    returned:
-      "bg-slate-100 text-slate-700 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
-  };
-
-  const paymentStyles: Record<string, string> = {
-    paid: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
-    cod_pending:
-      "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
-    pending:
-      "bg-slate-100 text-slate-700 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
-    failed:
-      "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
-    cancelled:
-      "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
-    refunded:
-      "bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-500/20",
-  };
-
-  const StatusBadge = ({ status }: { status: string }) => {
-    const key = status?.toLowerCase() ?? "pending";
-    const cls = statusStyles[key] ?? statusStyles.pending;
-    return (
-      <span
-        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${cls}`}
-      >
-        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
-        {status?.replace(/_/g, " ") || "pending"}
-      </span>
-    );
-  };
-
-  const PaymentBadge = ({ status }: { status: string }) => {
-    const key = status?.toLowerCase() ?? "pending";
-    const cls = paymentStyles[key] ?? paymentStyles.pending;
-    return (
-      <span
-        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${cls}`}
-      >
-        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
-        {status?.replace(/_/g, " ") || "pending"}
-      </span>
-    );
-  };
-
   if (loading && orders.length === 0) {
     return <SkeletonLoader />;
   }
 
+  const hasActiveFilters = activeFilterCount > 0;
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="w-full max-w-7xl overflow-x-clip py-6">
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Orders
           </h1>
@@ -361,7 +403,7 @@ const AllOrderPage = () => {
       </BottomSheet>
 
       {/* Card */}
-      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+      <div className="mt-6 min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
         {/* Card header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
@@ -382,74 +424,145 @@ const AllOrderPage = () => {
           )}
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Order
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Customer
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Total
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Payment
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Status
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Date
-                </th>
-                <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {orders.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-16">
-                    <div className="flex flex-col items-center justify-center text-center">
-                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                        <SearchOff className="text-muted-foreground" />
-                      </div>
-                      <p className="text-sm font-medium text-foreground">
-                        No orders found
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {activeFilterCount > 0
-                          ? "Try adjusting your filters."
-                          : "Orders will appear here once customers start buying."}
-                      </p>
-                    </div>
-                  </td>
+        {/* ----------------------- DESKTOP TABLE ----------------------- */}
+        <div className="hidden md:block">
+          <div className="w-full min-w-0 overflow-x-auto">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "12%" }} />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Order
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Customer
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Total
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Payment
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Status
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Date
+                  </th>
+                  <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
-              ) : (
-                orders.map((order: any) => (
-                  <tr
-                    key={order._id}
-                    className="group transition-colors hover:bg-muted/40"
-                  >
-                    <td className="whitespace-nowrap px-5 py-4">
-                      <Link
-                        href={`/sales/orders/${order.orderNumber}`}
-                        className="font-medium text-foreground transition hover:text-primary"
-                      >
-                        #{order.orderNumber}
-                      </Link>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {orders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>
+                      <EmptyState hasActiveFilters={hasActiveFilters} />
                     </td>
-                    <td className="whitespace-nowrap px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase text-muted-foreground">
-                          {`${order.firstName?.[0] ?? ""}${order.lastName?.[0] ?? ""}` ||
-                            "?"}
+                  </tr>
+                ) : (
+                  orders.map((order: any) => (
+                    <tr
+                      key={order._id}
+                      className="group transition-colors hover:bg-muted/40"
+                    >
+                      <td className="px-5 py-4">
+                        <Link
+                          href={`/sales/orders/${order.orderNumber}`}
+                          className="block truncate font-medium text-foreground transition hover:text-primary"
+                        >
+                          #{order.orderNumber}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase text-muted-foreground">
+                            {initials(order)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {order.firstName} {order.lastName}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {order.email}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate font-medium text-foreground">
+                          CFA {order.total?.toFixed(2) || "0.00"}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate">
+                          <PaymentBadge status={order.paymentStatus} />
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate">
+                          <StatusBadge status={order.orderStatus} />
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="truncate text-muted-foreground">
+                          {formatDate(order.createdAt)}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex justify-end">
+                          <PopoverMenu
+                            items={getOrderMenuItems(order)}
+                            ariaLabel={`Actions for order ${order.orderNumber}`}
+                            trigger={<MoreVert fontSize="small" />}
+                            align="right"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ------------------------ MOBILE CARDS ----------------------- */}
+        <div className="md:hidden">
+          {orders.length === 0 ? (
+            <EmptyState hasActiveFilters={hasActiveFilters} />
+          ) : (
+            <ul className="divide-y divide-border">
+              {orders.map((order: any) => (
+                <li key={order._id} className="p-4">
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <Link
+                          href={`/sales/orders/${order.orderNumber}`}
+                          className="truncate font-medium text-foreground transition hover:text-primary"
+                        >
+                          #{order.orderNumber}
+                        </Link>
+                        <span className="shrink-0 text-sm font-semibold text-foreground">
+                          CFA {order.total?.toFixed(2) || "0.00"}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex items-center gap-3">
+                        <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase text-muted-foreground">
+                          {initials(order)}
+                        </div>
+                        <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-foreground">
                             {order.firstName} {order.lastName}
                           </p>
@@ -458,38 +571,30 @@ const AllOrderPage = () => {
                           </p>
                         </div>
                       </div>
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4 font-medium text-foreground">
-                      CFA {order.total?.toFixed(2) || "0.00"}
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4">
-                      <PaymentBadge status={order.paymentStatus} />
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4">
-                      <StatusBadge status={order.orderStatus} />
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4 text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleDateString(undefined, {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4 text-right">
-                      <div className="flex justify-end">
-                        <PopoverMenu
-                          items={getOrderMenuItems(order)}
-                          ariaLabel={`Actions for order ${order.orderNumber}`}
-                          trigger={<MoreVert fontSize="small" />}
-                          align="right"
-                        />
+
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <StatusBadge status={order.orderStatus} />
+                        <PaymentBadge status={order.paymentStatus} />
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {formatDate(order.createdAt)}
+                      </p>
+                    </div>
+
+                    <div className="flex-none">
+                      <PopoverMenu
+                        items={getOrderMenuItems(order)}
+                        ariaLabel={`Actions for order ${order.orderNumber}`}
+                        trigger={<MoreVert fontSize="small" />}
+                        align="right"
+                      />
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Pagination */}
