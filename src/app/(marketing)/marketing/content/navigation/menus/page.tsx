@@ -351,7 +351,7 @@ const MenuPage = () => {
                     <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-right">
                       <div className="flex items-center justify-end gap-3">
                         <Link
-                          href={`/marketing/content/navigation/menus/edit/${menu._id}`}
+                          href={`/marketing/content/navigation/menus/edit?id=${menu._id}`}
                           className="text-primary hover:text-primary/80"
                         >
                           Edit
