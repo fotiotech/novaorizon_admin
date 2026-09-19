@@ -9,34 +9,67 @@ import {
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 
-// Helper to get human-readable target type label
-const getTargetTypeLabel = (targetType: string) => {
-  const labels: Record<string, string> = {
-    Category: "Categories",
-    Product: "Products",
-    Brand: "Brands",
-    Collection: "Collections",
-    Promotion: "Promotions",
-    Page: "Pages",
-  };
-  return labels[targetType] || targetType;
+// ------------------------------------------------------------------
+// Labels
+// ------------------------------------------------------------------
+const TARGET_TYPE_PLURAL: Record<string, string> = {
+  Category: "Categories",
+  Product: "Products",
+  Brand: "Brands",
+  Collection: "Collections",
+  Promotion: "Promotions",
+  Page: "Pages",
 };
 
-const getCollectionTypeLabel = (type: string) => {
-  const labels: Record<string, string> = {
-    rule: "Rule-based",
-    manual: "Manual",
-    recommendation: "Recommendation",
-    related: "Related products",
-  };
-  return labels[type] || type;
+const TARGET_TYPE_SINGULAR: Record<string, string> = {
+  Category: "Category",
+  Product: "Product",
+  Brand: "Brand",
+  Collection: "Collection",
+  Promotion: "Promotion",
+  Page: "Page",
 };
 
-// Helper to get item display name
-const getItemName = (item: any) => {
-  return item.title || item.name || "Unnamed";
+const COLLECTION_TYPE_LABEL: Record<string, string> = {
+  rule: "Rule-based",
+  manual: "Manual",
+  recommendation: "Recommendation",
+  related: "Related products",
 };
 
+const getTargetTypeLabel = (targetType: string) =>
+  TARGET_TYPE_PLURAL[targetType] || targetType;
+
+const getTargetTypeSingular = (targetType: string) =>
+  TARGET_TYPE_SINGULAR[targetType] || targetType;
+
+const getCollectionTypeLabel = (type: string) =>
+  COLLECTION_TYPE_LABEL[type] || type;
+
+// ------------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------------
+const getItemName = (item: any) => item.title || item.name || "Unnamed";
+
+const formatDate = (dateString?: string) => {
+  if (!dateString) return "—";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+// Rule collections are pre-resolved at a hard cap of 50 in
+// getCollectionsWithProducts(); flag when the cap was hit so the count
+// badge is not misleading.
+const RULE_ITEM_CAP = 50;
+
+// ------------------------------------------------------------------
+// Main Component
+// ------------------------------------------------------------------
 const ProductCollectionPage = () => {
   const [collections, setCollections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,8 +85,7 @@ const ProductCollectionPage = () => {
       setLoading(true);
       const result = await getCollectionsWithProducts();
       if (result.success) {
-        const mappedCollections = result.data || [];
-        setCollections(mappedCollections);
+        setCollections(result.data || []);
       } else {
         setError(result.error || "Failed to fetch collections");
       }
@@ -73,49 +105,48 @@ const ProductCollectionPage = () => {
       return;
     }
 
+    const index = collections.findIndex((c) => c.collection._id === id);
+    if (index === -1) return;
+    const removed = collections[index];
+
     setDeleteLoading(id);
     setError(null);
 
-    try {
-      const collectionToDelete = collections.find(
-        (c) => c.collection._id === id,
-      );
-      setCollections((prev) => prev.filter((c) => c.collection._id !== id));
+    // Optimistic removal
+    setCollections((prev) => prev.filter((c) => c.collection._id !== id));
 
+    try {
       const result = await deleteCollection(id);
       if (result.success) {
         setSuccess("Collection deleted successfully");
         setTimeout(() => setSuccess(null), 3000);
       } else {
-        if (collectionToDelete) {
-          setCollections((prev) => [...prev, collectionToDelete]);
-        }
+        // Restore at original position
+        setCollections((prev) => {
+          const copy = [...prev];
+          copy.splice(index, 0, removed);
+          return copy;
+        });
         setError(result.error || "Failed to delete collection");
       }
     } catch (err) {
+      setCollections((prev) => {
+        const copy = [...prev];
+        copy.splice(index, 0, removed);
+        return copy;
+      });
       setError("An unexpected error occurred");
-      await fetchCollections();
     } finally {
       setDeleteLoading(null);
     }
   };
 
   const toggleExpandCollection = (id: string) => {
-    const newExpanded = new Set(expandedCollections);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
-    } else {
-      newExpanded.add(id);
-    }
-    setExpandedCollections(newExpanded);
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
+    setExpandedCollections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   };
 
@@ -203,141 +234,131 @@ const ProductCollectionPage = () => {
         ) : (
           <div className="divide-y divide-gray-200">
             {collections.map(
-              ({ collection, items, itemCount, requiresProductContext }) => (
-                <div key={collection._id} className="p-4 md:p-6">
-                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between flex-wrap gap-2">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {collection.name}
-                        </h3>
-                        {collection.description && (
-                          <p className="text-gray-600 mt-1 text-sm">
-                            {collection.description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            collection.status === "active"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {collection.status === "active"
-                            ? "Active"
-                            : "Inactive"}
-                        </span>
-                      </div>
-                    </div>
+              ({ collection, items, itemCount, requiresProductContext }) => {
+                const isRuleCapped =
+                  collection.type === "rule" && itemCount >= RULE_ITEM_CAP;
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {/* Collection Type Badge */}
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                        {getCollectionTypeLabel(collection.type)}
-                      </span>
-                      {/* Target Type Badge */}
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                        {getTargetTypeLabel(collection.targetType)}
-                      </span>
-                      {/* Item count */}
-                      {requiresProductContext ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                          Requires product context
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {itemCount}{" "}
-                          {itemCount === 1
-                            ? collection.targetType.toLowerCase()
-                            : getTargetTypeLabel(
-                                collection.targetType,
-                              ).toLowerCase()}
-                        </span>
-                      )}
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        Updated {formatDate(collection.updated_at)}
-                      </span>
-                    </div>
+                // Tolerate either camelCase or snake_case timestamps coming
+                // from the server.
+                const updatedAt = collection.updatedAt ?? collection.updated_at;
 
-                    {items && items.length > 0 && (
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-medium text-gray-900">
-                            {getTargetTypeLabel(collection.targetType)} in this
-                            collection
-                          </h4>
-                          <button
-                            onClick={() =>
-                              toggleExpandCollection(collection._id)
-                            }
-                            className="text-sm text-blue-600 hover:text-blue-800"
-                          >
-                            {expandedCollections.has(collection._id)
-                              ? "Show less"
-                              : "Show all"}
-                          </button>
+                const countLabel = isRuleCapped
+                  ? `${RULE_ITEM_CAP}+ ${getTargetTypeLabel(
+                      collection.targetType,
+                    ).toLowerCase()}`
+                  : `${itemCount} ${
+                      itemCount === 1
+                        ? getTargetTypeSingular(
+                            collection.targetType,
+                          ).toLowerCase()
+                        : getTargetTypeLabel(
+                            collection.targetType,
+                          ).toLowerCase()
+                    }`;
+
+                return (
+                  <div key={collection._id} className="p-4 md:p-6">
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between flex-wrap gap-2">
+                          <div className="min-w-0">
+                            <h3 className="text-lg font-semibold text-gray-900 truncate">
+                              {collection.name}
+                            </h3>
+                            {collection.description && (
+                              <p className="text-gray-600 mt-1 text-sm">
+                                {collection.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                collection.status === "active"
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-gray-100 text-gray-800"
+                              }`}
+                            >
+                              {collection.status === "active"
+                                ? "Active"
+                                : "Inactive"}
+                            </span>
+                          </div>
                         </div>
 
-                        <ul className="mt-2 space-y-1">
-                          {(expandedCollections.has(collection._id)
-                            ? items
-                            : items.slice(0, 3)
-                          ).map((item: any) => (
-                            <li
-                              key={item._id}
-                              className="text-sm text-gray-600 flex items-center"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2"></span>
-                              {getItemName(item)}
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                            {getCollectionTypeLabel(collection.type)}
+                          </span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            {getTargetTypeLabel(collection.targetType)}
+                          </span>
 
-                        {items.length > 3 &&
-                          !expandedCollections.has(collection._id) && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              + {items.length - 3} more
-                            </p>
+                          {requiresProductContext ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                              Requires product context
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {countLabel}
+                            </span>
                           )}
-                      </div>
-                    )}
-                  </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Link
-                      href={`/marketing/content/navigation/collection/edit?id=${collection._id}`}
-                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      <svg
-                        className="w-4 h-4 mr-1"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                        />
-                      </svg>
-                      Edit
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(collection._id)}
-                      disabled={deleteLoading === collection._id}
-                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-75"
-                    >
-                      {deleteLoading === collection._id ? (
-                        <>
-                          <Spinner />
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            Updated {formatDate(updatedAt)}
+                          </span>
+                        </div>
+
+                        {items && items.length > 0 && (
+                          <div className="mt-4">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium text-gray-900">
+                                {getTargetTypeLabel(collection.targetType)} in
+                                this collection
+                              </h4>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleExpandCollection(collection._id)
+                                }
+                                className="text-sm text-blue-600 hover:text-blue-800"
+                              >
+                                {expandedCollections.has(collection._id)
+                                  ? "Show less"
+                                  : "Show all"}
+                              </button>
+                            </div>
+
+                            <ul className="mt-2 space-y-1">
+                              {(expandedCollections.has(collection._id)
+                                ? items
+                                : items.slice(0, 3)
+                              ).map((item: any) => (
+                                <li
+                                  key={item._id}
+                                  className="text-sm text-gray-600 flex items-center"
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2" />
+                                  {getItemName(item)}
+                                </li>
+                              ))}
+                            </ul>
+
+                            {items.length > 3 &&
+                              !expandedCollections.has(collection._id) && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  + {items.length - 3} more
+                                </p>
+                              )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center space-x-2 flex-shrink-0">
+                        <Link
+                          href={`/marketing/content/navigation/collection/edit/${collection._id}`}
+                          className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
                           <svg
                             className="w-4 h-4 mr-1"
                             fill="none"
@@ -348,17 +369,46 @@ const ProductCollectionPage = () => {
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                             />
                           </svg>
-                          Delete
-                        </>
-                      )}
-                    </button>
+                          Edit
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(collection._id)}
+                          disabled={deleteLoading === collection._id}
+                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-75"
+                        >
+                          {deleteLoading === collection._id ? (
+                            <>
+                              <Spinner />
+                              <span className="ml-1">Deleting…</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg
+                                className="w-4 h-4 mr-1"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                              Delete
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  </div>
-                </div>
-              ),
+                );
+              },
             )}
           </div>
         )}

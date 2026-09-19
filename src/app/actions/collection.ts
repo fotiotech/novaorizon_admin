@@ -11,6 +11,8 @@ import Page from "@/models/Page";
 import { Collection } from "@/models/Collection";
 import { deleteS3Object } from "./s3";
 
+const COLLECTION_LIST_PATH = "/marketing/content/navigation/collection";
+
 // ---------- Helper: get model by targetType ----------
 function getModelForTargetType(targetType: string) {
   switch (targetType) {
@@ -74,7 +76,9 @@ function buildQueryFromRules(rules: any[], targetType: string) {
     if (!rule.attribute || !rule.operator) continue;
     const value = parseRuleValue(rule.value, rule.operator);
 
-    if (targetType === "Product" && rule.attribute === "category_id") {
+    // NOTE: The RuleEditor exposes the Product category field as `categoryId`,
+    // so we must match that name here (not `category_id`).
+    if (targetType === "Product" && rule.attribute === "categoryId") {
       if (Array.isArray(value)) {
         const objectIds = value
           .filter((v) => mongoose.Types.ObjectId.isValid(v))
@@ -119,13 +123,13 @@ export async function getCollectionsWithProducts() {
     await connection();
     const collections = await Collection.find({})
       .populate("items")
-      .sort({ order: 1, created_at: -1 })
+      .sort({ order: 1, createdAt: -1 })
       .lean();
 
     const results = [];
 
     for (const collection of collections) {
-      let matchingItems = [];
+      let matchingItems: any[] = [];
 
       if (collection.type === "rule") {
         const Model = getModelForTargetType(collection.targetType);
@@ -141,8 +145,6 @@ export async function getCollectionsWithProducts() {
         matchingItems = collection.items || [];
       } else if (collection.type === "recommendation") {
         // Recommendation collections are dynamic; we don't pre-fetch items for admin preview.
-        // You could optionally call the recommendation functions here with a default user,
-        // but it's usually unnecessary in the admin.
         matchingItems = [];
       } else if (collection.type === "related") {
         // Related collections require a product context, which the admin list does not have.
@@ -164,8 +166,8 @@ export async function getCollectionsWithProducts() {
           showName: collection.showName,
           recommendationType: collection.recommendationType,
           recommendationLimit: collection.recommendationLimit,
-          created_at: collection.created_at,
-          updated_at: collection.updated_at,
+          createdAt: (collection as any).createdAt,
+          updatedAt: (collection as any).updatedAt,
         },
         items: matchingItems,
         itemCount: matchingItems.length,
@@ -225,6 +227,15 @@ export async function createCollection(formData: FormData) {
       return { success: false, error: "Invalid target type" };
     }
 
+    // Server-side enforcement: rule-based collections only for Product/Collection.
+    if (type === "rule" && !["Product", "Collection"].includes(targetType)) {
+      return {
+        success: false,
+        error:
+          "Rule-based collections are only allowed for Products and Collections.",
+      };
+    }
+
     // Validate dynamic product collection configuration
     if (type === "recommendation") {
       if (
@@ -235,7 +246,10 @@ export async function createCollection(formData: FormData) {
         return { success: false, error: "Invalid recommendation type" };
       }
     }
-    if (["recommendation", "related"].includes(type) && recommendationLimit < 1) {
+    if (
+      ["recommendation", "related"].includes(type) &&
+      recommendationLimit < 1
+    ) {
       return {
         success: false,
         error: "Collection item limit must be at least 1",
@@ -243,8 +257,8 @@ export async function createCollection(formData: FormData) {
     }
 
     // Parse rules / items only for relevant types
-    let rules = [];
-    let items = [];
+    let rules: any[] = [];
+    let items: string[] = [];
 
     if (type === "rule") {
       try {
@@ -320,7 +334,7 @@ export async function createCollection(formData: FormData) {
     });
 
     await collection.save();
-    revalidatePath("/marketing/content/navigation/collection");
+    revalidatePath(COLLECTION_LIST_PATH);
     return {
       success: true,
       data: collection.toObject(),
@@ -375,6 +389,15 @@ export async function updateCollection(id: string, formData: FormData) {
       return { success: false, error: "Invalid target type" };
     }
 
+    // Server-side enforcement: rule-based collections only for Product/Collection.
+    if (type === "rule" && !["Product", "Collection"].includes(targetType)) {
+      return {
+        success: false,
+        error:
+          "Rule-based collections are only allowed for Products and Collections.",
+      };
+    }
+
     if (type === "recommendation") {
       if (
         !["trending", "personalized", "recentlyViewed"].includes(
@@ -384,14 +407,17 @@ export async function updateCollection(id: string, formData: FormData) {
         return { success: false, error: "Invalid recommendation type" };
       }
     }
-    if (["recommendation", "related"].includes(type) && recommendationLimit < 1) {
+    if (
+      ["recommendation", "related"].includes(type) &&
+      recommendationLimit < 1
+    ) {
       return {
         success: false,
         error: "Collection item limit must be at least 1",
       };
     }
 
-    let rules = [];
+    let rules: any[] = [];
     if (type === "rule") {
       try {
         rules = rulesJson ? JSON.parse(rulesJson) : [];
@@ -423,7 +449,7 @@ export async function updateCollection(id: string, formData: FormData) {
       }
     }
 
-    let items = [];
+    let items: string[] = [];
     if (type === "manual") {
       try {
         items = itemsJson ? JSON.parse(itemsJson) : [];
@@ -468,7 +494,7 @@ export async function updateCollection(id: string, formData: FormData) {
         type === "recommendation" || type === "related"
           ? recommendationLimit
           : undefined,
-      updated_at: new Date(),
+      updatedAt: new Date(),
     };
 
     const collection = await Collection.findByIdAndUpdate(
@@ -481,7 +507,7 @@ export async function updateCollection(id: string, formData: FormData) {
       return { success: false, error: "Collection not found" };
     }
 
-    revalidatePath("/marketing/content/navigation/collection");
+    revalidatePath(COLLECTION_LIST_PATH);
     return {
       success: true,
       data: collection,
@@ -522,7 +548,7 @@ export async function deleteCollection(id: string) {
     if (!collection) {
       return { success: false, error: "Collection not found" };
     }
-    revalidatePath("/marketing/content/navigation/collection");
+    revalidatePath(COLLECTION_LIST_PATH);
     return { success: true, message: "Collection deleted successfully" };
   } catch (error) {
     console.error("Error deleting collection:", error);
@@ -547,7 +573,8 @@ export async function deleteCollectionImage(collectionId: string) {
     await deleteS3Object(collection.imageUrl);
     collection.imageUrl = "";
     await collection.save();
-    revalidatePath("/marketing/content/navigation/collections");
+    // Consistent with the rest of the actions (singular path).
+    revalidatePath(COLLECTION_LIST_PATH);
     return { success: true };
   } catch (error) {
     console.error("Error deleting collection image:", error);
@@ -568,26 +595,28 @@ export async function fetchAvailableItems(targetType: string, search?: string) {
     }
 
     const filter: any = {};
-    // Optionally filter by status if model has status field
-    // filter.status = "active"; // uncomment if you want active only
+    const isProduct = targetType === "Product";
 
     if (search) {
-      const searchField = targetType === "Product" ? "title" : "name";
-      filter[searchField] = { $regex: search, $options: "i" };
+      // Product uses `name`; everything else also uses `name` in this codebase.
+      filter.name = { $regex: search, $options: "i" };
     }
 
     const items = await (Model as any)
       .find(filter)
-      .select(
-        targetType === "Product" ? "_id title imageUrl" : "_id name imageUrl",
-      )
+      .select(isProduct ? "_id name images" : "_id name imageUrl")
       .limit(50)
       .lean();
 
     const normalized = items.map((item: any) => ({
       _id: item._id.toString(),
-      name: targetType === "Product" ? item.title : item.name,
-      imageUrl: item.imageUrl || null,
+      name: item.name,
+      // Product stores multiple images as `images[]`; other models use `imageUrl`.
+      imageUrl: isProduct
+        ? Array.isArray(item.images) && item.images.length > 0
+          ? item.images[0]
+          : null
+        : item.imageUrl || null,
     }));
 
     return { success: true, data: normalized };

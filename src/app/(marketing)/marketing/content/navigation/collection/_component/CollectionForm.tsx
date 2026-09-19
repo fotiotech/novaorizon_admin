@@ -14,11 +14,9 @@ import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import CollectionRuleForm from "./RuleEditor";
-import { getAllCollections } from "@/app/actions/collection";
 
 const CollectionForm = ({ id }: { id?: string }) => {
   const router = useRouter();
-  const [collections, setCollections] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,25 +122,9 @@ const CollectionForm = ({ id }: { id?: string }) => {
   };
 
   useEffect(() => {
-    async function fetchCollections() {
-      try {
-        setLoading(true);
-        const result = await getAllCollections();
-        if (result.success) {
-          setCollections(result.data || []);
-        } else {
-          setError(result.error || "Failed to fetch collections");
-        }
-      } catch (err) {
-        setError("An unexpected error occurred");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchCollections();
-
     const fetchData = async () => {
       try {
+        setLoading(true);
         if (id) {
           const collectionData = await getCollectionById(id);
           if (collectionData?.success && collectionData.data) {
@@ -431,7 +413,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
               <div className="col-span-2">
                 <p className="text-sm text-gray-600 mb-2">
                   This collection will show products related to the current
-                  product (based on the product's <code>related_products</code>{" "}
+                  product (based on the product's <code>relatedProducts</code>{" "}
                   field or fallback to same category/brand).
                 </p>
               </div>
@@ -470,7 +452,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
                   isSubmitting ||
                   formData.type === "recommendation" ||
                   formData.type === "related"
-                } // Disable for recommendation and related
+                }
               >
                 <option value="Category">Category</option>
                 <option value="Product">Product</option>

@@ -7,17 +7,15 @@ import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 
 // ------------------------------------------------------------------
-// Interfaces (matches new schema)
+// Interfaces
 // ------------------------------------------------------------------
 interface Menu {
   _id: string;
   name: string;
   description?: string;
   image?: string;
-  // Content source
   collectionId?: string | { _id: string; name: string } | null;
   link?: string;
-  // Display & layout
   location?: string;
   display: string;
   position?: string;
@@ -29,15 +27,19 @@ interface Menu {
   isSticky?: boolean;
   sectionTitle?: string;
   order: number;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // ------------------------------------------------------------------
-// Helper functions
+// Helpers
 // ------------------------------------------------------------------
-const formatDate = (dateString: string) => {
+const formatDate = (dateString?: string) => {
+  if (!dateString) return "—";
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -47,7 +49,6 @@ const formatDate = (dateString: string) => {
 
 const getContentSource = (menu: Menu) => {
   if (menu.collectionId) {
-    // If collectionId is populated (from aggregation), it might be an object with name
     if (typeof menu.collectionId === "object" && menu.collectionId.name) {
       return `Collection: ${menu.collectionId.name}`;
     }
@@ -91,18 +92,37 @@ const MenuPage = () => {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this menu?")) return;
+
+    const index = menus.findIndex((m) => m._id === id);
+    if (index === -1) return;
+    const removed = menus[index];
+
     setDeleteLoading(id);
     setError(null);
+
+    // Optimistic removal
+    setMenus((prev) => prev.filter((menu) => menu._id !== id));
+
     try {
       const result = await deleteMenu(id);
       if (result.success) {
         setSuccess("Menu deleted successfully");
-        setMenus((prev) => prev.filter((menu) => menu._id !== id));
         setTimeout(() => setSuccess(null), 3000);
       } else {
+        // Restore at original position
+        setMenus((prev) => {
+          const copy = [...prev];
+          copy.splice(index, 0, removed);
+          return copy;
+        });
         setError(result.error || "Failed to delete menu");
       }
     } catch (err) {
+      setMenus((prev) => {
+        const copy = [...prev];
+        copy.splice(index, 0, removed);
+        return copy;
+      });
       setError("An unexpected error occurred");
     } finally {
       setDeleteLoading(null);
@@ -135,7 +155,7 @@ const MenuPage = () => {
         />
       )}
 
-      {/* Header with Add button */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Menus</h1>
@@ -199,48 +219,48 @@ const MenuPage = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-border table-fixed">
+            <table className="min-w-full divide-y divide-border">
               <thead className="bg-muted">
                 <tr>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/6"
+                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
                   >
                     Name
                   </th>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/6 hidden sm:table-cell"
+                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell"
                   >
                     Order
                   </th>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/5 hidden md:table-cell"
+                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell"
                   >
                     Content Source
                   </th>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/6 hidden lg:table-cell"
+                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden lg:table-cell"
                   >
                     Location
                   </th>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/6 hidden xl:table-cell"
+                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden xl:table-cell"
                   >
                     Display
                   </th>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/6 hidden md:table-cell"
+                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell"
                   >
                     Created
                   </th>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-1/6"
+                    className="px-3 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider w-32"
                   >
                     Actions
                   </th>
@@ -249,33 +269,66 @@ const MenuPage = () => {
               <tbody className="bg-card divide-y divide-border">
                 {menus.map((menu) => (
                   <tr key={menu._id}>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-foreground truncate max-w-[120px] sm:max-w-none">
-                        {menu.name}
-                      </div>
-                      {menu.sectionTitle && (
-                        <div className="text-xs text-muted-foreground truncate">
-                          Section: {menu.sectionTitle}
+                    {/* Name + thumbnail */}
+                    <td className="px-3 py-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {menu.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={menu.image}
+                            alt={menu.name}
+                            className="w-8 h-8 rounded object-cover border border-border flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded bg-muted border border-border flex items-center justify-center flex-shrink-0">
+                            <svg
+                              className="w-4 h-4 text-muted-foreground"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 6h16M4 12h16M4 18h16"
+                              />
+                            </svg>
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-foreground truncate">
+                            {menu.name}
+                          </div>
+                          {menu.sectionTitle && (
+                            <div className="text-xs text-muted-foreground truncate">
+                              Section: {menu.sectionTitle}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </td>
+
                     <td className="px-3 py-4 whitespace-nowrap hidden sm:table-cell">
                       <span className="text-sm text-foreground">
                         {menu.order}
                       </span>
                     </td>
+
                     <td className="px-3 py-4 hidden md:table-cell">
                       <div className="text-sm text-foreground truncate max-w-xs">
                         {getContentSource(menu)}
                       </div>
                     </td>
+
                     <td className="px-3 py-4 hidden lg:table-cell">
                       <span className="text-sm text-foreground">
                         {menu.location || "—"}
                       </span>
                     </td>
+
                     <td className="px-3 py-4 hidden xl:table-cell">
-                      <div className="text-sm text-muted-foreground space-y-0.5 truncate max-w-[150px]">
+                      <div className="text-sm text-muted-foreground space-y-0.5 truncate max-w-[180px]">
                         <span>{menu.display}</span>
                         {menu.position && <span> | {menu.position}</span>}
                         {menu.columns && <span> | {menu.columns} col</span>}
@@ -290,23 +343,33 @@ const MenuPage = () => {
                         )}
                       </div>
                     </td>
+
                     <td className="px-3 py-4 whitespace-nowrap text-sm text-muted-foreground hidden md:table-cell">
-                      {formatDate(menu.createdAt)}
+                      {formatDate(menu.createdAt ?? menu.created_at)}
                     </td>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
+
+                    <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-right">
+                      <div className="flex items-center justify-end gap-3">
                         <Link
-                          href={`/marketing/content/navigation/menus/edit?id=${menu._id}`}
+                          href={`/marketing/content/navigation/menus/edit/${menu._id}`}
                           className="text-primary hover:text-primary/80"
                         >
                           Edit
                         </Link>
                         <button
+                          type="button"
                           onClick={() => handleDelete(menu._id)}
                           disabled={deleteLoading === menu._id}
-                          className="text-destructive hover:text-destructive/80 disabled:opacity-50"
+                          className="inline-flex items-center gap-1 text-destructive hover:text-destructive/80 disabled:opacity-50"
                         >
-                          {deleteLoading === menu._id ? "..." : "Delete"}
+                          {deleteLoading === menu._id ? (
+                            <>
+                              <Spinner />
+                              <span>Deleting…</span>
+                            </>
+                          ) : (
+                            "Delete"
+                          )}
                         </button>
                       </div>
                     </td>

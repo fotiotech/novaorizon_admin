@@ -7,6 +7,7 @@ import {
   createMenu,
   updateMenu,
   deleteMenuBackgroundImage,
+  deleteMenuImage, // 👈 new
 } from "@/app/actions/menu";
 import { getAllCollections } from "@/app/actions/collection";
 import Spinner from "@/components/Spinner";
@@ -18,61 +19,72 @@ interface MenuFormProps {
   id?: string;
 }
 
+const emptyMenu = {
+  name: "",
+  description: "",
+  collectionId: "",
+  link: "",
+  ctaText: "",
+  ctaLink: "",
+  location: "Home" as const,
+  display: "List" as const,
+  position: "left" as const,
+  columns: 4,
+  maxDepth: 2,
+  showImages: false,
+  backgroundColor: "#ffffff",
+  backgroundImage: "",
+  image: "", // 👈 main image
+  isSticky: false,
+  sectionTitle: "",
+  order: 0,
+};
+
+const NUMERIC_FIELDS = new Set(["order", "columns", "maxDepth"]);
+
 const MenuForm = ({ id }: MenuFormProps) => {
   const router = useRouter();
 
-  // ----- State -----
   const [loading, setLoading] = useState(true);
   const [loadingCollections, setLoadingCollections] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Menu data
-  const [menu, setMenu] = useState({
-    name: "",
-    description: "",
-    collectionId: "",
-    link: "",
-    ctaText: "",
-    ctaLink: "",
-    location: "Home" as const,
-    display: "List" as const,
-    position: "left" as const,
-    columns: 4,
-    maxDepth: 2,
-    showImages: false,
-    backgroundColor: "#ffffff",
-    backgroundImage: "",
-    isSticky: false,
-    sectionTitle: "",
-    order: 0,
-  });
-
-  // Collections for dropdown
+  const [menu, setMenu] = useState({ ...emptyMenu });
   const [collections, setCollections] = useState<any[]>([]);
 
-  // Background image uploader – we pass an empty array initially, will update later.
+  // ----- Main image uploader -----
+  const imgUpload = useFileUploader(
+    id || "new-menu",
+    menu.image ? [menu.image] : [],
+    "menus/images",
+  );
+  const imgUploadKey = useMemo(() => menu.image || "none", [menu.image]);
+
+  // ----- Background image uploader -----
   const bgUpload = useFileUploader(
     id || "new-menu",
     menu.backgroundImage ? [menu.backgroundImage] : [],
     "menus/backgrounds",
   );
-
-  // Force re-render of FilesUploader when backgroundImage changes
   const bgUploadKey = useMemo(
     () => menu.backgroundImage || "none",
     [menu.backgroundImage],
   );
 
-  // Sync uploaded image with menu state
+  // Sync uploads → state
   useEffect(() => {
-    const uploadedUrl = bgUpload.files[0] || "";
-    if (uploadedUrl !== menu.backgroundImage) {
-      setMenu((prev) => ({
-        ...prev,
-        backgroundImage: uploadedUrl,
-      }));
+    const url = imgUpload.files[0] || "";
+    if (url !== menu.image) {
+      setMenu((prev) => ({ ...prev, image: url }));
+    }
+  }, [imgUpload.files, menu.image]);
+
+  useEffect(() => {
+    const url = bgUpload.files[0] || "";
+    if (url !== menu.backgroundImage) {
+      setMenu((prev) => ({ ...prev, backgroundImage: url }));
     }
   }, [bgUpload.files, menu.backgroundImage]);
 
@@ -81,15 +93,10 @@ const MenuForm = ({ id }: MenuFormProps) => {
     const fetchData = async () => {
       try {
         setLoading(true);
-
-        // Fetch collections list
         setLoadingCollections(true);
         const collRes = await getAllCollections();
-        if (collRes.success) {
-          setCollections(collRes.data || []);
-        } else {
-          setError(collRes.error || "Failed to load collections");
-        }
+        if (collRes.success) setCollections(collRes.data || []);
+        else setError(collRes.error || "Failed to load collections");
         setLoadingCollections(false);
 
         if (id) {
@@ -97,6 +104,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           if (menuRes.success && menuRes.data) {
             const data = menuRes.data;
             setMenu({
+              ...emptyMenu,
               name: data.name || "",
               description: data.description || "",
               collectionId: data.collectionId || "",
@@ -106,19 +114,18 @@ const MenuForm = ({ id }: MenuFormProps) => {
               location: data.location || "Home",
               display: data.display || "List",
               position: data.position || "left",
-              columns: data.columns || 4,
-              maxDepth: data.maxDepth || 2,
-              showImages: data.showImages || false,
+              columns: data.columns ?? 4,
+              maxDepth: data.maxDepth ?? 2,
+              showImages: data.showImages ?? false,
               backgroundColor: data.backgroundColor || "#ffffff",
               backgroundImage: data.backgroundImage || "",
-              isSticky: data.isSticky || false,
+              image: data.image || "",
+              isSticky: data.isSticky ?? false,
               sectionTitle: data.sectionTitle || "",
-              order: data.order || 0,
+              order: data.order ?? 0,
             });
-            // Update background uploader with existing image
-            if (data.backgroundImage) {
-              bgUpload.setFiles([data.backgroundImage]);
-            }
+            if (data.image) imgUpload.setFiles([data.image]);
+            if (data.backgroundImage) bgUpload.setFiles([data.backgroundImage]);
           } else {
             setError(menuRes.error || "Failed to load menu");
           }
@@ -130,7 +137,8 @@ const MenuForm = ({ id }: MenuFormProps) => {
       }
     };
     fetchData();
-  }, [id]); // Remove bgUpload from deps to avoid infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   // ----- Handlers -----
   const handleChange = (
@@ -139,11 +147,31 @@ const MenuForm = ({ id }: MenuFormProps) => {
     >,
   ) => {
     const { name, value, type } = e.target;
-    setMenu((prev) => ({
-      ...prev,
-      [name]:
-        type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
-    }));
+    const val =
+      type === "checkbox"
+        ? (e.target as HTMLInputElement).checked
+        : NUMERIC_FIELDS.has(name)
+          ? Number(value)
+          : value;
+    setMenu((prev) => ({ ...prev, [name]: val }));
+  };
+
+  const handleRemoveImage = async (index: number, fileUrl: string) => {
+    if (!id) {
+      imgUpload.setFiles([]);
+      setMenu((prev) => ({ ...prev, image: "" }));
+      return;
+    }
+    try {
+      const result = await deleteMenuImage(id);
+      if (!result.success) throw new Error(result.error || "Failed to remove");
+      imgUpload.setFiles([]);
+      setMenu((prev) => ({ ...prev, image: "" }));
+      setSuccess("Image removed");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    }
   };
 
   const handleRemoveBackground = async (index: number, fileUrl: string) => {
@@ -171,7 +199,6 @@ const MenuForm = ({ id }: MenuFormProps) => {
     setSuccess(null);
 
     try {
-      // Validation: at least one of collectionId or link must be set
       if (!menu.collectionId && !menu.link) {
         setError("Please select a collection or provide a link.");
         setSubmitting(false);
@@ -183,29 +210,10 @@ const MenuForm = ({ id }: MenuFormProps) => {
       if (result.success) {
         setSuccess(result.message || (id ? "Menu updated" : "Menu created"));
         if (!id) {
-          // Reset form after creation
-          setMenu({
-            name: "",
-            description: "",
-            collectionId: "",
-            link: "",
-            ctaText: "",
-            ctaLink: "",
-            location: "Home",
-            display: "List",
-            position: "left",
-            columns: 4,
-            maxDepth: 2,
-            showImages: false,
-            backgroundColor: "#ffffff",
-            backgroundImage: "",
-            isSticky: false,
-            sectionTitle: "",
-            order: 0,
-          });
-          bgUpload.clearFiles();
+          setMenu({ ...emptyMenu });
+          imgUpload.setFiles([]);
+          bgUpload.setFiles([]);
         }
-        // Redirect to list after brief delay
         setTimeout(() => {
           router.push("/marketing/content/navigation/menus");
           router.refresh();
@@ -337,7 +345,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           )}
         </div>
 
-        {/* Link (if no collection) */}
+        {/* Link */}
         <div>
           <label
             htmlFor="link"
@@ -377,9 +385,6 @@ const MenuForm = ({ id }: MenuFormProps) => {
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="e.g., View All"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Text for the call-to-action button (e.g., "See More").
-          </p>
         </div>
 
         {/* CTA Link */}
@@ -399,9 +404,6 @@ const MenuForm = ({ id }: MenuFormProps) => {
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="https://example.com/all"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Destination URL for the CTA button.
-          </p>
         </div>
 
         {/* Location */}
@@ -425,7 +427,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
             <option value="Home">Home</option>
             <option value="Section">Section</option>
             <option value="Footer">Footer</option>
-            <option value="product_related">Product Related</option>
+            <option value="ProductRelated">Product Related</option>
           </select>
         </div>
 
@@ -446,12 +448,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
             min={0}
             step={1}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="0"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Menus with the same location are sorted by this number in ascending
-            order.
-          </p>
         </div>
 
         {/* Display */}
@@ -499,7 +496,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           </select>
         </div>
 
-        {/* Columns (for MegaMenu) */}
+        {/* Columns */}
         <div>
           <label
             htmlFor="columns"
@@ -537,10 +534,6 @@ const MenuForm = ({ id }: MenuFormProps) => {
             max={5}
             className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            How many levels of nested items to allow (1-5). Only applicable for
-            nested collections.
-          </p>
         </div>
 
         {/* Show Images */}
@@ -552,25 +545,12 @@ const MenuForm = ({ id }: MenuFormProps) => {
             checked={menu.showImages}
             onChange={handleChange}
             className="
-              appearance-none
-              w-5 h-5
-              border-2 border-border
-              rounded
-              bg-background
-              checked:bg-primary
-              checked:border-primary
-              relative
-              after:content-['✓']
-              after:absolute
-              after:inset-0
-              after:flex
-              after:items-center
-              after:justify-center
-              after:text-white
-              after:text-sm
-              after:opacity-0
-              checked:after:opacity-100
-              focus:ring-2 focus:ring-primary
+              appearance-none w-5 h-5 border-2 border-border rounded
+              bg-background checked:bg-primary checked:border-primary
+              relative after:content-['✓'] after:absolute after:inset-0
+              after:flex after:items-center after:justify-center
+              after:text-white after:text-sm after:opacity-0
+              checked:after:opacity-100 focus:ring-2 focus:ring-primary
               transition-all
             "
           />
@@ -609,13 +589,31 @@ const MenuForm = ({ id }: MenuFormProps) => {
           </div>
         </div>
 
-        {/* Background Image Upload - with key to force re-render */}
+        {/* Main Image (new) */}
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-1">
+            Main Image
+          </label>
+          <FilesUploader
+            key={imgUploadKey}
+            files={imgUpload.files}
+            addFiles={imgUpload.addFiles}
+            onRemove={handleRemoveImage}
+            loading={imgUpload.loading}
+            progressByName={imgUpload.progressByName}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Thumbnail shown next to the menu title in some layouts.
+          </p>
+        </div>
+
+        {/* Background Image */}
         <div>
           <label className="block text-sm font-medium text-foreground mb-1">
             Background Image
           </label>
           <FilesUploader
-            key={bgUploadKey} // Force re-render when background image changes
+            key={bgUploadKey}
             files={bgUpload.files}
             addFiles={bgUpload.addFiles}
             onRemove={handleRemoveBackground}
@@ -623,8 +621,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
             progressByName={bgUpload.progressByName}
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Upload a background image. Only the first image will be used. Click
-            × to remove.
+            Upload a background image. Only the first image will be used.
           </p>
         </div>
 
@@ -637,25 +634,12 @@ const MenuForm = ({ id }: MenuFormProps) => {
             checked={menu.isSticky}
             onChange={handleChange}
             className="
-              appearance-none
-              w-5 h-5
-              border-2 border-border
-              rounded
-              bg-background
-              checked:bg-primary
-              checked:border-primary
-              relative
-              after:content-['✓']
-              after:absolute
-              after:inset-0
-              after:flex
-              after:items-center
-              after:justify-center
-              after:text-white
-              after:text-sm
-              after:opacity-0
-              checked:after:opacity-100
-              focus:ring-2 focus:ring-primary
+              appearance-none w-5 h-5 border-2 border-border rounded
+              bg-background checked:bg-primary checked:border-primary
+              relative after:content-['✓'] after:absolute after:inset-0
+              after:flex after:items-center after:justify-center
+              after:text-white after:text-sm after:opacity-0
+              checked:after:opacity-100 focus:ring-2 focus:ring-primary
               transition-all
             "
           />

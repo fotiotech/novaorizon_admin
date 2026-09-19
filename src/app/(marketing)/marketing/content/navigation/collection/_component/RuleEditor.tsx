@@ -16,6 +16,9 @@ const OPERATORS = [
 ];
 
 // ---------- Product attributes ----------
+// NOTE: values must match actual Product schema fields where possible.
+// Product uses `images: string[]` (no `mainImage`), and `categoryId` (not
+// `category_id`). Duplicate weight entry removed.
 const PRODUCT_ATTRIBUTES = [
   { label: "Category", value: "categoryId" },
   { label: "Name", value: "name" },
@@ -25,15 +28,15 @@ const PRODUCT_ATTRIBUTES = [
   { label: "Width", value: "width" },
   { label: "Height", value: "height" },
   { label: "Color", value: "color" },
-  { label: "Main Image", value: "mainImage" },
+  { label: "Images", value: "images" },
   { label: "List Price", value: "listPrice" },
+  { label: "Price", value: "price" },
   { label: "Currency", value: "currency" },
   { label: "Stock Status", value: "stockStatus" },
   { label: "Quantity", value: "quantity" },
-  { label: "Short Descriptions", value: "shortDescription" },
-  { label: "Long Descriptions", value: "description" },
+  { label: "Short Description", value: "shortDescription" },
+  { label: "Description", value: "description" },
   { label: "Primary Material", value: "primaryMaterial" },
-  { label: "Shipping Weight", value: "weight" },
   { label: "Origin Country", value: "originCountry" },
   { label: "Warranty Period", value: "warrantyPeriod" },
   { label: "Meta Title", value: "metaTitle" },
@@ -46,11 +49,10 @@ const COLLECTION_ATTRIBUTES = [
   { label: "Description", value: "description" },
   { label: "Image URL", value: "imageUrl" },
   { label: "Status", value: "status" },
-  { label: "Type", value: "type" }, // "rule" or "manual"
-  { label: "Target Type", value: "targetType" }, // "Product" or "Collection"
-  { label: "Created At", value: "created_at" },
-  { label: "Updated At", value: "updated_at" },
-  // Add any other collection fields you want to filter on
+  { label: "Type", value: "type" },
+  { label: "Target Type", value: "targetType" },
+  { label: "Created At", value: "createdAt" },
+  { label: "Updated At", value: "updatedAt" },
 ];
 
 // ---------- Interface ----------
@@ -64,16 +66,15 @@ interface Rule {
 interface CollectionRuleFormProps {
   rules: Rule[];
   onAddRule: (rules: Rule[]) => void;
-  targetType?: "Product" | "Collection"; // new prop
+  targetType?: "Product" | "Collection";
 }
 
 // ---------- Main Component ----------
 export default function CollectionRuleForm({
   rules,
   onAddRule,
-  targetType = "Product", // default to Product
+  targetType = "Product",
 }: CollectionRuleFormProps) {
-  // Choose attribute list based on targetType
   const attributeOptions =
     targetType === "Collection" ? COLLECTION_ATTRIBUTES : PRODUCT_ATTRIBUTES;
 
@@ -108,7 +109,6 @@ export default function CollectionRuleForm({
 
   const handleRemoveRule = (index: number) => {
     const updatedRules = rules.filter((_, i) => i !== index);
-    // Update positions
     updatedRules.forEach((rule, i) => (rule.position = i));
     onAddRule(updatedRules);
   };
@@ -289,8 +289,9 @@ function AttributeInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [inputValue, setInputValue] = useState("");
 
+  // Sync display text from the parent value. If the value matches a known
+  // option, show its label; otherwise show the raw typed value.
   useEffect(() => {
-    // Find the label for the current value
     const currentAttribute = options.find((opt) => opt.value === value);
     setInputValue(currentAttribute ? currentAttribute.label : value);
   }, [value, options]);
@@ -298,6 +299,16 @@ function AttributeInput({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInputValue(val);
+
+    // Propagate the raw value to the parent so the rule.attribute is updated
+    // even when the user types a custom attribute not present in `options`.
+    const syntheticEvent = {
+      target: {
+        name: "attribute",
+        value: val,
+      },
+    } as unknown as React.ChangeEvent<HTMLInputElement>;
+    onChange(syntheticEvent);
 
     if (val.length > 0) {
       const filtered = options.filter(
@@ -317,13 +328,12 @@ function AttributeInput({
     label: string;
     value: string;
   }) => {
-    // Create a synthetic event to pass to the parent's onChange handler
     const syntheticEvent = {
       target: {
         name: "attribute",
         value: suggestion.value,
       },
-    } as React.ChangeEvent<HTMLInputElement>;
+    } as unknown as React.ChangeEvent<HTMLInputElement>;
 
     onChange(syntheticEvent);
     setInputValue(suggestion.label);
