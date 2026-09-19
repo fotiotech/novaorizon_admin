@@ -23,70 +23,82 @@ const AttributeSetForm: React.FC<AttributeSetFormProps> = ({
   const [title, setTitle] = useState("");
   const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
-  const [sort_order, setSortOrder] = useState<number | null>(null);
+  const [sortOrder, setSortOrder] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    title?: string;
+    code?: string;
+  }>({});
 
   // Fetch existing attribute set data when editing
   useEffect(() => {
-    if (isEditing && attributeSetId) {
-      const fetchSet = async () => {
-        setIsFetching(true);
-        try {
-          const data: any = await getAttributeSet(attributeSetId);
-          setTitle(data.title);
-          setCode(data.code);
-          setDescription(data.description || "");
-          setSortOrder(data.sort_order || 0);
-        } catch (err: any) {
-          console.error("Failed to fetch attribute set:", err);
-          setError(err.message || "Could not load attribute set");
-        } finally {
-          setIsFetching(false);
+    if (!isEditing || !attributeSetId) return;
+    const fetchSet = async () => {
+      setIsFetching(true);
+      try {
+        const res = await getAttributeSet(attributeSetId);
+        if (res.success && res.data) {
+          const d: any = res.data;
+          setTitle(d.title ?? "");
+          setCode(d.code ?? "");
+          setDescription(d.description ?? "");
+          setSortOrder(
+            typeof d.sortOrder === "number"
+              ? d.sortOrder
+              : typeof d.sort_order === "number"
+                ? d.sort_order
+                : 0,
+          );
+        } else {
+          setError(res.error || "Could not load attribute set");
         }
-      };
-      fetchSet();
-    }
+      } catch (err: any) {
+        console.error("Failed to fetch attribute set:", err);
+        setError(err?.message || "Could not load attribute set");
+      } finally {
+        setIsFetching(false);
+      }
+    };
+    fetchSet();
   }, [attributeSetId, isEditing]);
+
+  const validate = () => {
+    const errs: { title?: string; code?: string } = {};
+    if (!title.trim()) errs.title = "Title is required";
+    if (!code.trim()) errs.code = "Code is required";
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) {
-      setError("Code is required");
-      return;
-    }
-    if (!title.trim()) {
-      setError("Title is required");
-      return;
-    }
+    setError(null);
+    if (!validate()) return;
 
     setIsLoading(true);
-    setError(null);
-
     try {
       const payload = {
         title: title.trim(),
         code: code.trim(),
         description: description.trim() || undefined,
-        sort_order: sort_order || 0,
+        sortOrder: sortOrder ?? 0,
       };
 
-      let result;
-      if (isEditing && attributeSetId) {
-        result = await updateAttributeSet(attributeSetId, payload);
-      } else {
-        result = await createAttributeSet(payload);
-      }
+      const result =
+        isEditing && attributeSetId
+          ? await updateAttributeSet(attributeSetId, payload)
+          : await createAttributeSet(payload);
 
       if (result.success) {
         onSuccess();
       } else {
-        setError("Failed to save attribute set");
+        setError(result.error || "Failed to save attribute set");
       }
     } catch (err: any) {
       console.error("Error submitting attribute set:", err);
-      setError(err.message || "An error occurred");
+      setError(err?.message || "An error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -94,99 +106,146 @@ const AttributeSetForm: React.FC<AttributeSetFormProps> = ({
 
   if (isFetching) {
     return (
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-6">
-        <div className="flex justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        </div>
+      <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
+        <span className="ml-2">Loading…</span>
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-6">
-      <h3 className="text-lg font-semibold mb-4">
-        {isEditing ? "Edit Attribute Set" : "Create Attribute Set"}
-      </h3>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-            {error}
-          </div>
-        )}
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+      {error && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-sm font-medium mb-1">Title *</label>
+          <label
+            htmlFor="set-title"
+            className="block text-sm font-medium text-foreground"
+          >
+            Title <span className="text-destructive">*</span>
+          </label>
           <input
+            id="set-title"
             type="text"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
-            placeholder="e.g., Product Dimensions"
-            required
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (fieldErrors.title)
+                setFieldErrors((p) => ({ ...p, title: undefined }));
+            }}
+            placeholder="e.g. Product Dimensions"
+            className={
+              fieldErrors.title
+                ? "border-destructive focus:border-destructive"
+                : ""
+            }
           />
+          {fieldErrors.title && (
+            <p className="text-xs text-destructive">{fieldErrors.title}</p>
+          )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Code *</label>
+          <label
+            htmlFor="set-code"
+            className="block text-sm font-medium text-foreground"
+          >
+            Code <span className="text-destructive">*</span>
+          </label>
           <input
+            id="set-code"
             type="text"
             value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
-            placeholder="e.g., product-dimensions"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Sort Order</label>
-          <input
-            type="number"
-            value={sort_order || ""}
-            onChange={(e) =>
-              setSortOrder(e.target.value ? parseInt(e.target.value) : null)
+            onChange={(e) => {
+              setCode(e.target.value);
+              if (fieldErrors.code)
+                setFieldErrors((p) => ({ ...p, code: undefined }));
+            }}
+            placeholder="e.g. product_dimensions"
+            className={
+              fieldErrors.code
+                ? "border-destructive focus:border-destructive"
+                : ""
             }
-            className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
-            placeholder="e.g., 1"
           />
+          {fieldErrors.code && (
+            <p className="text-xs text-destructive">{fieldErrors.code}</p>
+          )}
         </div>
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
-            rows={2}
-            placeholder="Optional description"
-          />
-        </div>
+      <div>
+        <label
+          htmlFor="set-sortOrder"
+          className="block text-sm font-medium text-foreground"
+        >
+          Sort order
+        </label>
+        <input
+          id="set-sortOrder"
+          type="number"
+          value={sortOrder ?? ""}
+          onChange={(e) =>
+            setSortOrder(e.target.value ? parseInt(e.target.value, 10) : null)
+          }
+          placeholder="0"
+          className="max-w-[140px]"
+        />
+        <p className="text-xs text-muted-foreground">
+          Lower numbers appear first in lists.
+        </p>
+      </div>
 
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded transition"
-            disabled={isLoading}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:bg-gray-400"
-            disabled={isLoading}
-          >
-            {isLoading
-              ? isEditing
-                ? "Updating..."
-                : "Creating..."
-              : isEditing
-                ? "Update Set"
-                : "Create Set"}
-          </button>
-        </div>
-      </form>
-    </div>
+      <div>
+        <label
+          htmlFor="set-description"
+          className="block text-sm font-medium text-foreground"
+        >
+          Description
+        </label>
+        <textarea
+          id="set-description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          placeholder="Optional description…"
+          className="resize-none"
+        />
+      </div>
+
+      {/* Footer inside the modal */}
+      <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isLoading}
+          className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isLoading && (
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+          )}
+          {isLoading
+            ? isEditing
+              ? "Updating…"
+              : "Creating…"
+            : isEditing
+              ? "Update Set"
+              : "Create Set"}
+        </button>
+      </div>
+    </form>
   );
 };
 

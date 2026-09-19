@@ -4,17 +4,23 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 import {
-  createCategoryPropertyWithMappings,
-  updateCategoryPropertyWithMappings,
-  getCategoryProperty,
   getAllAttributeSets,
   getAllAttributeGroups,
   getAllAttributes,
 } from "@/app/actions/category";
 import MappingItem from "./MappingItem";
 import PropertyPreview from "./PropertyPreview";
+import {
+  getCategoryProperty,
+  updateCategoryPropertyWithMappings,
+  createCategoryPropertyWithMappings,
+} from "@/app/actions/category_property";
 
-// --- Types ---
+// ------------------------------------------------------------------
+// Types
+// ------------------------------------------------------------------
+export type AttributeFlag = "isRequired" | "isHighlight";
+
 export interface Mapping {
   id: string;
   set: string;
@@ -23,6 +29,7 @@ export interface Mapping {
     attributes: {
       attribute: string;
       isRequired: boolean;
+      isHighlight: boolean;
     }[];
   }[];
 }
@@ -51,7 +58,6 @@ interface Props {
   onSuccess?: () => void;
 }
 
-// Utility
 const generateId = () => {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -65,18 +71,15 @@ const generateId = () => {
 export default function PropertyForm({ propertyId, onSuccess }: Props) {
   const router = useRouter();
 
-  // Form fields
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [mappings, setMappings] = useState<Mapping[]>([]);
 
-  // Available data
   const [allSets, setAllSets] = useState<AttributeSetOption[]>([]);
   const [allGroups, setAllGroups] = useState<GroupOption[]>([]);
   const [allAttributes, setAllAttributes] = useState<AttributeOption[]>([]);
 
-  // UI states
   const [loadingData, setLoadingData] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +93,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  // Fetch data
+  // ---------------- Fetch reference data ---------------- //
   useEffect(() => {
     Promise.all([
       getAllAttributeSets(),
@@ -110,58 +113,59 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
       });
   }, []);
 
-  // Load existing property
+  // ---------------- Load existing property ---------------- //
   useEffect(() => {
-    if (propertyId) {
-      getCategoryProperty(propertyId)
-        .then((prop) => {
-          if (prop) {
-            setCode(prop.code || "");
-            setName(prop.name);
-            setDescription(prop.description || "");
-            if (prop.mappings && prop.mappings.length > 0) {
-              const withIds = prop.mappings.map((m: any) => ({
-                ...m,
-                id: generateId(),
-              }));
-              setMappings(withIds);
-            } else if (prop.sets && prop.sets.length > 0) {
-              const converted = prop.sets.map((setId: string) => ({
-                id: generateId(),
-                set: setId,
-                groups: [],
-              }));
-              setMappings(converted);
-            }
-          }
-        })
-        .catch(() => {
-          setError("Failed to load property data.");
-          toast.error("Failed to load property data.");
-        });
-    }
+    if (!propertyId) return;
+    getCategoryProperty(propertyId)
+      .then((prop) => {
+        if (!prop) return;
+        setCode(prop.code || "");
+        setName(prop.name);
+        setDescription(prop.description || "");
+
+        if (prop.mappings && prop.mappings.length > 0) {
+          const withIds = prop.mappings.map((m: any) => ({
+            ...m,
+            groups: (m.groups ?? []).map((g: any) => ({
+              ...g,
+              attributes: (g.attributes ?? []).map((a: any) => ({
+                attribute: a.attribute,
+                isRequired: a.isRequired === true,
+                isHighlight: a.isHighlight === true,
+              })),
+            })),
+            id: generateId(),
+          }));
+          setMappings(withIds);
+        } else if (prop.sets && prop.sets.length > 0) {
+          const converted = prop.sets.map((setId: string) => ({
+            id: generateId(),
+            set: setId,
+            groups: [],
+          }));
+          setMappings(converted);
+        }
+      })
+      .catch(() => {
+        setError("Failed to load property data.");
+        toast.error("Failed to load property data.");
+      });
   }, [propertyId]);
 
-  // Validation
+  // ---------------- Validation ---------------- //
   const validateField = useCallback(
     (field: "code" | "name" | "mappings") => {
       setFieldErrors((prev) => {
         const newErrors = { ...prev };
 
         if (field === "code") {
-          if (!code.trim()) {
-            newErrors.code = "Code is required";
-          } else {
-            delete newErrors.code;
-          }
+          if (!code.trim()) newErrors.code = "Code is required";
+          else delete newErrors.code;
         }
 
         if (field === "name") {
-          if (!name.trim()) {
-            newErrors.name = "Name is required";
-          } else {
-            delete newErrors.name;
-          }
+          if (!name.trim()) newErrors.name = "Name is required";
+          else delete newErrors.name;
         }
 
         if (field === "mappings") {
@@ -186,9 +190,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
             }
             if (hasError) break;
           }
-          if (!hasError) {
-            delete newErrors.mappings;
-          }
+          if (!hasError) delete newErrors.mappings;
         }
 
         return newErrors;
@@ -201,7 +203,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
   useEffect(() => validateField("name"), [name, validateField]);
   useEffect(() => validateField("mappings"), [mappings, validateField]);
 
-  // Handlers
+  // ---------------- Mapping handlers ---------------- //
   const addMapping = useCallback(() => {
     const newId = generateId();
     setMappings((prev) => [...prev, { id: newId, set: "", groups: [] }]);
@@ -248,7 +250,14 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
           const exists = group.attributes.some((a) => a.attribute === attrId);
           const newAttributes = exists
             ? group.attributes.filter((a) => a.attribute !== attrId)
-            : [...group.attributes, { attribute: attrId, isRequired: false }];
+            : [
+                ...group.attributes,
+                {
+                  attribute: attrId,
+                  isRequired: false,
+                  isHighlight: false,
+                },
+              ];
           const newGroups = [...m.groups];
           newGroups[groupIndex] = { ...group, attributes: newAttributes };
           return { ...m, groups: newGroups };
@@ -258,8 +267,13 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
     [],
   );
 
-  const toggleRequired = useCallback(
-    (mappingId: string, groupId: string, attrId: string) => {
+  const toggleFlag = useCallback(
+    (
+      mappingId: string,
+      groupId: string,
+      attrId: string,
+      flag: AttributeFlag,
+    ) => {
       setMappings((prev) =>
         prev.map((m) => {
           if (m.id !== mappingId) return m;
@@ -273,7 +287,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
           const newAttributes = [...group.attributes];
           newAttributes[attrIndex] = {
             ...newAttributes[attrIndex],
-            isRequired: !newAttributes[attrIndex].isRequired,
+            [flag]: !newAttributes[attrIndex][flag],
           };
           const newGroups = [...m.groups];
           newGroups[groupIndex] = { ...group, attributes: newAttributes };
@@ -288,7 +302,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
     setExpandedId((prev) => (prev === id ? null : id));
   }, []);
 
-  // Submit
+  // ---------------- Submit ---------------- //
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     validateField("code");
@@ -319,11 +333,11 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
       }
       if (result.success) {
         const action = propertyId ? "updated" : "created";
-        toast.success(`Category property ${action} successfully! 🎉`);
+        toast.success(`Category property ${action} successfully!`);
         onSuccess?.();
         setTimeout(() => {
           router.push("/catalog/categories/property");
-        }, 1500);
+        }, 1200);
       } else {
         const errorMsg = result.error || "Something went wrong.";
         setError(errorMsg);
@@ -343,11 +357,12 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
     [fieldErrors],
   );
 
+  // ---------------- Render ---------------- //
   if (loadingData) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-        <span className="ml-3 text-muted-foreground">Loading data...</span>
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-border border-t-primary" />
+        <span className="ml-3 text-sm">Loading data…</span>
       </div>
     );
   }
@@ -356,215 +371,284 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
     <>
       <Toaster position="top-right" reverseOrder={false} />
 
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-6 max-w-4xl mx-auto p-6 bg-background text-foreground border border-border rounded-lg shadow-sm"
-        noValidate
-      >
-        <h2 className="text-2xl font-bold">
-          {propertyId ? "Edit" : "Create"} Category Property
-        </h2>
-
-        {error && (
-          <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded">
-            {error}
-          </div>
-        )}
-
-        {/* Code Field */}
-        <div>
-          <label htmlFor="property-code" className="block font-medium">
-            Code <span className="text-destructive">*</span>
-          </label>
-          <input
-            id="property-code"
-            type="text"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className={`w-full border rounded p-2 bg-background text-foreground ${
-              fieldErrors.code ? "border-destructive" : "border-border"
-            } focus:ring-2 focus:ring-ring focus:border-transparent`}
-            aria-invalid={!!fieldErrors.code}
-            aria-describedby={fieldErrors.code ? "code-error" : undefined}
-            required
-          />
-          {fieldErrors.code && (
-            <p id="code-error" className="text-destructive text-sm mt-1">
-              {fieldErrors.code}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+          {/* Header */}
+          <header>
+            <h1 className="text-2xl font-semibold text-foreground">
+              {propertyId ? "Edit Category Property" : "New Category Property"}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Define reusable attribute mappings for categories.
             </p>
+          </header>
+
+          {error && (
+            <div
+              role="alert"
+              className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              {error}
+            </div>
           )}
-        </div>
 
-        {/* Name Field */}
-        <div>
-          <label htmlFor="property-name" className="block font-medium">
-            Name <span className="text-destructive">*</span>
-          </label>
-          <input
-            id="property-name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className={`w-full border rounded p-2 bg-background text-foreground ${
-              fieldErrors.name ? "border-destructive" : "border-border"
-            } focus:ring-2 focus:ring-ring focus:border-transparent`}
-            aria-invalid={!!fieldErrors.name}
-            aria-describedby={fieldErrors.name ? "name-error" : undefined}
-            required
-          />
-          {fieldErrors.name && (
-            <p id="name-error" className="text-destructive text-sm mt-1">
-              {fieldErrors.name}
-            </p>
-          )}
-        </div>
+          {/* Basics */}
+          <section className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Basic Information
+              </h2>
+            </div>
 
-        {/* Description */}
-        <div>
-          <label htmlFor="property-description" className="block font-medium">
-            Description
-          </label>
-          <textarea
-            id="property-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full border border-border rounded p-2 bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
-            rows={3}
-          />
-        </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label
+                    htmlFor="property-code"
+                    className="block text-sm font-medium text-foreground"
+                  >
+                    Code <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="property-code"
+                    type="text"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="e.g. electronics_attrs"
+                    className={
+                      fieldErrors.code
+                        ? "border-destructive focus:border-destructive"
+                        : ""
+                    }
+                    aria-invalid={!!fieldErrors.code}
+                    aria-describedby={
+                      fieldErrors.code ? "code-error" : undefined
+                    }
+                    required
+                  />
+                  {fieldErrors.code && (
+                    <p id="code-error" className="text-xs text-destructive">
+                      {fieldErrors.code}
+                    </p>
+                  )}
+                </div>
 
-        {/* Mappings */}
-        <div>
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">Set Mappings</h3>
+                <div>
+                  <label
+                    htmlFor="property-name"
+                    className="block text-sm font-medium text-foreground"
+                  >
+                    Name <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="property-name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Electronics Attributes"
+                    className={
+                      fieldErrors.name
+                        ? "border-destructive focus:border-destructive"
+                        : ""
+                    }
+                    aria-invalid={!!fieldErrors.name}
+                    aria-describedby={
+                      fieldErrors.name ? "name-error" : undefined
+                    }
+                    required
+                  />
+                  {fieldErrors.name && (
+                    <p id="name-error" className="text-xs text-destructive">
+                      {fieldErrors.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="property-description"
+                  className="block text-sm font-medium text-foreground"
+                >
+                  Description
+                </label>
+                <textarea
+                  id="property-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  placeholder="Optional description…"
+                  className="resize-none"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Mappings */}
+          <section className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Set Mappings
+                </h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Each set defines which groups and attributes apply.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addMapping}
+                className="admin-button-secondary"
+              >
+                <span className="text-base leading-none">+</span>
+                Add Set
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {fieldErrors.mappings && (
+                <p className="text-xs text-destructive">
+                  {fieldErrors.mappings}
+                </p>
+              )}
+
+              {mappings.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border px-6 py-10 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No sets added yet.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={addMapping}
+                    className="mt-3 text-sm font-medium text-primary hover:underline"
+                  >
+                    Add your first set →
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {mappings.map((mapping, index) => {
+                    const mappingId = mapping.id;
+                    const isExpanded = expandedId === mappingId;
+                    const hasSetError = !mapping.set && !!fieldErrors.mappings;
+
+                    return (
+                      <MappingItem
+                        key={mappingId}
+                        mapping={mapping}
+                        index={index}
+                        allSets={allSets}
+                        allGroups={allGroups}
+                        allAttributes={allAttributes}
+                        groupFilter={groupFilter[mappingId] || ""}
+                        attrFilters={attrFilter}
+                        expanded={isExpanded}
+                        onToggleExpand={() => toggleExpand(mappingId)}
+                        onUpdateSet={(setId) =>
+                          updateMappingSet(mappingId, setId)
+                        }
+                        onRemove={() => removeMapping(mappingId)}
+                        onToggleGroup={(groupId) =>
+                          toggleGroup(mappingId, groupId)
+                        }
+                        onToggleAttribute={(groupId, attrId) =>
+                          toggleAttribute(mappingId, groupId, attrId)
+                        }
+                        onToggleFlag={(groupId, attrId, flag) =>
+                          toggleFlag(mappingId, groupId, attrId, flag)
+                        }
+                        onGroupFilterChange={(value) =>
+                          setGroupFilter((prev) => ({
+                            ...prev,
+                            [mappingId]: value,
+                          }))
+                        }
+                        onAttrFilterChange={(groupId, value) => {
+                          const key = `${mappingId}-${groupId}`;
+                          setAttrFilter((prev) => ({ ...prev, [key]: value }));
+                        }}
+                        hasSetError={hasSetError}
+                        fieldError={fieldErrors.mappings}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={addMapping}
-              className="bg-secondary text-secondary-foreground px-3 py-1 rounded hover:bg-secondary/90 transition-colors"
+              onClick={() => router.push("/catalog/categories/property")}
+              className="admin-button-secondary"
             >
-              + Add Set
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !isFormValid}
+              className="admin-button"
+            >
+              {saving && (
+                <svg
+                  className="animate-spin h-4 w-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+              )}
+              {saving
+                ? "Saving…"
+                : propertyId
+                  ? "Update Property"
+                  : "Create Property"}
             </button>
           </div>
 
-          {fieldErrors.mappings && (
-            <p id="mappings-error" className="text-destructive text-sm mt-1">
-              {fieldErrors.mappings}
-            </p>
-          )}
-
-          {mappings.length === 0 && (
-            <p className="text-muted-foreground text-sm mt-2">
-              No sets added yet.
-            </p>
-          )}
-
-          {mappings.map((mapping, index) => {
-            const mappingId = mapping.id;
-            const isExpanded = expandedId === mappingId;
-            const hasSetError = !mapping.set && !!fieldErrors.mappings;
-
-            return (
-              <MappingItem
-                key={mappingId}
-                mapping={mapping}
-                index={index}
-                allSets={allSets}
-                allGroups={allGroups}
-                allAttributes={allAttributes}
-                groupFilter={groupFilter[mappingId] || ""}
-                attrFilters={attrFilter}
-                expanded={isExpanded}
-                onToggleExpand={() => toggleExpand(mappingId)}
-                onUpdateSet={(setId) => updateMappingSet(mappingId, setId)}
-                onRemove={() => removeMapping(mappingId)}
-                onToggleGroup={(groupId) => toggleGroup(mappingId, groupId)}
-                onToggleAttribute={(groupId, attrId) =>
-                  toggleAttribute(mappingId, groupId, attrId)
-                }
-                onToggleRequired={(groupId, attrId) =>
-                  toggleRequired(mappingId, groupId, attrId)
-                }
-                onGroupFilterChange={(value) =>
-                  setGroupFilter((prev) => ({ ...prev, [mappingId]: value }))
-                }
-                onAttrFilterChange={(groupId, value) => {
-                  const key = `${mappingId}-${groupId}`;
-                  setAttrFilter((prev) => ({ ...prev, [key]: value }));
-                }}
-                hasSetError={hasSetError}
-                fieldError={fieldErrors.mappings}
-              />
-            );
-          })}
-        </div>
-
-        {/* Submit */}
-        <div className="flex gap-4">
-          <button
-            type="submit"
-            disabled={saving || !isFormValid}
-            className={`bg-primary text-primary-foreground px-6 py-2 rounded hover:bg-primary/90 transition-colors flex items-center ${
-              saving || !isFormValid ? "opacity-50 cursor-not-allowed" : ""
-            }`}
-          >
-            {saving && (
-              <svg
-                className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
+          {/* Preview */}
+          <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+            <button
+              type="button"
+              onClick={() => setShowPreview((prev) => !prev)}
+              className="w-full flex items-center justify-between px-6 py-3 text-sm font-medium text-foreground hover:bg-muted/50 transition rounded-2xl"
+            >
+              <span>Live Preview</span>
+              <span className="text-muted-foreground">
+                {showPreview ? "▲" : "▼"}
+              </span>
+            </button>
+            {showPreview && (
+              <div className="px-6 pb-6 pt-2 border-t border-border">
+                <PropertyPreview
+                  code={code}
+                  name={name}
+                  description={description}
+                  mappings={mappings}
+                  allSets={allSets}
+                  allGroups={allGroups}
+                  allAttributes={allAttributes}
                 />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
+              </div>
             )}
-            {saving ? "Saving..." : propertyId ? "Update" : "Create"}
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push("/catalog/categories/property")}
-            className="bg-muted text-muted-foreground px-6 py-2 rounded hover:bg-muted/80 transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-
-        {/* Preview Toggle & Preview */}
-        <div className="border-t border-border pt-4 mt-4">
-          <button
-            type="button"
-            onClick={() => setShowPreview((prev) => !prev)}
-            className="text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
-          >
-            {showPreview ? "Hide" : "Show"} Live Preview
-            <span className="text-sm">{showPreview ? "▲" : "▼"}</span>
-          </button>
-          {showPreview && (
-            <div className="mt-2">
-              <PropertyPreview
-                code={code}
-                name={name}
-                description={description}
-                mappings={mappings}
-                allSets={allSets}
-                allGroups={allGroups}
-                allAttributes={allAttributes}
-              />
-            </div>
-          )}
-        </div>
-      </form>
+          </div>
+        </form>
+      </div>
     </>
   );
 }

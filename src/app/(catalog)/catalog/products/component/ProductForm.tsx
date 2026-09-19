@@ -10,7 +10,6 @@ import React, {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Box,
   CircularProgress,
   Alert,
   Stepper,
@@ -54,9 +53,11 @@ export type AttributeDetail = {
   options?: string[];
   type: string;
   isRequired?: boolean;
+  isHighlight?: boolean;
   unitFamily?: { id: string; name: string; baseUnit: string } | null;
   sortOrder: number;
 };
+
 export type GroupNode = {
   id: string;
   code: string;
@@ -66,12 +67,40 @@ export type GroupNode = {
   attributes: AttributeDetail[];
   children: GroupNode[];
 };
+
 type AttributeSetStep = {
   id: string;
   title: string;
   code: string;
+  sortOrder: number;
   groups: GroupNode[];
 };
+
+type AttributeStep = {
+  kind: "attributes";
+  id: string;
+  title: string;
+  /** Preserved on the render step so the memo can sort deterministically. */
+  sortOrder: number;
+  groups: GroupNode[];
+};
+
+type VariantsStep = {
+  kind: "variants";
+  id: "__variants__";
+  title: string;
+  /** Always pinned last, regardless of any set's sortOrder. */
+  sortOrder: number;
+};
+
+type RenderStep = AttributeStep | VariantsStep;
+
+const VARIANTS_STEP_ID = "__variants__";
+const VARIANT_GROUP_CODES = new Set([
+  "variantThemes",
+  "variantFields",
+  "variants",
+]);
 
 // ------------------------------------------------------------------
 // Helpers
@@ -90,31 +119,6 @@ const isEmptyValue = (value: any): boolean => {
 const normalizeCode = (code?: string): string => {
   if (!code) return "";
   return code.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
-};
-
-/** Depth-first search for a group by normalized code, including children. */
-const findGroupByCode = (
-  groups: GroupNode[],
-  code: string,
-): GroupNode | null => {
-  for (const g of groups) {
-    if (normalizeCode(g.code) === code) return g;
-    const found = findGroupByCode(g.children || [], code);
-    if (found) return found;
-  }
-  return null;
-};
-
-/** Search every step's tree for a group by normalized code. */
-const findGroupInSteps = (
-  steps: AttributeSetStep[],
-  code: string,
-): GroupNode | null => {
-  for (const step of steps) {
-    const found = findGroupByCode(step.groups, code);
-    if (found) return found;
-  }
-  return null;
 };
 
 const toScalarId = (value: any): string | null => {
@@ -179,14 +183,47 @@ function getGroupRelevantKeys(group: GroupNode): string[] {
   const keys: string[] = [];
   group.attributes.forEach((attr) => keys.push(normalizeCode(attr.code)));
   group.children.forEach((child) => keys.push(...getGroupRelevantKeys(child)));
-  if (normalizeCode(group.code) === "variantThemes") {
-    keys.push("variantThemes", "variantValues", "variants", "hasVariants");
-  }
   if (normalizeCode(group.code) === "productRelationships") {
     keys.push("relatedProducts");
   }
+  if (normalizeCode(group.code) === "variantThemes") {
+    keys.push("variants", "variantThemes", "variantValues", "hasVariants");
+  }
   return keys;
 }
+
+function stripVariantGroups(groups: GroupNode[]): GroupNode[] {
+  return groups
+    .filter((g) => !VARIANT_GROUP_CODES.has(normalizeCode(g.code)))
+    .map((g) => ({
+      ...g,
+      children: stripVariantGroups(g.children || []),
+    }))
+    .filter((g) => g.attributes.length > 0 || g.children.length > 0);
+}
+
+const findGroupByCode = (
+  groups: GroupNode[],
+  code: string,
+): GroupNode | null => {
+  for (const g of groups) {
+    if (normalizeCode(g.code) === code) return g;
+    const found = findGroupByCode(g.children || [], code);
+    if (found) return found;
+  }
+  return null;
+};
+
+const findGroupInSteps = (
+  steps: AttributeSetStep[],
+  code: string,
+): GroupNode | null => {
+  for (const step of steps) {
+    const found = findGroupByCode(step.groups, code);
+    if (found) return found;
+  }
+  return null;
+};
 
 // ------------------------------------------------------------------
 // GroupRenderer
@@ -198,7 +235,6 @@ interface GroupRendererProps {
   validationErrors: { [key: string]: string[] };
   handleChange: (field: string, value: any) => void;
   units: any[];
-  allVariantFields: AttributeDetail[];
 }
 
 const GroupRenderer = memo(
@@ -209,88 +245,35 @@ const GroupRenderer = memo(
     validationErrors,
     handleChange,
     units,
-    allVariantFields,
   }: GroupRendererProps) => {
     const { id, code, name, attributes, children } = group;
     const groupErrors = validationErrors[id] || [];
     const normalizedCode = normalizeCode(code);
 
-    const isSpecialGroup =
-      normalizedCode === "variantThemes" ||
-      normalizedCode === "productRelationships" ||
-      normalizedCode === "variants" ||
-      normalizedCode === "variantFields";
-
-    if (isSpecialGroup) {
-      if (normalizedCode === "variantThemes") {
-        return (
-          <section key={id} className="mb-6">
-            <h2 className="mb-3 text-sm font-semibold text-foreground">
-              {name}
-            </h2>
-            <VariantsManager
-              productId={productId}
-              product={productData}
-              attributes={attributes}
-              variantFields={allVariantFields}
-              onUpdate={handleChange}
-            />
-            {validationErrors["variants"] && (
-              <Alert severity="error" className="mt-4">
-                <ul className="list-disc pl-4">
-                  {validationErrors["variants"].map((err, idx) => (
-                    <li key={idx}>{err}</li>
-                  ))}
-                </ul>
-              </Alert>
-            )}
-            {children?.length > 0 &&
-              children.map((child) => (
-                <GroupRenderer
-                  key={child.id}
-                  group={child}
-                  productId={productId}
-                  productData={productData}
-                  validationErrors={validationErrors}
-                  handleChange={handleChange}
-                  units={units}
-                  allVariantFields={allVariantFields}
-                />
-              ))}
-          </section>
-        );
-      }
-      if (normalizedCode === "productRelationships") {
-        return (
-          <section key={id} className="mb-6">
-            <h2 className="mb-3 text-sm font-semibold text-foreground">
-              {name}
-            </h2>
-            <ManageRelatedProduct
-              id={productId}
-              product={productData}
-              attribute={attributes}
-              onUpdate={handleChange}
-            />
-            {children?.length > 0 &&
-              children.map((child) => (
-                <GroupRenderer
-                  key={child.id}
-                  group={child}
-                  productId={productId}
-                  productData={productData}
-                  validationErrors={validationErrors}
-                  handleChange={handleChange}
-                  units={units}
-                  allVariantFields={allVariantFields}
-                />
-              ))}
-          </section>
-        );
-      }
-      if (normalizedCode === "variants" || normalizedCode === "variantFields") {
-        return null;
-      }
+    if (normalizedCode === "productRelationships") {
+      return (
+        <section key={id} className="mb-6">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">{name}</h2>
+          <ManageRelatedProduct
+            id={productId}
+            product={productData}
+            attribute={attributes}
+            onUpdate={handleChange}
+          />
+          {children?.length > 0 &&
+            children.map((child) => (
+              <GroupRenderer
+                key={child.id}
+                group={child}
+                productId={productId}
+                productData={productData}
+                validationErrors={validationErrors}
+                handleChange={handleChange}
+                units={units}
+              />
+            ))}
+        </section>
+      );
     }
 
     return (
@@ -327,7 +310,6 @@ const GroupRenderer = memo(
                 validationErrors={validationErrors}
                 handleChange={handleChange}
                 units={units}
-                allVariantFields={allVariantFields}
               />
             ))}
         </div>
@@ -337,7 +319,6 @@ const GroupRenderer = memo(
   (prev, next) => {
     if (prev.productId !== next.productId) return false;
     if (prev.units !== next.units) return false;
-    if (prev.allVariantFields !== next.allVariantFields) return false;
     if (prev.handleChange !== next.handleChange) return false;
     if (prev.group.id !== next.group.id) return false;
 
@@ -351,13 +332,6 @@ const GroupRenderer = memo(
     if (prevGroupErrors.length !== nextGroupErrors.length) return false;
     if (prevGroupErrors.some((e, i) => e !== nextGroupErrors[i])) return false;
 
-    if (normalizeCode(prev.group.code) === "variantThemes") {
-      const prevVariantErrors = prev.validationErrors["variants"] || [];
-      const nextVariantErrors = next.validationErrors["variants"] || [];
-      if (prevVariantErrors.length !== nextVariantErrors.length) return false;
-      if (prevVariantErrors.some((e, i) => e !== nextVariantErrors[i]))
-        return false;
-    }
     return true;
   },
 );
@@ -371,11 +345,6 @@ function flattenStructuredFields(
 ): Record<string, any> {
   const result = { ...data };
 
-  if (Array.isArray(result.keyFeatures)) {
-    for (const item of result.keyFeatures) {
-      if (item?.k && item.v !== undefined) result[item.k] = item.v;
-    }
-  }
   if (Array.isArray(result.specifications)) {
     const flattenSpecs = (specs: any[]) => {
       for (const group of specs) {
@@ -406,8 +375,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
 }) => {
   const router = useRouter();
 
-  // Draft key is shared with `recreateProduct` via lib/draftKeys so a
-  // staged recreate lands where this form looks for it.
   const [productId] = useState<string>(
     () => initialProductId || getOrCreateNewProductDraftKey(),
   );
@@ -426,6 +393,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
 
   const currentStepRef = useRef(currentStep);
+  const stepperViewportRef = useRef<HTMLDivElement | null>(null);
 
   const clearNewProductSession = useCallback(() => {
     if (initialProductId) return;
@@ -476,7 +444,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
           data.variantValues = normalizeVariantValues(data.variantValues);
         }
 
-        // ---- DRAFT MERGE (timestamp-gated) ----
         const draft = await getProductDraft(productId);
         if (draft && draft.data) {
           const draftTime = draft.updatedAt
@@ -569,14 +536,31 @@ const ProductForm: React.FC<ProductFormProps> = ({
       try {
         setIsFetchingAttributes(true);
         setError(null);
+
         const sets = await getCategoryAttributeSets(productData.categoryId);
-        setSteps(sets);
+
+        // The server already sorts by `sortOrder`. We re-sort here so the
+        // form's step order is guaranteed regardless of how `sets` was
+        // shaped upstream. Missing sortOrder is treated as 0 so it lands
+        // at the top (matches the AttributeSet schema default).
+        const sortedSets: AttributeSetStep[] = [...sets]
+          .map((s) => ({
+            id: s.id,
+            title: s.title,
+            code: s.code,
+            sortOrder: typeof s.sortOrder === "number" ? s.sortOrder : 0,
+            groups: s.groups as GroupNode[],
+          }))
+          .sort((a, b) => a.sortOrder - b.sortOrder);
+
+        setSteps(sortedSets);
         setCurrentStep(0);
         setValidationErrors({});
       } catch (err) {
         console.error("Error fetching attribute sets:", err);
         setError("Failed to load product attributes. Please try again.");
         toast.error("Failed to load product attributes.");
+        setSteps([]);
       } finally {
         setIsFetchingAttributes(false);
       }
@@ -596,39 +580,88 @@ const ProductForm: React.FC<ProductFormProps> = ({
     })();
   }, []);
 
-  // ------------------------------------------------------------------ //
-  // Variants toggle — SOLE source of truth for step visibility.        //
-  // ------------------------------------------------------------------ //
+  // ================================================================== //
+  // Variants — group-code driven                                       //
+  // ================================================================== //
   const hasVariants = productData.hasVariants === true;
 
-  const visibleSteps = useMemo(() => {
-    if (hasVariants) return steps;
-    return steps.filter(
-      (step) =>
-        !step.groups.some((g) => normalizeCode(g.code) === "variantThemes"),
-    );
-  }, [steps, hasVariants]);
-
-  useEffect(() => {
-    if (currentStep >= visibleSteps.length) {
-      setCurrentStep(Math.max(0, visibleSteps.length - 1));
-    }
-  }, [visibleSteps, currentStep]);
-
-  useEffect(() => {
-    currentStepRef.current = currentStep;
-  }, [currentStep]);
-
-  // ---------------- Variant fields (recursive, from all steps) ---- //
+  const variantThemesGroup = useMemo(
+    () => findGroupInSteps(steps, "variantThemes"),
+    [steps],
+  );
   const variantFieldsGroup = useMemo(
     () => findGroupInSteps(steps, "variantFields"),
     [steps],
   );
 
-  const allVariantFields = useMemo(
-    () => variantFieldsGroup?.attributes || [],
-    [variantFieldsGroup],
-  );
+  const variantThemes = variantThemesGroup?.attributes ?? [];
+  const variantFields = variantFieldsGroup?.attributes ?? [];
+  const hasVariantConfig = !!variantThemesGroup;
+
+  // ------------------------------------------------------------------ //
+  // Build renderable steps                                             //
+  //                                                                    //
+  // 1. Map each AttributeSetStep to an AttributeStep, carrying sortOrder.
+  // 2. Strip variant groups from each step's groups.
+  // 3. Drop steps that became empty.
+  // 4. Sort the whole list ascending by sortOrder — this is where the
+  //    order is enforced for the UI, not just at fetch time.
+  // 5. Append the synthetic Variants step last (it carries
+  //    Number.MAX_SAFE_INTEGER so a re-sort below keeps it last).
+  // ------------------------------------------------------------------ //
+  const renderSteps = useMemo<RenderStep[]>(() => {
+    const attributeSteps: AttributeStep[] = steps
+      .map<AttributeStep>((step) => ({
+        kind: "attributes",
+        id: step.id,
+        title: step.title,
+        sortOrder: step.sortOrder ?? 0,
+        groups: stripVariantGroups(step.groups),
+      }))
+      .filter((s) => s.groups.length > 0);
+
+    const list: RenderStep[] = [...attributeSteps].sort(
+      (a, b) => a.sortOrder - b.sortOrder,
+    );
+
+    if (hasVariants && hasVariantConfig) {
+      list.push({
+        kind: "variants",
+        id: VARIANTS_STEP_ID,
+        title: "Variants",
+        sortOrder: Number.MAX_SAFE_INTEGER,
+      });
+    }
+
+    // Final sort — attribute steps keep their relative order; the
+    // variants step stays last because it carries MAX_SAFE_INTEGER.
+    return list.sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [steps, hasVariants, hasVariantConfig]);
+
+  // Clamp the active index when the step list shrinks.
+  useEffect(() => {
+    if (currentStep >= renderSteps.length && renderSteps.length > 0) {
+      setCurrentStep(renderSteps.length - 1);
+    } else if (renderSteps.length === 0 && currentStep !== 0) {
+      setCurrentStep(0);
+    }
+  }, [renderSteps.length, currentStep]);
+
+  useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
+
+  useEffect(() => {
+    const container = stepperViewportRef.current;
+    if (!container) return;
+    const active = container.querySelector<HTMLElement>(
+      ".MuiStep-root.Mui-active",
+    );
+    if (!active) return;
+    const target =
+      active.offsetLeft - container.clientWidth / 2 + active.clientWidth / 2;
+    container.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+  }, [currentStep, renderSteps.length]);
 
   // ---------------- Toggle handler ---------------- //
   const handleToggleVariants = useCallback((enabled: boolean) => {
@@ -690,9 +723,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     if (!hasVariants) return errors;
     const variants = productData.variants || [];
     if (variants.length === 0) return errors;
-
-    const variantFields: AttributeDetail[] = allVariantFields;
     if (variantFields.length === 0) return errors;
+
     const required = variantFields.filter((f) => f.isRequired);
 
     variants.forEach((variant: any, index: number) => {
@@ -712,22 +744,25 @@ const ProductForm: React.FC<ProductFormProps> = ({
   } => {
     const allErrors: { [key: string]: string[] } = {};
     let hasErrors = false;
-    visibleSteps.forEach((step) => {
-      step.groups.forEach((group) => {
-        const errors = validateGroup(group);
-        if (errors.length > 0) {
-          allErrors[group.id] = errors;
+
+    for (const step of renderSteps) {
+      if (step.kind === "variants") {
+        const errs = validateVariants();
+        if (errs.length > 0) {
+          allErrors["variants"] = errs;
           hasErrors = true;
         }
-      });
-    });
-    if (hasVariants) {
-      const variantErrors = validateVariants();
-      if (variantErrors.length > 0) {
-        allErrors["variants"] = variantErrors;
-        hasErrors = true;
+      } else {
+        for (const group of step.groups) {
+          const errs = validateGroup(group);
+          if (errs.length > 0) {
+            allErrors[group.id] = errs;
+            hasErrors = true;
+          }
+        }
       }
     }
+
     setValidationErrors(allErrors);
     if (hasErrors) {
       toast.error("Please fix the validation errors before saving.");
@@ -736,25 +771,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
   };
 
   const validateCurrentStep = (): boolean => {
-    if (currentStep >= visibleSteps.length) return true;
-    const currentStepData = visibleSteps[currentStep];
+    if (currentStep >= renderSteps.length) return true;
+    const step = renderSteps[currentStep];
+    if (!step) return true;
     const newErrors = { ...validationErrors };
     let hasErrors = false;
 
-    currentStepData.groups.forEach((group) => {
-      const errors = validateGroup(group);
-      if (errors.length > 0) {
-        newErrors[group.id] = errors;
-        hasErrors = true;
-      } else {
-        delete newErrors[group.id];
-      }
-    });
-
-    const hasVariantGroup = currentStepData.groups.some(
-      (g) => normalizeCode(g.code) === "variantThemes",
-    );
-    if (hasVariantGroup) {
+    if (step.kind === "variants") {
       const variantErrors = validateVariants();
       if (variantErrors.length > 0) {
         newErrors["variants"] = variantErrors;
@@ -762,6 +785,16 @@ const ProductForm: React.FC<ProductFormProps> = ({
       } else {
         delete newErrors["variants"];
       }
+    } else {
+      step.groups.forEach((group) => {
+        const errs = validateGroup(group);
+        if (errs.length > 0) {
+          newErrors[group.id] = errs;
+          hasErrors = true;
+        } else {
+          delete newErrors[group.id];
+        }
+      });
     }
 
     setValidationErrors(newErrors);
@@ -774,7 +807,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   // ---------------- Navigation ---------------- //
   const handleNext = () => {
-    if (validateCurrentStep() && currentStep < visibleSteps.length - 1) {
+    if (validateCurrentStep() && currentStep < renderSteps.length - 1) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -788,9 +821,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
       const camelField = normalizeCode(field);
       setProductData((prev) => ({ ...prev, [camelField]: value }));
 
-      const stepData = visibleSteps[currentStepRef.current];
-      if (stepData) {
-        const group = stepData.groups.find((g) =>
+      const step = renderSteps[currentStepRef.current];
+      if (step && step.kind === "attributes") {
+        const group = step.groups.find((g) =>
           g.attributes.some((a) => normalizeCode(a.code) === camelField),
         );
         if (group) {
@@ -809,14 +842,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
         });
       }
     },
-    [visibleSteps],
+    [renderSteps],
   );
 
   // ---------------- Submit ---------------- //
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (currentStep !== visibleSteps.length - 1) {
+    if (currentStep !== renderSteps.length - 1) {
       handleNext();
       return;
     }
@@ -824,11 +857,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
     const { ok, errors } = validateAllSteps();
     if (!ok) {
       let firstErrorStep = 0;
-      for (let i = 0; i < visibleSteps.length; i++) {
-        const hasError = visibleSteps[i].groups.some(
-          (g) => (errors[g.id]?.length ?? 0) > 0,
-        );
-        if (hasError) {
+      for (let i = 0; i < renderSteps.length; i++) {
+        const step = renderSteps[i];
+        const stepHasError =
+          step.kind === "variants"
+            ? (errors["variants"]?.length ?? 0) > 0
+            : step.groups.some((g) => (errors[g.id]?.length ?? 0) > 0);
+        if (stepHasError) {
           firstErrorStep = i;
           break;
         }
@@ -850,11 +885,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     try {
       const payload = { ...productData };
 
-      delete payload.keyFeatures;
       delete payload.specifications;
-
-      // Force the product to "active" on save so it's finalized and
-      // no longer sits in a draft/editable state.
       payload.status = "active";
 
       delete payload._id;
@@ -950,13 +981,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
-  // ---------------- Memoized ---------------- //
-  const currentStepGroups = useMemo(() => {
-    if (visibleSteps.length === 0 || currentStep >= visibleSteps.length)
-      return [];
-    return visibleSteps[currentStep].groups;
-  }, [visibleSteps, currentStep]);
-
   // ---------------- Early exits ---------------- //
   if (loading) {
     return (
@@ -985,21 +1009,23 @@ const ProductForm: React.FC<ProductFormProps> = ({
     );
   }
 
+  const activeStep = renderSteps[currentStep];
+  const showVariantsToggle = hasVariantConfig && !isFetchingAttributes;
+
   return (
-    <div className=" max-w-4xl py-6 ">
+    <div className="max-w-4xl py-2">
       <form
         onSubmit={handleSubmit}
         className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
       >
-        {/* Form header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4 ">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0 flex items-center gap-3">
             <h1 className="text-sm font-semibold text-foreground">
               {initialProductId ? "Edit product" : "New product"}
             </h1>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {visibleSteps.length > 0
-                ? `Step ${currentStep + 1} of ${visibleSteps.length}`
+              {renderSteps.length > 0
+                ? `Step ${currentStep + 1} of ${renderSteps.length}`
                 : "Fill in product details"}
             </p>
           </div>
@@ -1010,26 +1036,27 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 Auto-saved
               </span>
             )}
-            <FormControlLabel
-              control={
-                <Switch
-                  size="small"
-                  checked={hasVariants}
-                  onChange={(e) => handleToggleVariants(e.target.checked)}
-                  color="primary"
-                />
-              }
-              label={
-                <span className="text-xs text-muted-foreground">
-                  Has variants
-                </span>
-              }
-              sx={{ mr: 0 }}
-            />
+            {showVariantsToggle && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={hasVariants}
+                    onChange={(e) => handleToggleVariants(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <span className="text-xs text-muted-foreground">
+                    Has variants
+                  </span>
+                }
+                sx={{ mr: 0 }}
+              />
+            )}
           </div>
         </div>
 
-        {/* Body */}
         <div className="px-5 py-5">
           {error && (
             <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-sm text-destructive">
@@ -1041,55 +1068,72 @@ const ProductForm: React.FC<ProductFormProps> = ({
             <div className="flex min-h-[200px] items-center justify-center">
               <CircularProgress />
             </div>
-          ) : steps.length === 0 ? (
+          ) : renderSteps.length === 0 ? (
             <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-              No attribute sets mapped to this category.
+              {steps.length === 0
+                ? "No attribute sets mapped to this category."
+                : "No product fields are configured for this category."}
             </div>
-          ) : visibleSteps.length > 0 ? (
+          ) : (
             <>
-              <Stepper
-                activeStep={currentStep}
-                className="mb-6 w-full overflow-auto whitespace-nowrap"
+              <div
+                ref={stepperViewportRef}
+                className="mb-6 w-full overflow-x-auto"
               >
-                {visibleSteps.map((step) => {
-                  const hasError = step.groups.some(
-                    (g) =>
-                      validationErrors[g.id] &&
-                      validationErrors[g.id].length > 0,
-                  );
-                  return (
-                    <Step key={step.id} className="inline-block">
-                      <StepLabel error={hasError}>{step.title}</StepLabel>
-                    </Step>
-                  );
-                })}
-              </Stepper>
+                <Stepper
+                  key={`stepper-${renderSteps.length}`}
+                  activeStep={Math.min(
+                    currentStep,
+                    Math.max(0, renderSteps.length - 1),
+                  )}
+                  className="w-full min-w-max"
+                >
+                  {renderSteps.map((step) => {
+                    const hasError =
+                      step.kind === "variants"
+                        ? (validationErrors["variants"]?.length ?? 0) > 0
+                        : step.groups.some(
+                            (g) =>
+                              validationErrors[g.id] &&
+                              validationErrors[g.id].length > 0,
+                          );
+                    return (
+                      <Step key={step.id}>
+                        <StepLabel error={hasError}>{step.title}</StepLabel>
+                      </Step>
+                    );
+                  })}
+                </Stepper>
+              </div>
 
               <div className="space-y-6">
-                {currentStepGroups.map((group) => (
-                  <GroupRenderer
-                    key={group.id}
-                    group={group}
+                {activeStep?.kind === "variants" ? (
+                  <VariantsManager
                     productId={productId}
-                    productData={productData}
-                    validationErrors={validationErrors}
-                    handleChange={handleChange}
-                    units={units}
-                    allVariantFields={allVariantFields}
+                    product={productData}
+                    attributes={variantThemes}
+                    variantFields={variantFields}
+                    onUpdate={handleChange}
                   />
-                ))}
+                ) : (
+                  activeStep?.groups.map((group) => (
+                    <GroupRenderer
+                      key={group.id}
+                      group={group}
+                      productId={productId}
+                      productData={productData}
+                      validationErrors={validationErrors}
+                      handleChange={handleChange}
+                      units={units}
+                    />
+                  ))
+                )}
               </div>
             </>
-          ) : (
-            <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-              Turn on the variants toggle above to configure variants.
-            </div>
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/20 px-4 py-4 sm:px-5">
-          {/* Secondary actions */}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -1111,15 +1155,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
             )}
           </div>
 
-          {/* Step indicator — visible only when there's room */}
-          {visibleSteps.length > 1 && (
+          {renderSteps.length > 1 && (
             <span className="hidden text-xs text-muted-foreground md:inline">
-              Step {currentStep + 1} of {visibleSteps.length}
+              Step {currentStep + 1} of {renderSteps.length}
             </span>
           )}
 
-          {/* Primary action */}
-          {currentStep < visibleSteps.length - 1 ? (
+          {currentStep < renderSteps.length - 1 ? (
             <button
               type="button"
               onClick={handleNext}

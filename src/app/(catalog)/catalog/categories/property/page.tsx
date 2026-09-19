@@ -17,7 +17,7 @@ import {
 import {
   getCategoryProperty,
   deleteCategoryProperty,
-} from "@/app/actions/category";
+} from "@/app/actions/category_property";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { BottomSheet } from "@/components/ux/BottomSheet";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";

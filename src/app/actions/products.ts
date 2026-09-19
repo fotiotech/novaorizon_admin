@@ -198,26 +198,155 @@ function serialize(doc: any): any {
   return JSON.parse(JSON.stringify(obj));
 }
 
+// ==================================================================
+// Category attribute info
+//
+// Walks the category's attribute sets once and derives:
+//   - requiredCodes      → attribute codes with `isRequired: true`
+//   - variantThemeCodes  → attribute codes inside the `variantThemes` group
+//   - variantFieldCodes  → attribute codes inside the `variantFields` group
+//
+// Variant membership is driven by the group an attribute lives in,
+// not a per-attribute flag. Group codes are normalised so `variant_themes`
+// and `variantThemes` are treated identically.
+// ==================================================================
+
+const normalizeKey = (k: string) =>
+  k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+
+interface CategoryAttributeInfo {
+  requiredCodes: string[];
+  variantThemeCodes: Set<string>; // normalized camelCase
+  variantFieldCodes: Set<string>; // normalized camelCase
+}
+
+async function getCategoryAttributeInfo(
+  categoryId: string,
+): Promise<CategoryAttributeInfo> {
+  const attributeSets = await getCategoryAttributeSets(categoryId);
+  const requiredCodes: string[] = [];
+  const variantThemeCodes = new Set<string>();
+  const variantFieldCodes = new Set<string>();
+
+  const walk = (groups: any[]) => {
+    for (const group of groups ?? []) {
+      const groupCode = normalizeKey(String(group.code ?? ""));
+
+      for (const attr of group.attributes ?? []) {
+        if (!attr.code) continue;
+
+        if (attr.isRequired) {
+          // `sale_price` is opt-in — it's never enforced server-side.
+          if (attr.code !== "sale_price" && attr.code !== "salePrice") {
+            requiredCodes.push(attr.code);
+          }
+        }
+
+        // Variant membership is a property of the group the attribute
+        // lives in, not a per-attribute flag.
+        if (groupCode === "variantThemes") {
+          variantThemeCodes.add(normalizeKey(attr.code));
+        }
+        if (groupCode === "variantFields") {
+          variantFieldCodes.add(normalizeKey(attr.code));
+        }
+      }
+
+      if (group.children?.length) walk(group.children);
+    }
+  };
+
+  for (const set of attributeSets) walk(set.groups);
+
+  return { requiredCodes, variantThemeCodes, variantFieldCodes };
+}
+
+// ==================================================================
+// Variant data invariants
+//
+// A category supports variants iff its attribute sets contain a
+// `variantThemes` group with at least one attribute. `hasVariants`
+// is only meaningful when that precondition holds. When it does not,
+// or when the client asks for variants but supplies no valid theme,
+// we force-clear everything to keep DB state consistent.
+// ==================================================================
+
+function sanitizeVariantData(
+  payload: Record<string, any>,
+  categoryVariantThemes: Set<string>,
+): void {
+  const wantsVariants = payload.hasVariants === true;
+
+  // Rule 1: a category with no variant themes cannot have variants.
+  // Rule 2: user explicitly turned variants off.
+  if (categoryVariantThemes.size === 0 || !wantsVariants) {
+    payload.hasVariants = false;
+    payload.variants = [];
+    payload.variantThemes = [];
+    payload.variantValues = {};
+    return;
+  }
+
+  // Rule 3: only keep themes the category actually allows.
+  const declaredThemes: string[] = Array.isArray(payload.variantThemes)
+    ? payload.variantThemes
+        .map((c: any) => String(c))
+        .filter((c: string) => categoryVariantThemes.has(normalizeKey(c)))
+    : [];
+
+  if (declaredThemes.length === 0) {
+    // hasVariants was true but nothing valid to split by → downgrade.
+    payload.hasVariants = false;
+    payload.variants = [];
+    payload.variantThemes = [];
+    payload.variantValues = {};
+    return;
+  }
+
+  payload.variantThemes = declaredThemes;
+
+  // Rule 4: every variant must carry a non-empty value for every theme.
+  if (Array.isArray(payload.variants)) {
+    payload.variants = payload.variants.filter((v: any) => {
+      if (!v || typeof v !== "object") return false;
+      return declaredThemes.every((theme) => {
+        const key = normalizeKey(theme);
+        const value = v[key] ?? v[theme];
+        return value !== undefined && value !== null && value !== "";
+      });
+    });
+  } else {
+    payload.variants = [];
+  }
+
+  // Rule 5: variantValues only for declared themes.
+  const allowedKeys = new Set(declaredThemes.map(normalizeKey));
+  const raw = payload.variantValues;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const filtered: Record<string, any> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (allowedKeys.has(normalizeKey(k))) filtered[k] = v;
+    }
+    payload.variantValues = filtered;
+  } else {
+    payload.variantValues = {};
+  }
+}
+
+// ==================================================================
+// Legacy: kept around in case other code imports it. Reimplemented
+// on top of `getCategoryAttributeInfo`.
+// ==================================================================
+
 async function validateRequiredCategoryAttributes(
   categoryId: string,
   data: Record<string, any>,
 ) {
   if (!categoryId) return;
-  const attributeSets = await getCategoryAttributeSets(categoryId);
-  const requiredCodes = new Set<string>();
-  for (const set of attributeSets) {
-    for (const group of set.groups ?? []) {
-      for (const attr of group.attributes ?? []) {
-        if (attr.isRequired && attr.code) {
-          if (attr.code === "sale_price" || attr.code === "salePrice") continue;
-          requiredCodes.add(attr.code);
-        }
-      }
-    }
-  }
+  const info = await getCategoryAttributeInfo(categoryId);
   const missing: string[] = [];
-  for (const code of requiredCodes) {
-    const camel = code.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+  for (const code of info.requiredCodes) {
+    const camel = normalizeKey(code);
     const value = data[camel];
     if (
       value === undefined ||
@@ -300,11 +429,35 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
     return { ok: false, error: "Invalid brand" };
   }
 
+  // ---- Category attribute info (required codes + variant groups) ----
+  let categoryInfo: CategoryAttributeInfo | null = null;
   if (nextCategory) {
     try {
-      await validateRequiredCategoryAttributes(nextCategory.toString(), data);
+      categoryInfo = await getCategoryAttributeInfo(nextCategory.toString());
     } catch (e: any) {
-      return { ok: false, error: e.message || "Missing required fields" };
+      return {
+        ok: false,
+        error: e?.message || "Failed to load category attributes",
+      };
+    }
+
+    // Required-field enforcement.
+    const missing: string[] = [];
+    for (const code of categoryInfo.requiredCodes) {
+      const camel = normalizeKey(code);
+      const value = data[camel];
+      const empty =
+        value === undefined ||
+        value === null ||
+        (typeof value === "string" && !value.trim()) ||
+        (Array.isArray(value) && value.length === 0);
+      if (empty) missing.push(code);
+    }
+    if (missing.length) {
+      return {
+        ok: false,
+        error: `Missing required fields: ${missing.join(", ")}`,
+      };
     }
   }
 
@@ -317,8 +470,6 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
   delete payload.brand;
   delete payload.carrier;
   delete payload.categoryId;
-
-  // Never let the recreate marker leak onto the Product document.
   delete payload[RECREATE_SOURCE_FIELD];
 
   if (nextCategory !== undefined) payload.categoryId = nextCategory;
@@ -365,9 +516,7 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
 
   if (Array.isArray(payload.variantThemes)) {
     payload.variantThemes = payload.variantThemes.map((c: any) =>
-      String(c).replace(/_([a-z])/g, (_: string, ch: string) =>
-        ch.toUpperCase(),
-      ),
+      normalizeKey(String(c)),
     );
   }
 
@@ -395,6 +544,14 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
 
   delete payload.keyFeatures;
   delete payload.specifications;
+
+  // ---- Server-side variant invariant enforcement --------------------
+  // Runs last, on normalized data. No category → no variant themes known
+  // → variants are force-disabled.
+  sanitizeVariantData(
+    payload,
+    categoryInfo?.variantThemeCodes ?? new Set<string>(),
+  );
 
   return { ok: true, payload, providedId };
 }

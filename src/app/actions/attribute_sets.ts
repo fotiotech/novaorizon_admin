@@ -6,6 +6,72 @@ import CategoryProperty from "@/models/CategoryProperty";
 import { connection } from "@/utils/connection";
 import { revalidatePath } from "next/cache";
 
+// Update this to the route that actually hosts the Attribute Sets list page.
+const LIST_PATH = "/catalog/attributes/sets";
+
+// ========================================================================
+//  toPlain – deep-convert Mongoose / BSON values into client-safe JSON.
+// ========================================================================
+function toPlain<T>(value: T): T {
+  if (value === null || value === undefined) return value;
+
+  const t = typeof value;
+  if (t === "string" || t === "number" || t === "boolean") return value;
+  if (t === "bigint") return String(value) as any;
+  if (t === "function") return undefined as any;
+
+  if (value instanceof Date) return value.toISOString() as any;
+
+  if (Array.isArray(value)) return value.map((v) => toPlain(v)) as any;
+
+  if (typeof value === "object") {
+    const anyVal = value as any;
+
+    if (
+      anyVal._bsontype === "ObjectId" ||
+      anyVal.constructor?.name === "ObjectId" ||
+      typeof anyVal.toHexString === "function"
+    ) {
+      try {
+        return anyVal.toString() as any;
+      } catch {
+        return null as any;
+      }
+    }
+
+    if (typeof Buffer !== "undefined" && Buffer.isBuffer(anyVal)) {
+      return anyVal.toString("hex") as any;
+    }
+
+    if (
+      anyVal._bsontype &&
+      typeof anyVal.toString === "function" &&
+      anyVal.constructor?.name !== "Object"
+    ) {
+      try {
+        return anyVal.toString() as any;
+      } catch {
+        // fall through
+      }
+    }
+
+    if (typeof anyVal.toObject === "function") {
+      return toPlain(anyVal.toObject()) as any;
+    }
+
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(anyVal)) {
+      out[k] = toPlain(v);
+    }
+    return out as any;
+  }
+
+  return value;
+}
+
+// ========================================================================
+//  createAttributeSet
+// ========================================================================
 export async function createAttributeSet(data: {
   title: string;
   code: string;
@@ -14,47 +80,74 @@ export async function createAttributeSet(data: {
 }) {
   await connection();
 
-  const { title, code, description, sortOrder } = data;
+  const title = data.title?.trim() ?? "";
+  const code = data.code?.trim() ?? "";
 
-  if (!title.trim()) throw new Error("Title is required");
-  if (!code.trim()) throw new Error("Code is required");
+  if (!title) return { success: false, error: "Title is required" };
+  if (!code) return { success: false, error: "Code is required" };
 
-  // Check uniqueness of code
-  const existing = await AttributeSet.findOne({ code });
-  if (existing) throw new Error(`Code "${code}" already exists`);
+  try {
+    const existing = await AttributeSet.findOne({ code });
+    if (existing) {
+      return { success: false, error: `Code "${code}" already exists` };
+    }
 
-  const attributeSet = new AttributeSet({
-    title: title.trim(),
-    code: code.trim(),
-    description: description?.trim(),
-    sortOrder: sortOrder || 0,
-  });
-  await attributeSet.save();
+    const attributeSet = new AttributeSet({
+      title,
+      code,
+      description: data.description?.trim(),
+      sortOrder: data.sortOrder ?? 0,
+    });
+    await attributeSet.save();
 
-  revalidatePath("/attributes");
-  return { success: true, data: attributeSet };
+    revalidatePath(LIST_PATH);
+    return { success: true, data: toPlain(attributeSet.toObject()) };
+  } catch (error: any) {
+    console.error("[createAttributeSet]", error);
+    return {
+      success: false,
+      error: error?.message || "Failed to create attribute set",
+    };
+  }
 }
 
+// ========================================================================
+//  getAttributeSets
+// ========================================================================
 export async function getAttributeSets() {
   await connection();
   try {
-    const attributeSets = await AttributeSet.find().lean();
-    return { success: true, data: attributeSets };
-  } catch (error) {
+    const attributeSets = await AttributeSet.find()
+      .sort({ sortOrder: 1 })
+      .lean();
+    return { success: true, data: toPlain(attributeSets) };
+  } catch (error: any) {
+    console.error("[getAttributeSets]", error);
     return { success: false, error: "Failed to fetch attribute sets" };
   }
 }
 
+// ========================================================================
+//  getAttributeSet
+// ========================================================================
 export async function getAttributeSet(id: string) {
   await connection();
-  const set = await AttributeSet.findById(id).lean();
-  if (!set) throw new Error("Attribute set not found");
-  return {
-    ...set,
-    _id: set._id.toString(),
-  };
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return { success: false, error: "Invalid attribute set ID" };
+    }
+    const set = await AttributeSet.findById(id).lean();
+    if (!set) return { success: false, error: "Attribute set not found" };
+    return { success: true, data: toPlain(set) };
+  } catch (error: any) {
+    console.error("[getAttributeSet]", error);
+    return { success: false, error: "Failed to fetch attribute set" };
+  }
 }
 
+// ========================================================================
+//  updateAttributeSet
+// ========================================================================
 export async function updateAttributeSet(
   id: string,
   data: {
@@ -66,52 +159,84 @@ export async function updateAttributeSet(
 ) {
   await connection();
 
-  const { title, code, description, sortOrder } = data;
+  const title = data.title?.trim() ?? "";
+  const code = data.code?.trim() ?? "";
 
-  // Validate uniqueness of code (excluding itself)
-  const existing = await AttributeSet.findOne({ code, _id: { $ne: id } });
-  if (existing) {
-    throw new Error(`Code "${code}" already exists`);
-  }
+  if (!title) return { success: false, error: "Title is required" };
+  if (!code) return { success: false, error: "Code is required" };
 
-  const updated = await AttributeSet.findByIdAndUpdate(
-    id,
-    {
-      title,
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return { success: false, error: "Invalid attribute set ID" };
+    }
+
+    const existing = await AttributeSet.findOne({
       code,
-      description,
-      sortOrder,
-    },
-    { new: true },
-  );
+      _id: { $ne: id },
+    });
+    if (existing) {
+      return { success: false, error: `Code "${code}" already exists` };
+    }
 
-  revalidatePath("/attributes");
-  return { success: true, data: updated };
+    const updated = await AttributeSet.findByIdAndUpdate(
+      id,
+      {
+        title,
+        code,
+        description: data.description,
+        sortOrder: data.sortOrder,
+      },
+      { new: true },
+    );
+
+    if (!updated) {
+      return { success: false, error: "Attribute set not found" };
+    }
+
+    revalidatePath(LIST_PATH);
+    return { success: true, data: toPlain(updated.toObject()) };
+  } catch (error: any) {
+    console.error("[updateAttributeSet]", error);
+    return {
+      success: false,
+      error: error?.message || "Failed to update attribute set",
+    };
+  }
 }
 
+// ========================================================================
+//  deleteAttributeSet
+//
+//  Detaches this set from every CategoryProperty mapping in one round-trip,
+//  then deletes the set itself.
+// ========================================================================
 export async function deleteAttributeSet(id: string) {
   await connection();
   try {
-    const setObjectId = new mongoose.Types.ObjectId(id);
-
-    const categoryProperties = await CategoryProperty.find({});
-    for (const property of categoryProperties) {
-      let changed = false;
-      property.mappings = (property.mappings || []).filter((mapping: any) => {
-        const matches = mapping.set?.toString?.() === id;
-        if (matches) changed = true;
-        return !matches;
-      });
-
-      if (changed) {
-        await property.save();
-      }
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return { success: false, error: "Invalid attribute set ID" };
     }
 
-    await AttributeSet.findByIdAndDelete(setObjectId);
-    revalidatePath("/attribute-sets");
+    const setObjectId = new mongoose.Types.ObjectId(id);
+
+    // Single update: pull every mapping whose `set` field matches.
+    await CategoryProperty.updateMany(
+      { "mappings.set": setObjectId },
+      { $pull: { mappings: { set: setObjectId } } },
+    );
+
+    const deleted = await AttributeSet.findByIdAndDelete(setObjectId);
+    if (!deleted) {
+      return { success: false, error: "Attribute set not found" };
+    }
+
+    revalidatePath(LIST_PATH);
     return { success: true };
-  } catch (error) {
-    return { success: false, error: "Failed to delete attribute set" };
+  } catch (error: any) {
+    console.error("[deleteAttributeSet]", error);
+    return {
+      success: false,
+      error: error?.message || "Failed to delete attribute set",
+    };
   }
 }

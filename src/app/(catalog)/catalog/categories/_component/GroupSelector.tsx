@@ -1,63 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import {
-  createCategoryPropertyWithMappings,
-  updateCategoryPropertyWithMappings,
-  getCategoryProperty,
-  getAllAttributeSets,
-  getAllAttributeGroups,
-  getAllAttributes,
-} from "@/app/actions/category";
-
-// --- Types ---
-interface Mapping {
-  id: string;
-  set: string;
-  groups: {
-    group: string;
-    attributes: {
-      attribute: string;
-      isRequired: boolean;
-    }[];
-  }[];
-}
-
-interface AttributeSetOption {
-  _id: string;
-  title: string;
-  code: string;
-}
+import { useMemo } from "react";
 
 interface GroupOption {
   _id: string;
   name: string;
   code: string;
 }
-
-interface AttributeOption {
-  _id: string;
-  name: string;
-  code: string;
-  type: string;
-}
-
-interface Props {
-  propertyId?: string;
-  onSuccess?: () => void;
-}
-
-// Utility
-const generateId = () => {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return (
-    Math.random().toString(36).substring(2, 15) +
-    Math.random().toString(36).substring(2, 15)
-  );
-};
 
 interface GroupSelectorProps {
   mappingId: string;
@@ -88,45 +37,79 @@ export default function GroupSelector({
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium">
-          Select Groups & Attributes
+      <div className="flex items-center justify-between mb-2">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          Groups
         </label>
-        <span className="text-xs text-gray-500">
-          {selectedGroups.length} groups selected
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {selectedGroups.length} selected
         </span>
       </div>
 
-      {/* Filter */}
-      <input
-        type="text"
-        placeholder="Filter groups..."
-        value={filter}
-        onChange={(e) => onFilterChange(e.target.value)}
-        className="w-full border border-gray-300 rounded p-1 text-sm mt-1 mb-2"
-      />
+      <div className="relative mb-3">
+        <svg
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"
+          />
+        </svg>
+        <input
+          type="text"
+          placeholder="Search groups…"
+          value={filter}
+          onChange={(e) => onFilterChange(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 pl-9 pr-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+        />
+      </div>
 
-      {/* Scrollable Group Buttons */}
-      <div className="max-h-48 overflow-y-auto">
-        <div className="flex flex-wrap gap-2 mt-1">
-          {filtered.map((group) => {
-            const isSelected = selectedGroups.includes(group._id);
-            return (
-              <button
-                key={group._id}
-                type="button"
-                onClick={() => onToggleGroup(group._id)}
-                className={`px-3 py-1 rounded-full border transition-colors ${
-                  isSelected
-                    ? "bg-blue-500 text-white border-blue-500"
-                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
-                }`}
-              >
-                {group.name}
-              </button>
-            );
-          })}
-        </div>
+      <div className="max-h-44 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/50 dark:bg-gray-900/30">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-2">
+            No groups match “{filter}”.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {filtered.map((group) => {
+              const isSelected = selectedGroups.includes(group._id);
+              return (
+                <button
+                  key={group._id}
+                  type="button"
+                  onClick={() => onToggleGroup(group._id)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                    isSelected
+                      ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                      : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400"
+                  }`}
+                >
+                  {isSelected && (
+                    <svg
+                      className="h-3 w-3"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={3}
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  )}
+                  {group.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

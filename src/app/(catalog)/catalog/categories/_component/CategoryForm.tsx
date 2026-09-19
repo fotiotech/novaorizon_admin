@@ -5,12 +5,12 @@ import FilesUploader from "@/components/FilesUploader";
 import {
   getCategory,
   createCategory,
-  getCategoryProperty,
   deleteCategoryImage,
 } from "@/app/actions/category";
 import { Category as Cat } from "@/constant/types";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import { toast } from "react-toastify";
+import { getCategoryProperty } from "@/app/actions/category_property";
 
 // Simple inline validation
 const validateCategory = (data: Partial<Cat>) => {
@@ -57,6 +57,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   const [parentSearch, setParentSearch] = useState("");
   const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
   const parentDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Inheritance is only meaningful for non-root categories.
+  // Derived from the *current* parent selection so the toggle stays honest.
+  const canInherit = !!categoryData.parentId;
 
   // File uploader
   const {
@@ -162,6 +166,15 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // If the category loses its parent (root, or cleared), force inheritance off.
+  // This mirrors the server's `canInherit` guard so the UI never reports a
+  // state the server would silently discard.
+  useEffect(() => {
+    if (!canInherit && inheritProperty) {
+      setInheritProperty(false);
+    }
+  }, [canInherit, inheritProperty]);
+
   const handleInputChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
@@ -181,6 +194,14 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   };
 
   const handleToggleChange = () => {
+    // Block the toggle for root categories so the user can't enable
+    // something the server will discard.
+    if (!canInherit) {
+      toast.info(
+        "Select a parent category first — root categories cannot inherit.",
+      );
+      return;
+    }
     setInheritProperty((prev) => !prev);
   };
 
@@ -207,6 +228,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     setCategoryData((prev) => ({ ...prev, parentId: "" }));
     setParentSearch("");
     setIsParentDropdownOpen(false);
+    // Effect above will also turn inheritance off; keep this explicit
+    // so the UI updates in the same tick.
+    setInheritProperty(false);
   };
 
   const handleParentInputChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -214,6 +238,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     setIsParentDropdownOpen(true);
     if (e.target.value === "") {
       setCategoryData((prev) => ({ ...prev, parentId: "" }));
+      setInheritProperty(false);
     }
   };
 
@@ -244,12 +269,16 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     setIsLoading(true);
 
     try {
+      // Never send `inheritProperty: true` for a root category — the server
+      // would coerce it to false and the UI would misreport success.
+      const effectiveInherit = inheritProperty && canInherit;
+
       const formData = {
         ...categoryData,
         imageUrl: files || [],
         attributes: attributes || [],
         propertyId: selectedPropertyId || undefined,
-        inheritProperty: inheritProperty,
+        inheritProperty: effectiveInherit,
       };
 
       const result = await createCategory(
@@ -258,6 +287,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       );
 
       if (result && !result.error) {
+        // Surface any server-side warning (e.g. "No ancestor properties")
+        // instead of silently swallowing it.
+        if ((result as any).warning) {
+          toast.info((result as any).warning);
+        }
         onSuccess();
       } else {
         setError(result?.error || "Error while processing category");
@@ -426,7 +460,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             className={`w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 dark:text-white ${
               inheritProperty ? "opacity-50 cursor-not-allowed" : ""
             }`}
-            disabled={inheritProperty} // disable when inheritance is on
+            disabled={inheritProperty}
           >
             <option value="">None</option>
             {properties.map((prop) => (
@@ -465,9 +499,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             <button
               type="button"
               onClick={handleToggleChange}
+              disabled={!canInherit}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                 inheritProperty ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-              }`}
+              } ${!canInherit ? "opacity-40 cursor-not-allowed" : ""}`}
               role="switch"
               aria-checked={inheritProperty}
             >
@@ -500,7 +535,12 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               ? "✓ Inheritance enabled"
               : "✗ Inheritance disabled"}
           </span>
-          {inheritProperty && (
+          {!canInherit && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              ⚠ Root categories cannot inherit. Select a parent category first.
+            </p>
+          )}
+          {inheritProperty && canInherit && (
             <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
               ℹ️ A new property will be auto‑generated from ancestor mappings.
             </p>
