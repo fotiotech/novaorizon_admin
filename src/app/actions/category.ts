@@ -373,19 +373,6 @@ export async function deleteCategory(id: string) {
 
 // ========================================================================
 //  getCategoryAttributeSets
-//
-//  ROOT GUARD: the root category has no parent, so "inheritance" is
-//  meaningless for it. Even if `inheritProperty` is true in the DB
-//  (from a bad earlier write), we skip the inheritance branch and
-//  return the category's own property unchanged.
-//
-//  Read-only: never persists anything. Inheritance is computed on the
-//  fly from the ancestor chain. The category's own `property` field is
-//  never mutated here — only explicit write actions (createCategory)
-//  materialize an inherited property.
-//
-//  Both branches delegate to `buildAttributeSetsFromMappings`, which
-//  returns results sorted ascending by `sortOrder`.
 // ========================================================================
 export async function getCategoryAttributeSets(
   categoryId: string,

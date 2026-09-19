@@ -9,6 +9,7 @@ import {
   FolderOpen,
   KeyboardArrowRight,
   MoreVert,
+  SubdirectoryArrowRight,
 } from "@mui/icons-material";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 
@@ -18,6 +19,7 @@ interface CategoryNode {
   url_slug?: string;
   description?: string;
   parent_id?: string | null;
+  parentId?: string | null;
   imageUrl?: string[];
   subcategories: CategoryNode[];
 }
@@ -34,6 +36,17 @@ interface CategoryListProps {
   onFilterChange?: (value: string) => void;
   hideFilter?: boolean;
 }
+
+type FlatRow = CategoryNode & {
+  level: number;
+  visible: boolean;
+  parentName: string | null;
+};
+
+const getParentId = (node: CategoryNode): string | null => {
+  const pid = node.parentId ?? node.parent_id ?? null;
+  return pid ? String(pid) : null;
+};
 
 const CategoryList: React.FC<CategoryListProps> = ({
   categories,
@@ -63,6 +76,29 @@ const CategoryList: React.FC<CategoryListProps> = ({
       else next.add(id);
       return next;
     });
+  };
+
+  // Flat lookup of every known category, keyed by _id. Used ONLY to
+  // resolve a row's parent name — never to rebuild the tree.
+  const nodesById = useMemo(() => {
+    const map = new Map<string, CategoryNode>();
+    const walk = (nodes: CategoryNode[] | undefined) => {
+      if (!nodes) return;
+      for (const n of nodes) {
+        if (!n || !n._id) continue;
+        if (!map.has(n._id)) map.set(n._id, n);
+        walk(n.subcategories);
+      }
+    };
+    walk(categories);
+    return map;
+  }, [categories]);
+
+  const resolveParentName = (node: CategoryNode): string | null => {
+    const pid = getParentId(node);
+    if (!pid) return null;
+    const parent = nodesById.get(pid);
+    return parent ? parent.name : null;
   };
 
   const filterTree = (
@@ -100,14 +136,19 @@ const CategoryList: React.FC<CategoryListProps> = ({
     level: number = 0,
     parentExpanded: boolean = true,
     visited = new Set<string>(),
-  ): Array<CategoryNode & { level: number; visible: boolean }> => {
-    let rows: Array<CategoryNode & { level: number; visible: boolean }> = [];
+  ): FlatRow[] => {
+    let rows: FlatRow[] = [];
     for (const node of nodes) {
       if (!node?._id || visited.has(node._id)) continue;
       visited.add(node._id);
       const isExpanded = expanded.has(node._id);
       const visible = parentExpanded;
-      rows.push({ ...node, level, visible });
+      rows.push({
+        ...node,
+        level,
+        visible,
+        parentName: resolveParentName(node),
+      });
       if (node.subcategories && node.subcategories.length > 0 && isExpanded) {
         rows = rows.concat(
           flattenTree(node.subcategories, level + 1, true, visited),
@@ -117,9 +158,9 @@ const CategoryList: React.FC<CategoryListProps> = ({
     return rows;
   };
 
-  const flattenedRows = useMemo(
+  const flattenedRows = useMemo<FlatRow[]>(
     () => flattenTree(filteredCategories, 0, true),
-    [filteredCategories, expanded],
+    [filteredCategories, expanded, nodesById],
   );
 
   const getMenuItems = (row: CategoryNode): PopoverMenuItem[] => [
@@ -152,7 +193,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
         </div>
       </div>
 
-      {/* Internal filter (unused when hideFilter=true) */}
       {showFilter && !hideFilter && (
         <div className="border-b border-border p-3">
           <div className="relative">
@@ -171,7 +211,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
         </div>
       )}
 
-      {/* Content */}
       {flattenedRows.length === 0 ? (
         <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
@@ -200,8 +239,11 @@ const CategoryList: React.FC<CategoryListProps> = ({
                 <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Category
                 </th>
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Parent
+                </th>
                 <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <span className="">Actions</span>
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -265,6 +307,24 @@ const CategoryList: React.FC<CategoryListProps> = ({
                           </span>
                         )}
                       </div>
+                    </td>
+
+                    <td className="px-5 py-3">
+                      {row.parentName ? (
+                        <span className="inline-flex max-w-[16rem] items-center gap-1.5 text-muted-foreground">
+                          <SubdirectoryArrowRight
+                            fontSize="small"
+                            className="flex-none text-muted-foreground/70"
+                          />
+                          <span className="truncate" title={row.parentName}>
+                            {row.parentName}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-xs italic text-muted-foreground/60">
+                          — root —
+                        </span>
+                      )}
                     </td>
 
                     <td className="px-5 py-3 text-right">
