@@ -383,9 +383,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                 >
                   <div className="relative h-11 w-11 flex-none overflow-hidden rounded-lg bg-muted">
                     <Image
-                      src={
-                        item.mainImage || item.main_image || "/placeholder.png"
-                      }
+                      src={item.images[0] || "/placeholder.png"}
                       alt={item.name || item.title || "Product"}
                       fill
                       className="object-cover"
