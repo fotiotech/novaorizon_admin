@@ -21,7 +21,7 @@ export default function AttributesLayout({
   return (
     <div>
       {/* Secondary horizontal navigation (pill style) */}
-      <div className="mb-6 border-b border-border">
+      <div className=" border-b border-border">
         <nav className="flex flex-wrap gap-2 py-2">
           {subNavLinks.map((link) => {
             const isActive =

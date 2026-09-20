@@ -26,7 +26,7 @@ const SectionLayout: React.FC<SectionLayoutProps> = ({
 
   return (
     <div>
-      <div className="mb-3">
+      <div className="">
         <h1 className="text-xl sm:text-2xl font-bold text-foreground">
           {title}
         </h1>
@@ -35,7 +35,7 @@ const SectionLayout: React.FC<SectionLayoutProps> = ({
         {links.length > 0 && (
           <nav
             className="
-              mt-2 flex flex-nowrap items-stretch gap-1
+              mt-1 flex flex-nowrap items-stretch gap-1
               border-b border-border
               overflow-x-auto overflow-y-hidden
               scrollbar-thin scrollbar-thumb-border

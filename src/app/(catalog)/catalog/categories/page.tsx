@@ -222,7 +222,7 @@ const Categories = () => {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 py-8 ">
+    <div className="mx-auto max-w-7xl py-3 lg:space-y-6 lg:py-8 ">
       <Toaster position="top-right" richColors />
 
       {/* Header */}

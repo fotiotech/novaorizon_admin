@@ -353,7 +353,7 @@ const Attributes = () => {
   const isFiltering = filterText.trim() !== "";
 
   return (
-    <div className="w-full max-w-6xl overflow-x-clip py-6">
+    <div className="w-full max-w-6xl overflow-x-clip py-3 lg:py-6">
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
