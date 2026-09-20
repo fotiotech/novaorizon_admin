@@ -242,7 +242,7 @@ const DescriptionField: React.FC<{
           isOpen={isSheetOpen}
           onClose={() => setIsSheetOpen(false)}
           title={name || "Description"}
-          height="95vh"
+          height="85vh"
         >
           {/*
             Sheet body is a flex column with a bounded height:

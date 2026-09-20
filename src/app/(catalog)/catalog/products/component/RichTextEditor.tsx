@@ -1,7 +1,7 @@
 "use client";
 
 import { useEditor, EditorContent } from "@tiptap/react";
-import type { AnyExtension } from "@tiptap/react";
+import type { AnyExtension, Editor } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
@@ -230,7 +230,6 @@ const HIGHLIGHT_COLORS = [
   "#ffffff",
 ];
 
-// Line-height presets.
 const LINE_HEIGHTS: { value: string; label: string }[] = [
   { value: "1", label: "1.0" },
   { value: "1.15", label: "1.15" },
@@ -242,7 +241,6 @@ const LINE_HEIGHTS: { value: string; label: string }[] = [
   { value: "3", label: "3.0" },
 ];
 
-// Letter-spacing presets.
 const LETTER_SPACINGS: { value: string; label: string }[] = [
   { value: "-1px", label: "-1px" },
   { value: "-0.5px", label: "-0.5px" },
@@ -252,16 +250,10 @@ const LETTER_SPACINGS: { value: string; label: string }[] = [
   { value: "2px", label: "2px" },
 ];
 
-// ------------------------------------------------------------------
 // Shared class for every native <select> in the toolbar.
-//
-// `[color-scheme:light] dark:[color-scheme:dark]` is the crucial bit:
-// Windows Chrome/Edge ignore the element's CSS `color` for the closed
-// state of a native <select> and use the OS color scheme instead. This
-// class tells the browser to render the control in the light scheme
-// when the page is in light mode and the dark scheme in dark mode, so
-// the closed-state text and the dropdown list are readable in both.
-// ------------------------------------------------------------------
+// `[color-scheme:light] dark:[color-scheme:dark]` is what makes the
+// closed-state text readable on Windows Chrome/Edge, which otherwise
+// pick the OS color scheme for native select controls.
 const TOOLBAR_SELECT_CLASS =
   "h-7 shrink-0 rounded border border-border bg-white px-1.5 text-xs text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40 [color-scheme:light] dark:bg-gray-800 dark:text-gray-100 dark:[color-scheme:dark]";
 
@@ -440,7 +432,12 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
     const [showImageAltDialog, setShowImageAltDialog] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [counts, setCounts] = useState({ words: 0, characters: 0 });
-    const [, setTick] = useState(0);
+    // Undo/redo availability. Computed in editor callbacks (not during
+    // render) so it reflects the freshest transaction state.
+    const [history, setHistory] = useState({
+      canUndo: false,
+      canRedo: false,
+    });
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -450,6 +447,18 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
     const changeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingHtmlRef = useRef<string | null>(null);
     const lastEmittedHtmlRef = useRef(value);
+
+    // -----------------------------------------------------------------
+    // Initial content — captured ONCE.
+    //
+    // Tiptap v3's `useEditor` re-syncs the `content` option whenever the
+    // prop changes. Our parent feeds the editor's own output back in via
+    // the value prop, which was triggering an internal `setContent` on
+    // every debounced keystroke — and `setContent` clears the history
+    // stack, killing undo/redo. Reading the initial value through a ref
+    // means the option is stable after mount.
+    // -----------------------------------------------------------------
+    const initialContentRef = useRef(value);
 
     const { files, addFiles, progressByName } = useFileUploader(
       productId,
@@ -469,6 +478,15 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
         ? `${contentMaxHeight}px`
         : contentMaxHeight
       : undefined;
+
+    // Sync undo/redo availability from an editor instance. Called from
+    // every editor hook below so it tracks real transactions.
+    const syncHistory = useCallback((ed: Editor) => {
+      setHistory({
+        canUndo: ed.can().undo(),
+        canRedo: ed.can().redo(),
+      });
+    }, []);
 
     useEffect(() => {
       onChangeRef.current = onChange;
@@ -511,24 +529,27 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
       };
     }, []);
 
+    // ---- Editor instance ----
     const editor = useEditor({
       extensions,
-      content: value,
+      content: initialContentRef.current,
       onUpdate: ({ editor }) => {
         emitChange(editor.getHTML());
         setCounts({
           words: editor.storage.characterCount.words(),
           characters: editor.storage.characterCount.characters(),
         });
+        syncHistory(editor);
       },
-      onSelectionUpdate: () => {
-        setTick((n) => n + 1);
+      onSelectionUpdate: ({ editor }) => {
+        syncHistory(editor);
       },
       onCreate: ({ editor }) => {
         setCounts({
           words: editor.storage.characterCount.words(),
           characters: editor.storage.characterCount.characters(),
         });
+        syncHistory(editor);
       },
       immediatelyRender: false,
       editorProps: {
@@ -540,6 +561,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
       },
     });
 
+    // ---- Insert uploaded images ----
     useEffect(() => {
       if (!editor) return;
       const newUrls = files.filter(
@@ -555,6 +577,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
       }
     }, [files, editor]);
 
+    // ---- Prevent zoom on double-tap (iOS) ----
     useEffect(() => {
       const container = editorContainerRef.current;
       if (!container) return;
@@ -566,6 +589,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
         container.removeEventListener("touchstart", handleTouchStart);
     }, []);
 
+    // ---- Fullscreen Escape key ----
     useEffect(() => {
       if (!isFullscreen) return;
       const handleKey = (e: KeyboardEvent) => {
@@ -575,6 +599,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
       return () => document.removeEventListener("keydown", handleKey);
     }, [isFullscreen]);
 
+    // ---- Image upload handlers ----
     const handleImageUpload = useCallback((file: File) => {
       pendingFileRef.current = file;
       setShowImageAltDialog(true);
@@ -910,17 +935,18 @@ const RichTextEditor: React.FC<RichTextEditorProps> = memo(
 
             <Divider />
 
-            {/* History */}
+            {/* History — availability driven by the editor's own state,
+                updated inside onUpdate/onSelectionUpdate/onCreate. */}
             <ToolbarButton
               onClick={() => editor.chain().focus().undo().run()}
-              disabled={!editor.can().undo()}
+              disabled={!history.canUndo}
               title="Undo (Ctrl+Z)"
             >
               <Undo fontSize="small" />
             </ToolbarButton>
             <ToolbarButton
               onClick={() => editor.chain().focus().redo().run()}
-              disabled={!editor.can().redo()}
+              disabled={!history.canRedo}
               title="Redo (Ctrl+Y)"
             >
               <Redo fontSize="small" />
