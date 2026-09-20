@@ -75,7 +75,7 @@ interface DraftSummary {
 const ITEMS_PER_PAGE = 10;
 
 const inputClass =
-  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
 
 /* ------------------------------------------------------------------ */
 /* Module-scope helpers                                                */
@@ -806,7 +806,7 @@ export default function ProductsPage() {
 
       {/* Desktop filter bar */}
       <div className="hidden md:block">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-4">
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
             <div className="min-w-0 lg:col-span-6">{searchInputEl}</div>
             <div className="min-w-0 lg:col-span-3">{categorySelectEl}</div>
