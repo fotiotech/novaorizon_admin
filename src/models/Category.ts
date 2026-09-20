@@ -1,14 +1,23 @@
+// models/Category.ts
+
 import mongoose, { Schema, model, models, Document } from "mongoose";
 
-// Category Interface
 interface ICategory extends Document {
   slug: string;
   name: string;
   parentId?: mongoose.Types.ObjectId;
   description?: string;
   imageUrl?: string[];
-  property?: mongoose.Types.ObjectId; // Reference to CategoryProperty
+
   inheritProperty: boolean;
+
+  // Admin's manual selection. Never touched by inheritance.
+  property?: mongoose.Types.ObjectId;
+
+  // Auto-generated merged snapshot. Populated only by Re-run.
+  // Points at a CategoryProperty doc with `readOnly: true`.
+  inheritedProperty?: mongoose.Types.ObjectId;
+
   seoTitle?: string;
   seoDesc?: string;
   keywords?: string;
@@ -18,7 +27,6 @@ interface ICategory extends Document {
   updatedAt: Date;
 }
 
-// Category Schema
 const CategorySchema = new Schema<ICategory>({
   slug: {
     type: String,
@@ -45,14 +53,23 @@ const CategorySchema = new Schema<ICategory>({
       },
     },
   ],
+
   property: {
     type: Schema.Types.ObjectId,
     ref: "CategoryProperty",
   },
+
   inheritProperty: {
     type: Boolean,
-    default: true,
+    default: false,
   },
+
+  inheritedProperty: {
+    type: Schema.Types.ObjectId,
+    ref: "CategoryProperty",
+    default: null,
+  },
+
   seoTitle: { type: String, maxLength: 60 },
   seoDesc: { type: String, maxLength: 160 },
   keywords: { type: String },
@@ -62,13 +79,11 @@ const CategorySchema = new Schema<ICategory>({
   updatedAt: { type: Date, default: Date.now },
 });
 
-// Update `updatedAt` on save
 CategorySchema.pre("save", function (next) {
   this.updatedAt = new Date();
   next();
 });
 
-// Category Model
 const Category =
   models.Category || model<ICategory>("Category", CategorySchema);
 export default Category;

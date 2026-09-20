@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import AttributeSelector from "./AttributeSelector";
 import GroupSelector from "./GroupSelector";
 
@@ -81,6 +82,18 @@ export default function MappingItem({
   const { id, set, groups } = mapping;
   const setErrorId = `set-error-${id}`;
 
+  // Only ONE group's attribute body is expanded at a time within this
+  // mapping. Clicking another group's header collapses the previous one.
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+
+  // If the active group is removed from the mapping (deselected in
+  // GroupSelector), drop the stale pointer so nothing dangles.
+  useEffect(() => {
+    if (activeGroupId && !groups.some((g) => g.group === activeGroupId)) {
+      setActiveGroupId(null);
+    }
+  }, [groups, activeGroupId]);
+
   const totalGroups = groups.length;
   const totalAttributes = groups.reduce(
     (acc, g) => acc + g.attributes.length,
@@ -91,15 +104,15 @@ export default function MappingItem({
   const isConfigured = !!set && totalGroups > 0 && totalAttributes > 0;
 
   return (
-    <div className="rounded-lg border border-border bg-card text-card-foreground overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 bg-muted/40">
+    <div className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
+      <div className="flex items-center gap-2 bg-muted/40 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
         <button
           type="button"
           onClick={onToggleExpand}
-          className="flex flex-1 items-center gap-3 text-left min-w-0"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left sm:gap-3"
           aria-expanded={expanded}
         >
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-muted text-xs font-semibold text-foreground shrink-0">
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-foreground">
             {index + 1}
           </span>
           <div className="min-w-0 flex-1">
@@ -108,7 +121,7 @@ export default function MappingItem({
                 {setTitle}
               </span>
               {isConfigured && (
-                <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                <span className="hidden shrink-0 items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 sm:inline-flex">
                   Ready
                 </span>
               )}
@@ -124,7 +137,7 @@ export default function MappingItem({
               </span>
             </div>
           </div>
-          <span className="text-muted-foreground text-xs shrink-0">
+          <span className="shrink-0 text-xs text-muted-foreground">
             {expanded ? "▲" : "▼"}
           </span>
         </button>
@@ -132,7 +145,7 @@ export default function MappingItem({
         <button
           type="button"
           onClick={onRemove}
-          className="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
           aria-label="Remove set"
         >
           <svg
@@ -152,7 +165,7 @@ export default function MappingItem({
       </div>
 
       {expanded && (
-        <div className="px-4 py-4 space-y-5 border-t border-border">
+        <div className="space-y-4 border-t border-border px-3 py-3 sm:space-y-5 sm:px-4 sm:py-4">
           <div>
             <label
               htmlFor={`set-select-${id}`}
@@ -164,7 +177,7 @@ export default function MappingItem({
               id={`set-select-${id}`}
               value={set}
               onChange={(e) => onUpdateSet(e.target.value)}
-              className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition ${
+              className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 ${
                 hasSetError ? "border-destructive" : "border-border"
               }`}
               aria-invalid={hasSetError}
@@ -185,7 +198,7 @@ export default function MappingItem({
           </div>
 
           {set && (
-            <div className="space-y-5">
+            <div className="space-y-4 sm:space-y-5">
               <GroupSelector
                 mappingId={id}
                 selectedGroups={groups.map((g) => g.group)}
@@ -196,13 +209,14 @@ export default function MappingItem({
               />
 
               {groups.length > 0 && (
-                <div className="space-y-3">
+                <div className="space-y-2.5 sm:space-y-3">
                   {groups.map((group) => {
                     const groupId = group.group;
                     const groupName =
                       allGroups.find((g) => g._id === groupId)?.name || groupId;
                     const attrFilterKey = `${id}-${groupId}`;
                     const attrFilter = attrFilters[attrFilterKey] || "";
+                    const isActive = activeGroupId === groupId;
 
                     return (
                       <AttributeSelector
@@ -213,6 +227,12 @@ export default function MappingItem({
                         selectedAttributes={group.attributes}
                         allAttributes={allAttributes}
                         filter={attrFilter}
+                        expanded={isActive}
+                        onToggleExpand={() =>
+                          setActiveGroupId((prev) =>
+                            prev === groupId ? null : groupId,
+                          )
+                        }
                         onFilterChange={(value) =>
                           onAttrFilterChange(groupId, value)
                         }

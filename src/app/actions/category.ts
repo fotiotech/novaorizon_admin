@@ -14,14 +14,13 @@ import "@/models/UnitFamily";
 import { revalidatePath } from "next/cache";
 import { deleteS3Object } from "./s3";
 import {
-  collectAncestorProperties,
-  ensureCategoryPropertyFromMappings,
+  applyInheritedPropertyToCategory,
   buildAttributeSetsFromMappings,
   type AttributeSetResult,
 } from "./category_property";
 
 // ========================================================================
-//  toPlain – deep-convert Mongoose / BSON values into client-safe JSON.
+//  toPlain
 // ========================================================================
 function toPlain<T>(value: T): T {
   if (value === null || value === undefined) return value;
@@ -32,13 +31,11 @@ function toPlain<T>(value: T): T {
   if (t === "function") return undefined as any;
 
   if (value instanceof Date) return value.toISOString() as any;
-
   if (Array.isArray(value)) return value.map((v) => toPlain(v)) as any;
 
   if (typeof value === "object") {
     const anyVal = value as any;
 
-    // BSON ObjectId
     if (
       anyVal._bsontype === "ObjectId" ||
       anyVal.constructor?.name === "ObjectId" ||
@@ -51,12 +48,10 @@ function toPlain<T>(value: T): T {
       }
     }
 
-    // Node Buffer
     if (typeof Buffer !== "undefined" && Buffer.isBuffer(anyVal)) {
       return anyVal.toString("hex") as any;
     }
 
-    // Decimal128 / Long / other BSON wrappers with a JS value
     if (
       anyVal._bsontype &&
       typeof anyVal.toString === "function" &&
@@ -65,16 +60,14 @@ function toPlain<T>(value: T): T {
       try {
         return anyVal.toString() as any;
       } catch {
-        // fall through
+        /* fall through */
       }
     }
 
-    // Mongoose document → plain object, then recurse
     if (typeof anyVal.toObject === "function") {
       return toPlain(anyVal.toObject()) as any;
     }
 
-    // Plain object → recurse
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(anyVal)) {
       out[k] = toPlain(v);
@@ -83,6 +76,23 @@ function toPlain<T>(value: T): T {
   }
 
   return value;
+}
+
+// ========================================================================
+//  projectForList
+//
+//  Strips raw ObjectIds and replaces the inherited ref with a cheap
+//  boolean. Keeps the `property` populated object (form uses it).
+// ========================================================================
+function projectForList(category: any) {
+  if (!category) return category;
+  const { inheritedProperty, property, ...rest } = category;
+
+  return {
+    ...rest,
+    property: property ?? null,
+    hasInheritedSnapshot: !!inheritedProperty,
+  };
 }
 
 // ---------- Helper: Slug ----------
@@ -96,9 +106,7 @@ async function getUniqueCategorySlug(
   excludeId?: string | null,
 ): Promise<string> {
   const normalizedName = (name || "").trim();
-  if (!normalizedName) {
-    return "category";
-  }
+  if (!normalizedName) return "category";
 
   let base = generateSlug(normalizedName);
   if (parentId) {
@@ -126,18 +134,10 @@ async function getUniqueCategorySlug(
   return candidate;
 }
 
-function generatePropertyCode(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .trim()
-    .replace(/\s+/g, "_");
-}
-
 export async function getCategories() {
   await connection();
   const categories = await Category.find().populate("property").lean();
-  return toPlain(categories);
+  return toPlain(categories).map(projectForList);
 }
 
 // ---------- Category CRUD ----------
@@ -157,7 +157,7 @@ export async function getCategory(
   } else if (id) {
     const category = await Category.findById(id).populate("property").lean();
     if (!category) return null;
-    return toPlain(category);
+    return projectForList(toPlain(category));
   } else if (parentId) {
     const subCategories = await Category.find({ parentId })
       .populate("property")
@@ -165,12 +165,17 @@ export async function getCategory(
     return toPlain(subCategories);
   } else {
     const categories = await Category.find().populate("property").lean();
-    return toPlain(categories);
+    return toPlain(categories).map(projectForList);
   }
 }
 
 // ========================================================================
 //  createCategory
+//
+//  - `property` = admin's manual selection. Always written.
+//  - `inheritedProperty` = cleared when inheritance is off. Left as-is
+//    when on so the last snapshot survives edits; the next Re-run
+//    regenerates it (and cleans up any stale doc from a rename).
 // ========================================================================
 export async function createCategory(
   formData: {
@@ -227,14 +232,9 @@ export async function createCategory(
       id || undefined,
     );
 
-    // ---- Inheritance is only valid when the category has a parent ------
-    // The root ("All Category") has nothing above it. If a client sends
-    // `inheritProperty: true` for it anyway, we coerce it to false so the
-    // DB can never hold a self-inheriting root.
     const canInherit = !!resolvedParentId;
     const wantsInherit = inheritProperty === true && canInherit;
 
-    let categoryId: string | null = null;
     const existingCategory = id ? await Category.findById(id) : null;
 
     if (existingCategory) {
@@ -245,22 +245,24 @@ export async function createCategory(
         url_slug: slugValue,
         description,
         imageUrl: imageUrl || [],
+        inheritProperty: wantsInherit,
+        property: propertyId || null,
       };
 
-      if (wantsInherit) {
-        updateData.inheritProperty = true;
-      } else {
-        updateData.inheritProperty = false;
-        updateData.property = propertyId || null;
+      // Turning inheritance off: delete the snapshot doc and clear ref.
+      if (!wantsInherit && existingCategory.inheritedProperty) {
+        await CategoryProperty.deleteOne({
+          _id: existingCategory.inheritedProperty,
+        });
+        updateData.inheritedProperty = null;
       }
 
       await Category.findOneAndUpdate(
         { _id: existingCategory._id },
         { $set: updateData },
       );
-      categoryId = existingCategory._id.toString();
     } else {
-      const newCategoryData: any = {
+      const newCategory = new Category({
         slug: slugValue,
         url_slug: slugValue,
         name,
@@ -268,72 +270,15 @@ export async function createCategory(
         description,
         imageUrl: imageUrl || [],
         inheritProperty: wantsInherit,
-      };
-
-      newCategoryData.property = wantsInherit ? null : propertyId || null;
-
-      const newCategory = new Category(newCategoryData);
-      const saved = await newCategory.save();
-      categoryId = saved._id.toString();
-    }
-
-    if (wantsInherit && categoryId) {
-      const { mappings } = await collectAncestorProperties(categoryId);
-
-      if (mappings.length === 0) {
-        await Category.findByIdAndUpdate(categoryId, {
-          $set: { property: null },
-        });
-        return {
-          success: true,
-          warning: "No ancestor properties found to inherit.",
-        };
-      }
-
-      const baseCode = generatePropertyCode(name || "");
-      const propertyName = `${name || "Category"}`;
-      const propertyDescription = `Auto-generated from ancestors`;
-
-      // Preserve both attribute flags (isRequired, isHighlight) when
-      // persisting the merged inherited property.
-      const preparedMappings = mappings.map((m: any) => ({
-        set: new mongoose.Types.ObjectId(m.set),
-        groups: m.groups.map((g: any) => ({
-          group: new mongoose.Types.ObjectId(g.group),
-          attributes: g.attributes.map((a: any) => ({
-            attribute: new mongoose.Types.ObjectId(a.attribute),
-            isRequired: a.isRequired === true,
-            isHighlight: a.isHighlight === true,
-          })),
-        })),
-      }));
-
-      let property = await CategoryProperty.findOne({ code: baseCode });
-
-      if (property) {
-        property.name = propertyName;
-        property.description = propertyDescription;
-        property.mappings = preparedMappings as any;
-        await property.save();
-      } else {
-        property = new CategoryProperty({
-          code: baseCode,
-          name: propertyName,
-          description: propertyDescription,
-          mappings: preparedMappings as any,
-        });
-        await property.save();
-      }
-
-      await Category.findByIdAndUpdate(categoryId, {
-        $set: { property: property._id },
+        property: propertyId || null,
+        inheritedProperty: null,
       });
-
-      revalidatePath("/categories");
-      revalidatePath("/category-properties");
+      await newCategory.save();
     }
 
     revalidatePath("/categories");
+    revalidatePath("/catalog/categories/property");
+
     return { success: true };
   } catch (error: any) {
     console.error(
@@ -348,14 +293,67 @@ export async function createCategory(
 }
 
 // ========================================================================
+//  runCategoryInheritance
+// ========================================================================
+export async function runCategoryInheritance(
+  categoryId: string,
+): Promise<{ success?: boolean; error?: string; warning?: string }> {
+  try {
+    await connection();
+
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      return { error: "Invalid category ID." };
+    }
+
+    const category: any = await Category.findById(categoryId)
+      .select("parentId inheritProperty")
+      .lean();
+    if (!category) return { error: "Category not found." };
+
+    if (!category.parentId) {
+      return { error: "Root categories cannot inherit properties." };
+    }
+
+    if (category.inheritProperty !== true) {
+      await Category.findByIdAndUpdate(categoryId, {
+        $set: { inheritProperty: true },
+      });
+    }
+
+    const { warning } = await applyInheritedPropertyToCategory(categoryId);
+
+    revalidatePath("/categories");
+    revalidatePath("/catalog/categories/property");
+
+    return warning ? { success: true, warning } : { success: true };
+  } catch (error: any) {
+    console.error("Error running category inheritance:", error);
+    return { error: error.message || "Failed to run inheritance." };
+  }
+}
+
+// ========================================================================
 //  deleteCategory
 // ========================================================================
 export async function deleteCategory(id: string) {
   try {
     await connection();
 
+    const category: any = await Category.findById(id)
+      .select("inheritedProperty")
+      .lean();
+
+    // Delete the auto-gen snapshot doc so nothing dangles.
+    if (category?.inheritedProperty) {
+      await CategoryProperty.deleteOne({ _id: category.inheritedProperty });
+    }
+
     await Category.updateMany({ parentId: id }, { $set: { parentId: null } });
     await Category.updateMany({ property: id }, { $unset: { property: "" } });
+    await Category.updateMany(
+      { inheritedProperty: id },
+      { $unset: { inheritedProperty: "" } },
+    );
 
     await mongoose.models.Product?.updateMany(
       { categoryId: id },
@@ -364,6 +362,7 @@ export async function deleteCategory(id: string) {
 
     await Category.findByIdAndDelete(id);
     revalidatePath("/categories");
+    revalidatePath("/catalog/categories/property");
     return { success: true, message: "Category deleted successfully" };
   } catch (error) {
     console.error("Error deleting category:", error);
@@ -373,6 +372,9 @@ export async function deleteCategory(id: string) {
 
 // ========================================================================
 //  getCategoryAttributeSets
+//
+//  - inheritProperty on + inheritedProperty set → snapshot doc
+//  - otherwise                                 → own property doc
 // ========================================================================
 export async function getCategoryAttributeSets(
   categoryId: string,
@@ -384,7 +386,7 @@ export async function getCategoryAttributeSets(
   }
 
   const category: any = await Category.findById(categoryId)
-    .select("inheritProperty property parentId")
+    .select("property inheritedProperty inheritProperty parentId")
     .lean();
 
   if (!category) return [];
@@ -392,19 +394,14 @@ export async function getCategoryAttributeSets(
   const isRoot = !category.parentId;
   const wantsInheritance = category.inheritProperty === true && !isRoot;
 
-  // ---- Inherited view: merge self + ancestors, do NOT persist ---------
-  if (wantsInheritance) {
-    const { mappings } = await collectAncestorProperties(categoryId);
-    if (mappings.length === 0) return [];
-    return buildAttributeSetsFromMappings(mappings);
-  }
+  const effectiveId =
+    wantsInheritance && category.inheritedProperty
+      ? category.inheritedProperty
+      : category.property;
 
-  // ---- Own property only ----------------------------------------------
-  if (!category.property) return [];
+  if (!effectiveId) return [];
 
-  const property: any = await CategoryProperty.findById(
-    category.property,
-  ).lean();
+  const property: any = await CategoryProperty.findById(effectiveId).lean();
   if (!property) return [];
 
   return buildAttributeSetsFromMappings(property.mappings);

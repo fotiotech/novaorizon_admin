@@ -37,18 +37,18 @@ export default function GroupSelector({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      <div className="mb-2 flex items-center justify-between">
+        <label className="block text-sm font-medium text-foreground">
           Groups
         </label>
-        <span className="text-xs text-gray-500 dark:text-gray-400">
+        <span className="text-xs text-muted-foreground">
           {selectedGroups.length} selected
         </span>
       </div>
 
-      <div className="relative mb-3">
+      <div className="relative mb-2.5">
         <svg
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
           fill="none"
           stroke="currentColor"
           strokeWidth={2}
@@ -65,17 +65,17 @@ export default function GroupSelector({
           placeholder="Search groups…"
           value={filter}
           onChange={(e) => onFilterChange(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 pl-9 pr-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+          className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
       </div>
 
-      <div className="max-h-44 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/50 dark:bg-gray-900/30">
+      <div className="max-h-44 overflow-y-auto rounded-lg border border-border bg-muted/30 p-2.5 sm:p-3">
         {filtered.length === 0 ? (
-          <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-2">
+          <p className="py-2 text-center text-xs text-muted-foreground">
             No groups match “{filter}”.
           </p>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {filtered.map((group) => {
               const isSelected = selectedGroups.includes(group._id);
               return (
@@ -83,10 +83,10 @@ export default function GroupSelector({
                   key={group._id}
                   type="button"
                   onClick={() => onToggleGroup(group._id)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition sm:px-3 ${
                     isSelected
-                      ? "bg-blue-600 border-blue-600 text-white shadow-sm"
-                      : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background text-foreground hover:border-primary/60 hover:text-primary"
                   }`}
                 >
                   {isSelected && (

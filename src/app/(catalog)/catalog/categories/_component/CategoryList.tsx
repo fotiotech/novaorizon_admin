@@ -10,8 +10,16 @@ import {
   KeyboardArrowRight,
   MoreVert,
   SubdirectoryArrowRight,
+  AccountTree,
+  Visibility,
 } from "@mui/icons-material";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
+
+interface CategoryPropertyRef {
+  _id: string;
+  name: string;
+  code?: string;
+}
 
 interface CategoryNode {
   _id: string;
@@ -21,6 +29,9 @@ interface CategoryNode {
   parent_id?: string | null;
   parentId?: string | null;
   imageUrl?: string[];
+  property?: CategoryPropertyRef | string | null;
+  hasInheritedSnapshot?: boolean;
+  inheritProperty?: boolean;
   subcategories: CategoryNode[];
 }
 
@@ -30,6 +41,8 @@ interface CategoryListProps {
   emptyMessage?: string;
   onEditCategory: (category: CategoryNode) => void;
   onDeleteCategory: (category: CategoryNode) => void;
+  onRunInheritance: (category: CategoryNode) => void;
+  onViewProperty: (category: CategoryNode) => void;
   showFilter?: boolean;
   filterPlaceholder?: string;
   filterValue?: string;
@@ -48,12 +61,22 @@ const getParentId = (node: CategoryNode): string | null => {
   return pid ? String(pid) : null;
 };
 
+const asPropertyRef = (
+  src: CategoryPropertyRef | string | null | undefined,
+): CategoryPropertyRef | null => {
+  if (!src) return null;
+  if (typeof src === "string") return null;
+  return src;
+};
+
 const CategoryList: React.FC<CategoryListProps> = ({
   categories,
   title = "Categories",
   emptyMessage = "No categories found",
   onEditCategory,
   onDeleteCategory,
+  onRunInheritance,
+  onViewProperty,
   showFilter = true,
   filterPlaceholder = "Search categories…",
   filterValue,
@@ -78,8 +101,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
     });
   };
 
-  // Flat lookup of every known category, keyed by _id. Used ONLY to
-  // resolve a row's parent name — never to rebuild the tree.
   const nodesById = useMemo(() => {
     const map = new Map<string, CategoryNode>();
     const walk = (nodes: CategoryNode[] | undefined) => {
@@ -163,21 +184,41 @@ const CategoryList: React.FC<CategoryListProps> = ({
     [filteredCategories, expanded, nodesById],
   );
 
-  const getMenuItems = (row: CategoryNode): PopoverMenuItem[] => [
-    {
-      key: "edit",
-      label: "Edit category",
-      icon: <Edit fontSize="small" />,
-      onClick: () => onEditCategory(row),
-    },
-    {
+  const getMenuItems = (row: CategoryNode): PopoverMenuItem[] => {
+    const items: PopoverMenuItem[] = [
+      {
+        key: "edit",
+        label: "Edit category",
+        icon: <Edit fontSize="small" />,
+        onClick: () => onEditCategory(row),
+      },
+      {
+        key: "view-property",
+        label: "View property",
+        icon: <Visibility fontSize="small" />,
+        onClick: () => onViewProperty(row),
+      },
+    ];
+
+    if (row.inheritProperty && getParentId(row)) {
+      items.push({
+        key: "run-inheritance",
+        label: "Re-run inheritance",
+        icon: <AccountTree fontSize="small" />,
+        onClick: () => onRunInheritance(row),
+      });
+    }
+
+    items.push({
       key: "delete",
       label: "Delete",
       icon: <Delete fontSize="small" />,
       danger: true,
       onClick: () => onDeleteCategory(row),
-    },
-  ];
+    });
+
+    return items;
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
@@ -242,6 +283,9 @@ const CategoryList: React.FC<CategoryListProps> = ({
                 <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Parent
                 </th>
+                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Property
+                </th>
                 <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Actions
                 </th>
@@ -252,6 +296,11 @@ const CategoryList: React.FC<CategoryListProps> = ({
                 const hasChildren =
                   row.subcategories && row.subcategories.length > 0;
                 const isExpanded = expanded.has(row._id);
+
+                const own = asPropertyRef(row.property);
+                const inheriting = !!row.inheritProperty && !!getParentId(row);
+                const isInherited = inheriting && !!row.hasInheritedSnapshot;
+                const pendingSync = inheriting && !row.hasInheritedSnapshot;
 
                 return (
                   <tr
@@ -323,6 +372,47 @@ const CategoryList: React.FC<CategoryListProps> = ({
                       ) : (
                         <span className="text-xs italic text-muted-foreground/60">
                           — root —
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Property column */}
+                    <td className="px-5 py-3">
+                      {own || isInherited ? (
+                        <span
+                          className="inline-flex max-w-[16rem] items-center gap-1.5"
+                          title={
+                            own
+                              ? own.code
+                                ? `${own.name} (${own.code})`
+                                : own.name
+                              : "Inherited property"
+                          }
+                        >
+                          <span className="truncate text-foreground">
+                            {own?.name ?? "Inherited"}
+                          </span>
+
+                          {isInherited && (
+                            <span
+                              className="flex-none rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                              title="Merged from ancestors + own property (own wins)"
+                            >
+                              Inherited
+                            </span>
+                          )}
+                          {pendingSync && (
+                            <span
+                              className="flex-none rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                              title="Inheritance is on but no snapshot has been generated yet. Use 'Re-run inheritance'."
+                            >
+                              Pending sync
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-xs italic text-muted-foreground/60">
+                          —
                         </span>
                       )}
                     </td>

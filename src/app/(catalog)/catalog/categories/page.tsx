@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { deleteCategory, getCategory } from "@/app/actions/category";
+import {
+  deleteCategory,
+  getCategory,
+  getCategoryAttributeSets,
+  runCategoryInheritance,
+} from "@/app/actions/category";
+import type { AttributeSetResult } from "@/app/actions/category_property";
 import { Category as Cat } from "@/constant/types";
 import CategoryForm from "./_component/CategoryForm";
 import CategoryList from "./_component/CategoryList";
@@ -17,6 +23,7 @@ import {
   Close,
   FolderOpen,
 } from "@mui/icons-material";
+import PropertyViewerModal from "@/components/ux/PropertyViewerModal";
 
 const Categories = () => {
   const [categories, setCategories] = useState<Cat[]>([]);
@@ -29,6 +36,11 @@ const Categories = () => {
 
   const [filterText, setFilterText] = useState("");
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+
+  // ---------- Property viewer state ----------
+  const [viewTarget, setViewTarget] = useState<Cat | null>(null);
+  const [viewSets, setViewSets] = useState<AttributeSetResult[] | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -97,6 +109,63 @@ const Categories = () => {
     setEditId(null);
     setShowForm(false);
     toast.success(editId ? "Category updated" : "Category created");
+  };
+
+  // ---------- Run inheritance ----------
+  const handleRunInheritance = async (category: Cat) => {
+    const wasEnabled = !!category.inheritProperty;
+    const toastId = toast.loading(
+      wasEnabled ? "Re-running inheritance…" : "Enabling inheritance…",
+    );
+
+    try {
+      const result = await runCategoryInheritance(category._id as string);
+
+      if (result.success) {
+        await fetchCategories();
+        toast.dismiss(toastId);
+        if (result.warning) {
+          toast.info(result.warning);
+        } else {
+          toast.success(
+            wasEnabled
+              ? "Inheritance re-run — snapshot refreshed"
+              : "Inheritance enabled",
+          );
+        }
+      } else {
+        toast.dismiss(toastId);
+        toast.error(result.error || "Failed to run inheritance");
+      }
+    } catch (err) {
+      console.error("Error running inheritance:", err);
+      toast.dismiss(toastId);
+      toast.error("Failed to run inheritance");
+    }
+  };
+
+  // ---------- View property ----------
+  const handleViewProperty = async (category: Cat) => {
+    setViewTarget(category);
+    setViewSets(null);
+    setViewLoading(true);
+
+    try {
+      const sets = await getCategoryAttributeSets(category._id as string);
+      setViewSets(sets || []);
+    } catch (err) {
+      console.error("Error loading property:", err);
+      toast.error("Failed to load property");
+      setViewSets([]);
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const closeViewer = () => {
+    setViewTarget(null);
+    setViewSets(null);
+    setViewLoading(false);
   };
 
   const hasActiveFilters = filterText.trim() !== "";
@@ -296,6 +365,8 @@ const Categories = () => {
           emptyMessage="No categories found. Create your first category!"
           onEditCategory={handleEditClick as any}
           onDeleteCategory={handleDeleteClick as any}
+          onRunInheritance={handleRunInheritance as any}
+          onViewProperty={handleViewProperty as any}
           showFilter={true}
           hideFilter={true}
           filterValue={filterText}
@@ -303,6 +374,15 @@ const Categories = () => {
           filterPlaceholder="Search categories…"
         />
       )}
+
+      {/* Property viewer */}
+      <PropertyViewerModal
+        isOpen={!!viewTarget}
+        onClose={closeViewer}
+        category={viewTarget as any}
+        sets={viewSets}
+        loading={viewLoading}
+      />
 
       {/* Delete confirmation */}
       <ConfirmDialog

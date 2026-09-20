@@ -13,6 +13,7 @@ import {
   MoreVert,
   Add,
   Close,
+  Lock,
 } from "@mui/icons-material";
 import {
   getCategoryProperty,
@@ -29,6 +30,7 @@ interface Property {
   description?: string;
   sets?: any[];
   mappings?: any[];
+  readOnly?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -126,7 +128,11 @@ export default function CategoryPropertiesPage() {
   const fetchProperties = async () => {
     try {
       setLoading(true);
-      const data = await getCategoryProperty();
+      // Include system-managed (read-only) docs so they're visible and
+      // properly badged. Edits / deletes are blocked at the action layer.
+      const data = await getCategoryProperty(undefined, {
+        includeReadOnly: true,
+      });
       setProperties(data || []);
       setError(null);
     } catch (err) {
@@ -221,21 +227,37 @@ export default function CategoryPropertiesPage() {
     setSortOrder({ value: "name_asc", label: "Name A → Z" });
   };
 
-  const getMenuItems = (prop: Property): PopoverMenuItem[] => [
-    {
-      key: "edit",
-      label: "Edit property",
-      icon: <Edit fontSize="small" />,
-      href: `/catalog/categories/property/${prop._id}/edit`,
-    },
-    {
-      key: "delete",
-      label: "Delete",
-      icon: <Delete fontSize="small" />,
-      danger: true,
-      onClick: () => handleDeleteClick(prop),
-    },
-  ];
+  const getMenuItems = (prop: Property): PopoverMenuItem[] => {
+    // Read-only (system-managed) properties: no Edit / Delete — they
+    // are regenerated from the parent tree via the category's
+    // "Re-run inheritance" action.
+    if (prop.readOnly) {
+      return [
+        {
+          key: "managed",
+          label: "System-managed (read-only)",
+          icon: <Lock fontSize="small" />,
+          onClick: () => {},
+        },
+      ];
+    }
+
+    return [
+      {
+        key: "edit",
+        label: "Edit property",
+        icon: <Edit fontSize="small" />,
+        href: `/catalog/categories/property/${prop._id}/edit`,
+      },
+      {
+        key: "delete",
+        label: "Delete",
+        icon: <Delete fontSize="small" />,
+        danger: true,
+        onClick: () => handleDeleteClick(prop),
+      },
+    ];
+  };
 
   // ---------------- Early exits ----------------
   if (loading) {
@@ -493,8 +515,19 @@ export default function CategoryPropertiesPage() {
                     className="group transition-colors hover:bg-muted/40"
                   >
                     <td className="px-5 py-4">
-                      <div className="font-medium text-foreground">
-                        {prop.name}
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-foreground">
+                          {prop.name}
+                        </span>
+                        {prop.readOnly && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            title="System-managed. Regenerated from parent categories via Re-run inheritance."
+                          >
+                            <Lock style={{ fontSize: 10 }} />
+                            Inherited
+                          </span>
+                        )}
                       </div>
                       {prop.description && (
                         <div className="mt-0.5 line-clamp-1 max-w-md text-xs text-muted-foreground">

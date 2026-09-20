@@ -19,6 +19,7 @@ export type Category = {
   name?: string;
   description?: string;
   imageUrl?: string[];
+  inheritProperty?: boolean;
   property?: string | { _id: string; name: string };
   seoTitle?: string;
   seoDesc?: string;

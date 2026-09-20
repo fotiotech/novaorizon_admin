@@ -371,14 +371,18 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
     <>
       <Toaster position="top-right" reverseOrder={false} />
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+      <div className=" max-w-3xl py-4  sm:py-6">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 sm:space-y-5"
+          noValidate
+        >
           {/* Header */}
           <header>
-            <h1 className="text-2xl font-semibold text-foreground">
+            <h1 className="text-xl font-semibold text-foreground sm:text-2xl">
               {propertyId ? "Edit Category Property" : "New Category Property"}
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-0.5 text-sm text-muted-foreground">
               Define reusable attribute mappings for categories.
             </p>
           </header>
@@ -386,22 +390,22 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
           {error && (
             <div
               role="alert"
-              className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive sm:px-4 sm:py-3"
             >
               {error}
             </div>
           )}
 
           {/* Basics */}
-          <section className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <section className=" bg-card text-card-foreground">
+            <div className=" py-3 sm:py-3.5">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Basic Information
               </h2>
             </div>
 
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-4  sm:space-y-5 ">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
                 <div>
                   <label
                     htmlFor="property-code"
@@ -417,8 +421,8 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
                     placeholder="e.g. electronics_attrs"
                     className={
                       fieldErrors.code
-                        ? "border-destructive focus:border-destructive"
-                        : ""
+                        ? "mt-1 border-destructive focus:border-destructive"
+                        : "mt-1"
                     }
                     aria-invalid={!!fieldErrors.code}
                     aria-describedby={
@@ -427,7 +431,10 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
                     required
                   />
                   {fieldErrors.code && (
-                    <p id="code-error" className="text-xs text-destructive">
+                    <p
+                      id="code-error"
+                      className="mt-1 text-xs text-destructive"
+                    >
                       {fieldErrors.code}
                     </p>
                   )}
@@ -448,8 +455,8 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
                     placeholder="e.g. Electronics Attributes"
                     className={
                       fieldErrors.name
-                        ? "border-destructive focus:border-destructive"
-                        : ""
+                        ? "mt-1 border-destructive focus:border-destructive"
+                        : "mt-1"
                     }
                     aria-invalid={!!fieldErrors.name}
                     aria-describedby={
@@ -458,7 +465,10 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
                     required
                   />
                   {fieldErrors.name && (
-                    <p id="name-error" className="text-xs text-destructive">
+                    <p
+                      id="name-error"
+                      className="mt-1 text-xs text-destructive"
+                    >
                       {fieldErrors.name}
                     </p>
                   )}
@@ -478,34 +488,35 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
                   placeholder="Optional description…"
-                  className="resize-none"
+                  className="mt-1 resize-none"
                 />
               </div>
             </div>
           </section>
 
           {/* Mappings */}
-          <section className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
-            <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <section className=" bg-card text-card-foreground">
+            <div className="flex items-center justify-between gap-3  py-3  sm:py-3.5">
+              <div className="min-w-0">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Set Mappings
                 </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
                   Each set defines which groups and attributes apply.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={addMapping}
-                className="admin-button-secondary"
+                className="admin-button-secondary shrink-0"
               >
                 <span className="text-base leading-none">+</span>
-                Add Set
+                <span className="hidden sm:inline">Add Set</span>
+                <span className="sm:hidden">Add</span>
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="space-y-3  sm:space-y-4 ">
               {fieldErrors.mappings && (
                 <p className="text-xs text-destructive">
                   {fieldErrors.mappings}
@@ -513,20 +524,20 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
               )}
 
               {mappings.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border px-6 py-10 text-center">
+                <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center sm:py-10">
                   <p className="text-sm text-muted-foreground">
                     No sets added yet.
                   </p>
                   <button
                     type="button"
                     onClick={addMapping}
-                    className="mt-3 text-sm font-medium text-primary hover:underline"
+                    className="mt-2 text-sm font-medium text-primary hover:underline"
                   >
                     Add your first set →
                   </button>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5 sm:space-y-3">
                   {mappings.map((mapping, index) => {
                     const mappingId = mapping.id;
                     const isExpanded = expandedId === mappingId;
@@ -578,7 +589,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
           </section>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => router.push("/catalog/categories/property")}
@@ -593,7 +604,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
             >
               {saving && (
                 <svg
-                  className="animate-spin h-4 w-4"
+                  className="h-4 w-4 animate-spin"
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"
@@ -622,11 +633,11 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
           </div>
 
           {/* Preview */}
-          <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+          <div className="rounded-lg border border-border bg-card text-card-foreground">
             <button
               type="button"
               onClick={() => setShowPreview((prev) => !prev)}
-              className="w-full flex items-center justify-between px-6 py-3 text-sm font-medium text-foreground hover:bg-muted/50 transition rounded-2xl"
+              className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted/50 sm:px-5 sm:py-3"
             >
               <span>Live Preview</span>
               <span className="text-muted-foreground">
@@ -634,7 +645,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
               </span>
             </button>
             {showPreview && (
-              <div className="px-6 pb-6 pt-2 border-t border-border">
+              <div className="border-t border-border px-3 pb-3 pt-3 sm:px-5 sm:pb-5 sm:pt-4">
                 <PropertyPreview
                   code={code}
                   name={name}

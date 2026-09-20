@@ -20,11 +20,6 @@ interface AttributeFlags {
   isHighlight: boolean;
 }
 
-const DEFAULT_FLAGS: AttributeFlags = {
-  isRequired: false,
-  isHighlight: false,
-};
-
 function toFlags(
   input: Partial<AttributeFlags> | undefined | null,
 ): AttributeFlags {
@@ -171,52 +166,32 @@ function safeIdString(
 }
 
 // ========================================================================
-//  collectAncestorProperties
+//  normalizeMappings
 // ========================================================================
-export async function collectAncestorProperties(categoryId: string): Promise<{
-  mappings: any[];
-  propertyIds: string[];
-}> {
-  await connection();
-  const propertyIds: string[] = [];
-  let current: any = await Category.findById(categoryId)
-    .populate("property")
-    .lean();
-  let depth = 0;
-  const visited = new Set<string>();
+function normalizeMappings(mappings: any[]): any[] {
+  if (!Array.isArray(mappings)) return [];
+  return mappings.map((m: any) => ({
+    set: m?.set?.toString?.() ?? m?.set ?? "",
+    groups: Array.isArray(m?.groups)
+      ? m.groups.map((g: any) => ({
+          group: g?.group?.toString?.() ?? g?.group ?? "",
+          attributes: Array.isArray(g?.attributes)
+            ? g.attributes.map((a: any) => ({
+                attribute: a?.attribute?.toString?.() ?? a?.attribute ?? "",
+                isRequired: a?.isRequired === true,
+                isHighlight: a?.isHighlight === true,
+              }))
+            : [],
+        }))
+      : [],
+  }));
+}
 
-  while (current && depth < 20 && !visited.has(current._id?.toString())) {
-    visited.add(current._id.toString());
-
-    let propertyId: string | null = null;
-    try {
-      if (current.property) {
-        if (typeof current.property === "object" && current.property !== null) {
-          const propObj = current.property;
-          const idVal = propObj._id ?? propObj.id ?? propObj;
-          propertyId = safeIdString(idVal);
-        } else {
-          propertyId = safeIdString(current.property);
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    if (propertyId) propertyIds.push(propertyId);
-
-    const parentId = current.parentId;
-    if (!parentId) break;
-
-    current = await Category.findById(parentId).populate("property").lean();
-    depth += 1;
-  }
-
-  if (propertyIds.length === 0) return { mappings: [], propertyIds: [] };
-
-  const properties = await CategoryProperty.find({
-    _id: { $in: propertyIds },
-  }).lean();
-
+// ========================================================================
+//  mergeMappingsWithPrecedence
+//  Later layers win. [farthest, ..., nearest, own] → own wins.
+// ========================================================================
+function mergeMappingsWithPrecedence(layers: any[][]): any[] {
   const combinedMap = new Map<
     string,
     {
@@ -228,19 +203,21 @@ export async function collectAncestorProperties(categoryId: string): Promise<{
     }
   >();
 
-  for (const prop of properties.reverse()) {
-    if (!prop.mappings || !Array.isArray(prop.mappings)) continue;
-    for (const mapping of prop.mappings) {
-      if (!mapping.set) continue;
-      const setKey = mapping.set.toString();
+  for (const layer of layers) {
+    if (!Array.isArray(layer)) continue;
+    for (const mapping of layer) {
+      const setKey = mapping?.set?.toString?.() ?? mapping?.set;
+      if (!setKey) continue;
+
       if (!combinedMap.has(setKey)) {
         combinedMap.set(setKey, { set: setKey, groups: new Map() });
       }
       const setData = combinedMap.get(setKey)!;
-      if (!mapping.groups) continue;
-      for (const gm of mapping.groups) {
-        if (!gm.group) continue;
-        const groupKey = gm.group.toString();
+
+      for (const gm of mapping?.groups ?? []) {
+        const groupKey = gm?.group?.toString?.() ?? gm?.group;
+        if (!groupKey) continue;
+
         if (!setData.groups.has(groupKey)) {
           setData.groups.set(groupKey, {
             group: groupKey,
@@ -248,35 +225,92 @@ export async function collectAncestorProperties(categoryId: string): Promise<{
           });
         }
         const groupData = setData.groups.get(groupKey)!;
-        if (!gm.attributes) continue;
-        for (const am of gm.attributes) {
-          if (!am.attribute) continue;
-          const attrKey = am.attribute.toString();
-          groupData.attributes.set(attrKey, toFlags(am as any));
+
+        for (const am of gm?.attributes ?? []) {
+          const attrKey = am?.attribute?.toString?.() ?? am?.attribute;
+          if (!attrKey) continue;
+          groupData.attributes.set(attrKey, toFlags(am));
         }
       }
     }
   }
 
-  const mergedMappings = Array.from(combinedMap.values()).map((setData) => ({
+  return Array.from(combinedMap.values()).map((setData) => ({
     set: setData.set,
     groups: Array.from(setData.groups.values()).map((groupData) => ({
       group: groupData.group,
       attributes: Array.from(groupData.attributes.entries()).map(
-        ([attr, flags]) => ({
-          attribute: attr,
+        ([attribute, flags]) => ({
+          attribute,
           isRequired: flags.isRequired,
           isHighlight: flags.isHighlight,
         }),
       ),
     })),
   }));
-
-  return { mappings: mergedMappings, propertyIds };
 }
 
 // ========================================================================
-//  ensureCategoryPropertyFromMappings
+//  collectAncestorProperties
+//
+//  Walks the PARENT chain. Uses each tier's `property` (own) — not
+//  their `inheritedProperty` — so every tier contributes its own
+//  attributes directly. Self is excluded; caller adds own via merge.
+// ========================================================================
+export async function collectAncestorProperties(categoryId: string): Promise<{
+  mappings: any[];
+  propertyIds: string[];
+}> {
+  await connection();
+  const propertyIds: string[] = [];
+  const visited = new Set<string>();
+  let depth = 0;
+
+  const start: any = await Category.findById(categoryId)
+    .select("parentId")
+    .lean();
+
+  let currentId: string | null = start?.parentId?.toString() || null;
+
+  while (currentId && depth < 20 && !visited.has(currentId)) {
+    visited.add(currentId);
+    const node: any = await Category.findById(currentId)
+      .populate("property")
+      .lean();
+    if (!node) break;
+
+    const propertyId = safeIdString(node.property);
+    if (propertyId) propertyIds.push(propertyId);
+
+    currentId = node.parentId?.toString() || null;
+    depth += 1;
+  }
+
+  if (propertyIds.length === 0) return { mappings: [], propertyIds: [] };
+
+  const properties = await CategoryProperty.find({
+    _id: { $in: propertyIds },
+  }).lean();
+
+  const orderIndex = new Map(propertyIds.map((id, i) => [id, i]));
+  properties.sort((a: any, b: any) => {
+    const ai = orderIndex.get(a._id.toString()) ?? -1;
+    const bi = orderIndex.get(b._id.toString()) ?? -1;
+    return bi - ai;
+  });
+
+  const layers = properties.map((p: any) =>
+    normalizeMappings(p.mappings ?? []),
+  );
+
+  return {
+    mappings: mergeMappingsWithPrecedence(layers),
+    propertyIds,
+  };
+}
+
+// ========================================================================
+//  Inherited-property code generation
 // ========================================================================
 function generatePropertyCode(name: string): string {
   return name
@@ -286,45 +320,127 @@ function generatePropertyCode(name: string): string {
     .replace(/\s+/g, "_");
 }
 
+function generateInheritedPropertyCode(
+  name: string,
+  categoryId: string,
+): string {
+  const base = generatePropertyCode(name) || "category";
+  return `${base}_inherited_${categoryId.slice(-8)}`;
+}
+
+// ========================================================================
+//  ensureCategoryPropertyFromMappings
+//
+//  Upserts the auto-generated CategoryProperty (readOnly: true) and
+//  repoints `category.inheritedProperty` at it. Cleans up any previous
+//  snapshot (e.g. stale doc from a rename) in the same call.
+// ========================================================================
 export async function ensureCategoryPropertyFromMappings(
   categoryId: string,
   mappings: any[],
 ): Promise<string | null> {
-  const category = await Category.findById(categoryId).select("name");
+  const category = await Category.findById(categoryId).select(
+    "name inheritedProperty",
+  );
   if (!category) return null;
 
   if (mappings.length === 0) {
-    await Category.findByIdAndUpdate(categoryId, { $set: { property: null } });
+    // No snapshot needed — clean up any previous one.
+    if (category.inheritedProperty) {
+      await CategoryProperty.deleteOne({ _id: category.inheritedProperty });
+    }
+    await Category.findByIdAndUpdate(categoryId, {
+      $set: { inheritedProperty: null },
+    });
     return null;
   }
 
-  const baseCode = generatePropertyCode(category.name) + "_inherited";
-  const propertyName = `${category.name} (Inherited)`;
+  const code = generateInheritedPropertyCode(category.name, categoryId);
+  const propertyName = category.name;
   const propertyDescription = `Auto-generated inherited property for ${category.name}`;
 
   const prepared = mapInputMappings(mappings);
 
-  let property = await CategoryProperty.findOne({ code: baseCode });
+  let property = await CategoryProperty.findOne({ code });
   if (property) {
     property.name = propertyName;
     property.description = propertyDescription;
+    property.readOnly = true;
     property.mappings = prepared as any;
     await property.save();
   } else {
     property = new CategoryProperty({
-      code: baseCode,
+      code,
       name: propertyName,
       description: propertyDescription,
+      readOnly: true,
       mappings: prepared as any,
     });
     await property.save();
   }
 
+  // If the category previously pointed at a different snapshot (e.g.
+  // from a prior name), delete that stale doc.
+  const previousId = category.inheritedProperty?.toString();
+  if (previousId && previousId !== property._id.toString()) {
+    await CategoryProperty.deleteOne({ _id: previousId });
+  }
+
   await Category.findByIdAndUpdate(categoryId, {
-    $set: { property: property._id },
+    $set: { inheritedProperty: property._id },
   });
 
   return property._id.toString();
+}
+
+// ========================================================================
+//  applyInheritedPropertyToCategory
+//
+//  Merges own `property` + ancestors (own wins), then writes the
+//  snapshot via ensureCategoryPropertyFromMappings. `property` is
+//  untouched.
+// ========================================================================
+export async function applyInheritedPropertyToCategory(
+  categoryId: string,
+): Promise<{ propertyId: string | null; warning?: string }> {
+  await connection();
+
+  const category: any = await Category.findById(categoryId)
+    .select("property")
+    .lean();
+  if (!category) {
+    return { propertyId: null, warning: "Category not found." };
+  }
+
+  let ownMappings: any[] = [];
+  if (category.property) {
+    const ownProp: any = await CategoryProperty.findById(
+      category.property,
+    ).lean();
+    if (ownProp?.mappings) {
+      ownMappings = normalizeMappings(ownProp.mappings);
+    }
+  }
+
+  const { mappings: ancestorMappings } =
+    await collectAncestorProperties(categoryId);
+
+  const merged = mergeMappingsWithPrecedence([ancestorMappings, ownMappings]);
+
+  if (merged.length === 0) {
+    await ensureCategoryPropertyFromMappings(categoryId, []);
+    return {
+      propertyId: null,
+      warning: "No properties to inherit or merge.",
+    };
+  }
+
+  const propertyId = await ensureCategoryPropertyFromMappings(
+    categoryId,
+    merged,
+  );
+
+  return { propertyId };
 }
 
 // ========================================================================
@@ -482,8 +598,6 @@ export async function buildAttributeSetsFromMappings(
     });
   }
 
-  // Sort ascending by the set's sortOrder. Sets without a value (or
-  // with 0) float to the top, matching the AttributeSet schema default.
   result.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
   return result;
@@ -492,16 +606,22 @@ export async function buildAttributeSetsFromMappings(
 // ========================================================================
 //  Category Property CRUD
 // ========================================================================
-export async function getCategoryProperty(id?: string): Promise<any> {
+
+// By default hides readOnly (auto-generated) docs from the admin list.
+export async function getCategoryProperty(
+  id?: string,
+  options?: { includeReadOnly?: boolean },
+): Promise<any> {
   await connection();
   if (id) {
     const property = await CategoryProperty.findById(id).lean();
     if (!property) return null;
     return toPlain(property);
-  } else {
-    const properties = await CategoryProperty.find().lean();
-    return toPlain(properties);
   }
+
+  const filter = options?.includeReadOnly ? {} : { readOnly: { $ne: true } };
+  const properties = await CategoryProperty.find(filter).lean();
+  return toPlain(properties);
 }
 
 export async function createCategoryPropertyWithMappings(data: {
@@ -523,6 +643,11 @@ export async function createCategoryPropertyWithMappings(data: {
   await connection();
   const { code, name, description, mappings } = data;
 
+  const duplicate = await CategoryProperty.findOne({ code });
+  if (duplicate) {
+    return { error: `Code "${code}" is already in use.` };
+  }
+
   for (const m of mappings) {
     const setExists = await AttributeSet.findById(m.set);
     if (!setExists) return { error: `Set ${m.set} not found` };
@@ -537,22 +662,15 @@ export async function createCategoryPropertyWithMappings(data: {
   }
 
   const prepared = mapInputMappings(mappings);
-  let property = await CategoryProperty.findOne({ code });
 
-  if (property) {
-    property.name = name;
-    if (description !== undefined) property.description = description;
-    property.mappings = prepared as any;
-    await property.save();
-  } else {
-    property = new CategoryProperty({
-      code,
-      name,
-      description,
-      mappings: prepared as any,
-    });
-    await property.save();
-  }
+  const property = new CategoryProperty({
+    code,
+    name,
+    description,
+    readOnly: false,
+    mappings: prepared as any,
+  });
+  await property.save();
 
   revalidatePath("/catalog/categories/property");
   const plain = toPlain(property.toObject());
@@ -582,6 +700,13 @@ export async function updateCategoryPropertyWithMappings(
   const property = await CategoryProperty.findById(id);
   if (!property) return { error: "Category property not found" };
 
+  if (property.readOnly) {
+    return {
+      error:
+        "This property is system-managed (inherited). It can only be regenerated via Re-run inheritance.",
+    };
+  }
+
   if (data.code) {
     const existing = await CategoryProperty.findOne({ code: data.code });
     if (existing && existing._id.toString() !== id) {
@@ -606,12 +731,24 @@ export async function updateCategoryPropertyWithMappings(
 export async function deleteCategoryProperty(id: string) {
   try {
     await connection();
-    const property = await CategoryProperty.findByIdAndDelete(id);
+    const property = await CategoryProperty.findById(id);
     if (!property) return { error: "Category property not found." };
 
+    if (property.readOnly) {
+      return {
+        error:
+          "This property is system-managed (inherited) and cannot be deleted manually.",
+      };
+    }
+
+    await CategoryProperty.findByIdAndDelete(id);
+
+    // Only the manual ref needs clearing. Inherited refs point at
+    // auto-gen docs that are cleaned up when their category changes
+    // or is deleted.
     await Category.updateMany({ property: id }, { $unset: { property: "" } });
 
-    revalidatePath("/category-properties");
+    revalidatePath("/catalog/categories/property");
     revalidatePath("/categories");
     return { success: true, message: "Category property deleted." };
   } catch (error: any) {
