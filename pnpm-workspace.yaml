@@ -1,4 +1,5 @@
 allowBuilds:
+  '@mongodb-js/native-machine-id': true
   bcrypt: false
   core-js: false
   cpu-features: true

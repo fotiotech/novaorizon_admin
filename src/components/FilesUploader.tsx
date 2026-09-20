@@ -91,15 +91,12 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     <button
       type="button"
       onClick={open}
-      className="group flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border bg-card/60 text-center transition-colors hover:border-primary/60 hover:bg-primary/5"
+      className="group flex h-full w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border bg-card/60 text-center transition-colors hover:border-primary/60 hover:bg-primary/5"
     >
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:scale-105">
-        <Add fontSize="small" />
+      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:scale-105">
+        <Add style={{ fontSize: 18 }} />
       </span>
-      <span className="text-xs font-medium text-foreground">Add images</span>
-      <span className="hidden text-[10px] text-muted-foreground sm:block">
-        JPEG, PNG, GIF
-      </span>
+      <span className="text-[11px] font-medium text-foreground">Add</span>
     </button>
   );
 
@@ -121,29 +118,31 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
         className="group relative h-full w-full overflow-hidden rounded-xl border border-border bg-muted"
       >
         {isUploading ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-2">
+            <div className="h-1 w-full overflow-hidden rounded-full bg-border">
               <div
                 className="h-full rounded-full bg-primary transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <span className="text-xs text-muted-foreground">{progress}%</span>
+            <span className="text-[10px] text-muted-foreground">
+              {progress}%
+            </span>
           </div>
         ) : (
           <Image
             src={url}
             alt={`Image ${index + 1}`}
             fill
-            sizes="(max-width: 768px) 40vw, 240px"
+            sizes="(max-width: 768px) 30vw, 160px"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
           />
         )}
 
         {showOverlay && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white backdrop-blur-[1px]">
-            <span className="text-lg font-semibold">+{remaining}</span>
-            <span className="text-[10px] opacity-90">more</span>
+            <span className="text-base font-semibold">+{remaining}</span>
+            <span className="text-[9px] opacity-90">more</span>
           </div>
         )}
       </button>
@@ -158,7 +157,6 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     const progress = firstUrl ? getProgress(firstUrl) : undefined;
     const isUploading = progress !== undefined && progress < 100;
 
-    // Empty: dashed "+" button that opens the file picker directly
     if (total === 0) {
       return (
         <button
@@ -172,7 +170,6 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
       );
     }
 
-    // Has images: thumbnail + count badge, opens modal
     return (
       <button
         type="button"
@@ -241,9 +238,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
               <ImageIcon className="text-muted-foreground" />
             </div>
-            <p className="text-sm font-medium text-foreground">
-              No images yet
-            </p>
+            <p className="text-sm font-medium text-foreground">No images yet</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Click &ldquo;Add images&rdquo; to get started.
             </p>
@@ -253,8 +248,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {fileArray.map((url, index) => {
                 const progress = getProgress(url);
-                const isUploading =
-                  progress !== undefined && progress < 100;
+                const isUploading = progress !== undefined && progress < 100;
 
                 return (
                   <div
@@ -322,7 +316,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     <>
       <div
         {...getRootProps()}
-        className={`relative my-4 w-full max-w-[280px] transition-all sm:max-w-[320px] md:max-w-[360px] ${
+        className={`relative my-4 w-full max-w-[200px] transition-all  md:max-w-[220px] ${
           isDragActive
             ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background"
             : ""
@@ -330,21 +324,17 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
       >
         <input {...getInputProps()} />
 
-        {total === 0 && (
-          <div className="h-[110px] sm:h-[120px] md:h-[130px]">
-            {renderAddTile()}
-          </div>
-        )}
+        {total === 0 && <div className="aspect-square">{renderAddTile()}</div>}
 
         {total === 1 && (
-          <div className="grid h-[110px] grid-cols-2 gap-1.5 sm:h-[120px] sm:gap-2 md:h-[130px]">
+          <div className="grid aspect-[2/1] grid-cols-2 gap-1.5">
             {renderImageTile(visibleImages[0])}
             {renderAddTile()}
           </div>
         )}
 
         {total >= 2 && (
-          <div className="grid h-[130px] grid-cols-3 grid-rows-2 gap-1.5 sm:h-[145px] sm:gap-2 md:h-[160px]">
+          <div className="grid aspect-[3/2] grid-cols-3 grid-rows-2 gap-1.5">
             <div className="col-span-2 row-span-2">
               {renderImageTile(visibleImages[0])}
             </div>
@@ -357,9 +347,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
 
         {isDragActive && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-primary/10 backdrop-blur-sm">
-            <p className="text-xs font-medium text-primary sm:text-sm">
-              Drop images here
-            </p>
+            <p className="text-xs font-medium text-primary">Drop images here</p>
           </div>
         )}
       </div>

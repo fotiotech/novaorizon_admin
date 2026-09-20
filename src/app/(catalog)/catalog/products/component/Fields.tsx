@@ -7,6 +7,7 @@ import { getBrands } from "@/app/actions/brand";
 import { getCarriers } from "@/app/actions/carrier";
 import { Brand } from "@/constant/types";
 import RichTextEditorWrapper from "./RichTextEditorWrapper";
+import { BottomSheet } from "@/components/ux/DescBottomSheet";
 import { useFileUploader } from "@/hooks/useFileUploader";
 
 interface Carrier {
@@ -15,14 +16,13 @@ interface Carrier {
 }
 
 // ------------------------------------------------------------------
-// Field value shapes — one per "field kind" the form supports.
+// Field value shapes
 // ------------------------------------------------------------------
 type UnitValue = { value: number | ""; unit?: string };
 type NumberFieldValue = number | "" | UnitValue | null | undefined;
 type StringFieldValue = string | null | undefined;
 type ArrayFieldValue = string[] | null | undefined;
 
-// Guards
 const isUnitValue = (v: unknown): v is UnitValue =>
   typeof v === "object" && v !== null && "value" in v;
 const asString = (v: unknown): string =>
@@ -34,6 +34,22 @@ const asNumberInput = (v: NumberFieldValue): number | "" => {
   if (typeof v === "number") return v;
   if (isUnitValue(v)) return v.value;
   return "";
+};
+
+// ------------------------------------------------------------------
+// useIsMobile
+// ------------------------------------------------------------------
+const useIsMobile = (breakpoint = 768) => {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, [breakpoint]);
+  return isMobile;
 };
 
 interface FieldProps {
@@ -49,19 +65,12 @@ interface FieldProps {
   isRequired?: boolean;
 }
 
-// ------------------------------------------------------------------
-// Shared class tokens — every native input uses these so dark mode is
-// consistent and there is a single source of truth.
-// ------------------------------------------------------------------
 const INPUT_CLASS =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50";
 const LABEL_CLASS = "mb-1.5 block text-xs font-medium text-muted-foreground";
 const CHECK_BORDER = "border-input";
 const CHECK_BG = "bg-primary border-primary";
 
-// ------------------------------------------------------------------
-// Static select styles (theme-aware)
-// ------------------------------------------------------------------
 const customSelectStyles = {
   control: (provided: any, state: any) => ({
     ...provided,
@@ -189,6 +198,96 @@ const GalleryUploaderWrapper: React.FC<{
   );
 });
 GalleryUploaderWrapper.displayName = "GalleryUploaderWrapper";
+
+// ------------------------------------------------------------------
+// Description field
+// ------------------------------------------------------------------
+const DescriptionField: React.FC<{
+  field: unknown;
+  code: string;
+  name?: string;
+  productId: string;
+  handleAttributeChange: (code: string, value: any) => void;
+  isRequired?: boolean;
+}> = ({ field, code, name, productId, handleAttributeChange }) => {
+  const isMobile = useIsMobile();
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const value = asString(field);
+
+  // ---- Mobile: preview button → bottom sheet ---------------------
+  if (isMobile) {
+    const previewText = value
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setIsSheetOpen(true)}
+          className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-left text-sm shadow-sm transition hover:bg-muted/40 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+        >
+          {previewText ? (
+            <span className="line-clamp-3 text-foreground">{previewText}</span>
+          ) : (
+            <span className="text-muted-foreground/70">
+              Tap to edit {name || "description"}
+            </span>
+          )}
+        </button>
+
+        <BottomSheet
+          isOpen={isSheetOpen}
+          onClose={() => setIsSheetOpen(false)}
+          title={name || "Description"}
+          height="95vh"
+        >
+          {/*
+            Sheet body is a flex column with a bounded height:
+            - Editor cell: min-h-0 flex-1 → eats every pixel above
+              the Done row, and the editor's `fillContainer` mode
+              stretches to match.
+            - Done row: flex-none → natural height only.
+          */}
+          <div className="flex h-full min-h-0 flex-col gap-3">
+            <div className="min-h-0 flex-1">
+              <RichTextEditorWrapper
+                value={value}
+                onChange={(html: any) => handleAttributeChange(code, html)}
+                placeholder={`Enter ${name}`}
+                productId={productId}
+                fillContainer
+              />
+            </div>
+            <div className="flex flex-none justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSheetOpen(false)}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </BottomSheet>
+      </>
+    );
+  }
+
+  // ---- Desktop: inline, height-bounded editor ---------------------
+  return (
+    <RichTextEditorWrapper
+      value={value}
+      onChange={(html: any) => handleAttributeChange(code, html)}
+      placeholder={`Enter ${name}`}
+      productId={productId}
+      contentMaxHeight={500}
+    />
+  );
+};
+DescriptionField.displayName = "DescriptionField";
 
 // ------------------------------------------------------------------
 // Main Fields component
@@ -340,11 +439,13 @@ const Fields: React.FC<FieldProps> = React.memo(
         case "textarea":
           if (code === "description") {
             return (
-              <RichTextEditorWrapper
-                value={asString(field as StringFieldValue)}
-                onChange={(html: any) => handleAttributeChange(code, html)}
-                placeholder={`Enter ${name}`}
+              <DescriptionField
+                field={field}
+                code={code}
+                name={name}
                 productId={productId || ""}
+                handleAttributeChange={handleAttributeChange}
+                isRequired={isRequired}
               />
             );
           }
