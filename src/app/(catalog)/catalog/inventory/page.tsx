@@ -1,23 +1,10 @@
 // app/inventory/page.tsx
 
 "use client";
-import React, { useEffect, useState } from "react";
-import { Edit, Warning } from "@mui/icons-material";
-import {
-  Card,
-  CardContent,
-  Typography,
-  CircularProgress,
-  Box,
-  Alert,
-  IconButton,
-  TextField,
-  Tooltip,
-  Snackbar,
-} from "@mui/material";
-import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { RootState } from "@/app/store/store";
-import { fetchProducts, updateProductStock } from "@/fetch/fetchProducts";
+import React, { useCallback, useEffect, memo, useState } from "react";
+import { Edit, Warning, Inventory2 } from "@mui/icons-material";
+import { Snackbar, Alert } from "@mui/material";
+import { findProducts, updateProductStockLevel } from "@/app/actions/products";
 
 interface ProductRow {
   _id: string;
@@ -41,10 +28,123 @@ interface InventoryStats {
   lowStockProducts: ProductRow[];
 }
 
-const InventoryPage: React.FC = () => {
-  const dispatch = useAppDispatch();
-  const productState = useAppSelector((state: RootState) => state.product);
+const PAGE_SIZE = 100; // findProducts caps at 100 server-side
 
+/* ------------------------------------------------------------------ */
+/* Shared tokens                                                       */
+/* ------------------------------------------------------------------ */
+const INPUT_CLASS =
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50";
+
+const stockStyles: Record<string, string> = {
+  in_stock:
+    "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+  low_stock:
+    "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
+  out_of_stock:
+    "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+};
+
+const stockLabels: Record<ProductRow["stockStatus"], string> = {
+  in_stock: "In stock",
+  low_stock: "Low stock",
+  out_of_stock: "Out of stock",
+};
+
+const getStockStatus = (
+  quantity: number,
+  threshold: number,
+): ProductRow["stockStatus"] => {
+  if (quantity <= 0) return "out_of_stock";
+  if (quantity <= threshold) return "low_stock";
+  return "in_stock";
+};
+
+/* ------------------------------------------------------------------ */
+/* Mapping — products.ts aggregation projection                        */
+/* ------------------------------------------------------------------ */
+const mapProduct = (p: any): ProductRow => {
+  const qty = Number(p?.quantity ?? 0);
+  const threshold = Number(p?.lowStockThreshold ?? 10);
+  const lastUpdated =
+    p?.updatedAt?.toString?.() ||
+    p?.createdAt?.toString?.() ||
+    new Date().toISOString();
+
+  return {
+    _id: String(p?._id ?? ""),
+    productName: String(p?.name ?? ""),
+    sku: String(p?.sku ?? ""),
+    stockQuantity: qty,
+    lowStockThreshold: threshold,
+    stockStatus: getStockStatus(qty, threshold),
+    lastUpdated,
+  };
+};
+
+/* ------------------------------------------------------------------ */
+/* Small presentational components                                     */
+/* ------------------------------------------------------------------ */
+const StatusBadge = memo(function StatusBadge({
+  status,
+}: {
+  status: ProductRow["stockStatus"];
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${stockStyles[status]}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {stockLabels[status]}
+    </span>
+  );
+});
+
+const StatCard = memo(function StatCard({
+  label,
+  count,
+  hint,
+  tone,
+  icon,
+}: {
+  label: string;
+  count: number;
+  hint: string;
+  tone: "success" | "warning" | "danger";
+  icon?: React.ReactNode;
+}) {
+  const toneRing: Record<typeof tone, string> = {
+    success:
+      "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+    warning:
+      "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+    danger: "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
+  } as const;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <div
+          className={`flex h-8 w-8 items-center justify-center rounded-lg ${toneRing[tone]}`}
+        >
+          {icon ?? <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+        </div>
+      </div>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+        {count}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
+});
+
+/* ------------------------------------------------------------------ */
+/* Page                                                                */
+/* ------------------------------------------------------------------ */
+const InventoryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<string | null>(null);
@@ -61,51 +161,38 @@ const InventoryPage: React.FC = () => {
     severity: "success" as "success" | "error",
   });
 
-  useEffect(() => {
+  /* ---- Load all inventory via findProducts ---- */
+  const loadInventory = useCallback(async () => {
     setLoading(true);
-    dispatch(fetchProducts())
-      .then(() => setLoading(false))
-      .catch((err) => {
-        setError(err.message || "Failed to fetch products");
-        setLoading(false);
-      });
-  }, [dispatch]);
-
-  useEffect(() => {
-    if (!productState.allIds.length) {
-      setProducts([]);
-      setStats(null);
-      return;
-    }
-
+    setError(null);
     try {
-      const rows: ProductRow[] = productState.allIds.map((id) => {
-        const p = productState.byId[id];
-        const quantity = p.quantity ?? 0;
-        const threshold = p.lowStockThreshold ?? 10;
-        const status: ProductRow["stockStatus"] =
-          quantity <= 0
-            ? "out_of_stock"
-            : quantity <= threshold
-              ? "low_stock"
-              : "in_stock";
+      const collected: ProductRow[] = [];
+      let page = 1;
+      let totalPages = 1;
 
-        const productName = p.name || p.title || "";
-        const sku = p.sku || "";
+      // Walk all pages so we don't silently truncate at 100.
+      do {
+        const res = await findProducts({
+          page,
+          pageSize: PAGE_SIZE,
+          sort: "createdAt",
+          sortDir: "desc",
+        });
 
-        return {
-          _id: p._id,
-          productName,
-          sku,
-          stockQuantity: quantity,
-          lowStockThreshold: threshold,
-          stockStatus: status,
-          lastUpdated:
-            p.updatedAt?.toString() ||
-            p.createdAt?.toString() ||
-            new Date().toISOString(),
-        };
-      });
+        if (res.error) throw new Error(res.error);
+
+        (res.products ?? []).forEach((p: any) => collected.push(mapProduct(p)));
+
+        totalPages = Math.max(1, res.totalPages ?? 1);
+        page++;
+      } while (page <= totalPages);
+
+      // Dedupe defensively (safe if pages ever overlap).
+      const unique = Array.from(
+        new Map(collected.map((r) => [r._id, r])).values(),
+      );
+
+      setProducts(unique);
 
       const statsObj: InventoryStats = {
         in_stock: { count: 0, totalStock: 0 },
@@ -114,23 +201,30 @@ const InventoryPage: React.FC = () => {
         lowStockProducts: [],
       };
 
-      rows.forEach((prod) => {
+      unique.forEach((prod) => {
         statsObj[prod.stockStatus].count++;
         statsObj[prod.stockStatus].totalStock += prod.stockQuantity;
         if (prod.stockStatus === "low_stock")
           statsObj.lowStockProducts.push(prod);
       });
 
-      setProducts(rows);
       setStats(statsObj);
-      setError(null);
     } catch (err: any) {
-      setError(err.message || "Failed to map inventory");
+      console.error("Failed to load inventory:", err);
+      setError(err?.message || "Failed to load inventory");
+      setProducts([]);
+      setStats(null);
+    } finally {
+      setLoading(false);
     }
-  }, [productState]);
+  }, []);
+
+  useEffect(() => {
+    void loadInventory();
+  }, [loadInventory]);
 
   const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
+    setSnackbar((s) => ({ ...s, open: false }));
   };
 
   const handleEdit = (product: ProductRow) => {
@@ -141,75 +235,60 @@ const InventoryPage: React.FC = () => {
     });
   };
 
+  const handleCancel = () => {
+    if (saving) return;
+    setEditingProduct(null);
+  };
+
   const handleSave = async (id: string) => {
     setSaving(true);
     try {
-      const result = await dispatch(
-        updateProductStock(
-          id,
-          editValues.quantity,
-          editValues.lowStockThreshold,
-        ),
+      const res = await updateProductStockLevel(
+        id,
+        editValues.quantity,
+        editValues.lowStockThreshold,
       );
 
-      if (result.success) {
-        setSnackbar({
-          open: true,
-          message: "Product updated successfully",
-          severity: "success",
-        });
-        setEditingProduct(null);
-      } else {
-        throw new Error(result.error || "Update failed");
+      if (!res.success) {
+        throw new Error(res.error || "Update failed");
       }
+
+      setSnackbar({
+        open: true,
+        message: "Product updated successfully",
+        severity: "success",
+      });
+      setEditingProduct(null);
+      await loadInventory();
     } catch (err: any) {
       setSnackbar({
         open: true,
-        message: err.message || "Failed to update product",
+        message: err?.message || "Failed to update product",
         severity: "error",
       });
-      await dispatch(fetchProducts());
     } finally {
       setSaving(false);
     }
   };
 
-  // Theme-aware stock status helper
-  const getStockStatusClass = (quantity: number, threshold: number) => {
-    if (quantity <= 0) return "text-destructive font-medium";
-    if (quantity <= threshold) return "text-accent font-medium";
-    return "text-secondary font-medium";
+  const quantityColor = (quantity: number, threshold: number) => {
+    if (quantity <= 0) return "text-rose-600 dark:text-rose-400";
+    if (quantity <= threshold) return "text-amber-600 dark:text-amber-400";
+    return "text-foreground";
   };
 
-  const getStockLabel = (status: ProductRow["stockStatus"]) => {
-    switch (status) {
-      case "in_stock":
-        return "In Stock";
-      case "low_stock":
-        return "Low Stock";
-      case "out_of_stock":
-        return "Out of Stock";
-      default:
-        return status;
-    }
-  };
-
+  /* ---------------- Loading ---------------- */
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[200px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
       </div>
     );
   }
 
+  /* ---------------- Render ---------------- */
   return (
-    <div className="w-full space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-foreground">
-          Inventory Management
-        </h1>
-      </div>
-
+    <div className="w-full max-w-7xl overflow-x-clip py-6">
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
@@ -224,232 +303,393 @@ const InventoryPage: React.FC = () => {
         </Alert>
       </Snackbar>
 
+      {/* Header */}
+      <div className="mb-6 flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Inventory
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Track stock levels and replenish what&apos;s running low
+        </p>
+      </div>
+
+      {/* Error */}
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg">
-          <strong>Error:</strong> {error}
-        </div>
-      )}
-
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="bg-card text-card-foreground shadow-md border border-border">
-            <CardContent>
-              <Typography variant="h6" className="text-foreground">
-                In Stock
-              </Typography>
-              <Typography variant="h4" className="text-foreground font-bold">
-                {stats.in_stock.count}
-              </Typography>
-              <Typography variant="body2" className="text-muted-foreground">
-                Total Items: {stats.in_stock.totalStock}
-              </Typography>
-            </CardContent>
-          </Card>
-          <Card className="bg-card text-card-foreground shadow-md border border-border">
-            <CardContent>
-              <Typography
-                variant="h6"
-                className="flex items-center text-foreground"
-              >
-                Low Stock <Warning className="ml-2 text-accent" />
-              </Typography>
-              <Typography variant="h4" className="text-foreground font-bold">
-                {stats.low_stock.count}
-              </Typography>
-              <Typography variant="body2" className="text-muted-foreground">
-                Items Need Attention
-              </Typography>
-            </CardContent>
-          </Card>
-          <Card className="bg-card text-card-foreground shadow-md border border-border">
-            <CardContent>
-              <Typography
-                variant="h6"
-                className="flex items-center text-foreground"
-              >
-                Out of Stock <Warning className="ml-2 text-destructive" />
-              </Typography>
-              <Typography variant="h4" className="text-foreground font-bold">
-                {stats.out_of_stock.count}
-              </Typography>
-              <Typography variant="body2" className="text-muted-foreground">
-                Need Replenishment
-              </Typography>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {stats && stats.lowStockProducts.length > 0 && (
-        <div className="bg-accent/10 border border-accent/20 text-accent px-4 py-3 rounded-lg mb-6">
-          <Typography
-            variant="subtitle1"
-            className="font-bold mb-2 text-accent"
-          >
-            Low Stock Alerts
-          </Typography>
-          <div className="space-y-2">
-            {stats.lowStockProducts.map((p) => (
-              <div key={p._id} className="flex justify-between items-center">
-                <Typography variant="body2" className="text-foreground">
-                  {p.productName}
-                </Typography>
-                <Typography variant="body2" className="text-muted-foreground">
-                  Stock: {p.stockQuantity} / {p.lowStockThreshold}
-                </Typography>
-              </div>
-            ))}
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <div>
+            <span className="font-semibold">Error: </span>
+            {error}
           </div>
+          <button
+            onClick={() => void loadInventory()}
+            className="flex-none rounded-md border border-destructive/40 px-2.5 py-1 text-xs font-medium transition hover:bg-destructive/10"
+          >
+            Retry
+          </button>
         </div>
       )}
 
-      <div className="bg-card text-card-foreground shadow-md rounded-lg border border-border overflow-auto">
-        <table className="min-w-full divide-y divide-border">
-          <thead className="bg-muted">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Product
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                SKU
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Stock Level
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Threshold
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Last Updated
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border bg-card">
-            {products.map((prod) => (
-              <tr key={prod._id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Typography
-                    variant="body2"
-                    className="font-medium text-foreground"
-                  >
-                    {prod.productName}
-                  </Typography>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Typography variant="body2" className="text-muted-foreground">
-                    {prod.sku}
-                  </Typography>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {editingProduct === prod._id ? (
-                    <TextField
-                      type="number"
-                      value={editValues.quantity}
-                      onChange={(e) =>
-                        setEditValues({
-                          ...editValues,
-                          quantity: Math.max(0, parseInt(e.target.value) || 0),
-                        })
-                      }
-                      size="small"
-                      disabled={saving}
-                      className="w-20"
-                      inputProps={{
-                        className: "text-foreground bg-background",
-                      }}
-                    />
-                  ) : (
-                    <span
-                      className={getStockStatusClass(
-                        prod.stockQuantity,
-                        prod.lowStockThreshold,
-                      )}
-                    >
-                      {prod.stockQuantity}
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {editingProduct === prod._id ? (
-                    <TextField
-                      type="number"
-                      value={editValues.lowStockThreshold}
-                      onChange={(e) =>
-                        setEditValues({
-                          ...editValues,
-                          lowStockThreshold: Math.max(
-                            0,
-                            parseInt(e.target.value) || 0,
-                          ),
-                        })
-                      }
-                      size="small"
-                      disabled={saving}
-                      className="w-20"
-                      inputProps={{
-                        className: "text-foreground bg-background",
-                      }}
-                    />
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {prod.lowStockThreshold}
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={getStockStatusClass(
-                      prod.stockQuantity,
-                      prod.lowStockThreshold,
-                    )}
-                  >
-                    {getStockLabel(prod.stockStatus)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Typography variant="body2" className="text-muted-foreground">
-                    {new Date(prod.lastUpdated).toLocaleString()}
-                  </Typography>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  {editingProduct === prod._id ? (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleSave(prod._id)}
-                        disabled={saving}
-                        className="px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/80 transition-colors disabled:opacity-50"
-                      >
-                        {saving ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        onClick={() => setEditingProduct(null)}
-                        disabled={saving}
-                        className="px-2 py-1 text-xs font-medium bg-muted text-muted-foreground rounded hover:bg-muted/80 transition-colors disabled:opacity-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <Tooltip title="Edit inventory">
-                      <IconButton onClick={() => handleEdit(prod)} size="small">
-                        <Edit
-                          fontSize="small"
-                          className="text-primary hover:text-primary/80"
-                        />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                </td>
-              </tr>
+      {/* Stats */}
+      {stats && (
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            label="In stock"
+            count={stats.in_stock.count}
+            hint={`${stats.in_stock.totalStock} units available`}
+            tone="success"
+          />
+          <StatCard
+            label="Low stock"
+            count={stats.low_stock.count}
+            hint="Need attention soon"
+            tone="warning"
+            icon={<Warning fontSize="small" />}
+          />
+          <StatCard
+            label="Out of stock"
+            count={stats.out_of_stock.count}
+            hint="Need replenishment"
+            tone="danger"
+            icon={<Warning fontSize="small" />}
+          />
+        </div>
+      )}
+
+      {/* Low stock alert panel */}
+      {stats && stats.lowStockProducts.length > 0 && (
+        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-50/60 p-4 dark:bg-amber-500/10">
+          <div className="mb-3 flex items-center gap-2">
+            <Warning
+              fontSize="small"
+              className="text-amber-600 dark:text-amber-400"
+            />
+            <h2 className="text-sm font-semibold text-foreground">
+              Low stock alerts
+            </h2>
+            <span className="inline-flex items-center rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+              {stats.lowStockProducts.length}
+            </span>
+          </div>
+          <ul className="divide-y divide-amber-500/20">
+            {stats.lowStockProducts.map((p) => (
+              <li
+                key={p._id}
+                className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
+              >
+                <span className="min-w-0 truncate text-sm text-foreground">
+                  {p.productName || "Untitled"}
+                </span>
+                <span className="flex-none text-xs text-muted-foreground">
+                  <span className="font-semibold text-amber-700 dark:text-amber-400">
+                    {p.stockQuantity}
+                  </span>{" "}
+                  / {p.lowStockThreshold}
+                </span>
+              </li>
             ))}
-          </tbody>
-        </table>
+          </ul>
+        </div>
+      )}
+
+      {/* Table / Cards wrapper */}
+      <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">
+              All inventory
+            </h2>
+            {products.length > 0 && (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {products.length}
+              </span>
+            )}
+          </div>
+          {saving && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+              Saving…
+            </span>
+          )}
+        </div>
+
+        {products.length === 0 ? (
+          <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <Inventory2 className="text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground">
+              No products in inventory
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Add products to start tracking stock.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* ---------------- DESKTOP TABLE ---------------- */}
+            <div className="hidden md:block">
+              <div className="w-full overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40">
+                      <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Product
+                      </th>
+                      <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        SKU
+                      </th>
+                      <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Stock
+                      </th>
+                      <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Threshold
+                      </th>
+                      <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Status
+                      </th>
+                      <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Last updated
+                      </th>
+                      <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {products.map((prod) => {
+                      const isEditing = editingProduct === prod._id;
+                      return (
+                        <tr
+                          key={prod._id}
+                          className="transition-colors hover:bg-muted/40"
+                        >
+                          <td className="px-5 py-4">
+                            <div className="max-w-[240px] truncate font-medium text-foreground">
+                              {prod.productName || "Untitled"}
+                            </div>
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="truncate font-mono text-xs text-muted-foreground">
+                              {prod.sku || "—"}
+                            </div>
+                          </td>
+                          <td className="px-5 py-4">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                min={0}
+                                value={editValues.quantity}
+                                onChange={(e) =>
+                                  setEditValues((v) => ({
+                                    ...v,
+                                    quantity: Math.max(
+                                      0,
+                                      parseInt(e.target.value) || 0,
+                                    ),
+                                  }))
+                                }
+                                disabled={saving}
+                                className={`${INPUT_CLASS} w-24`}
+                              />
+                            ) : (
+                              <span
+                                className={`font-semibold ${quantityColor(
+                                  prod.stockQuantity,
+                                  prod.lowStockThreshold,
+                                )}`}
+                              >
+                                {prod.stockQuantity}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-4">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                min={0}
+                                value={editValues.lowStockThreshold}
+                                onChange={(e) =>
+                                  setEditValues((v) => ({
+                                    ...v,
+                                    lowStockThreshold: Math.max(
+                                      0,
+                                      parseInt(e.target.value) || 0,
+                                    ),
+                                  }))
+                                }
+                                disabled={saving}
+                                className={`${INPUT_CLASS} w-24`}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {prod.lowStockThreshold}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-4">
+                            <StatusBadge status={prod.stockStatus} />
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(prod.lastUpdated).toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            {isEditing ? (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => handleSave(prod._id)}
+                                  disabled={saving}
+                                  className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {saving ? "Saving…" : "Save"}
+                                </button>
+                                <button
+                                  onClick={handleCancel}
+                                  disabled={saving}
+                                  className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleEdit(prod)}
+                                aria-label={`Edit inventory for ${prod.productName}`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                              >
+                                <Edit fontSize="small" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* ---------------- MOBILE CARDS ---------------- */}
+            <ul className="divide-y divide-border md:hidden">
+              {products.map((prod) => {
+                const isEditing = editingProduct === prod._id;
+                return (
+                  <li key={prod._id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {prod.productName || "Untitled"}
+                        </p>
+                        <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                          {prod.sku || "—"}
+                        </p>
+                      </div>
+                      {!isEditing && (
+                        <button
+                          onClick={() => handleEdit(prod)}
+                          aria-label={`Edit inventory for ${prod.productName}`}
+                          className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                        >
+                          <Edit fontSize="small" />
+                        </button>
+                      )}
+                    </div>
+
+                    {isEditing ? (
+                      <div className="mt-3 space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                              Quantity
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              inputMode="numeric"
+                              value={editValues.quantity}
+                              onChange={(e) =>
+                                setEditValues((v) => ({
+                                  ...v,
+                                  quantity: Math.max(
+                                    0,
+                                    parseInt(e.target.value) || 0,
+                                  ),
+                                }))
+                              }
+                              disabled={saving}
+                              className={INPUT_CLASS}
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                              Threshold
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              inputMode="numeric"
+                              value={editValues.lowStockThreshold}
+                              onChange={(e) =>
+                                setEditValues((v) => ({
+                                  ...v,
+                                  lowStockThreshold: Math.max(
+                                    0,
+                                    parseInt(e.target.value) || 0,
+                                  ),
+                                }))
+                              }
+                              disabled={saving}
+                              className={INPUT_CLASS}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={handleCancel}
+                            disabled={saving}
+                            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleSave(prod._id)}
+                            disabled={saving}
+                            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {saving ? "Saving…" : "Save"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <StatusBadge status={prod.stockStatus} />
+                          <span className="text-xs text-muted-foreground">
+                            Stock:{" "}
+                            <span
+                              className={`font-semibold ${quantityColor(
+                                prod.stockQuantity,
+                                prod.lowStockThreshold,
+                              )}`}
+                            >
+                              {prod.stockQuantity}
+                            </span>{" "}
+                            / {prod.lowStockThreshold}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          Updated{" "}
+                          {new Date(prod.lastUpdated).toLocaleDateString()}
+                        </p>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
       </div>
     </div>
   );

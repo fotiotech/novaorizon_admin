@@ -1151,3 +1151,105 @@ export async function deleteProductImages(
     };
   }
 }
+
+// ==================================================================
+// LIGHTWEIGHT QUANTITY-ONLY UPDATE
+// ==================================================================
+export async function updateProductQuantity(
+  productId: string,
+  quantity: number,
+): Promise<ProductResponse> {
+  try {
+    await connection();
+    if (!productId) return { success: false, error: "Product ID required" };
+
+    const pid = toObjectId(productId);
+    if (!pid) return { success: false, error: "Invalid product ID" };
+
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty < 0 || !Number.isInteger(qty)) {
+      return {
+        success: false,
+        error: "Quantity must be a non-negative whole number",
+      };
+    }
+
+    const product = await Product.findByIdAndUpdate(
+      pid,
+      { $set: { quantity: qty, updatedAt: new Date() } },
+      { new: true },
+    );
+    if (!product) return { success: false, error: "Product not found" };
+
+    revalidatePath("/catalog/products");
+    revalidatePath(`/catalog/products/edit/${productId}`);
+    return { success: true, data: serialize(product) };
+  } catch (error: any) {
+    console.error("Error updating product quantity:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to update quantity",
+    };
+  }
+}
+
+// ==================================================================
+// LIGHTWEIGHT STOCK-LEVEL UPDATE (quantity + lowStockThreshold)
+// ==================================================================
+export async function updateProductStockLevel(
+  productId: string,
+  quantity: number,
+  lowStockThreshold: number,
+): Promise<ProductResponse> {
+  try {
+    await connection();
+    if (!productId) return { success: false, error: "Product ID required" };
+
+    const pid = toObjectId(productId);
+    if (!pid) return { success: false, error: "Invalid product ID" };
+
+    const qty = Number(quantity);
+    const threshold = Number(lowStockThreshold);
+
+    if (!Number.isFinite(qty) || qty < 0 || !Number.isInteger(qty)) {
+      return {
+        success: false,
+        error: "Quantity must be a non-negative whole number",
+      };
+    }
+    if (
+      !Number.isFinite(threshold) ||
+      threshold < 0 ||
+      !Number.isInteger(threshold)
+    ) {
+      return {
+        success: false,
+        error: "Low-stock threshold must be a non-negative whole number",
+      };
+    }
+
+    const product = await Product.findByIdAndUpdate(
+      pid,
+      {
+        $set: {
+          quantity: qty,
+          lowStockThreshold: threshold,
+          updatedAt: new Date(),
+        },
+      },
+      { new: true },
+    );
+    if (!product) return { success: false, error: "Product not found" };
+
+    revalidatePath("/inventory");
+    revalidatePath("/catalog/products");
+    revalidatePath(`/catalog/products/edit/${productId}`);
+    return { success: true, data: serialize(product) };
+  } catch (error: any) {
+    console.error("Error updating product stock level:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to update stock level",
+    };
+  }
+}

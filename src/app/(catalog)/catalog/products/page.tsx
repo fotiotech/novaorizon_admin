@@ -10,6 +10,7 @@ import {
   getProductFilterCategories,
   updateProductCategory,
   updateProductStatus,
+  updateProductQuantity,
 } from "@/app/actions/products";
 import { getCategories } from "@/app/actions/category";
 import { getProductDraft, deleteProductDraft } from "@/app/actions/drafts";
@@ -29,6 +30,7 @@ import {
   Add,
   SearchOff,
   Inventory2,
+  Inventory,
   ToggleOn,
 } from "@mui/icons-material";
 import { useDebouncedCallback } from "use-debounce";
@@ -240,6 +242,10 @@ export default function ProductsPage() {
   const [statusTarget, setStatusTarget] = useState<Product | null>(null);
   const [newStatus, setNewStatus] = useState<"active" | "inactive">("active");
   const [isSavingStatus, setIsSavingStatus] = useState(false);
+
+  const [quantityTarget, setQuantityTarget] = useState<Product | null>(null);
+  const [newQuantity, setNewQuantity] = useState<string>("");
+  const [isSavingQuantity, setIsSavingQuantity] = useState(false);
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
@@ -495,6 +501,49 @@ export default function ProductsPage() {
   };
 
   /* ------------------------------------------------------------------ */
+  /* Edit Quantity                                                       */
+  /* ------------------------------------------------------------------ */
+  const openQuantityEditor = (product: Product) => {
+    setQuantityTarget(product);
+    setNewQuantity(String(product.quantity ?? 0));
+  };
+
+  const confirmQuantityChange = async () => {
+    if (!quantityTarget) return;
+
+    const parsed = Number(newQuantity);
+    if (
+      newQuantity.trim() === "" ||
+      !Number.isFinite(parsed) ||
+      parsed < 0 ||
+      !Number.isInteger(parsed)
+    ) {
+      toast.error("Enter a non-negative whole number");
+      return;
+    }
+
+    setIsSavingQuantity(true);
+    const toastId = toast.loading("Updating quantity...");
+    try {
+      const result = await updateProductQuantity(quantityTarget._id, parsed);
+      if (result.success) {
+        toast.success(`Quantity set to ${parsed}`, { id: toastId });
+        await fetchProducts();
+        setQuantityTarget(null);
+      } else {
+        toast.error(result.error || "Failed to update quantity", {
+          id: toastId,
+        });
+      }
+    } catch (err: any) {
+      console.error("Quantity update error:", err);
+      toast.error(err?.message || "An error occurred", { id: toastId });
+    } finally {
+      setIsSavingQuantity(false);
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
   /* Filters                                                             */
   /* ------------------------------------------------------------------ */
   const applyFilters = useCallback((patch: Partial<FilterOptions>) => {
@@ -559,6 +608,12 @@ export default function ProductsPage() {
       label: "Change status",
       icon: <ToggleOn fontSize="small" />,
       onClick: () => openStatusEditor(product),
+    },
+    {
+      key: "quantity",
+      label: "Update quantity",
+      icon: <Inventory fontSize="small" />,
+      onClick: () => openQuantityEditor(product),
     },
     {
       key: "delete",
@@ -847,7 +902,7 @@ export default function ProductsPage() {
                 <col style={{ width: "36%" }} />
                 <col style={{ width: "14%" }} />
                 <col style={{ width: "14%" }} />
-                <col style={{ width: "14%" }} />
+                <col style={{ width: "16%" }} />
                 <col style={{ width: "16%" }} />
                 <col style={{ width: "6%" }} />
               </colgroup>
@@ -943,8 +998,11 @@ export default function ProductsPage() {
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="truncate">
+                        <div className="flex items-center gap-2">
                           <StockBadge product={product} />
+                          <span className="text-xs text-muted-foreground">
+                            ({product.quantity ?? 0})
+                          </span>
                         </div>
                       </td>
                       <td className="px-5 py-4">
@@ -1025,6 +1083,9 @@ export default function ProductsPage() {
                           {getCategoryName(product.categoryId)}
                         </span>
                         <StockBadge product={product} />
+                        <span className="text-[11px] text-muted-foreground">
+                          Qty: {product.quantity ?? 0}
+                        </span>
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <span className="font-mono text-[11px] text-muted-foreground">
@@ -1235,6 +1296,68 @@ export default function ProductsPage() {
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSavingStatus ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Quantity dialog */}
+      {quantityTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          onClick={() => {
+            if (!isSavingQuantity) setQuantityTarget(null);
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold tracking-tight">
+              Update quantity
+            </h3>
+            <p className="mb-4 mt-1 text-sm text-muted-foreground">
+              Set stock on hand for{" "}
+              <span className="font-medium text-foreground">
+                {quantityTarget.name || "this product"}
+              </span>
+              .
+            </p>
+
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Quantity
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              value={newQuantity}
+              onChange={(e) => setNewQuantity(e.target.value)}
+              disabled={isSavingQuantity}
+              className={`${inputClass} mb-5`}
+              autoFocus
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setQuantityTarget(null)}
+                disabled={isSavingQuantity}
+                className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmQuantityChange}
+                disabled={isSavingQuantity || newQuantity.trim() === ""}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSavingQuantity ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
