@@ -651,6 +651,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     currentStepRef.current = currentStep;
   }, [currentStep]);
 
+  // Keep the stepper's active step in view horizontally.
   useEffect(() => {
     const container = stepperViewportRef.current;
     if (!container) return;
@@ -1013,12 +1014,16 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const showVariantsToggle = hasVariantConfig && !isFetchingAttributes;
 
   return (
-    <div className="max-w-4xl py-2">
+    <div className="max-w-4xl mx-auto">
       <form
         onSubmit={handleSubmit}
-        className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+        // `overflow-clip` clips rounded corners WITHOUT creating a
+        // scroll container, so `position: sticky` on the footer below
+        // continues to work.
+        className="overflow-clip bg-card text-card-foreground"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 border-b border-border py-4">
           <div className="min-w-0 flex items-center gap-3">
             <h1 className="text-sm font-semibold text-foreground">
               {initialProductId ? "Edit product" : "New product"}
@@ -1057,7 +1062,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
           </div>
         </div>
 
-        <div className="px-5 py-5">
+        {/* Body */}
+        <div className=" py-5">
           {error && (
             <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-sm text-destructive">
               {error}
@@ -1133,7 +1139,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/20 px-4 py-4 sm:px-5">
+        {/* Sticky action bar — pinned to the viewport bottom while the
+            form is in view, so the user never has to scroll to reach
+            Cancel / Previous / Continue / Save. */}
+        <div className="sticky bottom-0 z-20 flex items-center justify-between gap-2 border-t border-border bg-card/95 px-4 py-3 shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.08)] backdrop-blur-sm sm:px-5 sm:py-4">
           <div className="flex items-center gap-2">
             <button
               type="button"
