@@ -51,6 +51,33 @@ const Categories = () => {
     fetchCategories();
   }, []);
 
+  // -------------------------------------------------------------------
+  //  Auto-enter the synthetic "All Category" root whenever browse mode
+  //  is active and we're at the top level. The user should never see a
+  //  level that only contains the single wrapper node.
+  // -------------------------------------------------------------------
+  useEffect(() => {
+    if (!browseMode) return;
+    if (browsePath.length > 0) return;
+    if (categories.length === 0) return;
+
+    const roots = categories.filter((c) => {
+      const pid = (c as any).parentId ?? (c as any).parent_id ?? null;
+      return !pid;
+    });
+    if (roots.length === 0) return;
+
+    const allRoot = roots.find((r) => {
+      const n = (r.name ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+      return n === "all category" || n === "all categories";
+    });
+
+    // Prefer the explicitly-named root; if there's only one root, use it
+    // regardless of name (it's still just a container).
+    const target = allRoot ?? (roots.length === 1 ? roots[0] : null);
+    if (target) setBrowsePath([target._id as string]);
+  }, [browseMode, browsePath.length, categories]);
+
   const fetchCategories = async () => {
     try {
       setLoading(true);
