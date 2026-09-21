@@ -37,6 +37,10 @@ const Categories = () => {
   const [filterText, setFilterText] = useState("");
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
+  // ---------- Browse (drill-down) state ----------
+  const [browseMode, setBrowseMode] = useState(false);
+  const [browsePath, setBrowsePath] = useState<string[]>([]);
+
   // ---------- Property viewer state ----------
   const [viewTarget, setViewTarget] = useState<Cat | null>(null);
   const [viewSets, setViewSets] = useState<AttributeSetResult[] | null>(null);
@@ -168,10 +172,31 @@ const Categories = () => {
     setViewLoading(false);
   };
 
+  // ---------- Browse handlers ----------
+  const handleOpenCategory = (category: Cat) => {
+    setBrowsePath((prev) => [...prev, category._id as string]);
+  };
+
+  const handleBreadcrumbClick = (index: number) => {
+    setBrowsePath((prev) => (index < 0 ? [] : prev.slice(0, index + 1)));
+  };
+
+  const handleToggleBrowse = () => {
+    setBrowseMode((prev) => !prev);
+    setBrowsePath([]);
+  };
+
   const hasActiveFilters = filterText.trim() !== "";
   const activeFilterCount = hasActiveFilters ? 1 : 0;
 
   // ---------- SAFE TREE BUILDER ----------
+  // `parentId` may be exposed as `parentId` or `parent_id` depending on the
+  // shape returned by the server; handle both.
+  const getNodeParentId = (cat: Cat): string | null => {
+    const pid = (cat as any).parentId ?? (cat as any).parent_id ?? null;
+    return pid ? String(pid) : null;
+  };
+
   const buildSafeSubtree = (
     parentId: string,
     visited: Set<string> = new Set(),
@@ -181,7 +206,10 @@ const Categories = () => {
     visited.add(parentId);
 
     return categories
-      .filter((cat) => cat.parentId === parentId && cat._id !== parentId)
+      .filter((cat) => {
+        const pid = getNodeParentId(cat);
+        return pid === parentId && (cat._id as string) !== parentId;
+      })
       .map((cat) => ({
         ...cat,
         subcategories: buildSafeSubtree(
@@ -192,18 +220,16 @@ const Categories = () => {
       }));
   };
 
-  const categoriesWithSubcategories = categories.map((category) => {
-    if (!category.parentId) {
-      return {
-        ...category,
-        subcategories: buildSafeSubtree(category._id as string),
-      };
-    }
-    return {
+  // Only expose ROOT categories at the top level, each carrying its full
+  // nested subtree. Previously every non-root category was also emitted as
+  // a flat, childless duplicate — which caused the drill-down to dead-end
+  // after two levels when the flat copy won the id→node lookup.
+  const categoriesWithSubcategories = categories
+    .filter((category) => !getNodeParentId(category))
+    .map((category) => ({
       ...category,
-      subcategories: [],
-    };
-  });
+      subcategories: buildSafeSubtree(category._id as string),
+    }));
 
   const filterInputEl = (
     <div className="relative">
@@ -235,11 +261,11 @@ const Categories = () => {
             Manage your product categories and subcategories
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted lg:hidden"
+            className="relative inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted lg:hidden"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
@@ -251,15 +277,30 @@ const Categories = () => {
             )}
           </button>
 
+          <button
+            type="button"
+            onClick={handleToggleBrowse}
+            aria-pressed={browseMode}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition ${
+              browseMode
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "border border-border bg-card text-foreground hover:bg-muted"
+            }`}
+          >
+            <FolderOpen fontSize="small" />
+            {browseMode ? "Tree view" : "Browse"}
+          </button>
+
           <Link
             href="/catalog/categories/property"
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:flex-initial"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
           >
             Properties
           </Link>
+
           <button
             onClick={handleNewCategory}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 sm:flex-initial"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             <Add fontSize="small" />
             New category
@@ -361,6 +402,7 @@ const Categories = () => {
       {!loading && (
         <CategoryList
           categories={categoriesWithSubcategories as any[]}
+          allCategories={categories as any[]}
           title="All categories"
           emptyMessage="No categories found. Create your first category!"
           onEditCategory={handleEditClick as any}
@@ -372,6 +414,10 @@ const Categories = () => {
           filterValue={filterText}
           onFilterChange={setFilterText}
           filterPlaceholder="Search categories…"
+          browseMode={browseMode}
+          browsePath={browsePath}
+          onOpenCategory={handleOpenCategory as any}
+          onBreadcrumbClick={handleBreadcrumbClick}
         />
       )}
 
