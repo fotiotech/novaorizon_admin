@@ -32,12 +32,12 @@ interface CategoryNode {
   property?: CategoryPropertyRef | string | null;
   hasInheritedSnapshot?: boolean;
   inheritProperty?: boolean;
-  subcategories: CategoryNode[];
+  subcategories?: CategoryNode[];
 }
 
 interface CategoryListProps {
+  /** Flat list of every category. */
   categories: CategoryNode[];
-  allCategories?: CategoryNode[];
   title?: string;
   emptyMessage?: string;
   onEditCategory: (category: CategoryNode) => void;
@@ -49,6 +49,8 @@ interface CategoryListProps {
   filterValue?: string;
   onFilterChange?: (value: string) => void;
   hideFilter?: boolean;
+  // ---------- View mode ----------
+  /** true → drill-down browse; false → flat list. */
   browseMode?: boolean;
   browsePath?: string[];
   onOpenCategory?: (category: CategoryNode) => void;
@@ -56,8 +58,6 @@ interface CategoryListProps {
 }
 
 type FlatRow = CategoryNode & {
-  level: number;
-  visible: boolean;
   parentName: string | null;
 };
 
@@ -87,7 +87,6 @@ const isAllCategoryName = (name: string): boolean => {
 
 const CategoryList: React.FC<CategoryListProps> = ({
   categories,
-  allCategories,
   title = "Categories",
   emptyMessage = "No categories found",
   onEditCategory,
@@ -99,13 +98,12 @@ const CategoryList: React.FC<CategoryListProps> = ({
   filterValue,
   onFilterChange,
   hideFilter = false,
-  browseMode = false,
+  browseMode = true,
   browsePath = [],
   onOpenCategory,
   onBreadcrumbClick,
 }) => {
   const [internalFilter, setInternalFilter] = useState("");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const isFilterControlled = filterValue !== undefined;
   const filter = isFilterControlled ? filterValue! : internalFilter;
@@ -115,39 +113,16 @@ const CategoryList: React.FC<CategoryListProps> = ({
 
   const isSearching = filter.trim().length > 0;
 
-  const toggleExpand = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   // -------------------------------------------------------------------
-  //  Lookup tables
+  //  Lookups
   // -------------------------------------------------------------------
   const nodesById = useMemo(() => {
     const map = new Map<string, CategoryNode>();
-
-    if (allCategories && allCategories.length > 0) {
-      for (const n of allCategories) {
-        if (n && n._id && !map.has(n._id)) map.set(n._id, n);
-      }
-      return map;
+    for (const n of categories) {
+      if (n && n._id && !map.has(n._id)) map.set(n._id, n);
     }
-
-    const walk = (nodes: CategoryNode[] | undefined) => {
-      if (!nodes) return;
-      for (const n of nodes) {
-        if (!n || !n._id) continue;
-        if (!map.has(n._id)) map.set(n._id, n);
-        walk(n.subcategories);
-      }
-    };
-    walk(categories);
     return map;
-  }, [allCategories, categories]);
+  }, [categories]);
 
   const allNodesList = useMemo(
     () => Array.from(nodesById.values()),
@@ -160,7 +135,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
   );
 
   // -------------------------------------------------------------------
-  //  Synthetic-root detection (excluded from search results).
+  //  Synthetic-root detection (excluded from list + search results).
   //   - Any root named "All Category" / "All Categories".
   //   - If there is exactly ONE root, treat it as synthetic too.
   // -------------------------------------------------------------------
@@ -190,70 +165,9 @@ const CategoryList: React.FC<CategoryListProps> = ({
     return parent ? parent.name : null;
   };
 
-  // ---------- Tree-mode recursive filter ----------
-  const filterTree = (
-    nodes: CategoryNode[],
-    query: string,
-    visited = new Set<string>(),
-  ): CategoryNode[] => {
-    if (!query.trim()) return nodes;
-    const lower = query.toLowerCase();
-    return nodes
-      ?.map((node) => {
-        if (visited.has(node._id)) return null;
-        visited.add(node._id);
-        const matches = node.name.toLowerCase().includes(lower);
-        const filteredChildren = filterTree(
-          node.subcategories || [],
-          query,
-          visited,
-        );
-        if (matches || filteredChildren?.length > 0) {
-          return { ...node, subcategories: filteredChildren };
-        }
-        return null;
-      })
-      .filter(Boolean) as CategoryNode[];
-  };
-
-  const filteredCategories = useMemo(
-    () => filterTree(categories, filter),
-    [categories, filter],
-  );
-
-  const flattenTree = (
-    nodes: CategoryNode[],
-    level: number = 0,
-    parentExpanded: boolean = true,
-    visited = new Set<string>(),
-  ): FlatRow[] => {
-    let rows: FlatRow[] = [];
-    for (const node of nodes) {
-      if (!node?._id || visited.has(node._id)) continue;
-      visited.add(node._id);
-      const isExpanded = expanded.has(node._id);
-      const visible = parentExpanded;
-      rows.push({
-        ...node,
-        level,
-        visible,
-        parentName: resolveParentName(node),
-      });
-      if (node.subcategories && node.subcategories.length > 0 && isExpanded) {
-        rows = rows.concat(
-          flattenTree(node.subcategories, level + 1, true, visited),
-        );
-      }
-    }
-    return rows;
-  };
-
-  const flattenedRows = useMemo<FlatRow[]>(
-    () => flattenTree(filteredCategories, 0, true),
-    [filteredCategories, expanded, nodesById],
-  );
-
-  // ---------- Browse (drill-down) computations ----------
+  // -------------------------------------------------------------------
+  //  Browse (drill-down) computations
+  // -------------------------------------------------------------------
   const browseCurrentParentId = useMemo(
     () => (browsePath.length > 0 ? browsePath[browsePath.length - 1] : null),
     [browsePath],
@@ -270,6 +184,21 @@ const CategoryList: React.FC<CategoryListProps> = ({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [browseMode, allNodesList, browseCurrentParentId]);
 
+  // -------------------------------------------------------------------
+  //  List mode: every real (non-synthetic) category, alphabetical.
+  // -------------------------------------------------------------------
+  const listRows = useMemo(() => {
+    return allNodesList
+      .filter((n) => !syntheticRootIds.has(n._id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [allNodesList, syntheticRootIds]);
+
+  const listRowsFiltered = useMemo(() => {
+    if (!isSearching) return listRows;
+    const q = filter.trim().toLowerCase();
+    return listRows.filter((n) => n.name.toLowerCase().includes(q));
+  }, [listRows, filter, isSearching]);
+
   // Global search across every category — excluding synthetic roots.
   const searchResults = useMemo(() => {
     if (!isSearching) return [] as CategoryNode[];
@@ -281,20 +210,14 @@ const CategoryList: React.FC<CategoryListProps> = ({
   }, [allNodesList, filter, isSearching, syntheticRootIds]);
 
   // -------------------------------------------------------------------
-  //  Breadcrumbs.
-  //
-  //  Rule: only prepend the synthetic "All categories" home crumb when
-  //  the path does NOT already start at a root. If browsePath[0] IS a
-  //  root (e.g. the container "All Category"), that root *is* the first
-  //  crumb — adding "All categories" would duplicate the same level.
+  //  Breadcrumbs — only shown in browse mode.
+  //  Rule: skip the synthetic home crumb when the path already starts at
+  //  a root (that root IS the first crumb).
   // -------------------------------------------------------------------
   const breadcrumbItems = useMemo<BreadcrumbItem[]>(() => {
-    if (!browseMode) {
-      return [{ id: null, name: "All categories", pathIndex: -1 }];
-    }
+    if (!browseMode) return [];
 
     const items: BreadcrumbItem[] = [];
-
     const firstId = browsePath[0];
     const firstNode = firstId ? nodesById.get(firstId) : undefined;
     const firstIsRoot = !!firstNode && !getParentId(firstNode);
@@ -314,23 +237,26 @@ const CategoryList: React.FC<CategoryListProps> = ({
     return items;
   }, [browseMode, browsePath, nodesById]);
 
+  // -------------------------------------------------------------------
+  //  Rows to render
+  // -------------------------------------------------------------------
   const rowsToRender: FlatRow[] = useMemo(() => {
+    const toRow = (n: CategoryNode): FlatRow => ({
+      ...n,
+      parentName: resolveParentName(n),
+    });
+
     if (browseMode) {
       const source = isSearching ? searchResults : browseChildren;
-      return source.map((n) => ({
-        ...n,
-        level: 0,
-        visible: true,
-        parentName: resolveParentName(n),
-      }));
+      return source.map(toRow);
     }
-    return flattenedRows;
+    return listRowsFiltered.map(toRow);
   }, [
     browseMode,
     isSearching,
     searchResults,
     browseChildren,
-    flattenedRows,
+    listRowsFiltered,
     nodesById,
   ]);
 
@@ -357,7 +283,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
     prevNavRef.current = next;
   }, [browseMode, browsePath]);
 
-  const animationKey = browseMode ? `browse:${browsePath.join("|")}` : "tree";
+  const animationKey = browseMode ? `browse:${browsePath.join("|")}` : "list";
   const animationClass =
     navDirection === "in"
       ? "browse-anim-in"
@@ -409,7 +335,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
     ? isSearching
       ? searchResults.length
       : browseChildren.length
-    : filteredCategories.length;
+    : listRowsFiltered.length;
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
@@ -457,7 +383,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
       </div>
 
       {/* Breadcrumbs (browse mode only, hidden while searching) */}
-      {browseMode && !isSearching && (
+      {browseMode && !isSearching && breadcrumbItems.length > 0 && (
         <div className="flex flex-wrap items-center gap-1 border-b border-border px-5 py-2.5 text-sm">
           {breadcrumbItems.map((item, idx) => {
             const isLast = idx === breadcrumbItems.length - 1;
@@ -572,8 +498,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
               <tbody className="divide-y divide-border">
                 {rowsToRender.map((row) => {
                   const hasChildren = hasChildrenById(row._id);
-                  const isExpanded = expanded.has(row._id);
-
                   const own = asPropertyRef(row.property);
                   const inheriting =
                     !!row.inheritProperty && !!getParentId(row);
@@ -583,45 +507,19 @@ const CategoryList: React.FC<CategoryListProps> = ({
                   return (
                     <tr
                       key={row._id}
-                      className={`group transition-colors hover:bg-muted/40 ${
-                        row.visible ? "" : "hidden"
-                      }`}
+                      className="group transition-colors hover:bg-muted/40"
                     >
                       <td className="px-5 py-3">
-                        <div
-                          className="flex items-center gap-2"
-                          style={{
-                            paddingLeft: browseMode
-                              ? "0rem"
-                              : `${row.level * 1.25}rem`,
-                          }}
-                        >
-                          {hasChildren ? (
-                            browseMode ? (
-                              <button
-                                type="button"
-                                onClick={() => onOpenCategory?.(row)}
-                                className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                                aria-label={`Open ${row.name}`}
-                              >
-                                <KeyboardArrowRight fontSize="small" />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => toggleExpand(row._id)}
-                                className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                                aria-label={isExpanded ? "Collapse" : "Expand"}
-                                aria-expanded={isExpanded}
-                              >
-                                <KeyboardArrowRight
-                                  fontSize="small"
-                                  className={`transition-transform duration-200 ${
-                                    isExpanded ? "rotate-90" : ""
-                                  }`}
-                                />
-                              </button>
-                            )
+                        <div className="flex items-center gap-2">
+                          {browseMode && hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenCategory?.(row)}
+                              className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                              aria-label={`Open ${row.name}`}
+                            >
+                              <KeyboardArrowRight fontSize="small" />
+                            </button>
                           ) : (
                             <span className="inline-flex h-6 w-6 flex-none items-center justify-center">
                               <span className="h-1.5 w-1.5 rounded-full bg-border" />

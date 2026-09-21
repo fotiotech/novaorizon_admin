@@ -21,6 +21,7 @@ import {
   Search,
   Add,
   Close,
+  ListAlt,
   FolderOpen,
 } from "@mui/icons-material";
 import PropertyViewerModal from "@/components/ux/PropertyViewerModal";
@@ -37,8 +38,8 @@ const Categories = () => {
   const [filterText, setFilterText] = useState("");
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
-  // ---------- Browse (drill-down) state ----------
-  const [browseMode, setBrowseMode] = useState(false);
+  // ---------- View mode: false = list, true = browse (drill-down) ----------
+  const [browseMode, setBrowseMode] = useState(true);
   const [browsePath, setBrowsePath] = useState<string[]>([]);
 
   // ---------- Property viewer state ----------
@@ -70,6 +71,7 @@ const Categories = () => {
       const result = await deleteCategory(id);
       if (result.success) {
         setCategories(categories.filter((cat) => cat._id !== id));
+        setBrowsePath((prev) => (prev.includes(id) ? [] : prev));
         toast.success("Category deleted successfully");
       } else {
         toast.error(result.error || "Failed to delete category");
@@ -181,55 +183,13 @@ const Categories = () => {
     setBrowsePath((prev) => (index < 0 ? [] : prev.slice(0, index + 1)));
   };
 
-  const handleToggleBrowse = () => {
+  const handleToggleMode = () => {
     setBrowseMode((prev) => !prev);
     setBrowsePath([]);
   };
 
   const hasActiveFilters = filterText.trim() !== "";
   const activeFilterCount = hasActiveFilters ? 1 : 0;
-
-  // ---------- SAFE TREE BUILDER ----------
-  // `parentId` may be exposed as `parentId` or `parent_id` depending on the
-  // shape returned by the server; handle both.
-  const getNodeParentId = (cat: Cat): string | null => {
-    const pid = (cat as any).parentId ?? (cat as any).parent_id ?? null;
-    return pid ? String(pid) : null;
-  };
-
-  const buildSafeSubtree = (
-    parentId: string,
-    visited: Set<string> = new Set(),
-    depth = 0,
-  ): any[] => {
-    if (depth > 10 || visited.has(parentId)) return [];
-    visited.add(parentId);
-
-    return categories
-      .filter((cat) => {
-        const pid = getNodeParentId(cat);
-        return pid === parentId && (cat._id as string) !== parentId;
-      })
-      .map((cat) => ({
-        ...cat,
-        subcategories: buildSafeSubtree(
-          cat._id as string,
-          new Set(visited),
-          depth + 1,
-        ),
-      }));
-  };
-
-  // Only expose ROOT categories at the top level, each carrying its full
-  // nested subtree. Previously every non-root category was also emitted as
-  // a flat, childless duplicate — which caused the drill-down to dead-end
-  // after two levels when the flat copy won the id→node lookup.
-  const categoriesWithSubcategories = categories
-    .filter((category) => !getNodeParentId(category))
-    .map((category) => ({
-      ...category,
-      subcategories: buildSafeSubtree(category._id as string),
-    }));
 
   const filterInputEl = (
     <div className="relative">
@@ -279,16 +239,22 @@ const Categories = () => {
 
           <button
             type="button"
-            onClick={handleToggleBrowse}
-            aria-pressed={browseMode}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition ${
-              browseMode
-                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "border border-border bg-card text-foreground hover:bg-muted"
-            }`}
+            onClick={handleToggleMode}
+            aria-pressed={!browseMode}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+            title={browseMode ? "Switch to list view" : "Switch to browse view"}
           >
-            <FolderOpen fontSize="small" />
-            {browseMode ? "Tree view" : "Browse"}
+            {browseMode ? (
+              <>
+                <ListAlt fontSize="small" />
+                List
+              </>
+            ) : (
+              <>
+                <FolderOpen fontSize="small" />
+                Browse
+              </>
+            )}
           </button>
 
           <Link
@@ -401,9 +367,8 @@ const Categories = () => {
       {/* List */}
       {!loading && (
         <CategoryList
-          categories={categoriesWithSubcategories as any[]}
-          allCategories={categories as any[]}
-          title="All categories"
+          categories={categories as any[]}
+          title={browseMode ? "Browse categories" : "All categories"}
           emptyMessage="No categories found. Create your first category!"
           onEditCategory={handleEditClick as any}
           onDeleteCategory={handleDeleteClick as any}
@@ -436,11 +401,7 @@ const Categories = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={confirmDelete}
         title="Delete category"
-        message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.${
-          (deleteTarget as any)?.subcategories?.length
-            ? ` It has ${(deleteTarget as any).subcategories.length} subcategory(ies) that will also be removed.`
-            : ""
-        }`}
+        message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
         confirmLabel="Delete"
         danger={true}
       />
