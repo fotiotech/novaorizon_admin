@@ -177,12 +177,15 @@ export async function deleteHeroContent(id: string) {
   }
 }
 
-export async function deleteHeroImage(heroId: string) {
+export async function deleteHeroImage(heroId: string, fileUrl: string) {
   try {
     await connection();
 
     if (!mongoose.Types.ObjectId.isValid(heroId)) {
       return { success: false, error: "Invalid hero ID" };
+    }
+    if (!fileUrl) {
+      return { success: false, error: "No image URL provided" };
     }
 
     const hero = await HeroContent.findById(heroId);
@@ -190,16 +193,11 @@ export async function deleteHeroImage(heroId: string) {
       return { success: false, error: "Hero not found" };
     }
 
-    if (!hero.imageUrl) {
-      return { success: false, error: "No image to delete" };
-    }
-
-    await deleteS3Object(hero.imageUrl);
-
-    hero.imageUrl = "";
-    await hero.save();
-
-    revalidatePath("/hero"); // adjust path
+    // Delete the S3 object the user clicked. We intentionally do NOT touch
+    // `hero.imageUrl` here — the schema requires at least one image, and the
+    // form submit (updateHeroContent) is the single writer that persists the
+    // replacement URL from local state.
+    await deleteS3Object(fileUrl);
 
     return { success: true, message: "Image removed successfully" };
   } catch (error) {

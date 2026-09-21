@@ -3,8 +3,9 @@
 import {
   createHeroContent,
   updateHeroContent,
-  deleteHeroImage, // NEW server action
+  deleteHeroImage,
 } from "@/app/actions/content_management";
+import { deleteS3Object } from "@/app/actions/s3";
 import FilesUploader from "@/components/FilesUploader";
 import Spinner from "@/components/Spinner";
 import { useFileUploader } from "@/hooks/useFileUploader";
@@ -40,10 +41,11 @@ const HeroForm: React.FC<HeroFormProps> = ({
   });
 
   // useFileUploader – now without database callback
-  const { files, loading, addFiles, setFiles } = useFileUploader(
-    undefined,
-    initialData?.imageUrl ? [initialData.imageUrl] : [],
-  );
+  const { files, loading, progressByName, addFiles, setFiles } =
+    useFileUploader(
+      undefined,
+      initialData?.imageUrl ? [initialData.imageUrl] : [],
+    );
 
   const [submitStatus, setSubmitStatus] = useState({
     success: false,
@@ -51,14 +53,18 @@ const HeroForm: React.FC<HeroFormProps> = ({
     loading: false,
   });
 
-  // Sync files when initialData changes (e.g., after edit)
+  // Sync *text* fields when a different record is loaded.
+  // Keyed on _id (not object identity) so a parent re-render doesn't clobber
+  // local edits. Note: we do NOT touch `files` here — useFileUploader already
+  // owns that state and syncing it here caused deleted images to reappear.
   useEffect(() => {
-    if (initialData?.imageUrl) {
-      setFiles([initialData.imageUrl]);
-    } else {
-      setFiles([]);
-    }
-  }, [initialData, setFiles]);
+    setFormData({
+      title: initialData?.title ?? "",
+      description: initialData?.description ?? "",
+      cta_text: initialData?.cta_text ?? "",
+      cta_link: initialData?.cta_link ?? "",
+    });
+  }, [initialData?._id]);
 
   // Auto-dismiss status messages
   useEffect(() => {
@@ -77,27 +83,39 @@ const HeroForm: React.FC<HeroFormProps> = ({
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Handle image removal – calls server action
+  // Handle image removal – deletes the exact file the user clicked
   const handleRemoveImage = async (index: number, fileUrl: string) => {
-    if (mode === "update" && initialData?._id) {
-      const result = await deleteHeroImage(initialData._id);
-      if (!result.success) {
-        throw new Error(result.error || "Failed to remove image");
+    try {
+      if (mode === "update" && initialData?._id) {
+        const result = await deleteHeroImage(initialData._id, fileUrl);
+        if (!result.success) {
+          throw new Error(result.error || "Failed to remove image");
+        }
+      } else {
+        // Create mode: file is already in S3, so remove it there too.
+        await deleteS3Object(fileUrl);
       }
-      // Remove from local state
+
+      // Remove from local state (source of truth for the uploader)
       setFiles((prev) => prev.filter((_, i) => i !== index));
-      // Optionally show success message
+
       setSubmitStatus({
         success: true,
         message: "Image removed successfully",
         loading: false,
       });
-      setTimeout(() => {
-        setSubmitStatus({ success: false, message: "", loading: false });
-      }, 3000);
-    } else {
-      // In create mode, just remove from local state
-      setFiles((prev) => prev.filter((_, i) => i !== index));
+      setTimeout(
+        () => setSubmitStatus({ success: false, message: "", loading: false }),
+        3000,
+      );
+    } catch (error) {
+      setSubmitStatus({
+        success: false,
+        message: (error as Error).message || "Failed to remove image",
+        loading: false,
+      });
+      // Re-throw so FilesUploader's built-in alert also fires
+      throw error;
     }
   };
 
@@ -217,6 +235,7 @@ const HeroForm: React.FC<HeroFormProps> = ({
         <FilesUploader
           files={files}
           loading={loading}
+          progressByName={progressByName}
           addFiles={addFiles}
           onRemove={handleRemoveImage}
         />
