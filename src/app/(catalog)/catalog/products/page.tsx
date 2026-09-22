@@ -1,3 +1,4 @@
+// app/catalog/products/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef, memo } from "react";
@@ -123,9 +124,6 @@ const StatusBadge = memo(function StatusBadge({
 }: {
   status: Product["status"];
 }) {
-  // `status` can occasionally arrive as a non-string (BSON wrapper,
-  // array from a bad write, `{ value: "active" }`, etc). Coerce
-  // defensively so a single corrupt row can't crash the list.
   const raw =
     typeof status === "string"
       ? status
@@ -155,8 +153,6 @@ function getCategoryName(cat: Product["categoryId"]): string {
   return cat.name || "Uncategorized";
 }
 
-/* Shared empty-state block — used in both the desktop table and the
-   mobile card list. Kept at module scope so it can't be re-created. */
 const EmptyState = memo(function EmptyState({
   hasActiveFilters,
   onClearFilters,
@@ -249,8 +245,6 @@ export default function ProductsPage() {
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
-  // Prevent stale responses (from a superseded page/filter change) from
-  // clobbering newer results.
   const requestIdRef = useRef(0);
 
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
@@ -314,7 +308,6 @@ export default function ProductsPage() {
         sortDir: "desc",
       });
 
-      // A newer request has been issued — drop this stale response.
       if (requestId !== requestIdRef.current) return;
 
       if (res.error) {
@@ -676,20 +669,16 @@ export default function ProductsPage() {
     </select>
   );
 
-  // Only show the full-page skeleton on a truly empty first load.
   const showSkeleton = loading && products.length === 0 && !error;
 
   if (showSkeleton) {
     return (
-      <div className="w-full max-w-7xl overflow-x-clip py-6">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-          <div className="h-10 w-32 animate-pulse rounded bg-muted" />
+      <div className="w-full max-w-7xl overflow-x-clip">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="h-7 w-32 animate-pulse rounded bg-muted" />
+          <div className="h-9 w-64 animate-pulse rounded bg-muted" />
         </div>
-        <div className="mb-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="h-9 w-full animate-pulse rounded bg-muted" />
-        </div>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
           <div className="space-y-4 p-6">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-4">
@@ -710,7 +699,7 @@ export default function ProductsPage() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -725,22 +714,17 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="w-full max-w-7xl overflow-x-clip py-3 lg:py-6">
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Products
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Manage your catalog, pricing, and stock
-          </p>
-        </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
+    <div className="w-full max-w-7xl overflow-x-clip">
+      {/* -------------------------------------------------------------- */}
+      {/* Header — inline on desktop: title · search · filters · action  */}
+      {/* -------------------------------------------------------------- */}
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-2">
+        {/* Mobile: Filters + New product on the same row */}
+        <div className="flex items-center gap-2 md:hidden">
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted md:hidden"
+            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
@@ -754,17 +738,44 @@ export default function ProductsPage() {
 
           <Link
             href="/catalog/products/new"
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 sm:flex-initial"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             <Add fontSize="small" />
             New product
           </Link>
         </div>
+
+        {/* Desktop: inline search + category + status + clear */}
+        <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
+          <div className="min-w-0 max-w-xs flex-1">{searchInputEl}</div>
+          <div className="w-40 shrink-0">{categorySelectEl}</div>
+          <div className="w-32 shrink-0">{statusSelectEl}</div>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              aria-label="Clear filters"
+              title="Clear filters"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <Close fontSize="small" />
+            </button>
+          )}
+        </div>
+
+        {/* Desktop: New product */}
+        <Link
+          href="/catalog/products/new"
+          className="hidden shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 md:inline-flex"
+        >
+          <Add fontSize="small" />
+          New product
+        </Link>
       </div>
 
       {/* Draft banner */}
       {draftSummary && (
-        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-50/60 p-3.5 sm:flex-row sm:items-center sm:justify-between dark:bg-amber-500/10">
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-50/60 p-3.5 sm:flex-row sm:items-center sm:justify-between dark:bg-amber-500/10">
           <div className="flex min-w-0 items-start gap-3">
             <EditNote className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
             <div className="min-w-0">
@@ -803,28 +814,6 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
-
-      {/* Desktop filter bar */}
-      <div className="hidden md:block">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-            <div className="min-w-0 lg:col-span-6">{searchInputEl}</div>
-            <div className="min-w-0 lg:col-span-3">{categorySelectEl}</div>
-            <div className="min-w-0 lg:col-span-3">{statusSelectEl}</div>
-          </div>
-          {hasActiveFilters && (
-            <div className="mt-3 flex justify-end border-t border-border pt-3">
-              <button
-                onClick={handleClearFilters}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
-              >
-                <Close fontSize="small" />
-                Clear filters
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Mobile filter sheet */}
       <BottomSheet
@@ -873,9 +862,9 @@ export default function ProductsPage() {
       </BottomSheet>
 
       {/* Card */}
-      <div className="mt-6 min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All products
@@ -908,22 +897,22 @@ export default function ProductsPage() {
               </colgroup>
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Product
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     SKU
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Price
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Stock
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Category
                   </th>
-                  <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
@@ -950,7 +939,7 @@ export default function ProductsPage() {
                       key={product._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-lg bg-muted">
                             {product.images?.[0] ? (
@@ -986,18 +975,18 @@ export default function ProductsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate font-mono text-xs text-muted-foreground">
                           {product.sku || "—"}
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate font-medium text-foreground">
                           CFA{" "}
                           {(product.listPrice || product.price || 0).toFixed(2)}
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <StockBadge product={product} />
                           <span className="text-xs text-muted-foreground">
@@ -1005,14 +994,14 @@ export default function ProductsPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate">
                           <span className="inline-flex max-w-full items-center truncate rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                             {getCategoryName(product.categoryId)}
                           </span>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-right">
+                      <td className="px-4 py-3 text-right">
                         <div className="flex justify-end">
                           <PopoverMenu
                             ariaLabel={`Actions for ${product.name}`}
@@ -1113,7 +1102,7 @@ export default function ProductsPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-4 border-t border-border px-5 py-3">
+          <div className="flex items-center justify-between gap-4 border-t border-border px-4 py-2.5">
             <p className="text-xs text-muted-foreground">
               Showing{" "}
               <span className="font-medium text-foreground">
@@ -1185,7 +1174,7 @@ export default function ProductsPage() {
           aria-modal="true"
         >
           <div
-            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
+            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight">
@@ -1251,7 +1240,7 @@ export default function ProductsPage() {
           aria-modal="true"
         >
           <div
-            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
+            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight">
@@ -1313,7 +1302,7 @@ export default function ProductsPage() {
           aria-modal="true"
         >
           <div
-            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
+            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight">

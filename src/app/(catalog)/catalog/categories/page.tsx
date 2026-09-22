@@ -1,3 +1,4 @@
+// app/catalog/categories/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -72,8 +73,6 @@ const Categories = () => {
       return n === "all category" || n === "all categories";
     });
 
-    // Prefer the explicitly-named root; if there's only one root, use it
-    // regardless of name (it's still just a container).
     const target = allRoot ?? (roots.length === 1 ? roots[0] : null);
     if (target) setBrowsePath([target._id as string]);
   }, [browseMode, browsePath.length, categories]);
@@ -219,7 +218,7 @@ const Categories = () => {
   const activeFilterCount = hasActiveFilters ? 1 : 0;
 
   const filterInputEl = (
-    <div className="relative">
+    <div className="relative w-full">
       <Search
         fontSize="small"
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -229,30 +228,25 @@ const Categories = () => {
         placeholder="Search categories…"
         value={filterText}
         onChange={(e) => setFilterText(e.target.value)}
-        className="w-full rounded-lg border border-input bg-background px-3 py-2 pl-9 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+        className="w-full rounded-lg border border-input bg-background px-3 py-2 pl-9 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
       />
     </div>
   );
 
   return (
-    <div className="mx-auto max-w-7xl py-3 lg:space-y-6 lg:py-8 ">
+    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
       <Toaster position="top-right" richColors />
 
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Categories
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Manage your product categories and subcategories
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+      {/* -------------------------------------------------------------- */}
+      {/* Controls — no title (top bar renders the page name)            */}
+      {/* -------------------------------------------------------------- */}
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-2">
+        {/* Mobile: 2×2 grid of controls */}
+        <div className="grid grid-cols-2 gap-2 lg:hidden">
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted lg:hidden"
+            className="relative inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
@@ -269,7 +263,6 @@ const Categories = () => {
             onClick={handleToggleMode}
             aria-pressed={!browseMode}
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
-            title={browseMode ? "Switch to list view" : "Switch to browse view"}
           >
             {browseMode ? (
               <>
@@ -299,11 +292,51 @@ const Categories = () => {
             New category
           </button>
         </div>
+
+        {/* Desktop: inline search · List/Browse · Properties · New */}
+        <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
+          <div className="min-w-0 max-w-sm flex-1">{filterInputEl}</div>
+
+          <button
+            type="button"
+            onClick={handleToggleMode}
+            aria-pressed={!browseMode}
+            title={browseMode ? "Switch to list view" : "Switch to browse view"}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+          >
+            {browseMode ? (
+              <>
+                <ListAlt fontSize="small" />
+                List
+              </>
+            ) : (
+              <>
+                <FolderOpen fontSize="small" />
+                Browse
+              </>
+            )}
+          </button>
+
+          <Link
+            href="/catalog/categories/property"
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+          >
+            Properties
+          </Link>
+
+          <button
+            onClick={handleNewCategory}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            <Add fontSize="small" />
+            New category
+          </button>
+        </div>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <span>
             <strong className="font-medium">Error:</strong> {error}
           </span>
@@ -316,9 +349,6 @@ const Categories = () => {
           </button>
         </div>
       )}
-
-      {/* Desktop filter */}
-      <div className="hidden lg:block">{filterInputEl}</div>
 
       {/* Mobile filter sheet */}
       <BottomSheet
@@ -356,13 +386,13 @@ const Categories = () => {
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="border-b border-border px-5 py-4">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="border-b border-border px-4 py-3">
             <div className="h-5 w-32 animate-pulse rounded bg-muted" />
           </div>
           <div className="divide-y divide-border">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center gap-4 px-5 py-4">
+              <div key={i} className="flex items-center gap-4 px-4 py-3">
                 <div className="h-9 w-9 flex-none animate-pulse rounded-lg bg-muted" />
                 <div className="flex-1 space-y-2">
                   <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />

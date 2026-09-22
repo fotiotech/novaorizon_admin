@@ -1,50 +1,11 @@
-"use client";
-
-import { ReactNode } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+// app/catalog/attributes/layout.tsx
+// Sub-navigation for attributes now lives in the sidebar (menu-config).
+// This layout is a pass-through — delete it if you don't need a wrapper.
 
 export default function AttributesLayout({
   children,
 }: {
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-
-  const subNavLinks = [
-    { name: "Attributes", href: "/catalog/attributes" },
-    { name: "Sets", href: "/catalog/attributes/sets" },
-    { name: "Groups", href: "/catalog/attributes/groups" },
-    { name: "Units", href: "/catalog/attributes/units" },
-  ];
-
-  return (
-    <div>
-      {/* Secondary horizontal navigation (pill style) */}
-      <div className=" border-b border-border">
-        <nav className="flex flex-wrap gap-2 py-2">
-          {subNavLinks.map((link) => {
-            const isActive =
-              pathname === link.href || pathname.startsWith(link.href + "/");
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? "bg-primary/10 text-primary hover:bg-primary/20 dark:bg-primary/20 dark:text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                {link.name}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Page content */}
-      <div>{children}</div>
-    </div>
-  );
+  return <>{children}</>;
 }

@@ -1,3 +1,4 @@
+// app/catalog/attributes/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -41,7 +42,7 @@ interface Option {
 // Shared class tokens
 // ------------------------------------------------------------------
 const INPUT_CLASS =
-  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
 
 // ------------------------------------------------------------------
 // Theme-aware react-select styles (matches the rest of the app)
@@ -293,18 +294,15 @@ const Attributes = () => {
     },
   ];
 
-  // ---------------- Early exits ----------------
+  // ---------------- Early exit: skeleton ----------------
   if (loading) {
     return (
-      <div className="w-full max-w-6xl overflow-x-clip py-6">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="h-8 w-40 animate-pulse rounded bg-muted" />
-          <div className="h-10 w-32 animate-pulse rounded bg-muted" />
+      <div className="mx-auto w-full max-w-6xl overflow-x-clip">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="h-9 w-64 animate-pulse rounded bg-muted" />
+          <div className="h-9 w-32 animate-pulse rounded bg-muted" />
         </div>
-        <div className="mb-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="h-9 w-full animate-pulse rounded bg-muted" />
-        </div>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
           <div className="space-y-3 p-5">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-4">
@@ -322,7 +320,7 @@ const Attributes = () => {
 
   // Shared filter controls — reused in desktop bar and mobile sheet
   const filterInputEl = (
-    <div className="relative">
+    <div className="relative w-full">
       <Search
         fontSize="small"
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -353,22 +351,17 @@ const Attributes = () => {
   const isFiltering = filterText.trim() !== "";
 
   return (
-    <div className="w-full max-w-6xl overflow-x-clip py-3 lg:py-6">
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Attributes
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Manage product attribute definitions and their options
-          </p>
-        </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
+    <div className="mx-auto w-full max-w-6xl overflow-x-clip">
+      {/* -------------------------------------------------------------- */}
+      {/* Controls — no title (top bar renders the page name)            */}
+      {/* -------------------------------------------------------------- */}
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-2">
+        {/* Mobile: Filters + New attribute */}
+        <div className="flex items-center gap-2 md:hidden">
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:hidden"
+            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
@@ -382,7 +375,31 @@ const Attributes = () => {
 
           <button
             onClick={handleNewAttribute}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 sm:flex-initial"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            <Add fontSize="small" />
+            New attribute
+          </button>
+        </div>
+
+        {/* Desktop: search · sort · clear · New attribute */}
+        <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
+          <div className="min-w-0 max-w-sm flex-1">{filterInputEl}</div>
+          <div className="w-40 shrink-0">{sortSelectEl}</div>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              aria-label="Clear filters"
+              title="Clear filters"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <Close fontSize="small" />
+            </button>
+          )}
+          <button
+            onClick={handleNewAttribute}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             <Add fontSize="small" />
             New attribute
@@ -421,27 +438,6 @@ const Attributes = () => {
           </button>
         </div>
       )}
-
-      {/* Desktop filter bar */}
-      <div className="hidden sm:block">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-            <div className="min-w-0 lg:col-span-6">{filterInputEl}</div>
-            <div className="min-w-0 lg:col-span-3">{sortSelectEl}</div>
-          </div>
-          {hasActiveFilters && (
-            <div className="mt-3 flex justify-end border-t border-border pt-3">
-              <button
-                onClick={handleClearFilters}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
-              >
-                <Close fontSize="small" />
-                Clear filters
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Mobile filter sheet */}
       <BottomSheet
@@ -485,9 +481,9 @@ const Attributes = () => {
       </BottomSheet>
 
       {/* Card */}
-      <div className="mt-6 min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All attributes
@@ -515,25 +511,25 @@ const Attributes = () => {
               </colgroup>
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Name
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Code
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Unit family
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Type
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Sort order
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Options
                   </th>
-                  <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
@@ -551,34 +547,34 @@ const Attributes = () => {
                       key={attr._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate text-sm font-medium text-foreground">
                           {attr.name}
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate font-mono text-xs text-muted-foreground">
                           {attr.code}
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate text-sm text-muted-foreground">
                           {attr.unitFamily?.name || "—"}
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate">
                           <span className="inline-flex max-w-full items-center truncate rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium capitalize text-muted-foreground">
                             {attr.type}
                           </span>
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate text-sm text-muted-foreground">
                           {attr.sort_order}
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div
                           className="truncate text-sm text-muted-foreground"
                           title={formatOptions(attr.option)}
@@ -586,7 +582,7 @@ const Attributes = () => {
                           {formatOptions(attr.option)}
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-right">
+                      <td className="px-4 py-3 text-right">
                         <div className="flex justify-end">
                           <PopoverMenu
                             items={getMenuItems(attr)}

@@ -1,3 +1,4 @@
+// app/catalog/attributes/groups/page.tsx
 "use client";
 
 import {
@@ -58,7 +59,7 @@ type FlatRow = {
 // Shared class tokens
 // ------------------------------------------------------------------
 const INPUT_CLASS =
-  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
 
 const SELECT_STYLES = {
   control: (provided: any, state: any) => ({
@@ -271,7 +272,6 @@ const Group = () => {
       await deleteAttributeGroup(deleteTargetId);
       const res = await findAllAttributeGroups();
       setGroups(res as unknown as AttributesGroup[]);
-      // If the deleted group was anywhere in the browse path, reset to root.
       setBrowsePath((prev) => (prev.includes(deleteTargetId) ? [] : prev));
       setSuccess("Group deleted successfully!");
       setIsDeleteModalOpen(false);
@@ -548,7 +548,7 @@ const Group = () => {
   ];
 
   const filterInputEl = (
-    <div className="relative">
+    <div className="relative w-full">
       <Search
         fontSize="small"
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -583,7 +583,7 @@ const Group = () => {
     : flattenedGroups.length;
 
   return (
-    <div className="mx-auto max-w-7xl py-8">
+    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
       {/* Animation keyframes */}
       <style>{`
         @keyframes browseIn {
@@ -616,21 +616,16 @@ const Group = () => {
         }
       `}</style>
 
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Attribute groups
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Organize attributes into hierarchical groups
-          </p>
-        </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
+      {/* -------------------------------------------------------------- */}
+      {/* Controls — no title (top bar renders the page name)            */}
+      {/* -------------------------------------------------------------- */}
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-2">
+        {/* Mobile: Filters + List/Browse + New group */}
+        <div className="grid grid-cols-2 gap-2 md:hidden">
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:hidden"
+            className="relative inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
@@ -646,8 +641,7 @@ const Group = () => {
             type="button"
             onClick={handleToggleMode}
             aria-pressed={!browseMode}
-            title={browseMode ? "Switch to list view" : "Switch to browse view"}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:flex-initial"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
           >
             {browseMode ? (
               <>
@@ -664,7 +658,52 @@ const Group = () => {
 
           <button
             onClick={handleOpenCreateModal}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 sm:flex-initial"
+            className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            <Add fontSize="small" />
+            New group
+          </button>
+        </div>
+
+        {/* Desktop: search · sort · clear · List/Browse · New group */}
+        <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
+          <div className="min-w-0 max-w-sm flex-1">{filterInputEl}</div>
+          <div className="w-40 shrink-0">{sortSelectEl}</div>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              aria-label="Clear filters"
+              title="Clear filters"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <Close fontSize="small" />
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleToggleMode}
+            aria-pressed={!browseMode}
+            title={browseMode ? "Switch to list view" : "Switch to browse view"}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+          >
+            {browseMode ? (
+              <>
+                <ListAlt fontSize="small" />
+                List
+              </>
+            ) : (
+              <>
+                <FolderOpen fontSize="small" />
+                Browse
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleOpenCreateModal}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             <Add fontSize="small" />
             New group
@@ -703,27 +742,6 @@ const Group = () => {
           </button>
         </div>
       )}
-
-      {/* Desktop filter bar */}
-      <div className="hidden sm:block">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-            <div className="lg:col-span-6">{filterInputEl}</div>
-            <div className="lg:col-span-3">{sortSelectEl}</div>
-          </div>
-          {hasActiveFilters && (
-            <div className="mt-3 flex justify-end border-t border-border pt-3">
-              <button
-                onClick={handleClearFilters}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
-              >
-                <Close fontSize="small" />
-                Clear filters
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Mobile filter sheet */}
       <BottomSheet
@@ -767,9 +785,9 @@ const Group = () => {
       </BottomSheet>
 
       {/* Card */}
-      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               {browseMode ? "Browse groups" : "All groups"}
@@ -790,7 +808,7 @@ const Group = () => {
 
         {/* Breadcrumbs (browse mode, hidden while searching) */}
         {browseMode && !isSearching && (
-          <div className="flex flex-wrap items-center gap-1 border-b border-border px-5 py-2.5 text-sm">
+          <div className="flex flex-wrap items-center gap-1 border-b border-border px-4 py-2 text-sm">
             {breadcrumbItems.map((item, idx) => {
               const isLast = idx === breadcrumbItems.length - 1;
               const isHome = idx === 0;
@@ -826,7 +844,7 @@ const Group = () => {
 
         {/* Search-results banner */}
         {browseMode && isSearching && (
-          <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-5 py-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
             <Search fontSize="small" />
             <span>
               Searching all groups —{" "}
@@ -848,16 +866,16 @@ const Group = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Name
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Code
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Parent
                   </th>
-                  <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
@@ -865,7 +883,7 @@ const Group = () => {
               <tbody className="divide-y divide-border">
                 {isLoading && groups.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-5 py-16">
+                    <td colSpan={4} className="px-4 py-16">
                       <div className="flex justify-center">
                         <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
                       </div>
@@ -873,7 +891,7 @@ const Group = () => {
                   </tr>
                 ) : rowsToRender.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-5 py-16">
+                    <td colSpan={4} className="px-4 py-16">
                       <div className="flex flex-col items-center justify-center text-center">
                         <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                           {filterText.trim() ? (
@@ -923,7 +941,7 @@ const Group = () => {
                       key={row._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-3">
                         <div
                           className="flex items-center gap-2"
                           style={{
@@ -984,15 +1002,15 @@ const Group = () => {
                           )}
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-3">
+                      <td className="whitespace-nowrap px-4 py-3">
                         <span className="font-mono text-xs text-muted-foreground">
                           {row.code}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-3 text-sm text-muted-foreground">
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-muted-foreground">
                         {row.parentName ?? "—"}
                       </td>
-                      <td className="whitespace-nowrap px-5 py-3 text-right">
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
                         <div className="flex justify-end">
                           <PopoverMenu
                             items={getMenuItems(row)}

@@ -336,44 +336,41 @@ const AllOrderPage = () => {
   const hasActiveFilters = activeFilterCount > 0;
 
   return (
-    <div className="w-full max-w-7xl overflow-x-clip py-6">
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Orders
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Manage and track all incoming orders
-          </p>
-        </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted md:hidden"
-            aria-label="Open filters"
-          >
-            <FilterList fontSize="small" />
-            <span>Filters</span>
-            {activeFilterCount > 0 && (
-              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+    <div className="w-full max-w-7xl overflow-x-clip">
+      {/* -------------------------------------------------------------- */}
+      {/* Header — no title (top bar renders the page name)              */}
+      {/* -------------------------------------------------------------- */}
+      <div className="mb-4 flex items-center gap-2">
+        {/* Mobile: Filters */}
+        <button
+          type="button"
+          onClick={() => setIsMobileFiltersOpen(true)}
+          className="relative inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted md:hidden"
+          aria-label="Open filters"
+        >
+          <FilterList fontSize="small" />
+          <span>Filters</span>
+          {activeFilterCount > 0 && (
+            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
 
-          <Link
-            href="/orders/chat"
-            className="inline-flex flex-1 items-center justify-center rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:flex-initial"
-          >
-            Chats
-          </Link>
-        </div>
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Chats — right-aligned on both mobile and desktop */}
+        <Link
+          href="/orders/chat"
+          className="inline-flex shrink-0 items-center justify-center rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+        >
+          Chats
+        </Link>
       </div>
 
-      {/* Desktop filter bar */}
-      <div className="hidden md:block">
+      {/* Desktop filter bar — the whole SearchFilter renders inline */}
+      <div className="mb-4 hidden md:block">
         <SearchFilter
           onFilterChange={handleFilterChange}
           initialFilters={filters}
@@ -413,9 +410,9 @@ const AllOrderPage = () => {
       </BottomSheet>
 
       {/* Card */}
-      <div className="mt-6 min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All orders
@@ -449,25 +446,25 @@ const AllOrderPage = () => {
               </colgroup>
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Order
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Customer
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Total
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Payment
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Status
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Date
                   </th>
-                  <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
@@ -485,7 +482,7 @@ const AllOrderPage = () => {
                       key={order._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <Link
                           href={`/sales/orders/${order.orderNumber}`}
                           className="block truncate font-medium text-foreground transition hover:text-primary"
@@ -493,7 +490,7 @@ const AllOrderPage = () => {
                           #{order.orderNumber}
                         </Link>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase text-muted-foreground">
                             {initials(order)}
@@ -508,27 +505,27 @@ const AllOrderPage = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate font-medium text-foreground">
                           CFA {order.total?.toFixed(2) || "0.00"}
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate">
                           <PaymentBadge status={order.paymentStatus} />
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate">
                           <StatusBadge status={order.orderStatus} />
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3">
                         <div className="truncate text-muted-foreground">
                           {formatDate(order.createdAt)}
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-right">
+                      <td className="px-4 py-3 text-right">
                         <div className="flex justify-end">
                           <PopoverMenu
                             items={getOrderMenuItems(order)}
@@ -609,7 +606,7 @@ const AllOrderPage = () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-4 border-t border-border px-5 py-3">
+          <div className="flex items-center justify-between gap-4 border-t border-border px-4 py-2.5">
             <p className="text-xs text-muted-foreground">
               Showing{" "}
               <span className="font-medium text-foreground">
@@ -682,7 +679,7 @@ const AllOrderPage = () => {
               onChange={(e) =>
                 setSelectedNewStatus(e.target.value as OrderStatus)
               }
-              className="mt-1 block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
             >
               <option value="pending">Pending</option>
               <option value="processing">Processing</option>
@@ -697,7 +694,7 @@ const AllOrderPage = () => {
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+              className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
               onClick={() => setIsStatusModalOpen(false)}
               disabled={updatingStatus}
             >
@@ -705,7 +702,7 @@ const AllOrderPage = () => {
             </button>
             <button
               type="button"
-              className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
               onClick={handleStatusUpdate}
               disabled={updatingStatus || !selectedNewStatus}
             >
