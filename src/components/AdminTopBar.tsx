@@ -4,12 +4,13 @@
 import { Menu, Notifications } from "@mui/icons-material";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { toast, ToastContainer } from "react-toastify";
+import { useCallback, useEffect, useState } from "react";
+import { ToastContainer } from "react-toastify";
 import { useSession } from "next-auth/react";
 import { SignIn } from "../app/(auth)/components/SignInButton";
 import { useUnreadMessages } from "@/app/(customers)/customers/chat/_component/useUnreadMessages";
 import axios from "axios";
+import Pusher from "pusher-js";
 import { ThemeToggle } from "./theme-toggle";
 
 interface AdminTopBarProps {
@@ -21,6 +22,7 @@ interface AdminTopBarProps {
 type NotificationType = {
   _id: string;
   message: string;
+  type?: "order" | "payment" | "promotion" | "product" | "system";
   isRead: boolean;
   timestamp: string;
 };
@@ -33,19 +35,83 @@ const AdminTopBar = ({
   const session = useSession();
   const unreadCount = useUnreadMessages();
   const user = session?.data?.user as any;
+
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
 
-  useEffect(() => {
-    const fetchNotifications = async () => {
+  // ── Fetch the latest notifications ────────────────────────────────
+  const fetchNotifications = useCallback(async () => {
+    try {
       const res = await axios.get(
         `${process.env.NEXT_PUBLIC_API_URL}/api/notify`,
         { timeout: 10000 },
       );
-      setNotifications(res.data);
-    };
 
-    fetchNotifications();
+      if (!Array.isArray(res.data)) {
+        console.error(
+          "[AdminTopBar] Unexpected /api/notify response:",
+          res.data,
+        );
+        setNotifications([]);
+        return;
+      }
+
+      setNotifications(res.data);
+    } catch (err: any) {
+      console.error(
+        "[AdminTopBar] Failed to load notifications:",
+        err?.response?.status,
+        err?.response?.data ?? err?.message,
+        "URL:",
+        `${process.env.NEXT_PUBLIC_API_URL}/api/notify`,
+      );
+      setNotifications([]);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  // ── Real-time updates via Pusher ──────────────────────────────────
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_PUSHER_APP_KEY) return;
+
+    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_APP_KEY!, {
+      cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER!,
+    });
+
+    const channel = pusher.subscribe("admin-notifications");
+    channel.bind(
+      "new-notification",
+      (data: {
+        id?: string;
+        message: string;
+        type?: NotificationType["type"];
+        timestamp?: string;
+      }) => {
+        setNotifications((prev) => {
+          const next: NotificationType = {
+            _id:
+              data.id ??
+              `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            message: data.message,
+            type: data.type ?? "system",
+            isRead: false,
+            timestamp: data.timestamp ?? new Date().toISOString(),
+          };
+          return [next, ...prev];
+        });
+      },
+    );
+
+    return () => {
+      channel.unbind_all();
+      pusher.unsubscribe("admin-notifications");
+      pusher.disconnect();
+    };
+  }, []);
+
+  const unreadNotifications = notifications.filter((n) => !n.isRead).length;
 
   return (
     <header className="flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-sm">
@@ -80,12 +146,12 @@ const AdminTopBar = ({
       <div className="flex items-center gap-3 md:gap-4">
         <ThemeToggle />
 
-        <Link href={"/notifications"} className="relative">
+        <Link href={"/dashboard/notifications"} className="relative">
           <button className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20">
             <Notifications className="h-5 w-5" />
-            {notifications.length > 0 && (
+            {unreadNotifications > 0 && (
               <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
-                {notifications.length > 99 ? "99+" : notifications.length}
+                {unreadNotifications > 99 ? "99+" : unreadNotifications}
               </span>
             )}
           </button>

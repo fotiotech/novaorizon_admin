@@ -2,6 +2,7 @@
 
 import Notification from "@/models/Notification";
 import User from "@/models/User";
+import { connection } from "@/utils/connection";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
 
@@ -15,20 +16,22 @@ const pusher = new Pusher({
 
 export async function GET() {
   try {
-    const PAGE_SIZE = 10; // Limit to avoid overloading
+    await connection();
+    const PAGE_SIZE = 10;
     const notifications = await Notification.find()
       .sort({ timestamp: -1 })
-      .limit(PAGE_SIZE);
+      .limit(PAGE_SIZE)
+      .lean();
 
-    const userIds = notifications.map((notification) => notification.userId);
+    const userIds = notifications.map((n) => n.userId);
     const users = await User.find({ _id: { $in: userIds } }).lean();
     const userMap = Object.fromEntries(
-      users.map((user: any) => [user._id.toString(), user])
+      users.map((u: any) => [u._id.toString(), u]),
     );
 
-    const notificationsWithUsers = notifications.map((notification) => ({
-      ...notification.toObject(),
-      user: userMap[notification.userId.toString()],
+    const notificationsWithUsers = notifications.map((n) => ({
+      ...n,
+      user: userMap[n.userId.toString()],
     }));
 
     return NextResponse.json(notificationsWithUsers);
@@ -39,23 +42,34 @@ export async function GET() {
     });
     return NextResponse.json(
       { error: "Failed to fetch data." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-// Your API route that triggers the event
 export async function POST(request: Request) {
-  const { userId, message } = await request.json();
+  try {
+    await connection();
+    const { userId, message, type = "system" } = await request.json();
 
-  // Save the notification in the database
-  const notification = new Notification({ userId, message });
-  await notification.save();
+    const notification = new Notification({ userId, message, type });
+    await notification.save();
 
-  // Trigger an event on a channel
-  pusher.trigger("admin-notifications", "new-notification", {
-    message,
-  });
+    // Broadcast to the admin channel — the client hook listens on this.
+    await pusher.trigger("admin-notifications", "new-notification", {
+      id: notification._id.toString(),
+      userId,
+      message,
+      type,
+      timestamp: notification.timestamp,
+    });
 
-  return NextResponse.json({ status: "Notification sent" });
+    return NextResponse.json({ status: "Notification sent" });
+  } catch (error: any) {
+    console.error("Failed to send notification:", error);
+    return NextResponse.json(
+      { error: "Failed to send notification" },
+      { status: 500 },
+    );
+  }
 }

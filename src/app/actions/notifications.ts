@@ -1,10 +1,21 @@
 import axios from "axios";
 
-export const triggerNotification = async (userId: string, message: string) => {
+type NotificationType =
+  | "order"
+  | "payment"
+  | "promotion"
+  | "product"
+  | "system";
+
+export const triggerNotification = async (
+  userId: string,
+  message: string,
+  type: NotificationType = "system",
+) => {
   try {
     const res = await axios.post(
       `${process.env.NEXT_PUBLIC_API_URL}/api/notify`,
-      { userId, message }
+      { userId, message, type },
     );
     if (res.data.status === "Notification sent") {
       console.log("Notification triggered successfully");

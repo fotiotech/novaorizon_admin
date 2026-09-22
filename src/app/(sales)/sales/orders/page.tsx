@@ -22,6 +22,7 @@ import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { Modal } from "@/components/ux/Modal";
 import { BottomSheet } from "@/components/ux/BottomSheet";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
+import { useUnreadOrderNotifications } from "@/app/(dashboard)/dashboard/notifications/_component/hooks/useUnreadOrderNotifications";
 
 type OrderStatus =
   | "pending"
@@ -150,6 +151,7 @@ function formatDate(iso: string | Date): string {
 }
 
 const AllOrderPage = () => {
+  const { markAllRead } = useUnreadOrderNotifications();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -212,6 +214,14 @@ const AllOrderPage = () => {
     },
     [limit],
   );
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void markAllRead();
+    }, 800);
+
+    return () => clearTimeout(t);
+  }, [markAllRead]);
 
   useEffect(() => {
     fetchOrders(page, filters);

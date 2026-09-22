@@ -30,6 +30,7 @@ import {
 import { useUnreadMessages } from "@/app/(customers)/customers/chat/_component/useUnreadMessages";
 import { useNewContactCount } from "@/hooks/useNewContactCount";
 import LeftSheet from "@/components/ux/LeftSheet";
+import { useUnreadOrderNotifications } from "@/app/(dashboard)/dashboard/notifications/_component/hooks/useUnreadOrderNotifications";
 
 export interface MenuLink {
   name: string;
@@ -37,6 +38,7 @@ export interface MenuLink {
   icon?: React.ReactNode;
   showUnreadCount?: boolean;
   showContactCount?: boolean;
+  showOrderCount?: boolean;
   absolute?: boolean;
 }
 
@@ -78,7 +80,12 @@ export const rawMenuConfig = [
   {
     title: "Sales",
     links: [
-      { name: "Orders", href: "/orders", icon: <ShoppingBag /> },
+      {
+        name: "Orders",
+        href: "/orders",
+        icon: <ShoppingBag />,
+        showOrderCount: true,
+      },
       { name: "Fulfillment", href: "/fulfillment", icon: <LocalShipping /> },
       { name: "Refunds", href: "/refunds", icon: <Replay /> },
     ],
@@ -143,6 +150,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   const pathname = usePathname();
   const unreadCount = useUnreadMessages();
   const newContactCount = useNewContactCount();
+  const { count: unreadOrderCount } = useUnreadOrderNotifications();
 
   // Expanded state — collapsed by default; the header row is always clickable.
   const [expandedSections, setExpandedSections] = useState<
@@ -264,6 +272,12 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                         {link.showContactCount && newContactCount > 0 && (
                           <span className="bg-blue-600 text-white rounded-full px-2 py-0.5 text-xs font-medium min-w-5 text-center">
                             {newContactCount > 99 ? "99+" : newContactCount}
+                          </span>
+                        )}
+
+                        {link.showOrderCount && unreadOrderCount > 0 && (
+                          <span className="bg-destructive text-destructive-foreground rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
+                            {unreadOrderCount > 99 ? "99+" : unreadOrderCount}
                           </span>
                         )}
                       </Link>

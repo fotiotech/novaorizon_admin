@@ -1,3 +1,4 @@
+// auth.ts
 import { connection } from "@/utils/connection";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import client from "./lib/db";
@@ -27,6 +28,13 @@ const providers: Provider[] = [
         if (!user || !(await user.matchPassword(credentials.password))) {
           throw new Error("Invalid credentials");
         }
+
+        // Uncomment if you enforce email verification
+        // if (!user.isVerified) {
+        //   throw new Error(
+        //     "Your email address is unverified. Please check your inbox for the activation link.",
+        //   );
+        // }
 
         return {
           id: user._id.toString(),
@@ -92,6 +100,43 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-admin.session-token"
+          : "admin.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+    callbackUrl: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-admin.callback-url"
+          : "admin.callback-url",
+      options: {
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+    csrfToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Host-admin.csrf-token"
+          : "admin.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+  },
   callbacks: {
     async jwt({ token, user, trigger, session }: any) {
       // Add user info to token on sign in
@@ -100,9 +145,11 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         token.role = user.role;
       }
 
-      // Update token with session data if needed
+      // Safely update token with session data (whitelist fields only)
       if (trigger === "update" && session) {
-        token = { ...token, ...session };
+        token.name = session.user?.name ?? token.name;
+        token.image = session.user?.image ?? token.image;
+        // Do NOT copy role or id from session
       }
 
       return token;
@@ -122,6 +169,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       return baseUrl;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET, // Use NEXTAUTH_SECRET instead
-  trustHost: true, // Required for Vercel deployments
+  secret: process.env.NEXTAUTH_SECRET,
+  trustHost: true,
 } satisfies NextAuthConfig);
