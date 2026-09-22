@@ -4,8 +4,7 @@ import {
   deleteAttributeGroup,
   findAllAttributeGroups,
 } from "@/app/actions/attributegroup";
-import { findAttributesAndValues } from "@/app/actions/attributes";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Select from "react-select";
 import { AttributeGroupFormModal } from "./_component/AttributeGroupFormModal";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
@@ -22,26 +21,17 @@ import {
   Add,
   Close,
   KeyboardArrowRight,
+  ListAlt,
+  FolderOpen,
 } from "@mui/icons-material";
 
 // Types
-type AttributeType = {
-  _id?: string;
-  id?: string;
-  code: string;
-  name: string;
-  option?: string;
-  type: string;
-  sort_order: number;
-};
-
 type AttributesGroup = {
   _id: string;
   code: string;
   name: string;
   parent_id: string;
   parentId?: string;
-  attributes?: string[];
   sort_order: number;
   sortOrder?: number;
   children?: AttributesGroup[];
@@ -51,6 +41,18 @@ interface SortOption {
   value: "name_asc" | "name_desc" | "newest" | "oldest";
   label: string;
 }
+
+type FlatRow = {
+  _id: string;
+  name: string;
+  code: string;
+  parentId: string | null;
+  parentName: string | null;
+  level: number;
+  hasChildren: boolean;
+  childrenCount: number;
+  isExpanded: boolean;
+};
 
 // ------------------------------------------------------------------
 // Shared class tokens
@@ -117,8 +119,17 @@ const PORTAL_PROPS = {
   menuShouldScrollIntoView: false,
 } as const;
 
+// ------------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------------
+const getParentId = (g: any): string | null => {
+  const pid = g?.parentId ?? g?.parent_id ?? null;
+  if (pid === null || pid === undefined) return null;
+  const s = String(pid).trim();
+  return s === "" ? null : s;
+};
+
 const Group = () => {
-  const [attributes, setAttributes] = useState<AttributeType[]>([]);
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editGroupId, setEditGroupId] = useState<string>("");
@@ -138,23 +149,20 @@ const Group = () => {
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
+  // ---------- View mode: true = browse (drill-down), false = list (tree) ----------
+  const [browseMode, setBrowseMode] = useState(true);
+  const [browsePath, setBrowsePath] = useState<string[]>([]);
+
+  const isSearching = filterText.trim() !== "";
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [attributesResponse, groupsResponse] = await Promise.all([
-          findAttributesAndValues(),
-          findAllAttributeGroups(),
-        ]);
-
-        if (attributesResponse?.length > 0) {
-          setAttributes(attributesResponse as unknown as AttributeType[]);
-        }
-
+        const groupsResponse = await findAllAttributeGroups();
         if (groupsResponse) {
           setGroups(groupsResponse as unknown as AttributesGroup[]);
         }
-
         setError(null);
       } catch (err) {
         console.error("Error fetching data:", err);
@@ -167,6 +175,63 @@ const Group = () => {
     fetchData();
   }, []);
 
+  // ------------------------------------------------------------------
+  // Flat lookup (groups from the server are a nested tree)
+  // ------------------------------------------------------------------
+  const allGroupsFlat = useMemo(() => {
+    const result: any[] = [];
+    const walk = (list: any[] | undefined) => {
+      if (!list) return;
+      for (const g of list) {
+        result.push(g);
+        walk(g.children);
+      }
+    };
+    walk(groups as any[]);
+    return result;
+  }, [groups]);
+
+  const nodesById = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const g of allGroupsFlat) {
+      if (g && g._id && !map.has(g._id)) map.set(g._id, g);
+    }
+    return map;
+  }, [allGroupsFlat]);
+
+  const childrenCountById = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const g of allGroupsFlat) {
+      const pid = getParentId(g);
+      if (!pid) continue;
+      counts.set(pid, (counts.get(pid) ?? 0) + 1);
+    }
+    return counts;
+  }, [allGroupsFlat]);
+
+  const resolveParentName = (g: any): string | null => {
+    const pid = getParentId(g);
+    if (!pid) return null;
+    return nodesById.get(pid)?.name ?? null;
+  };
+
+  // ------------------------------------------------------------------
+  // Auto-enter the single root on browse mode (if there is exactly one)
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (!browseMode) return;
+    if (browsePath.length > 0) return;
+    if (groups.length === 0) return;
+
+    const roots = (groups as any[]).filter((g) => !getParentId(g));
+    if (roots.length === 1) {
+      setBrowsePath([roots[0]._id]);
+    }
+  }, [browseMode, browsePath.length, groups]);
+
+  // ------------------------------------------------------------------
+  // Handlers
+  // ------------------------------------------------------------------
   const handleFormSuccess = async () => {
     try {
       const res = await findAllAttributeGroups();
@@ -206,6 +271,8 @@ const Group = () => {
       await deleteAttributeGroup(deleteTargetId);
       const res = await findAllAttributeGroups();
       setGroups(res as unknown as AttributesGroup[]);
+      // If the deleted group was anywhere in the browse path, reset to root.
+      setBrowsePath((prev) => (prev.includes(deleteTargetId) ? [] : prev));
       setSuccess("Group deleted successfully!");
       setIsDeleteModalOpen(false);
       setDeleteTargetId("");
@@ -221,19 +288,30 @@ const Group = () => {
   const toggleGroupExpansion = (id: string) => {
     setExpandedGroups((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
       return newSet;
     });
   };
 
+  // ---------- Browse handlers ----------
+  const handleOpenGroup = (group: any) => {
+    setBrowsePath((prev) => [...prev, group._id]);
+  };
+
+  const handleBreadcrumbClick = (index: number) => {
+    setBrowsePath((prev) => (index < 0 ? [] : prev.slice(0, index + 1)));
+    setFilterText("");
+  };
+
+  const handleToggleMode = () => {
+    setBrowseMode((prev) => !prev);
+    setBrowsePath([]);
+  };
+
   const getParentGroupName = (parentId: string) => {
     if (!parentId) return "—";
-    const parent = groups.find((g) => g._id === parentId);
-    return parent ? parent.name : parentId;
+    return nodesById.get(parentId)?.name ?? parentId;
   };
 
   const sortOptions: SortOption[] = [
@@ -251,7 +329,31 @@ const Group = () => {
     }
   };
 
-  const flattenedGroups = useMemo(() => {
+  const sortList = <T extends { name: string; _id: string }>(
+    list: T[],
+  ): T[] => {
+    const copy = [...list];
+    copy.sort((a, b) => {
+      switch (sortOrder.value) {
+        case "name_asc":
+          return a.name.localeCompare(b.name);
+        case "name_desc":
+          return b.name.localeCompare(a.name);
+        case "newest":
+          return objectIdTimestamp(b._id) - objectIdTimestamp(a._id);
+        case "oldest":
+          return objectIdTimestamp(a._id) - objectIdTimestamp(b._id);
+        default:
+          return 0;
+      }
+    });
+    return copy;
+  };
+
+  // ------------------------------------------------------------------
+  // List-mode rows (tree with expand/collapse)
+  // ------------------------------------------------------------------
+  const flattenedGroups = useMemo<FlatRow[]>(() => {
     const matchesFilter = (g: AttributesGroup): boolean => {
       if (!filterText.trim()) return true;
       const q = filterText.toLowerCase();
@@ -261,65 +363,163 @@ const Group = () => {
       );
     };
 
-    const sortList = (list: AttributesGroup[]): AttributesGroup[] => {
-      const copy = [...list];
-      copy.sort((a, b) => {
-        switch (sortOrder.value) {
-          case "name_asc":
-            return a.name.localeCompare(b.name);
-          case "name_desc":
-            return b.name.localeCompare(a.name);
-          case "newest":
-            return objectIdTimestamp(b._id) - objectIdTimestamp(a._id);
-          case "oldest":
-            return objectIdTimestamp(a._id) - objectIdTimestamp(b._id);
-          default:
-            return 0;
-        }
-      });
-      return copy;
-    };
+    const rows: FlatRow[] = [];
+    const filterActive = filterText.trim() !== "";
 
-    const flatten = (groupList: AttributesGroup[], level = 0): any[] => {
-      let result: any[] = [];
-      const filterActive = filterText.trim() !== "";
-
-      groupList.forEach((group) => {
-        const selfMatches = matchesFilter(group);
+    const walk = (list: any[], level: number) => {
+      for (const g of sortList(list)) {
+        const children = (g.children as any[]) || [];
+        const selfMatches = matchesFilter(g);
         const childMatchesAny = filterActive
-          ? (function anyDescendantMatches(g: AttributesGroup): boolean {
-              return (g.children || []).some(
-                (c) => matchesFilter(c) || anyDescendantMatches(c),
-              );
-            })(group)
+          ? children.some(
+              (c: any) =>
+                matchesFilter(c) || descendantMatches(c, matchesFilter),
+            )
           : false;
 
-        if (filterActive && !selfMatches && !childMatchesAny) return;
+        if (filterActive && !selfMatches && !childMatchesAny) continue;
 
-        result.push({
-          ...group,
+        const isExpanded = expandedGroups.has(g._id) || filterActive;
+
+        rows.push({
+          _id: g._id,
+          name: g.name,
+          code: g.code,
+          parentId: getParentId(g),
+          parentName: resolveParentName(g),
           level,
-          hasChildren: group.children && group.children.length > 0,
-          isExpanded: expandedGroups.has(group._id) || filterActive,
+          hasChildren: children.length > 0,
+          childrenCount: children.length,
+          isExpanded,
         });
 
-        const shouldExpand =
-          expandedGroups.has(group._id) || (filterActive && childMatchesAny);
-
-        if (shouldExpand && group.children) {
-          result = result.concat(flatten(sortList(group.children), level + 1));
+        if (isExpanded && children.length > 0) {
+          walk(children, level + 1);
         }
-      });
-
-      return result;
+      }
     };
 
-    const rootGroups = groups.filter(
-      (group) => !group.parent_id && !group.parentId,
-    );
-    return flatten(sortList(rootGroups));
-  }, [groups, expandedGroups, filterText, sortOrder]);
+    const rootGroups = (groups as any[]).filter((g) => !getParentId(g));
+    walk(rootGroups, 0);
+    return rows;
+  }, [groups, expandedGroups, filterText, sortOrder, nodesById]);
 
+  const descendantMatches = (g: any, matcher: (x: any) => boolean): boolean => {
+    const children = g.children || [];
+    return children.some(
+      (c: any) => matcher(c) || descendantMatches(c, matcher),
+    );
+  };
+
+  // ------------------------------------------------------------------
+  // Browse-mode: current level + global search
+  // ------------------------------------------------------------------
+  const browseCurrentParentId = useMemo(
+    () => (browsePath.length > 0 ? browsePath[browsePath.length - 1] : null),
+    [browsePath],
+  );
+
+  const browseChildren = useMemo(() => {
+    return sortList(
+      allGroupsFlat.filter((g) => {
+        const pid = getParentId(g);
+        if (browseCurrentParentId === null) return pid === null;
+        return pid === browseCurrentParentId;
+      }),
+    );
+  }, [allGroupsFlat, browseCurrentParentId, sortOrder]);
+
+  const searchResults = useMemo(() => {
+    if (!isSearching) return [] as any[];
+    const q = filterText.trim().toLowerCase();
+    return sortList(
+      allGroupsFlat.filter(
+        (g) =>
+          g.name.toLowerCase().includes(q) ||
+          (g.code || "").toLowerCase().includes(q),
+      ),
+    );
+  }, [allGroupsFlat, filterText, isSearching, sortOrder]);
+
+  const breadcrumbItems = useMemo(() => {
+    const items: { id: string | null; name: string; pathIndex: number }[] = [
+      { id: null, name: "All groups", pathIndex: -1 },
+    ];
+    for (const id of browsePath) {
+      items.push({
+        id,
+        name: nodesById.get(id)?.name ?? "Unknown",
+        pathIndex: browsePath.indexOf(id),
+      });
+    }
+    return items;
+  }, [browsePath, nodesById]);
+
+  // ------------------------------------------------------------------
+  // Rows to render (browse vs list)
+  // ------------------------------------------------------------------
+  const rowsToRender: FlatRow[] = useMemo(() => {
+    const toRow = (g: any, level = 0): FlatRow => {
+      const children = (g.children as any[]) || [];
+      return {
+        _id: g._id,
+        name: g.name,
+        code: g.code,
+        parentId: getParentId(g),
+        parentName: resolveParentName(g),
+        level,
+        hasChildren: children.length > 0,
+        childrenCount: children.length,
+        isExpanded: false,
+      };
+    };
+
+    if (browseMode) {
+      const source = isSearching ? searchResults : browseChildren;
+      return source.map((g) => toRow(g, 0));
+    }
+    return flattenedGroups;
+  }, [
+    browseMode,
+    isSearching,
+    searchResults,
+    browseChildren,
+    flattenedGroups,
+    nodesById,
+  ]);
+
+  // ------------------------------------------------------------------
+  // Animation (direction-aware)
+  // ------------------------------------------------------------------
+  const prevNavRef = useRef<{ mode: boolean; len: number }>({
+    mode: browseMode,
+    len: browsePath.length,
+  });
+  const [navDirection, setNavDirection] = useState<"in" | "out" | "fade">(
+    "fade",
+  );
+
+  useEffect(() => {
+    const prev = prevNavRef.current;
+    const next = { mode: browseMode, len: browsePath.length };
+    if (next.mode !== prev.mode) setNavDirection("fade");
+    else if (next.len > prev.len) setNavDirection("in");
+    else if (next.len < prev.len) setNavDirection("out");
+    else setNavDirection("fade");
+    prevNavRef.current = next;
+  }, [browseMode, browsePath]);
+
+  const animationKey = browseMode ? `browse:${browsePath.join("|")}` : "list";
+  const animationClass =
+    navDirection === "in"
+      ? "browse-anim-in"
+      : navDirection === "out"
+        ? "browse-anim-out"
+        : "browse-anim-fade";
+
+  // ------------------------------------------------------------------
+  // Filters
+  // ------------------------------------------------------------------
   const hasActiveFilters =
     filterText.trim() !== "" || sortOrder.value !== "name_asc";
   const activeFilterCount =
@@ -347,7 +547,6 @@ const Group = () => {
     },
   ];
 
-  // Shared filter controls
   const filterInputEl = (
     <div className="relative">
       <Search
@@ -377,8 +576,46 @@ const Group = () => {
     />
   );
 
+  const totalAtLevel = browseMode
+    ? isSearching
+      ? searchResults.length
+      : browseChildren.length
+    : flattenedGroups.length;
+
   return (
     <div className="mx-auto max-w-7xl py-8">
+      {/* Animation keyframes */}
+      <style>{`
+        @keyframes browseIn {
+          from { opacity: 0; transform: translateX(16px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes browseOut {
+          from { opacity: 0; transform: translateX(-16px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes browseFade {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .browse-anim-in {
+          animation: browseIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        .browse-anim-out {
+          animation: browseOut 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        .browse-anim-fade {
+          animation: browseFade 220ms ease-out both;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .browse-anim-in,
+          .browse-anim-out,
+          .browse-anim-fade {
+            animation: none;
+          }
+        }
+      `}</style>
+
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -402,6 +639,26 @@ const Group = () => {
               <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
                 {activeFilterCount}
               </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleMode}
+            aria-pressed={!browseMode}
+            title={browseMode ? "Switch to list view" : "Switch to browse view"}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:flex-initial"
+          >
+            {browseMode ? (
+              <>
+                <ListAlt fontSize="small" />
+                List
+              </>
+            ) : (
+              <>
+                <FolderOpen fontSize="small" />
+                Browse
+              </>
             )}
           </button>
 
@@ -515,11 +772,11 @@ const Group = () => {
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
-              All groups
+              {browseMode ? "Browse groups" : "All groups"}
             </h2>
-            {flattenedGroups.length > 0 && (
+            {totalAtLevel > 0 && (
               <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {flattenedGroups.length}
+                {totalAtLevel}
               </span>
             )}
           </div>
@@ -531,157 +788,226 @@ const Group = () => {
           )}
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Name
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Code
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Parent
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Attributes
-                </th>
-                <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {isLoading && groups.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-5 py-16">
-                    <div className="flex justify-center">
-                      <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
-                    </div>
-                  </td>
+        {/* Breadcrumbs (browse mode, hidden while searching) */}
+        {browseMode && !isSearching && (
+          <div className="flex flex-wrap items-center gap-1 border-b border-border px-5 py-2.5 text-sm">
+            {breadcrumbItems.map((item, idx) => {
+              const isLast = idx === breadcrumbItems.length - 1;
+              const isHome = idx === 0;
+              const homeClickable = isHome && browsePath.length > 0;
+              return (
+                <React.Fragment key={`${item.pathIndex}:${item.id ?? "root"}`}>
+                  {idx > 0 && (
+                    <KeyboardArrowRight
+                      fontSize="small"
+                      className="text-muted-foreground/60"
+                    />
+                  )}
+                  {isLast ? (
+                    <span className="font-medium text-foreground">
+                      {item.name}
+                    </span>
+                  ) : isHome && !homeClickable ? (
+                    <span className="text-muted-foreground">{item.name}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleBreadcrumbClick(item.pathIndex)}
+                      className="rounded px-1.5 py-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                    >
+                      {item.name}
+                    </button>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Search-results banner */}
+        {browseMode && isSearching && (
+          <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-5 py-2 text-xs text-muted-foreground">
+            <Search fontSize="small" />
+            <span>
+              Searching all groups —{" "}
+              <button
+                type="button"
+                onClick={() => setFilterText("")}
+                className="font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                clear search
+              </button>{" "}
+              to browse again.
+            </span>
+          </div>
+        )}
+
+        {/* Animated content region */}
+        <div key={animationKey} className={animationClass}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Name
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Code
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Parent
+                  </th>
+                  <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
-              ) : flattenedGroups.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-5 py-16">
-                    <div className="flex flex-col items-center justify-center text-center">
-                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                        {filterText.trim() ? (
-                          <SearchOff className="text-muted-foreground" />
-                        ) : (
-                          <AccountTree className="text-muted-foreground" />
-                        )}
-                      </div>
-                      <p className="text-sm font-medium text-foreground">
-                        {filterText.trim()
-                          ? "No groups match your search"
-                          : "No groups yet"}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {filterText.trim()
-                          ? "Try adjusting or clearing your search."
-                          : "Create your first group to organize attributes."}
-                      </p>
-                      <div className="mt-4">
-                        {filterText.trim() ? (
-                          <button
-                            onClick={handleClearFilters}
-                            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
-                          >
-                            Clear filters
-                          </button>
-                        ) : (
-                          <button
-                            onClick={handleOpenCreateModal}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
-                          >
-                            <Add fontSize="small" />
-                            New group
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                flattenedGroups.map((group) => (
-                  <tr
-                    key={group._id}
-                    className="group transition-colors hover:bg-muted/40"
-                  >
-                    <td className="px-5 py-3">
-                      <div
-                        className="flex items-center gap-2"
-                        style={{ paddingLeft: `${group.level * 1.25}rem` }}
-                      >
-                        {group.hasChildren ? (
-                          <button
-                            type="button"
-                            onClick={() => toggleGroupExpansion(group._id)}
-                            className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                            aria-label={
-                              group.isExpanded ? "Collapse" : "Expand"
-                            }
-                            aria-expanded={group.isExpanded}
-                          >
-                            <KeyboardArrowRight
-                              fontSize="small"
-                              className={`transition-transform duration-200 ${
-                                group.isExpanded ? "rotate-90" : ""
-                              }`}
-                            />
-                          </button>
-                        ) : (
-                          <span className="inline-flex h-6 w-6 flex-none items-center justify-center">
-                            <span className="h-1.5 w-1.5 rounded-full bg-border" />
-                          </span>
-                        )}
-                        <span className="truncate text-sm font-medium text-foreground">
-                          {group.name}
-                        </span>
-                        {group.hasChildren && (
-                          <span className="ml-1 inline-flex flex-none items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                            {group.children.length}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-3">
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {group.code}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-3 text-sm text-muted-foreground">
-                      {getParentGroupName(
-                        group.parent_id || group.parentId || "",
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-3">
-                      {group.attributes && group.attributes.length > 0 ? (
-                        <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                          {group.attributes.length} attribute
-                          {group.attributes.length === 1 ? "" : "s"}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-3 text-right">
-                      <div className="flex justify-end">
-                        <PopoverMenu
-                          items={getMenuItems(group)}
-                          ariaLabel={`Actions for ${group.name}`}
-                          trigger={<MoreVert fontSize="small" />}
-                          align="right"
-                        />
+              </thead>
+              <tbody className="divide-y divide-border">
+                {isLoading && groups.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-16">
+                      <div className="flex justify-center">
+                        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : rowsToRender.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-16">
+                      <div className="flex flex-col items-center justify-center text-center">
+                        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                          {filterText.trim() ? (
+                            <SearchOff className="text-muted-foreground" />
+                          ) : (
+                            <AccountTree className="text-muted-foreground" />
+                          )}
+                        </div>
+                        <p className="text-sm font-medium text-foreground">
+                          {filterText.trim()
+                            ? "No groups match your search"
+                            : browseMode && browsePath.length > 0
+                              ? "No subgroups here"
+                              : "No groups yet"}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {filterText.trim()
+                            ? "Try adjusting or clearing your search."
+                            : browseMode && browsePath.length > 0
+                              ? "This group has no direct children."
+                              : "Create your first group to organize attributes."}
+                        </p>
+                        <div className="mt-4">
+                          {filterText.trim() ? (
+                            <button
+                              onClick={handleClearFilters}
+                              className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+                            >
+                              Clear filters
+                            </button>
+                          ) : (
+                            <button
+                              onClick={handleOpenCreateModal}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
+                            >
+                              <Add fontSize="small" />
+                              New group
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  rowsToRender.map((row) => (
+                    <tr
+                      key={row._id}
+                      className="group transition-colors hover:bg-muted/40"
+                    >
+                      <td className="px-5 py-3">
+                        <div
+                          className="flex items-center gap-2"
+                          style={{
+                            paddingLeft: browseMode
+                              ? "0rem"
+                              : `${row.level * 1.25}rem`,
+                          }}
+                        >
+                          {browseMode && row.hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenGroup(row)}
+                              className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                              aria-label={`Open ${row.name}`}
+                            >
+                              <KeyboardArrowRight fontSize="small" />
+                            </button>
+                          ) : !browseMode && row.hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleGroupExpansion(row._id)}
+                              className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                              aria-label={
+                                row.isExpanded ? "Collapse" : "Expand"
+                              }
+                              aria-expanded={row.isExpanded}
+                            >
+                              <KeyboardArrowRight
+                                fontSize="small"
+                                className={`transition-transform duration-200 ${
+                                  row.isExpanded ? "rotate-90" : ""
+                                }`}
+                              />
+                            </button>
+                          ) : (
+                            <span className="inline-flex h-6 w-6 flex-none items-center justify-center">
+                              <span className="h-1.5 w-1.5 rounded-full bg-border" />
+                            </span>
+                          )}
+                          {browseMode && row.hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenGroup(row)}
+                              className="truncate text-left text-sm font-medium text-foreground hover:underline"
+                              title={row.name}
+                            >
+                              {row.name}
+                            </button>
+                          ) : (
+                            <span className="truncate text-sm font-medium text-foreground">
+                              {row.name}
+                            </span>
+                          )}
+                          {row.hasChildren && (
+                            <span className="ml-1 inline-flex flex-none items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                              {row.childrenCount}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-3">
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {row.code}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-3 text-sm text-muted-foreground">
+                        {row.parentName ?? "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-3 text-right">
+                        <div className="flex justify-end">
+                          <PopoverMenu
+                            items={getMenuItems(row)}
+                            ariaLabel={`Actions for ${row.name}`}
+                            trigger={<MoreVert fontSize="small" />}
+                            align="right"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -694,7 +1020,6 @@ const Group = () => {
         }}
         onSuccess={handleFormSuccess}
         groupId={editGroupId || undefined}
-        attributes={attributes}
         groups={groups}
       />
 

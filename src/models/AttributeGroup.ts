@@ -5,7 +5,6 @@ export interface IAttributeGroup {
   code: string;
   name: string;
   parentId?: mongoose.Types.ObjectId;
-  attributes?: { id: mongoose.Types.ObjectId; isRequired: boolean }[];
   createdAt?: Date;
   sortOrder: number;
 }
@@ -46,12 +45,6 @@ const attributeGroupSchema = new Schema<IAttributeGroup>(
       type: Schema.Types.ObjectId,
       ref: "AttributeGroup",
     },
-    attributes: [
-      {
-        id: { type: Schema.Types.ObjectId, ref: "Attribute" },
-        isRequired: { type: Boolean, default: false },
-      },
-    ],
     sortOrder: { type: Number, default: 0 },
   },
   {

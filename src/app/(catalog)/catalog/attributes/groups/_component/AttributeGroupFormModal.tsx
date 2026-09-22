@@ -2,27 +2,20 @@
 
 import React, { useState, useEffect } from "react";
 import { Modal } from "@/components/ux/Modal";
-import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import Select from "react-select";
 import {
   createAttributeGroup,
   findGroup,
   updateAttributeGroup,
 } from "@/app/actions/attributegroup";
-import { Delete, Save, Cancel } from "@mui/icons-material";
+import { Save, Cancel } from "@mui/icons-material";
 
 interface AttributeGroupFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   groupId?: string; // if provided, editing mode
-  attributes: any[];
   groups: any[];
-}
-
-interface Option {
-  value: string;
-  label: string;
 }
 
 const selectStyles = {
@@ -61,24 +54,15 @@ const selectStyles = {
     ...base,
     color: "hsl(var(--muted-foreground))",
   }),
-  multiValue: (base: any) => ({
-    ...base,
-    backgroundColor: "hsl(var(--primary) / 0.2)",
-  }),
-  multiValueLabel: (base: any) => ({
-    ...base,
-    color: "hsl(var(--foreground))",
-  }),
 };
 
 export const AttributeGroupFormModal: React.FC<
   AttributeGroupFormModalProps
-> = ({ isOpen, onClose, onSuccess, groupId, attributes, groups }) => {
+> = ({ isOpen, onClose, onSuccess, groupId, groups }) => {
   const isEditing = !!groupId;
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [sortOrder, setSortOrder] = useState<number | null>(null);
-  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
   const [parentGroupId, setParentGroupId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -94,11 +78,7 @@ export const AttributeGroupFormModal: React.FC<
             setName(groupData.name || "");
             setCode(groupData.code || "");
             setParentGroupId(groupData.parentId || "");
-            setSortOrder(groupData.sortOrder || null);
-            const attrIds =
-              groupData.attributes?.map((attr: any) => attr._id || attr.id) ||
-              [];
-            setSelectedAttributes(attrIds);
+            setSortOrder(groupData.sortOrder ?? null);
           }
           setError(null);
         } catch (err) {
@@ -114,18 +94,9 @@ export const AttributeGroupFormModal: React.FC<
       setCode("");
       setSortOrder(null);
       setParentGroupId("");
-      setSelectedAttributes([]);
       setError(null);
     }
   }, [isEditing, groupId, isOpen]);
-
-  const handleAttributeToggle = (attributeId: string) => {
-    setSelectedAttributes((prev) =>
-      prev.includes(attributeId)
-        ? prev.filter((id) => id !== attributeId)
-        : [...prev, attributeId],
-    );
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,14 +117,12 @@ export const AttributeGroupFormModal: React.FC<
       }
 
       if (isEditing && groupId) {
-        const data = {
+        await updateAttributeGroup(groupId, {
           name,
           code,
-          parent_id: parentGroupId,
-          attributes: selectedAttributes,
-          sort_order: sortOrder as number,
-        };
-        await updateAttributeGroup(groupId, data);
+          parentId: parentGroupId || null,
+          sortOrder: sortOrder ?? 0,
+        });
       } else {
         await createAttributeGroup(
           "create",
@@ -161,8 +130,7 @@ export const AttributeGroupFormModal: React.FC<
           name,
           code,
           parentGroupId,
-          selectedAttributes,
-          sortOrder || 0,
+          sortOrder ?? 0,
         );
       }
 
@@ -174,11 +142,6 @@ export const AttributeGroupFormModal: React.FC<
       setIsLoading(false);
     }
   };
-
-  const attributeOptions = attributes.map((attr) => ({
-    value: attr._id || attr.id,
-    label: attr.name,
-  }));
 
   const parentGroupOptions = groups
     .filter((g) => (isEditing ? g._id !== groupId : true))
@@ -266,43 +229,6 @@ export const AttributeGroupFormModal: React.FC<
             isDisabled={isLoading}
             instanceId="parent-group-select"
           />
-        </div>
-
-        {/* Attributes Selection */}
-        <div>
-          <label className="block text-sm font-medium mb-2">Attributes</label>
-          <div className="border border-border rounded-lg p-3 bg-card max-h-48 overflow-y-auto">
-            {attributes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No attributes available
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {attributes.map((attr) => (
-                  <label
-                    key={attr._id || attr.id}
-                    className="flex items-center gap-2 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedAttributes.includes(attr._id || attr.id)}
-                      onChange={() =>
-                        handleAttributeToggle(attr._id || attr.id)
-                      }
-                      disabled={isLoading}
-                      className="w-4 h-4 rounded border-border"
-                    />
-                    <span className="text-sm text-foreground">
-                      {attr.name}{" "}
-                      <span className="text-xs text-muted-foreground">
-                        ({attr.code})
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Action Buttons */}
