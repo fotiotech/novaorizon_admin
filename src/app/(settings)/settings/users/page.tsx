@@ -1,9 +1,19 @@
 // app/dashboard/users/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState, memo } from "react";
+import {
+  Person2,
+  CheckCircle,
+  PersonAdd,
+  TrendingUp,
+  Search,
+  SearchOff,
+  Close,
+  Refresh,
+} from "@mui/icons-material";
 import { getUserAnalytics } from "@/app/actions/analytic";
-import { UserAnalytics, User } from "@/constant/types/user";
+import type { UserAnalytics } from "@/constant/types/user";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,9 +26,8 @@ import {
   PointElement,
   LineElement,
 } from "chart.js";
-import { Bar, Doughnut, Line } from "react-chartjs-2";
+import { Doughnut, Line } from "react-chartjs-2";
 
-// Register ChartJS components
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -31,20 +40,179 @@ ChartJS.register(
   LineElement,
 );
 
-// Define chart data types
-interface ChartData {
-  labels: string[];
-  datasets: {
-    label: string;
-    data: number[];
-    backgroundColor: string[];
-    borderColor?: string[];
-    borderWidth?: number;
-    fill?: boolean;
-    tension?: number;
-  }[];
+// ------------------------------------------------------------------
+// Shared class tokens
+// ------------------------------------------------------------------
+const INPUT_CLASS =
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+
+const surfaceClass =
+  "rounded-lg border border-border bg-card text-card-foreground";
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const STATUS_STYLES: Record<string, string> = {
+  active:
+    "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+  inactive:
+    "bg-slate-100 text-slate-700 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
+  suspended:
+    "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+  pending:
+    "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
+};
+
+const ROLE_STYLES: Record<string, string> = {
+  admin: "bg-primary/10 text-primary ring-primary/20",
+  seller:
+    "bg-secondary/10 text-secondary-600 dark:text-secondary-400 ring-secondary-600/20 dark:ring-secondary-500/20",
+  support:
+    "bg-accent/10 text-accent-600 dark:text-accent-400 ring-accent-600/20 dark:ring-accent-500/20",
+  customer:
+    "bg-slate-100 text-slate-700 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
+};
+
+function formatDate(iso?: string | null): string {
+  if (!iso || iso === "Never") return iso ?? "—";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Chart helpers                                                      */
+/* ------------------------------------------------------------------ */
+
+function hsl(token: string, alpha = 1) {
+  if (typeof window === "undefined") return `hsl(0 0% 0% / ${alpha})`;
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue(token)
+    .trim();
+  return raw ? `hsl(${raw} / ${alpha})` : `hsl(0 0% 0% / ${alpha})`;
+}
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: "bottom" as const,
+      labels: {
+        color: "hsl(var(--muted-foreground))",
+        font: { size: 11 },
+        boxWidth: 10,
+        boxHeight: 10,
+        usePointStyle: true,
+        padding: 12,
+      },
+    },
+    tooltip: {
+      backgroundColor: "hsl(var(--popover))",
+      titleColor: "hsl(var(--popover-foreground))",
+      bodyColor: "hsl(var(--popover-foreground))",
+      borderColor: "hsl(var(--border) / 0.6)",
+      borderWidth: 1,
+      padding: 10,
+      cornerRadius: 10,
+      boxPadding: 6,
+      usePointStyle: true,
+      titleFont: { size: 12, weight: 600 },
+      bodyFont: { size: 12 },
+    },
+  },
+} as const;
+
+/* ------------------------------------------------------------------ */
+/*  Stat card                                                          */
+/* ------------------------------------------------------------------ */
+const StatCard = memo(function StatCard({
+  label,
+  value,
+  hint,
+  icon,
+  iconClass,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  icon: React.ReactNode;
+  iconClass: string;
+}) {
+  return (
+    <div className={`${surfaceClass} p-4`}>
+      <div className="flex items-center justify-between">
+        <span
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${iconClass}`}
+        >
+          {icon}
+        </span>
+      </div>
+      <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground tabular-nums">
+        {value}
+      </p>
+      <p className="mt-0.5 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+        {label}
+      </p>
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+});
+
+/* ------------------------------------------------------------------ */
+/*  Skeleton                                                           */
+/* ------------------------------------------------------------------ */
+const Skeleton = memo(function Skeleton() {
+  return (
+    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-lg border border-border bg-card p-4">
+            <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
+            <div className="mt-3 h-7 w-24 animate-pulse rounded bg-muted" />
+            <div className="mt-2 h-3 w-20 animate-pulse rounded bg-muted" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {[1, 2].map((i) => (
+          <div key={i} className="rounded-lg border border-border bg-card">
+            <div className="border-b border-border px-4 py-3">
+              <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+            </div>
+            <div className="h-72 p-4">
+              <div className="h-full w-full animate-pulse rounded bg-muted" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
 export default function UserDashboard() {
   const [userData, setUserData] = useState<UserAnalytics | null>(null);
   const [selectedRole, setSelectedRole] = useState<string>("all");
@@ -53,415 +221,464 @@ export default function UserDashboard() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch user data
-  useEffect(() => {
-    async function fetchUserData() {
-      try {
-        const data = await getUserAnalytics();
-        setUserData(data);
-      } catch (err) {
-        console.error("Failed to fetch user data:", err);
-        setError("Failed to fetch user data");
-      } finally {
-        setIsLoading(false);
-      }
+  const load = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getUserAnalytics();
+      setUserData(data);
+    } catch (err) {
+      console.error("Failed to fetch user data:", err);
+      setError("Failed to fetch user data");
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    fetchUserData();
+  useEffect(() => {
+    void load();
   }, []);
 
-  // Filter users based on role, status, and search query
-  const filteredUsers: User[] =
-    userData?.recentUsers.filter((user: any) => {
+  // ---------- Filtered list ----------
+  const filteredUsers = useMemo(() => {
+    if (!userData?.recentUsers) return [];
+    const q = searchQuery.trim().toLowerCase();
+    return userData.recentUsers.filter((user: any) => {
       const matchesRole = selectedRole === "all" || user.role === selectedRole;
       const matchesStatus =
         selectedStatus === "all" || user.status === selectedStatus;
-      const matchesSearch =
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesRole && matchesStatus && matchesSearch;
-    }) || [];
+      if (!matchesRole || !matchesStatus) return false;
+      if (!q) return true;
+      const haystack =
+        `${user.name ?? user.fullName ?? ""} ${user.email ?? ""}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [userData, selectedRole, selectedStatus, searchQuery]);
 
-  // Data for status chart
-  const statusChartData: ChartData = {
-    labels: userData ? Object.keys(userData.usersByStatus) : [],
-    datasets: [
-      {
-        label: "Users by Status",
-        data: userData ? Object.values(userData.usersByStatus) : [],
-        backgroundColor: ["rgba(75, 192, 192, 0.7)", "rgba(255, 99, 132, 0.7)"],
-        borderColor: ["rgba(75, 192, 192, 1)", "rgba(255, 99, 132, 1)"],
-        borderWidth: 1,
-      },
-    ],
+  const isFiltering =
+    searchQuery.trim() !== "" ||
+    selectedRole !== "all" ||
+    selectedStatus !== "all";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setSelectedRole("all");
+    setSelectedStatus("all");
   };
 
-  // Data for role chart
-  const roleChartData: ChartData = {
-    labels: userData ? Object.keys(userData.usersByRole) : [],
-    datasets: [
-      {
-        label: "Users by Role",
-        data: userData ? Object.values(userData.usersByRole) : [],
-        backgroundColor: [
-          "rgba(255, 99, 132, 0.7)",
-          "rgba(54, 162, 235, 0.7)",
-          "rgba(255, 206, 86, 0.7)",
-          "rgba(75, 192, 192, 0.7)",
-        ],
-        borderColor: [
-          "rgba(255, 99, 132, 1)",
-          "rgba(54, 162, 235, 1)",
-          "rgba(255, 206, 86, 1)",
-          "rgba(75, 192, 192, 1)",
-        ],
-        borderWidth: 1,
-      },
-    ],
-  };
+  // ---------- Charts ----------
+  const statusChartData = useMemo(
+    () => ({
+      labels: userData ? Object.keys(userData.usersByStatus) : [],
+      datasets: [
+        {
+          label: "Users by status",
+          data: userData
+            ? Object.values(userData.usersByStatus).map(Number)
+            : [],
+          backgroundColor: [
+            hsl("--secondary", 0.85),
+            hsl("--destructive", 0.85),
+            hsl("--accent", 0.85),
+            hsl("--primary", 0.85),
+          ],
+          borderWidth: 0,
+          spacing: 2,
+          borderRadius: 6,
+        },
+      ],
+    }),
+    [userData],
+  );
 
-  // Data for monthly signups chart
-  const monthlySignupsData: ChartData | any = {
-    labels: [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ],
-    datasets: [
-      {
-        label: "Monthly Signups",
-        data: userData?.monthlySignups || [],
-        fill: false,
-        backgroundColor: "rgba(75, 192, 192, 0.2)",
-        borderColor: "rgba(75, 192, 192, 1)",
-        tension: 0.1,
-      },
-    ],
-  };
+  const monthlySignupsData = useMemo(
+    () => ({
+      labels: MONTHS,
+      datasets: [
+        {
+          label: "Monthly signups",
+          data: userData?.monthlySignups ?? Array(12).fill(0),
+          fill: true,
+          backgroundColor: hsl("--primary", 0.15),
+          borderColor: hsl("--primary", 1),
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: hsl("--primary", 1),
+          pointBorderColor: "hsl(var(--background))",
+          pointBorderWidth: 2,
+        },
+      ],
+    }),
+    [userData],
+  );
 
-  // Chart options
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: "top" as const,
-      },
-    },
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center p-4 sm:p-6">
-        <div className="text-center">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-primary"></div>
-          <p className="mt-4 text-sm text-muted-foreground">
-            Loading user data...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // ---------- Early states ----------
+  if (isLoading) return <Skeleton />;
 
   if (error) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center p-4 sm:p-6">
-        <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-center text-destructive">
-          <p className="font-semibold">Error</p>
-          <p>{error}</p>
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+          <p className="font-semibold">Something went wrong</p>
+          <p className="mt-1 text-sm">{error}</p>
+          <button
+            onClick={() => void load()}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-destructive/40 px-4 py-1.5 text-sm font-medium transition hover:bg-destructive/10"
+          >
+            <Refresh sx={{ fontSize: 16 }} />
+            Retry
+          </button>
         </div>
       </div>
     );
   }
 
+  const activeUserPct = userData?.totalUsers
+    ? Math.round((userData.activeUsers / userData.totalUsers) * 100)
+    : 0;
+
   return (
-    <div className="p-3 sm:p-6">
-      <div className="mx-auto max-w-7xl">
-        <h1 className="mb-2 text-2xl font-bold sm:text-3xl">
-          User Management Dashboard
-        </h1>
-        <p className="mb-6 text-sm text-muted-foreground sm:mb-8">
-          Monitor and manage your user base effectively
-        </p>
+    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+      <div className="flex flex-col gap-4">
+        {/* ---------------- Stat cards ---------------- */}
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Total users"
+            value={(userData?.totalUsers ?? 0).toLocaleString()}
+            icon={<Person2 sx={{ fontSize: 18 }} />}
+            iconClass="bg-primary/10 text-primary"
+          />
+          <StatCard
+            label="Active"
+            value={(userData?.activeUsers ?? 0).toLocaleString()}
+            hint={`${activeUserPct}% of total`}
+            icon={<CheckCircle sx={{ fontSize: 18 }} />}
+            iconClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          />
+          <StatCard
+            label="New this month"
+            value={(userData?.newUsersThisMonth ?? 0).toLocaleString()}
+            icon={<PersonAdd sx={{ fontSize: 18 }} />}
+            iconClass="bg-accent/10 text-accent-600 dark:text-accent-400"
+          />
+          <StatCard
+            label="Growth rate"
+            value={`${(userData?.userGrowthRate ?? 0).toFixed(1)}%`}
+            hint="vs. last month"
+            icon={<TrendingUp sx={{ fontSize: 18 }} />}
+            iconClass="bg-secondary/10 text-secondary-600 dark:text-secondary-400"
+          />
+        </section>
 
-        {/* Summary Cards */}
-        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center">
-              <div className="rounded-full bg-blue-100 p-3">
-                <svg
-                  className="w-6 h-6 text-blue-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h2 className="text-lg font-semibold text-gray-600">
-                  Total Users
-                </h2>
-                <p className="text-2xl font-bold">
-                  {userData?.totalUsers || 0}
-                </p>
-              </div>
+        {/* ---------------- Charts ---------------- */}
+        <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className={surfaceClass}>
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-sm font-semibold text-foreground">
+                Users by status
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Breakdown of account status
+              </p>
             </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <div className="rounded-full bg-green-100 p-3">
-                <svg
-                  className="w-6 h-6 text-green-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h2 className="text-lg font-semibold text-gray-600">
-                  Active Users
-                </h2>
-                <p className="text-2xl font-bold">
-                  {userData?.activeUsers || 0}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <div className="rounded-full bg-purple-100 p-3">
-                <svg
-                  className="w-6 h-6 text-purple-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h2 className="text-lg font-semibold text-gray-600">
-                  New This Month
-                </h2>
-                <p className="text-2xl font-bold">
-                  {userData?.newUsersThisMonth || 0}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <div className="rounded-full bg-yellow-100 p-3">
-                <svg
-                  className="w-6 h-6 text-yellow-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h2 className="text-lg font-semibold text-gray-600">
-                  Growth Rate
-                </h2>
-                <p className="text-2xl font-bold">
-                  {userData?.userGrowthRate?.toFixed(1) || 0}%
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">Users by Status</h2>
-            <div className="h-80">
+            <div className="h-72 p-4">
               <Doughnut data={statusChartData} options={chartOptions} />
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">Monthly Signups</h2>
-            <div className="h-80">
+          <div className={surfaceClass}>
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-sm font-semibold text-foreground">
+                Monthly signups
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                New users per month for the current year
+              </p>
+            </div>
+            <div className="h-72 p-4">
               <Line data={monthlySignupsData} options={chartOptions} />
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Users Table Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <h2 className="text-xl font-semibold mb-4 md:mb-0">Recent Users</h2>
+        {/* ---------------- Recent users ---------------- */}
+        <section className={surfaceClass}>
+          {/* Controls */}
+          <div className="flex flex-col gap-3 border-b border-border px-4 py-3 md:flex-row md:items-center">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground">
+                Recent users
+              </h2>
+              {filteredUsers.length > 0 && (
+                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  {filteredUsers.length}
+                </span>
+              )}
+            </div>
 
-            <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-              <div className="relative">
+            <div className="flex flex-1 items-center gap-2 md:justify-end">
+              <div className="relative min-w-0 max-w-xs flex-1">
+                <Search
+                  fontSize="small"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                />
                 <input
                   type="text"
-                  placeholder="Search users..."
-                  className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Search users…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`${INPUT_CLASS} pl-9`}
                 />
               </div>
 
-              <div className="flex gap-2">
-                <select
-                  title="role"
-                  className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                >
-                  <option value="all">All Roles</option>
-                  {userData &&
-                    Object.keys(userData.usersByRole).map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                </select>
+              <select
+                title="Filter by role"
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value)}
+                className={`${INPUT_CLASS} w-32 shrink-0 capitalize`}
+              >
+                <option value="all">All roles</option>
+                {userData &&
+                  Object.keys(userData.usersByRole).map((role) => (
+                    <option key={role} value={role} className="capitalize">
+                      {role}
+                    </option>
+                  ))}
+              </select>
 
-                <select
-                  title="status"
-                  className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
+              <select
+                title="Filter by status"
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className={`${INPUT_CLASS} w-32 shrink-0 capitalize`}
+              >
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="suspended">Suspended</option>
+                <option value="pending">Pending</option>
+              </select>
+
+              {isFiltering && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  aria-label="Clear filters"
+                  title="Clear filters"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
                 >
-                  <option value="all">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
+                  <Close fontSize="small" />
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Join Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Active
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user: any) => (
-                    <tr key={user._id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                              <span className="font-medium text-blue-800">
-                                {user.name.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
+          {/* ----------------------- DESKTOP TABLE ----------------------- */}
+          <div className="hidden md:block">
+            <div className="w-full min-w-0 overflow-x-auto">
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col style={{ width: "28%" }} />
+                  <col style={{ width: "26%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "11%" }} />
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-border bg-muted/40">
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      User
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Email
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Role
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Status
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Joined
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Last active
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6}>
+                        <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+                          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                            {isFiltering ? (
+                              <SearchOff className="text-muted-foreground" />
+                            ) : (
+                              <Person2 className="text-muted-foreground" />
+                            )}
                           </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {user.name}
-                            </div>
-                          </div>
+                          <p className="text-sm font-medium text-foreground">
+                            {isFiltering
+                              ? "No users match your filters"
+                              : "No users yet"}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {isFiltering
+                              ? "Try adjusting or clearing your filters."
+                              : "Users will appear here once they sign up."}
+                          </p>
+                          {isFiltering && (
+                            <button
+                              onClick={clearFilters}
+                              className="mt-4 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+                            >
+                              Clear filters
+                            </button>
+                          )}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {user.email}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                          ${
-                            user.status === "active"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {user.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.joinDate}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.lastActive}
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-4 text-center text-sm text-gray-500"
-                    >
-                      No users found matching your criteria
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredUsers.map((user: any) => {
+                      const displayName =
+                        user.name ?? user.fullName ?? "Unnamed";
+                      const initial = displayName[0]?.toUpperCase() ?? "?";
+                      const statusKey = String(user.status ?? "").toLowerCase();
+                      const roleKey = String(user.role ?? "").toLowerCase();
+                      return (
+                        <tr
+                          key={user._id}
+                          className="group transition-colors hover:bg-muted/40"
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold uppercase text-primary">
+                                {initial}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {displayName}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="truncate text-sm text-muted-foreground">
+                              {user.email || "—"}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset ${
+                                ROLE_STYLES[roleKey] ?? ROLE_STYLES.customer
+                              }`}
+                            >
+                              {user.role || "customer"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset ${
+                                STATUS_STYLES[statusKey] ??
+                                STATUS_STYLES.pending
+                              }`}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+                              {user.status || "pending"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="truncate text-xs text-muted-foreground">
+                              {formatDate(user.joinDate)}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="truncate text-xs text-muted-foreground">
+                              {formatDate(user.lastActive)}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          {/* ------------------------ MOBILE CARDS ----------------------- */}
+          <div className="md:hidden">
+            {filteredUsers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <Person2 className="text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium text-foreground">
+                  {isFiltering ? "No users match your filters" : "No users yet"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {isFiltering
+                    ? "Try adjusting or clearing your filters."
+                    : "Users will appear here once they sign up."}
+                </p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-border">
+                {filteredUsers.map((user: any) => {
+                  const displayName = user.name ?? user.fullName ?? "Unnamed";
+                  const initial = displayName[0]?.toUpperCase() ?? "?";
+                  const statusKey = String(user.status ?? "").toLowerCase();
+                  const roleKey = String(user.role ?? "").toLowerCase();
+                  return (
+                    <li key={user._id} className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
+                          {initial}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {displayName}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {user.email || "—"}
+                          </p>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset ${
+                                ROLE_STYLES[roleKey] ?? ROLE_STYLES.customer
+                              }`}
+                            >
+                              {user.role || "customer"}
+                            </span>
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset ${
+                                STATUS_STYLES[statusKey] ??
+                                STATUS_STYLES.pending
+                              }`}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+                              {user.status || "pending"}
+                            </span>
+                          </div>
+
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            Joined {formatDate(user.joinDate)} · Last active{" "}
+                            {formatDate(user.lastActive)}
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

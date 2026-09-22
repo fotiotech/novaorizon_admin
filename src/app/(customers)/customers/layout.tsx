@@ -1,22 +1,7 @@
-// app/customers/layout.tsx
-import SectionLayout from "@/components/SectionLayout";
-
-const customersLinks = [
-  { name: "Customer List", href: "/customers/customers" },
-  { name: "Segmentation", href: "/customers/segmentation" },
-  { name: "Messages", href: "/customers/messages" },
-  { name: "Chat", href: "/customers/chat" },
-  { name: "Reviews", href: "/customers/reviews" },
-];
-
 export default function CustomersLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <SectionLayout title="Customers" links={customersLinks}>
-      {children}
-    </SectionLayout>
-  );
+  return <>{children}</>;
 }

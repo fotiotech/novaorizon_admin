@@ -16,7 +16,7 @@ import {
 
 // Server action to get financial stats
 export async function getFinancialStats(
-  timeRange = "month"
+  timeRange = "month",
 ): Promise<ApiResponse<FinancialStats>> {
   await connection();
 
@@ -104,7 +104,7 @@ export async function getFinancialStats(
 // Server action to get transactions with filters
 export async function getTransactions(
   filters: TransactionFilters = {},
-  timeRange = "month"
+  timeRange = "month",
 ): Promise<ApiResponse<TransactionType[]>> {
   await connection();
 
@@ -148,7 +148,7 @@ export async function getTransactions(
 // Server action to update transaction status
 export async function updateTransactionStatus(
   transactionId: string,
-  status: string
+  status: string,
 ): Promise<ApiResponse<TransactionType>> {
   await connection();
 
@@ -156,7 +156,7 @@ export async function updateTransactionStatus(
     const transaction = await Transaction.findByIdAndUpdate(
       transactionId,
       { status },
-      { new: true }
+      { new: true },
     );
 
     if (!transaction) {
@@ -167,7 +167,7 @@ export async function updateTransactionStatus(
     if (status === "refunded") {
       await Order.findOneAndUpdate(
         { orderNumber: transaction.orderId },
-        { paymentStatus: "refunded" }
+        { paymentStatus: "refunded" },
       );
     }
 
@@ -180,7 +180,7 @@ export async function updateTransactionStatus(
 
 // Server action to get chart data
 export async function getChartData(
-  timeRange = "month"
+  timeRange = "month",
 ): Promise<ApiResponse<ChartData>> {
   await connection();
 
@@ -221,14 +221,14 @@ export async function getChartData(
     ]);
 
     // Format revenue data for charts
-    const revenueData = revenueByPeriod.map((item) => {
+    const revenueData = revenueByPeriod.map((item: any) => {
       let name;
       if (timeRange === "week") {
         name = `Week ${item._id.week}`;
       } else if (timeRange === "month") {
         name = new Date(item._id.year, item._id.month - 1).toLocaleString(
           "default",
-          { month: "short" }
+          { month: "short" },
         );
       } else if (timeRange === "quarter") {
         const quarter = Math.ceil(item._id.month / 3);
@@ -283,7 +283,7 @@ export async function getChartData(
 export async function exportFinancialData(
   format: string,
   timeRange: string,
-  filters: TransactionFilters = {}
+  filters: TransactionFilters = {},
 ): Promise<ApiResponse<any> | string> {
   await connection();
 
@@ -329,7 +329,7 @@ export async function exportFinancialData(
       let csvContent = "Type,Date,Description,Amount,Status\n";
 
       // Add transactions to CSV
-      transactions.forEach((transaction) => {
+      transactions.forEach((transaction: any) => {
         csvContent += `Transaction,${
           transaction.date.toISOString().split("T")[0]
         },"Order #${transaction.orderId}",${transaction.amount},${
@@ -350,7 +350,7 @@ export async function exportFinancialData(
       return {
         success: true,
         data: {
-          transactions: transactions.map((t) => ({
+          transactions: transactions.map((t: any) => ({
             type: "transaction",
             date: t.date,
             orderId: t.orderId,

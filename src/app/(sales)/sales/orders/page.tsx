@@ -337,15 +337,12 @@ const AllOrderPage = () => {
 
   return (
     <div className="w-full max-w-7xl overflow-x-clip">
-      {/* -------------------------------------------------------------- */}
-      {/* Header — no title (top bar renders the page name)              */}
-      {/* -------------------------------------------------------------- */}
-      <div className="mb-4 flex items-center gap-2">
-        {/* Mobile: Filters */}
+      {/* Mobile filters trigger — only visible below md */}
+      <div className="mb-4 flex md:hidden">
         <button
           type="button"
           onClick={() => setIsMobileFiltersOpen(true)}
-          className="relative inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted md:hidden"
+          className="relative inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
           aria-label="Open filters"
         >
           <FilterList fontSize="small" />
@@ -356,20 +353,9 @@ const AllOrderPage = () => {
             </span>
           )}
         </button>
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Chats — right-aligned on both mobile and desktop */}
-        <Link
-          href="/orders/chat"
-          className="inline-flex shrink-0 items-center justify-center rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
-        >
-          Chats
-        </Link>
       </div>
 
-      {/* Desktop filter bar — the whole SearchFilter renders inline */}
+      {/* Desktop filter bar */}
       <div className="mb-4 hidden md:block">
         <SearchFilter
           onFilterChange={handleFilterChange}

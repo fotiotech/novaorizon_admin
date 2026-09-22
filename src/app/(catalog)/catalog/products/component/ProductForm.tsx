@@ -1,3 +1,4 @@
+// components/ProductForm.tsx
 "use client";
 
 import React, {
@@ -80,7 +81,6 @@ type AttributeStep = {
   kind: "attributes";
   id: string;
   title: string;
-  /** Preserved on the render step so the memo can sort deterministically. */
   sortOrder: number;
   groups: GroupNode[];
 };
@@ -89,7 +89,6 @@ type VariantsStep = {
   kind: "variants";
   id: "__variants__";
   title: string;
-  /** Always pinned last, regardless of any set's sortOrder. */
   sortOrder: number;
 };
 
@@ -252,8 +251,10 @@ const GroupRenderer = memo(
 
     if (normalizedCode === "productRelationships") {
       return (
-        <section key={id} className="mb-6">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">{name}</h2>
+        <section key={id} className="mb-5">
+          <h2 className="mb-2.5 text-sm font-semibold text-foreground">
+            {name}
+          </h2>
           <ManageRelatedProduct
             id={productId}
             product={productData}
@@ -277,9 +278,9 @@ const GroupRenderer = memo(
     }
 
     return (
-      <section key={id} className="mb-6">
-        <h2 className="mb-3 text-sm font-semibold text-foreground">{name}</h2>
-        <div className="flex flex-col gap-4">
+      <section key={id} className="mb-5">
+        <h2 className="mb-2.5 text-sm font-semibold text-foreground">{name}</h2>
+        <div className="flex flex-col gap-3.5">
           {attributes.map((a) => (
             <div key={a.id}>
               <AttributeField
@@ -292,7 +293,7 @@ const GroupRenderer = memo(
             </div>
           ))}
           {groupErrors.length > 0 && (
-            <Alert severity="error" className="mt-4">
+            <Alert severity="error" className="mt-3">
               <ul className="list-disc pl-4">
                 {groupErrors.map((error, index) => (
                   <li key={index}>{error}</li>
@@ -539,10 +540,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
         const sets = await getCategoryAttributeSets(productData.categoryId);
 
-        // The server already sorts by `sortOrder`. We re-sort here so the
-        // form's step order is guaranteed regardless of how `sets` was
-        // shaped upstream. Missing sortOrder is treated as 0 so it lands
-        // at the top (matches the AttributeSet schema default).
         const sortedSets: AttributeSetStep[] = [...sets]
           .map((s) => ({
             id: s.id,
@@ -600,14 +597,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   // ------------------------------------------------------------------ //
   // Build renderable steps                                             //
-  //                                                                    //
-  // 1. Map each AttributeSetStep to an AttributeStep, carrying sortOrder.
-  // 2. Strip variant groups from each step's groups.
-  // 3. Drop steps that became empty.
-  // 4. Sort the whole list ascending by sortOrder — this is where the
-  //    order is enforced for the UI, not just at fetch time.
-  // 5. Append the synthetic Variants step last (it carries
-  //    Number.MAX_SAFE_INTEGER so a re-sort below keeps it last).
   // ------------------------------------------------------------------ //
   const renderSteps = useMemo<RenderStep[]>(() => {
     const attributeSteps: AttributeStep[] = steps
@@ -633,12 +622,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
       });
     }
 
-    // Final sort — attribute steps keep their relative order; the
-    // variants step stays last because it carries MAX_SAFE_INTEGER.
     return list.sort((a, b) => a.sortOrder - b.sortOrder);
   }, [steps, hasVariants, hasVariantConfig]);
 
-  // Clamp the active index when the step list shrinks.
   useEffect(() => {
     if (currentStep >= renderSteps.length && renderSteps.length > 0) {
       setCurrentStep(renderSteps.length - 1);
@@ -651,7 +637,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
     currentStepRef.current = currentStep;
   }, [currentStep]);
 
-  // Keep the stepper's active step in view horizontally.
   useEffect(() => {
     const container = stepperViewportRef.current;
     if (!container) return;
@@ -985,12 +970,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
   // ---------------- Early exits ---------------- //
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="border-b border-border px-5 py-4">
+      <div className="mx-auto w-full max-w-4xl overflow-x-clip">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="border-b border-border px-4 py-3">
             <div className="h-5 w-40 animate-pulse rounded bg-muted" />
           </div>
-          <div className="space-y-3 p-5">
+          <div className="space-y-3 p-4">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="h-12 animate-pulse rounded-lg bg-muted" />
             ))}
@@ -1002,8 +987,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   if (!productData.categoryId && !loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
-        <div className="rounded-xl border border-amber-500/30 bg-amber-50/60 p-5 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+      <div className="mx-auto w-full max-w-3xl overflow-x-clip">
+        <div className="rounded-lg border border-amber-500/30 bg-amber-50/60 p-4 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
           Please select a category first to load product attributes.
         </div>
       </div>
@@ -1014,17 +999,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const showVariantsToggle = hasVariantConfig && !isFetchingAttributes;
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="mx-auto w-full max-w-4xl overflow-x-clip">
       <form
         onSubmit={handleSubmit}
-        // `overflow-clip` clips rounded corners WITHOUT creating a
-        // scroll container, so `position: sticky` on the footer below
-        // continues to work.
-        className="overflow-clip bg-card text-card-foreground"
+        className="overflow-clip rounded-lg border border-border bg-card text-card-foreground"
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border py-4">
-          <div className="min-w-0 flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
             <h1 className="text-sm font-semibold text-foreground">
               {initialProductId ? "Edit product" : "New product"}
             </h1>
@@ -1063,7 +1045,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         </div>
 
         {/* Body */}
-        <div className=" py-5">
+        <div className="px-4 py-5">
           {error && (
             <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-sm text-destructive">
               {error}
@@ -1112,7 +1094,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 </Stepper>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-5">
                 {activeStep?.kind === "variants" ? (
                   <VariantsManager
                     productId={productId}
@@ -1139,16 +1121,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
           )}
         </div>
 
-        {/* Sticky action bar — pinned to the viewport bottom while the
-            form is in view, so the user never has to scroll to reach
-            Cancel / Previous / Continue / Save. */}
-        <div className="sticky bottom-0 z-20 flex items-center justify-between gap-2 border-t border-border bg-card/95 px-4 py-3 shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.08)] backdrop-blur-sm sm:px-5 sm:py-4">
+        {/* Sticky action bar */}
+        <div className="sticky bottom-0 z-20 flex items-center justify-between gap-2 border-t border-border bg-card px-4 py-3">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCancelClick}
               disabled={isSubmitting}
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 sm:px-3.5"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel
             </button>
@@ -1157,7 +1137,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 type="button"
                 onClick={handlePrev}
                 disabled={isSubmitting}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 sm:px-3.5"
+                className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Previous
               </button>

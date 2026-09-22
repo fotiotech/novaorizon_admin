@@ -1,19 +1,53 @@
 // components/UserRolePermissionsForm.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Shield, Person2, Save, Check, Close } from "@mui/icons-material";
 import { updateUserRoleAndPermissions } from "@/app/actions/users";
+import { toast } from "react-hot-toast";
 
-// Predefined roles and permissions (customize as needed)
-const ROLES = ["admin", "editor", "viewer", "user"];
-const PERMISSIONS_LIST = [
-  "manage_users",
-  "manage_content",
-  "view_reports",
-  "edit_settings",
-  "delete_items",
+// ------------------------------------------------------------------
+// Roles — must match the enum in models/User.ts
+// ------------------------------------------------------------------
+const ROLES: { value: string; label: string; description: string }[] = [
+  {
+    value: "admin",
+    label: "Admin",
+    description: "Full access to every part of the admin panel.",
+  },
+  {
+    value: "seller",
+    label: "Seller",
+    description: "Manages products, orders, and inventory.",
+  },
+  {
+    value: "support",
+    label: "Support",
+    description: "Handles customers, messages, and order inquiries.",
+  },
+  {
+    value: "customer",
+    label: "Customer",
+    description: "Storefront access only — no admin panel access.",
+  },
 ];
+
+// ------------------------------------------------------------------
+// Permissions — app-level grants layered on top of the role
+// ------------------------------------------------------------------
+const PERMISSIONS: { key: string; label: string; group: string }[] = [
+  { key: "manage_users", label: "Manage users", group: "Users" },
+  { key: "manage_products", label: "Manage products", group: "Catalog" },
+  { key: "manage_categories", label: "Manage categories", group: "Catalog" },
+  { key: "manage_orders", label: "Manage orders", group: "Sales" },
+  { key: "manage_refunds", label: "Manage refunds", group: "Sales" },
+  { key: "manage_content", label: "Manage content", group: "Marketing" },
+  { key: "manage_settings", label: "Manage settings", group: "Settings" },
+  { key: "view_reports", label: "View reports", group: "Analytics" },
+];
+
+const INPUT_CLASS =
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60";
 
 interface UserData {
   _id: string;
@@ -23,144 +57,205 @@ interface UserData {
   permissions: string[];
 }
 
+interface Props {
+  userId?: string;
+  initialUser?: UserData;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}
+
 export default function UserRolePermissionsForm({
   userId,
-}: {
-  userId?: string;
-}) {
-  const [user, setUser] = useState<UserData | null>(null);
-  const [role, setRole] = useState("");
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  initialUser,
+  onSuccess,
+  onCancel,
+}: Props) {
+  const [role, setRole] = useState(initialUser?.role ?? "customer");
+  const [permissions, setPermissions] = useState<string[]>(
+    initialUser?.permissions ?? [],
+  );
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
-  const router = useRouter();
 
-  // Fetch user data
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await fetch(`/api/users/${userId}`); // or use server action directly
-        if (!res.ok) throw new Error("Failed to fetch user");
-        const data = await res.json();
-        setUser(data);
-        setRole(data.role || "");
-        setPermissions(data.permissions || []);
-      } catch (err) {
-        setMessage({ type: "error", text: "Error loading user" });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUser();
-  }, [userId]);
-
-  // Toggle permission checkbox
   const togglePermission = (perm: string) => {
     setPermissions((prev) =>
       prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm],
     );
   };
 
-  // Handle submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    setMessage(null);
-
-    if (!userId) return;
-
-    const result = await updateUserRoleAndPermissions(
-      userId,
-      role,
-      permissions,
-    );
-    if (result.success) {
-      setMessage({ type: "success", text: result.message });
-      router.refresh();
-    } else {
-      setMessage({ type: "error", text: result.message });
+    if (!userId) {
+      toast.error("Missing user id");
+      return;
     }
-    setSaving(false);
+    setSaving(true);
+    const toastId = toast.loading("Updating role & permissions…");
+    try {
+      const result = await updateUserRoleAndPermissions(
+        userId,
+        role,
+        permissions,
+      );
+      if (result.success) {
+        toast.success("Role & permissions updated", { id: toastId });
+        onSuccess?.();
+      } else {
+        toast.error(result.message || "Failed to update user", { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update user", { id: toastId });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (loading) return <div>Loading user data...</div>;
-  if (!user) return <div>User not found</div>;
+  // Group permissions by their `group` label
+  const grouped = PERMISSIONS.reduce<Record<string, typeof PERMISSIONS>>(
+    (acc, p) => {
+      if (!acc[p.group]) acc[p.group] = [];
+      acc[p.group].push(p);
+      return acc;
+    },
+    {},
+  );
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-6 max-w-lg mx-auto p-6 bg-white rounded shadow"
-    >
-      <h2 className="text-2xl font-bold">Edit Role & Permissions</h2>
-      <p className="text-sm text-gray-600">
-        User: {user.name} ({user.email})
-      </p>
-
-      {/* Role Select */}
-      <div>
-        <label
-          htmlFor="role"
-          className="block text-sm font-medium text-gray-700"
-        >
-          Role
-        </label>
-        <select
-          id="role"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Permissions Checkboxes */}
-      <div>
-        <span className="block text-sm font-medium text-gray-700">
-          Permissions
-        </span>
-        <div className="mt-2 space-y-2">
-          {PERMISSIONS_LIST.map((perm) => (
-            <label key={perm} className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={permissions.includes(perm)}
-                onChange={() => togglePermission(perm)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span>{perm}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {message && (
-        <div
-          className={`p-3 rounded ${
-            message.type === "success"
-              ? "bg-green-100 text-green-700"
-              : "bg-red-100 text-red-700"
-          }`}
-        >
-          {message.text}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* User summary */}
+      {initialUser && (
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-background/50 p-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
+            {(initialUser.name || "?").charAt(0)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">
+              {initialUser.name}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {initialUser.email}
+            </p>
+          </div>
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={saving}
-        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-      >
-        {saving ? "Saving..." : "Update User"}
-      </button>
+      {/* Role */}
+      <div>
+        <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Shield sx={{ fontSize: 14 }} />
+          Role
+        </label>
+        <div className="grid grid-cols-1 gap-2">
+          {ROLES.map((r) => {
+            const active = role === r.value;
+            return (
+              <button
+                key={r.value}
+                type="button"
+                onClick={() => setRole(r.value)}
+                disabled={saving}
+                className={`flex items-start gap-3 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  active
+                    ? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
+                    : "border-border bg-background hover:border-primary/30 hover:bg-muted/40"
+                }`}
+              >
+                <span
+                  className={`mt-0.5 inline-flex h-4 w-4 flex-none items-center justify-center rounded-full border-2 transition ${
+                    active
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background"
+                  }`}
+                >
+                  {active && <Check sx={{ fontSize: 10 }} />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium capitalize text-foreground">
+                    {r.label}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {r.description}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Permissions */}
+      <div>
+        <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Person2 sx={{ fontSize: 14 }} />
+          Permissions{" "}
+          <span className="font-normal text-muted-foreground/70">
+            (optional, layered on top of the role)
+          </span>
+        </label>
+
+        <div className="space-y-3 rounded-lg border border-border bg-background/50 p-3">
+          {Object.entries(grouped).map(([group, items]) => (
+            <div key={group}>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                {group}
+              </p>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {items.map((p) => {
+                  const checked = permissions.includes(p.key);
+                  return (
+                    <label
+                      key={p.key}
+                      className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-muted/60"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => togglePermission(p.key)}
+                        disabled={saving}
+                        className="h-4 w-4 rounded border-border accent-primary disabled:cursor-not-allowed"
+                      />
+                      <span className="text-sm text-foreground">{p.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {permissions.length > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {permissions.length} permission
+            {permissions.length === 1 ? "" : "s"} selected
+          </p>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Close sx={{ fontSize: 14 }} />
+            Cancel
+          </button>
+        )}
+        <button
+          type="submit"
+          disabled={saving}
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? (
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+          ) : (
+            <Save sx={{ fontSize: 16 }} />
+          )}
+          {saving ? "Saving…" : "Save changes"}
+        </button>
+      </div>
     </form>
   );
 }

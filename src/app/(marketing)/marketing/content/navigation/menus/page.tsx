@@ -1,13 +1,25 @@
+// app/marketing/content/navigation/menus/page.tsx
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState, memo } from "react";
+import {
+  Add,
+  Close,
+  Delete,
+  Edit,
+  MenuOpen,
+  MoreVert,
+  Search,
+  SearchOff,
+} from "@mui/icons-material";
 import { getAllMenus, deleteMenu } from "@/app/actions/menu";
-import Spinner from "@/components/Spinner";
-import Notification from "@/components/Notification";
+import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
+import { toast } from "react-hot-toast";
 
 // ------------------------------------------------------------------
-// Interfaces
+// Types
 // ------------------------------------------------------------------
 interface Menu {
   _id: string;
@@ -32,6 +44,12 @@ interface Menu {
   created_at?: string;
   updated_at?: string;
 }
+
+// ------------------------------------------------------------------
+// Shared class tokens
+// ------------------------------------------------------------------
+const INPUT_CLASS =
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
 
 // ------------------------------------------------------------------
 // Helpers
@@ -61,14 +79,64 @@ const getContentSource = (menu: Menu) => {
 };
 
 // ------------------------------------------------------------------
-// Main Component
+// Empty state
+// ------------------------------------------------------------------
+const EmptyState = memo(function EmptyState({
+  isFiltering,
+  onClear,
+}: {
+  isFiltering: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        {isFiltering ? (
+          <SearchOff className="text-muted-foreground" />
+        ) : (
+          <MenuOpen className="text-muted-foreground" />
+        )}
+      </div>
+      <p className="text-sm font-medium text-foreground">
+        {isFiltering ? "No menus match your search" : "No menus yet"}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {isFiltering
+          ? "Try adjusting or clearing your search."
+          : "Create your first menu to get started."}
+      </p>
+      <div className="mt-4">
+        {isFiltering ? (
+          <button
+            onClick={onClear}
+            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+          >
+            Clear search
+          </button>
+        ) : (
+          <Link
+            href="/marketing/content/navigation/menus/create"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            <Add fontSize="small" />
+            Add Menu
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ------------------------------------------------------------------
+// Main component
 // ------------------------------------------------------------------
 const MenuPage = () => {
   const [menus, setMenus] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Menu | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchMenus = async () => {
     try {
@@ -76,10 +144,12 @@ const MenuPage = () => {
       const result = await getAllMenus();
       if (result.success) {
         setMenus(result.data || []);
+        setError(null);
       } else {
         setError(result.error || "Failed to fetch menus");
       }
     } catch (err) {
+      console.error("Failed to load menus:", err);
       setError("An unexpected error occurred");
     } finally {
       setLoading(false);
@@ -87,27 +157,25 @@ const MenuPage = () => {
   };
 
   useEffect(() => {
-    fetchMenus();
+    void fetchMenus();
   }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this menu?")) return;
-
-    const index = menus.findIndex((m) => m._id === id);
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const index = menus.findIndex((m) => m._id === deleteTarget._id);
     if (index === -1) return;
-    const removed = menus[index];
 
-    setDeleteLoading(id);
-    setError(null);
+    const removed = menus[index];
+    setIsDeleting(true);
 
     // Optimistic removal
-    setMenus((prev) => prev.filter((menu) => menu._id !== id));
+    setMenus((prev) => prev.filter((menu) => menu._id !== removed._id));
 
     try {
-      const result = await deleteMenu(id);
+      const result = await deleteMenu(removed._id);
       if (result.success) {
-        setSuccess("Menu deleted successfully");
-        setTimeout(() => setSuccess(null), 3000);
+        toast.success(`"${removed.name}" deleted`);
+        setDeleteTarget(null);
       } else {
         // Restore at original position
         setMenus((prev) => {
@@ -115,7 +183,7 @@ const MenuPage = () => {
           copy.splice(index, 0, removed);
           return copy;
         });
-        setError(result.error || "Failed to delete menu");
+        toast.error(result.error || "Failed to delete menu");
       }
     } catch (err) {
       setMenus((prev) => {
@@ -123,263 +191,380 @@ const MenuPage = () => {
         copy.splice(index, 0, removed);
         return copy;
       });
-      setError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
-      setDeleteLoading(null);
+      setIsDeleting(false);
     }
   };
 
-  if (loading) {
+  const visibleMenus = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return menus;
+    return menus.filter((m) => {
+      const haystack = [m.name, m.description, m.location, m.sectionTitle]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [menus, query]);
+
+  const isFiltering = query.trim() !== "";
+
+  const getMenuItems = (menu: Menu): PopoverMenuItem[] => [
+    {
+      key: "edit",
+      label: "Edit menu",
+      icon: <Edit fontSize="small" />,
+      href: `/marketing/content/navigation/menus/edit?id=${menu._id}`,
+    },
+    {
+      key: "delete",
+      label: "Delete",
+      icon: <Delete fontSize="small" />,
+      danger: true,
+      onClick: () => setDeleteTarget(menu),
+    },
+  ];
+
+  // ---------------- Early exits ----------------
+  if (loading && menus.length === 0) {
     return (
-      <div className="flex justify-center items-center min-h-64">
-        <Spinner />
+      <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="h-9 w-64 animate-pulse rounded-lg bg-muted" />
+          <div className="flex-1" />
+          <div className="h-9 w-32 animate-pulse rounded-lg bg-muted" />
+        </div>
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="space-y-3 p-5">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-4">
+                <div className="h-8 w-8 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-48 animate-pulse rounded bg-muted" />
+                <div className="flex-1" />
+                <div className="h-8 w-8 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && menus.length === 0) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+          <p className="font-semibold">Something went wrong</p>
+          <p className="mt-1 text-sm">{error}</p>
+          <button
+            onClick={() => void fetchMenus()}
+            className="mt-4 rounded-lg border border-destructive/40 px-4 py-1.5 text-sm font-medium transition hover:bg-destructive/10"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div>
-      {/* Notifications */}
-      {error && (
-        <Notification
-          type="error"
-          message={error}
-          onClose={() => setError(null)}
-        />
-      )}
-      {success && (
-        <Notification
-          type="success"
-          message={success}
-          onClose={() => setSuccess(null)}
-        />
-      )}
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Menus</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage navigation menus – each references a collection or a direct
-            link
-          </p>
+    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+      {/* -------------------------------------------------------------- */}
+      {/* Controls — no title (top bar renders the page name)            */}
+      {/* -------------------------------------------------------------- */}
+      <div className="mb-4 flex items-center gap-2">
+        <div className="relative min-w-0 max-w-sm flex-1">
+          <Search
+            fontSize="small"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search menus…"
+            className={`${INPUT_CLASS} pl-9`}
+          />
         </div>
+
+        {isFiltering && (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            aria-label="Clear search"
+            title="Clear search"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          >
+            <Close fontSize="small" />
+          </button>
+        )}
+
+        <div className="flex-1" />
+
         <Link
           href="/marketing/content/navigation/menus/create"
-          className="bg-primary px-4 py-2 rounded-lg text-primary-foreground hover:bg-primary/90 transition-colors flex items-center"
+          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
         >
-          <svg
-            className="w-5 h-5 mr-2"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-            />
-          </svg>
+          <Add fontSize="small" />
           Add Menu
         </Link>
       </div>
 
-      {/* Table Container */}
-      <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
-        {menus.length === 0 ? (
-          <div className="text-center py-12 px-4">
-            <svg
-              className="mx-auto h-12 w-12 text-muted-foreground"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
-            <h3 className="mt-4 text-lg font-medium text-foreground">
-              No menus
-            </h3>
-            <p className="mt-1 text-muted-foreground">
-              Get started by creating a new menu.
-            </p>
-            <div className="mt-6">
-              <Link
-                href="/marketing/content/navigation/menus/create"
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Add Menu
-              </Link>
-            </div>
+      {/* Card */}
+      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
+        {/* Card header */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">All menus</h2>
+            {visibleMenus.length > 0 && (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {visibleMenus.length}
+              </span>
+            )}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-border">
-              <thead className="bg-muted">
-                <tr>
-                  <th
-                    scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                  >
+        </div>
+
+        {/* ----------------------- DESKTOP TABLE ----------------------- */}
+        <div className="hidden md:block">
+          <div className="w-full min-w-0 overflow-x-auto">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col style={{ width: "28%" }} />
+                <col style={{ width: "8%" }} />
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "6%" }} />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Name
                   </th>
-                  <th
-                    scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell"
-                  >
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Order
                   </th>
-                  <th
-                    scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell"
-                  >
-                    Content Source
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Content source
                   </th>
-                  <th
-                    scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden lg:table-cell"
-                  >
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Location
                   </th>
-                  <th
-                    scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden xl:table-cell"
-                  >
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Display
                   </th>
-                  <th
-                    scope="col"
-                    className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell"
-                  >
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Created
                   </th>
-                  <th
-                    scope="col"
-                    className="px-3 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider w-32"
-                  >
-                    Actions
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-card divide-y divide-border">
-                {menus.map((menu) => (
-                  <tr key={menu._id}>
-                    {/* Name + thumbnail */}
-                    <td className="px-3 py-4">
-                      <div className="flex items-center gap-3 min-w-0">
-                        {menu.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={menu.image}
-                            alt={menu.name}
-                            className="w-8 h-8 rounded object-cover border border-border flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded bg-muted border border-border flex items-center justify-center flex-shrink-0">
-                            <svg
-                              className="w-4 h-4 text-muted-foreground"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 6h16M4 12h16M4 18h16"
-                              />
-                            </svg>
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-foreground truncate">
-                            {menu.name}
-                          </div>
-                          {menu.sectionTitle && (
-                            <div className="text-xs text-muted-foreground truncate">
-                              Section: {menu.sectionTitle}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-3 py-4 whitespace-nowrap hidden sm:table-cell">
-                      <span className="text-sm text-foreground">
-                        {menu.order}
-                      </span>
-                    </td>
-
-                    <td className="px-3 py-4 hidden md:table-cell">
-                      <div className="text-sm text-foreground truncate max-w-xs">
-                        {getContentSource(menu)}
-                      </div>
-                    </td>
-
-                    <td className="px-3 py-4 hidden lg:table-cell">
-                      <span className="text-sm text-foreground">
-                        {menu.location || "—"}
-                      </span>
-                    </td>
-
-                    <td className="px-3 py-4 hidden xl:table-cell">
-                      <div className="text-sm text-muted-foreground space-y-0.5 truncate max-w-[180px]">
-                        <span>{menu.display}</span>
-                        {menu.position && <span> | {menu.position}</span>}
-                        {menu.columns && <span> | {menu.columns} col</span>}
-                        {menu.isSticky && <span> | Sticky</span>}
-                        {menu.backgroundColor && (
-                          <span className="inline-flex items-center ml-1">
-                            <span
-                              className="inline-block w-3 h-3 rounded-full border border-border"
-                              style={{ backgroundColor: menu.backgroundColor }}
-                            />
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    <td className="px-3 py-4 whitespace-nowrap text-sm text-muted-foreground hidden md:table-cell">
-                      {formatDate(menu.createdAt ?? menu.created_at)}
-                    </td>
-
-                    <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-right">
-                      <div className="flex items-center justify-end gap-3">
-                        <Link
-                          href={`/marketing/content/navigation/menus/edit?id=${menu._id}`}
-                          className="text-primary hover:text-primary/80"
-                        >
-                          Edit
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(menu._id)}
-                          disabled={deleteLoading === menu._id}
-                          className="inline-flex items-center gap-1 text-destructive hover:text-destructive/80 disabled:opacity-50"
-                        >
-                          {deleteLoading === menu._id ? (
-                            <>
-                              <Spinner />
-                              <span>Deleting…</span>
-                            </>
-                          ) : (
-                            "Delete"
-                          )}
-                        </button>
-                      </div>
+              <tbody className="divide-y divide-border">
+                {visibleMenus.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>
+                      <EmptyState
+                        isFiltering={isFiltering}
+                        onClear={() => setQuery("")}
+                      />
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  visibleMenus.map((menu) => (
+                    <tr
+                      key={menu._id}
+                      className="group transition-colors hover:bg-muted/40"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded bg-muted">
+                            {menu.image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={menu.image}
+                                alt={menu.name}
+                                loading="lazy"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <MenuOpen
+                                fontSize="small"
+                                className="text-muted-foreground"
+                              />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {menu.name}
+                            </p>
+                            {menu.sectionTitle && (
+                              <p className="truncate text-xs text-muted-foreground">
+                                Section: {menu.sectionTitle}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="truncate text-sm text-foreground">
+                          {menu.order}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="truncate text-sm text-foreground">
+                          {getContentSource(menu)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="truncate text-sm text-foreground">
+                          {menu.location || "—"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="capitalize">{menu.display}</span>
+                          {menu.position && (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+                              {menu.position}
+                            </span>
+                          )}
+                          {menu.columns && (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+                              {menu.columns} col
+                            </span>
+                          )}
+                          {menu.isSticky && (
+                            <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                              Sticky
+                            </span>
+                          )}
+                          {menu.backgroundColor && (
+                            <span
+                              className="inline-block h-3 w-3 rounded-full border border-border"
+                              style={{ backgroundColor: menu.backgroundColor }}
+                            />
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="truncate text-sm text-muted-foreground">
+                          {formatDate(menu.createdAt ?? menu.created_at)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end">
+                          <PopoverMenu
+                            items={getMenuItems(menu)}
+                            ariaLabel={`Actions for ${menu.name}`}
+                            trigger={<MoreVert fontSize="small" />}
+                            align="right"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
-        )}
+        </div>
+
+        {/* ------------------------ MOBILE CARDS ----------------------- */}
+        <div className="md:hidden">
+          {visibleMenus.length === 0 ? (
+            <EmptyState
+              isFiltering={isFiltering}
+              onClear={() => setQuery("")}
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {visibleMenus.map((menu) => (
+                <li key={menu._id} className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded bg-muted">
+                      {menu.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={menu.image}
+                          alt={menu.name}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <MenuOpen
+                          fontSize="small"
+                          className="text-muted-foreground"
+                        />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {menu.name}
+                      </p>
+                      {menu.sectionTitle && (
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          Section: {menu.sectionTitle}
+                        </p>
+                      )}
+
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="capitalize">{menu.display}</span>
+                        {menu.location && (
+                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+                            {menu.location}
+                          </span>
+                        )}
+                        {menu.isSticky && (
+                          <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                            Sticky
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="mt-2 truncate text-xs text-muted-foreground">
+                        {getContentSource(menu)}
+                      </p>
+
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Order {menu.order} ·{" "}
+                        {formatDate(menu.createdAt ?? menu.created_at)}
+                      </p>
+                    </div>
+
+                    <div className="flex-none">
+                      <PopoverMenu
+                        items={getMenuItems(menu)}
+                        ariaLabel={`Actions for ${menu.name}`}
+                        trigger={<MoreVert fontSize="small" />}
+                        align="right"
+                      />
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => {
+          if (!isDeleting) setDeleteTarget(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Delete menu"
+        message={`Are you sure you want to delete "${deleteTarget?.name || "this menu"}"? This action cannot be undone.`}
+        confirmLabel={isDeleting ? "Deleting…" : "Delete"}
+        danger
+      />
     </div>
   );
 };

@@ -1,29 +1,55 @@
 // @/types/finance.ts
 
+// Replace the `Order`, `OrderItem`, and `RevenueData` interfaces
+export interface OrderItem {
+  productId: string; // was: product
+  name: string;
+  quantity: number;
+  price: number;
+}
+
 export interface Order {
   _id: string;
   orderNumber: string;
   userId: string;
-  items: OrderItem[];
-  totalAmount: number;
+  products: OrderItem[]; // was: items
+  subtotal: number;
   tax: number;
   shippingCost: number;
   discount: number;
-  paymentStatus: 'pending' | 'paid' | 'refunded' | 'failed';
-  shippingStatus: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  orderStatus: 'processing' | 'completed' | 'cancelled';
+  total: number; // was: totalAmount
+  paymentStatus:
+    | "pending"
+    | "cod_pending"
+    | "paid"
+    | "failed"
+    | "cancelled"
+    | "refunded";
+  orderStatus:
+    | "pending"
+    | "processing"
+    | "shipped"
+    | "in transit"
+    | "completed"
+    | "return_requested"
+    | "cancelled"
+    | "returned";
   paymentMethod: string;
   shippingAddress: ShippingAddress;
-  paymentDate?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface OrderItem {
-  product: string;
-  quantity: number;
-  price: number;
-  name?: string;
+// RevenueData + ExpenseData are separate series — keep them separate.
+export interface RevenueData {
+  name: string;
+  revenue: number;
+  count: number;
+}
+
+export interface ExpenseData {
+  name: string;
+  value: number;
 }
 
 export interface ShippingAddress {
@@ -44,9 +70,9 @@ export interface Transaction {
     email: string;
   };
   amount: number;
-  type: 'income' | 'expense' | 'refund';
+  type: "income" | "expense" | "refund";
   description: string;
-  status: 'completed' | 'pending' | 'failed' | 'refunded';
+  status: "completed" | "pending" | "failed" | "refunded";
   paymentMethod: string;
   date: Date;
   createdAt: Date;
@@ -59,7 +85,7 @@ export interface Expense {
   amount: number;
   date: Date;
   receipt: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: "pending" | "approved" | "rejected";
   createdBy: string;
   createdAt: Date;
 }
@@ -93,7 +119,7 @@ export interface TransactionFilters {
 }
 
 export interface TimeRange {
-  range: 'week' | 'month' | 'quarter' | 'year';
+  range: "week" | "month" | "quarter" | "year";
 }
 
 export interface ApiResponse<T> {

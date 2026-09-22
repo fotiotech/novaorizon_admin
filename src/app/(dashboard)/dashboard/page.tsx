@@ -13,6 +13,14 @@ import {
   type ChartData,
 } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
+import {
+  Person2,
+  Inventory2,
+  ShoppingBag,
+  ArrowForward,
+  ArrowUpward,
+  ArrowDownward,
+} from "@mui/icons-material";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -68,23 +76,6 @@ function hsl(token: string, alpha = 1) {
   return raw ? `hsl(${raw} / ${alpha})` : `hsl(0 0% 0% / ${alpha})`;
 }
 
-/* Soft drop-shadow plugin so the ring lifts off the card. */
-const softShadow = {
-  id: "softShadow",
-  beforeDatasetDraw(chart: ChartJS, args: { index: number }) {
-    const { ctx } = chart;
-    ctx.save();
-    ctx.shadowColor = "rgba(15, 23, 42, 0.18)";
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 4;
-  },
-  afterDatasetDraw(chart: ChartJS) {
-    chart.ctx.restore();
-  },
-};
-
-ChartJS.register(softShadow);
-
 /* ------------------------------------------------------------------ */
 /*  Chart options                                                      */
 /* ------------------------------------------------------------------ */
@@ -94,7 +85,7 @@ const doughnutOptions: ChartOptions<"doughnut"> = {
   maintainAspectRatio: false,
   cutout: "74%",
   radius: "92%",
-  layout: { padding: 4 },
+  layout: { padding: 2 },
   animation: {
     animateRotate: true,
     animateScale: false,
@@ -121,62 +112,11 @@ const doughnutOptions: ChartOptions<"doughnut"> = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  Icons                                                              */
+/*  Surface tokens                                                     */
 /* ------------------------------------------------------------------ */
 
-function UserIcon({ className = "h-5 w-5" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.8}
-        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-      />
-    </svg>
-  );
-}
-
-function ProductIcon({ className = "h-5 w-5" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.8}
-        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-      />
-    </svg>
-  );
-}
-
-function OrderIcon({ className = "h-5 w-5" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.8}
-        d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-      />
-    </svg>
-  );
-}
+const surfaceClass =
+  "rounded-lg border border-border bg-card text-card-foreground";
 
 /* ------------------------------------------------------------------ */
 /*  Chart wrapper with a centered value                                */
@@ -193,7 +133,7 @@ function DoughnutChart({
   data,
   centerValue,
   centerLabel,
-  size = 112,
+  size = 96,
 }: DoughnutChartProps) {
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -203,7 +143,7 @@ function DoughnutChart({
           {centerValue}
         </span>
         {centerLabel && (
-          <span className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+          <span className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
             {centerLabel}
           </span>
         )}
@@ -216,13 +156,11 @@ function DoughnutChart({
 /*  Stat card                                                          */
 /* ------------------------------------------------------------------ */
 
-const surfaceClass =
-  "rounded-2xl bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_8px_24px_-12px_rgba(0,0,0,0.5)]";
-
 interface StatRow {
   label: string;
   value: string;
   tone?: "muted" | "positive" | "negative" | "accent";
+  trend?: "up" | "down";
 }
 
 interface StatCardProps {
@@ -252,44 +190,62 @@ function StatCard({
 }: StatCardProps) {
   const toneClass: Record<NonNullable<StatRow["tone"]>, string> = {
     muted: "text-muted-foreground",
-    positive: "text-secondary-600 dark:text-secondary-400",
-    negative: "text-destructive",
-    accent: "text-accent-600 dark:text-accent-400",
+    positive: "text-emerald-600 dark:text-emerald-400",
+    negative: "text-rose-600 dark:text-rose-400",
+    accent: "text-primary",
   };
 
   return (
-    <div className={`${surfaceClass} p-5`}>
+    <div className={`${surfaceClass} p-4`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${iconClass}`}
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${iconClass}`}
           >
             {icon}
           </span>
-          <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+            {title}
+          </h2>
         </div>
         <Link
           href={href}
-          className="text-xs font-medium text-primary hover:underline"
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:underline"
         >
-          {hrefLabel} →
+          {hrefLabel}
+          <ArrowForward sx={{ fontSize: 12 }} />
         </Link>
       </div>
 
-      <div className="mt-5 flex items-center justify-between gap-4">
+      <div className="mt-4 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-3xl font-semibold tracking-tight text-foreground">
+          <p className="text-2xl font-semibold tracking-tight text-foreground tabular-nums">
             {primaryValue}
           </p>
-          <dl className="mt-2 space-y-1 text-sm">
+          <dl className="mt-2 space-y-1 text-xs">
             {rows.map((row) => (
               <div key={row.label} className="flex items-center gap-1.5">
+                {row.trend && (
+                  <span
+                    className={
+                      row.trend === "up"
+                        ? "inline-flex h-3 w-3 items-center justify-center text-emerald-600 dark:text-emerald-400"
+                        : "inline-flex h-3 w-3 items-center justify-center text-rose-600 dark:text-rose-400"
+                    }
+                  >
+                    {row.trend === "up" ? (
+                      <ArrowUpward sx={{ fontSize: 11 }} />
+                    ) : (
+                      <ArrowDownward sx={{ fontSize: 11 }} />
+                    )}
+                  </span>
+                )}
                 <dt
-                  className={
+                  className={`tabular-nums ${
                     row.tone && row.tone !== "muted"
                       ? toneClass[row.tone]
                       : "text-muted-foreground"
-                  }
+                  }`}
                 >
                   {row.value}
                 </dt>
@@ -357,9 +313,9 @@ export default function AdminOverview() {
             : [1, 1],
           backgroundColor: [hsl("--primary", 0.9), hsl("--primary", 0.12)],
           hoverBackgroundColor: [hsl("--primary", 1), hsl("--primary", 0.18)],
-          hoverOffset: 6,
+          hoverOffset: 4,
           borderWidth: 0,
-          borderRadius: 8,
+          borderRadius: 6,
           spacing: 2,
         },
       ],
@@ -390,9 +346,9 @@ export default function AdminOverview() {
             hsl("--destructive", 1),
             hsl("--accent", 1),
           ],
-          hoverOffset: 6,
+          hoverOffset: 4,
           borderWidth: 0,
-          borderRadius: 8,
+          borderRadius: 6,
           spacing: 2,
         },
       ],
@@ -417,9 +373,9 @@ export default function AdminOverview() {
             : [1, 1],
           backgroundColor: [hsl("--primary", 0.9), hsl("--accent", 0.85)],
           hoverBackgroundColor: [hsl("--primary", 1), hsl("--accent", 1)],
-          hoverOffset: 6,
+          hoverOffset: 4,
           borderWidth: 0,
-          borderRadius: 8,
+          borderRadius: 6,
           spacing: 2,
         },
       ],
@@ -432,12 +388,41 @@ export default function AdminOverview() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-transparent border-t-primary" />
-          <p className="mt-4 text-sm text-muted-foreground">
-            Loading dashboard…
-          </p>
+      <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="rounded-lg border border-border bg-card p-4"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
+                <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex-1 space-y-2">
+                  <div className="h-7 w-20 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-32 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+                </div>
+                <div className="h-24 w-24 animate-pulse rounded-full bg-muted" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="rounded-lg border border-border bg-card">
+          <div className="space-y-3 p-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3.5 w-1/3 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+                </div>
+                <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -445,10 +430,10 @@ export default function AdminOverview() {
 
   if (error) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="max-w-sm rounded-xl bg-destructive/10 p-5 text-center">
-          <p className="font-semibold text-destructive">Something went wrong</p>
-          <p className="mt-1 text-sm text-destructive/90">{error}</p>
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+          <p className="font-semibold">Something went wrong</p>
+          <p className="mt-1 text-sm">{error}</p>
         </div>
       </div>
     );
@@ -468,25 +453,61 @@ export default function AdminOverview() {
     ? Math.round((orders.completed / orders.total) * 100)
     : 0;
 
-  return (
-    <div className="admin-page-shell">
-      <div className="admin-page-gap mx-auto flex max-w-7xl flex-col">
-        {/* Header */}
-        <header>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Overview of your store&apos;s performance
-          </p>
-        </header>
+  /* Quick action definitions */
+  const quickActions = [
+    {
+      href: "/customers/customers",
+      title: "Manage users",
+      description: "View and manage user accounts",
+      Icon: Person2,
+      classes: "bg-primary/10 text-primary",
+    },
+    {
+      href: "/catalog/products",
+      title: "Manage products",
+      description: "View and manage your inventory",
+      Icon: Inventory2,
+      classes: "bg-accent/10 text-accent-600 dark:text-accent-400",
+    },
+    {
+      href: "/sales/orders",
+      title: "Manage orders",
+      description: "Review and process incoming orders",
+      Icon: ShoppingBag,
+      classes: "bg-secondary/10 text-secondary-600 dark:text-secondary-400",
+    },
+  ];
 
+  /* Recent activity icon resolver */
+  const activityMeta = (type: string) => {
+    switch (type) {
+      case "user":
+        return {
+          Icon: Person2,
+          classes: "bg-primary/10 text-primary",
+        };
+      case "product":
+        return {
+          Icon: Inventory2,
+          classes: "bg-accent/10 text-accent-600 dark:text-accent-400",
+        };
+      default:
+        return {
+          Icon: ShoppingBag,
+          classes: "bg-secondary/10 text-secondary-600 dark:text-secondary-400",
+        };
+    }
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+      <div className="flex flex-col gap-4">
         {/* Summary cards */}
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           <StatCard
             title="Users"
-            href="/users"
-            icon={<UserIcon />}
+            href="/customers/customers"
+            icon={<Person2 sx={{ fontSize: 18 }} />}
             iconClass="bg-primary/10 text-primary"
             primaryValue={(users?.total ?? 0).toLocaleString()}
             rows={[
@@ -495,6 +516,7 @@ export default function AdminOverview() {
                 value: `+${users?.newThisMonth ?? 0}`,
                 label: "this month",
                 tone: "positive",
+                trend: "up",
               },
             ]}
             chart={userChart}
@@ -504,8 +526,8 @@ export default function AdminOverview() {
 
           <StatCard
             title="Products"
-            href="/products"
-            icon={<ProductIcon />}
+            href="/catalog/products"
+            icon={<Inventory2 sx={{ fontSize: 18 }} />}
             iconClass="bg-accent/10 text-accent-600 dark:text-accent-400"
             primaryValue={(products?.total ?? 0).toLocaleString()}
             rows={[
@@ -523,8 +545,8 @@ export default function AdminOverview() {
 
           <StatCard
             title="Orders"
-            href="/orders"
-            icon={<OrderIcon />}
+            href="/sales/orders"
+            icon={<ShoppingBag sx={{ fontSize: 18 }} />}
             iconClass="bg-secondary/10 text-secondary-600 dark:text-secondary-400"
             primaryValue={(orders?.total ?? 0).toLocaleString()}
             rows={[
@@ -555,47 +577,34 @@ export default function AdminOverview() {
 
         {/* Recent activity */}
         <section className={`${surfaceClass} overflow-hidden`}>
-          <div className="flex items-center justify-between px-5 pt-5">
-            <h2 className="font-semibold text-foreground">Recent activity</h2>
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground">
+                Recent activity
+              </h2>
+            </div>
             <Link
-              href="/activity"
-              className="text-xs font-medium text-primary hover:underline"
+              href="/dashboard/notifications"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:underline"
             >
-              View all →
+              View all
+              <ArrowForward sx={{ fontSize: 12 }} />
             </Link>
           </div>
 
           {overviewData?.recentActivity?.length ? (
-            <ul className="space-y-1 p-3">
+            <ul className="divide-y divide-border">
               {overviewData.recentActivity.map((activity, index) => {
-                const meta =
-                  activity.type === "user"
-                    ? {
-                        Icon: UserIcon,
-                        classes: "bg-primary/10 text-primary",
-                      }
-                    : activity.type === "product"
-                      ? {
-                          Icon: ProductIcon,
-                          classes:
-                            "bg-accent/10 text-accent-600 dark:text-accent-400",
-                        }
-                      : {
-                          Icon: OrderIcon,
-                          classes:
-                            "bg-secondary/10 text-secondary-600 dark:text-secondary-400",
-                        };
-                const { Icon, classes } = meta;
-
+                const { Icon, classes } = activityMeta(activity.type);
                 return (
                   <li
                     key={index}
-                    className="flex items-start gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-muted/50"
+                    className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
                   >
                     <span
                       className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${classes}`}
                     >
-                      <Icon className="h-4 w-4" />
+                      <Icon sx={{ fontSize: 16 }} />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
@@ -613,57 +622,37 @@ export default function AdminOverview() {
               })}
             </ul>
           ) : (
-            <p className="px-5 py-6 text-center text-sm text-muted-foreground">
+            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
               No recent activity.
             </p>
           )}
         </section>
 
         {/* Quick actions */}
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {[
-            {
-              href: "/users",
-              title: "Manage users",
-              description: "View and manage user accounts",
-              Icon: UserIcon,
-              classes: "bg-primary/10 text-primary",
-            },
-            {
-              href: "/products",
-              title: "Manage products",
-              description: "View and manage your inventory",
-              Icon: ProductIcon,
-              classes: "bg-accent/10 text-accent-600 dark:text-accent-400",
-            },
-            {
-              href: "/orders",
-              title: "Manage orders",
-              description: "Review and process incoming orders",
-              Icon: OrderIcon,
-              classes:
-                "bg-secondary/10 text-secondary-600 dark:text-secondary-400",
-            },
-          ].map(({ href, title, description, Icon, classes }) => (
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {quickActions.map(({ href, title, description, Icon, classes }) => (
             <Link
               key={href}
               href={href}
-              className={`${surfaceClass} group flex items-center gap-3 p-5 transition-all hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-16px_rgba(15,23,42,0.18)]`}
+              className={`${surfaceClass} group flex items-center gap-3 p-4 transition-colors hover:border-primary/30 hover:bg-muted/40`}
             >
               <span
-                className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${classes}`}
+                className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${classes}`}
               >
-                <Icon />
+                <Icon sx={{ fontSize: 18 }} />
               </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground">{title}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {title}
+                </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {description}
                 </p>
               </div>
-              <span className="ml-auto text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground">
-                →
-              </span>
+              <ArrowForward
+                sx={{ fontSize: 16 }}
+                className="shrink-0 text-muted-foreground/60 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-foreground"
+              />
             </Link>
           ))}
         </section>

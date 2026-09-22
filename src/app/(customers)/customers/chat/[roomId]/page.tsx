@@ -1,7 +1,8 @@
 // app/chat/[roomId]/page.tsx - Individual Chat Page
 "use client";
-import { useUserData } from "@/app/context/UserDataContext"; // 👈 new import
-import { useEffect, useState, useRef, use } from "react";
+
+import { useUserData } from "@/app/context/UserDataContext";
+import { useEffect, useMemo, useRef, useState, use } from "react";
 import { db } from "@/utils/firebasedb";
 import {
   addDoc,
@@ -18,6 +19,17 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
+import {
+  ArrowBack,
+  Send as SendIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Inventory2,
+  MoreVert,
+} from "@mui/icons-material";
+import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
+import { toast } from "react-hot-toast";
 
 interface Message {
   id: string;
@@ -34,7 +46,6 @@ interface ChatPageProps {
 
 export default function ChatPage(props: ChatPageProps) {
   const params = use(props.params);
-  // 👇 Use UserDataContext instead of useUser + useSession
   const { user } = useUserData();
   const { roomId } = params;
   const router = useRouter();
@@ -42,11 +53,17 @@ export default function ChatPage(props: ChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [room, setRoom] = useState<any | null>(null);
   const [draft, setDraft] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
 
+  const [editTarget, setEditTarget] = useState<Message | null>(null);
+  const [editText, setEditText] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
+
+  const bottomRef = useRef<HTMLDivElement>(null);
+
   const sendMessage = async () => {
-    if (!draft.trim() || !user) return;
+    if (!draft.trim() || !user || !db) return;
     const newMsg = {
       from: user.name || "clickitcome",
       text: draft.trim(),
@@ -54,82 +71,81 @@ export default function ChatPage(props: ChatPageProps) {
     };
 
     try {
-      if (!db) return;
       const msgRef = collection(db, "chats", roomId, "messages");
       await addDoc(msgRef, newMsg);
 
-      // Update the last message in the chat room
-      if (db && roomId) {
-        const roomRef = doc(db, "chatRooms", roomId);
-        await updateDoc(roomRef, {
-          lastMessage:
-            draft.trim().substring(0, 50) +
-            (draft.trim().length > 50 ? "..." : ""),
-          lastUpdated: serverTimestamp(),
-        });
-      }
+      const roomRef = doc(db, "chatRooms", roomId);
+      await updateDoc(roomRef, {
+        lastMessage:
+          draft.trim().substring(0, 50) +
+          (draft.trim().length > 50 ? "..." : ""),
+        lastUpdated: serverTimestamp(),
+      });
+      setDraft("");
     } catch (err) {
       console.error("Failed to send message:", err);
+      toast.error("Failed to send message");
     }
-
-    setDraft("");
   };
 
-  const updateMessage = async (id: string, newText: string) => {
+  const confirmEdit = async () => {
+    if (!editTarget || !db) return;
+    setIsBusy(true);
     try {
-      if (!db) return;
-      const msgDoc = doc(db, "chats", roomId, "messages", id);
-      await updateDoc(msgDoc, { text: newText });
+      const msgDoc = doc(db, "chats", roomId, "messages", editTarget.id);
+      await updateDoc(msgDoc, { text: editText });
+      toast.success("Message updated");
+      setEditTarget(null);
+      setEditText("");
     } catch (err) {
       console.error("Failed to update message:", err);
+      toast.error("Failed to update message");
+    } finally {
+      setIsBusy(false);
     }
   };
 
-  const deleteMessage = async (id: string) => {
+  const confirmDelete = async () => {
+    if (!deleteTarget || !db) return;
+    setIsBusy(true);
     try {
-      if (!db) return;
-      const msgDoc = doc(db, "chats", roomId, "messages", id);
+      const msgDoc = doc(db, "chats", roomId, "messages", deleteTarget.id);
       await deleteDoc(msgDoc);
+      toast.success("Message deleted");
+      setDeleteTarget(null);
     } catch (err) {
       console.error("Failed to delete message:", err);
+      toast.error("Failed to delete message");
+    } finally {
+      setIsBusy(false);
     }
   };
 
-  // Mark messages as read when component mounts
+  // Mark messages as read
   useEffect(() => {
     if (!user || !roomId || !db) return;
-
-    const markMessagesAsRead = async () => {
+    (async () => {
       try {
         const roomRef = doc(db, "chatRooms", roomId);
-        await updateDoc(roomRef, {
-          lastRead: serverTimestamp(),
-        });
+        await updateDoc(roomRef, { lastRead: serverTimestamp() });
       } catch (err) {
         console.error("Error marking messages as read:", err);
       }
-    };
-
-    markMessagesAsRead();
+    })();
   }, [user, roomId]);
 
-  // Fetch room details
+  // Fetch room + subscribe to messages
   useEffect(() => {
     async function fetchRoom() {
       if (!db || !roomId) {
         setLoading(false);
         return;
       }
-
       try {
         const roomRef = doc(db, "chatRooms", roomId);
         const snap = await getDoc(roomRef);
-
         if (snap.exists()) {
-          setRoom({
-            roomId: snap.id,
-            ...(snap.data() as any),
-          });
+          setRoom({ roomId: snap.id, ...(snap.data() as any) });
         } else {
           setRoom(null);
         }
@@ -161,11 +177,10 @@ export default function ChatPage(props: ChatPageProps) {
     return () => unsubscribe();
   }, [roomId]);
 
-  // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex h-[60vh] items-center justify-center">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
       </div>
     );
   }
@@ -174,163 +189,258 @@ export default function ChatPage(props: ChatPageProps) {
     notFound();
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b p-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button
-              title="chat"
-              type="button"
-              onClick={() => router.push("/chat")}
-              className="p-2 rounded-lg hover:bg-gray-100"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-            <div>
-              <h1 className="font-semibold text-gray-900">
-                {room.from || "Unknown User"}
-              </h1>
-              <p className="text-sm text-gray-500">
-                {room.product || "No product specified"}
-              </p>
-            </div>
-          </div>
+  const getMessageMenuItems = (m: Message): PopoverMenuItem[] => [
+    {
+      key: "edit",
+      label: "Edit message",
+      icon: <EditIcon fontSize="small" />,
+      onClick: () => {
+        setEditTarget(m);
+        setEditText(m.text);
+      },
+    },
+    {
+      key: "delete",
+      label: "Delete message",
+      icon: <DeleteIcon fontSize="small" />,
+      danger: true,
+      onClick: () => setDeleteTarget(m),
+    },
+  ];
 
-          <Link
-            href="/chat"
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
-          >
-            All Chats
-          </Link>
+  return (
+    <div className="mx-auto flex h-[100dvh] w-full max-w-4xl flex-col overflow-x-clip">
+      {/* Header */}
+      <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-2.5">
+        <button
+          type="button"
+          onClick={() => router.push("/chat")}
+          aria-label="Back to chats"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <ArrowBack fontSize="small" />
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-sm font-semibold text-foreground">
+            {room.from || "Unknown user"}
+          </h1>
+          <p className="truncate text-xs text-muted-foreground">
+            {room.product || "No product specified"}
+          </p>
         </div>
+
+        <Link
+          href="/chat"
+          className="hidden shrink-0 items-center rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted sm:inline-flex"
+        >
+          All chats
+        </Link>
       </div>
 
-      {/* Chat Content */}
-      <div className="flex-1 p-4">
-        <div className="max-w-4xl mx-auto">
-          {room.cart && (
-            <div className="mb-6 p-4 rounded-lg bg-white shadow-sm border">
-              <h3 className="font-semibold mb-2 text-gray-900">
-                Order Summary
+      {/* Body */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3 sm:px-4">
+        {/* Order summary */}
+        {room.cart && room.cart.length > 0 && (
+          <div className="mb-3 overflow-hidden rounded-lg border border-border bg-card">
+            <div className="border-b border-border px-4 py-2.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                Order summary
               </h3>
-              <ul className="space-y-2">
-                {room.cart.map((item: any, i: number) => (
-                  <li key={i} className="flex items-center space-x-3">
-                    {item.imageUrl && (
-                      <div className="relative h-12 w-12 rounded-md overflow-hidden">
-                        <Image
-                          src={item.imageUrl}
-                          alt={item.name || "Product image"}
-                          fill
-                          className="object-cover"
+            </div>
+            <ul className="divide-y divide-border">
+              {room.cart.map((item: any, i: number) => (
+                <li key={i} className="flex items-center gap-3 px-4 py-2.5">
+                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
+                    {item.imageUrl ? (
+                      <Image
+                        src={item.imageUrl}
+                        alt={item.name || "Product image"}
+                        fill
+                        sizes="44px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <Inventory2
+                        fontSize="small"
+                        className="text-muted-foreground"
+                      />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {item.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.quantity} × {item.price} CFA
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                Total
+              </span>
+              <span className="text-sm font-semibold text-foreground tabular-nums">
+                {room.cart.total?.toFixed(2)} CFA
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 space-y-2">
+          {messages.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <p className="text-sm font-medium text-foreground">
+                No messages yet
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Start the conversation below.
+              </p>
+            </div>
+          ) : (
+            messages.map((m) => {
+              const mine = m.from === user?.name;
+              return (
+                <div
+                  key={m.id}
+                  className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`group relative max-w-[80%] rounded-2xl px-3.5 py-2 text-sm ${
+                      mine
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground"
+                    }`}
+                  >
+                    <p
+                      className={`mb-0.5 text-[11px] font-medium ${
+                        mine
+                          ? "text-primary-foreground/70"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {m.from}
+                    </p>
+                    <p className="whitespace-pre-wrap break-words">{m.text}</p>
+
+                    {mine && (
+                      <div className="absolute -left-9 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                        <PopoverMenu
+                          items={getMessageMenuItems(m)}
+                          ariaLabel="Message actions"
+                          trigger={<MoreVert sx={{ fontSize: 16 }} />}
+                          align="left"
                         />
                       </div>
                     )}
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{item.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {item.quantity} × {item.price}CFA
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
-                <span className="font-medium text-gray-700">Total:</span>
-                <span className="font-bold">
-                  {room.cart.total?.toFixed(2)}CFA
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="bg-white rounded-xl shadow-sm border p-4">
-            <div className="h-96 overflow-y-auto space-y-3 mb-4">
-              {messages.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-gray-400">
-                  No messages yet. Start the conversation!
-                </div>
-              ) : (
-                messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`flex ${
-                      m.from === user?.name ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`max-w-xs lg:max-w-md rounded-lg px-4 py-2 ${
-                        m.from === user?.name ? "bg-blue-100" : "bg-gray-100"
-                      }`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-sm font-medium text-gray-700">
-                            {m.from}
-                          </p>
-                          <p className="text-gray-900">{m.text}</p>
-                        </div>
-                        {m.from === user?.name && (
-                          <div className="flex space-x-1 ml-2">
-                            <button
-                              className="text-blue-600 text-xs hover:text-blue-800"
-                              onClick={() =>
-                                updateMessage(
-                                  m.id,
-                                  prompt("Edit message:", m.text) || m.text,
-                                )
-                              }
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="text-red-600 text-xs hover:text-red-800"
-                              onClick={() => deleteMessage(m.id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
                   </div>
-                ))
-              )}
-              <div ref={bottomRef} />
-            </div>
+                </div>
+              );
+            })
+          )}
+          <div ref={bottomRef} />
+        </div>
+      </div>
 
-            <div className="flex">
-              <input
-                className="flex-1 border rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="Type your message…"
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              />
+      {/* Composer */}
+      <div className="border-t border-border bg-card px-3 py-3 sm:px-4">
+        <div className="flex items-center gap-2">
+          <input
+            className="min-w-0 flex-1 rounded-full border border-input bg-background px-4 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Type your message…"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void sendMessage();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={sendMessage}
+            disabled={!draft.trim()}
+            aria-label="Send message"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <SendIcon sx={{ fontSize: 18 }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Edit message modal */}
+      {editTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          onClick={() => {
+            if (!isBusy) {
+              setEditTarget(null);
+              setEditText("");
+            }
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold tracking-tight">
+              Edit message
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Update the text and save your changes.
+            </p>
+
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              rows={4}
+              autoFocus
+              className="mt-4 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+            />
+
+            <div className="mt-4 flex justify-end gap-2">
               <button
-                className="bg-blue-600 text-white px-4 rounded-r-lg hover:bg-blue-700 transition-colors"
-                onClick={sendMessage}
-                disabled={!draft.trim()}
+                type="button"
+                onClick={() => {
+                  setEditTarget(null);
+                  setEditText("");
+                }}
+                disabled={isBusy}
+                className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Send
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmEdit}
+                disabled={isBusy || !editText.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isBusy ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => {
+          if (!isBusy) setDeleteTarget(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Delete message"
+        message="Are you sure you want to delete this message? This cannot be undone."
+        confirmLabel={isBusy ? "Deleting…" : "Delete"}
+        danger
+      />
     </div>
   );
 }

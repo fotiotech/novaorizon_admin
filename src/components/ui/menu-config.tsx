@@ -33,6 +33,10 @@ import {
   Widgets,
   GroupWork,
   Straighten,
+  Menu as MenuIcon,
+  MenuOpen,
+  Search,
+  Shield,
 } from "@mui/icons-material";
 
 export interface MenuLink {
@@ -54,13 +58,46 @@ export interface MenuSection {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Content sub-tree — extracted from app/marketing/content/page.tsx.
+// Rendered as the `children` of the Marketing → Content link, so the
+// sidebar can drill in: Marketing → Content → Navigation / Menus / …
+// ─────────────────────────────────────────────────────────────────────
+export const contentLinks: MenuLink[] = [
+  {
+    name: "Navigation",
+    href: "/marketing/content/navigation",
+    icon: <MenuIcon />,
+  },
+  {
+    name: "Menus",
+    href: "/marketing/content/navigation/menus",
+    icon: <MenuOpen />,
+  },
+  {
+    name: "Hero Content",
+    href: "/marketing/content/hero_content",
+    icon: <ImageIcon />,
+  },
+  {
+    name: "SEO Settings",
+    href: "/marketing/content/seo",
+    icon: <Search />,
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────
 // Marketing — merged.
 // Layout additions: "Promotion Type", "Properties".
 // Renamed: "Email Marketing" → "Email Campaigns" (layout name wins).
-// Kept from sidebar: "Content", "Affiliate Marketing".
+// Content now exposes a nested sub-tree via `contentLinks`.
 // ─────────────────────────────────────────────────────────────────────
 export const marketingLinks: MenuLink[] = [
-  { name: "Content", href: "/marketing/content", icon: <Code /> },
+  {
+    name: "Content",
+    href: "/marketing/content",
+    icon: <Code />,
+    children: contentLinks,
+  },
   { name: "Campaigns", href: "/marketing/campaigns", icon: <Discount /> },
   { name: "Promotions", href: "/marketing/promotions", icon: <Discount /> },
   {
@@ -83,7 +120,6 @@ export const marketingLinks: MenuLink[] = [
     href: "/marketing/affiliate",
     icon: <Code />,
   },
-  { name: "SEO", href: "/marketing/seo", icon: <Code /> },
 ];
 
 // ─────────────────────────────────────────────────────────────────────
@@ -92,7 +128,7 @@ export const marketingLinks: MenuLink[] = [
 // can drill in: Channels → Store → Pages/Posts/Media/Blog/Tags/FAQs.
 // ─────────────────────────────────────────────────────────────────────
 export const storeLinks: MenuLink[] = [
-  { name: "Pages", href: "/channels/store/pages", icon: <Description /> },
+  { name: "Pages", href: "/channels/store/pges", icon: <Description /> },
   { name: "Posts", href: "/channels/store/posts", icon: <Article /> },
   { name: "Media", href: "/channels/store/media", icon: <ImageIcon /> },
   { name: "Blog", href: "/channels/store/blog", icon: <Article /> },
@@ -214,6 +250,11 @@ export const rawMenuConfig = [
         icon: <Tune />,
       },
       { name: "Users", href: "/settings/users", icon: <Person2 /> },
+      {
+        name: "Roles & Permissions",
+        href: "/settings/permissions_roles",
+        icon: <Shield />,
+      },
       { name: "Payments", href: "/settings/payment", icon: <Payment /> },
       {
         name: "Shipping",

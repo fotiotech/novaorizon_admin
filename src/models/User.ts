@@ -55,6 +55,7 @@ const UserSchema = new Schema(
       default: "customer",
       index: true,
     },
+    permissions: { type: [String], default: [] },
 
     // NextAuth / adapter collections
     accounts: { type: [Schema.Types.Mixed], default: [] },

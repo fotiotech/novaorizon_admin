@@ -1,6 +1,7 @@
+// app/catalog/categories/property/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, memo } from "react";
 import Link from "next/link";
 import Select from "react-select";
 import {
@@ -44,7 +45,7 @@ interface SortOption {
 // Shared class tokens
 // ------------------------------------------------------------------
 const INPUT_CLASS =
-  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
 
 // ------------------------------------------------------------------
 // Theme-aware react-select styles
@@ -108,6 +109,55 @@ const PORTAL_PROPS = {
   menuShouldScrollIntoView: false,
 } as const;
 
+// ------------------------------------------------------------------
+// Empty state
+// ------------------------------------------------------------------
+const EmptyState = memo(function EmptyState({
+  isFiltering,
+  onClear,
+}: {
+  isFiltering: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        {isFiltering ? (
+          <SearchOff className="text-muted-foreground" />
+        ) : (
+          <Layers className="text-muted-foreground" />
+        )}
+      </div>
+      <p className="text-sm font-medium text-foreground">
+        {isFiltering ? "No properties match your search" : "No properties yet"}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {isFiltering
+          ? "Try adjusting or clearing your search."
+          : "Create your first property to get started."}
+      </p>
+      <div className="mt-4">
+        {isFiltering ? (
+          <button
+            onClick={onClear}
+            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+          >
+            Clear filters
+          </button>
+        ) : (
+          <Link
+            href="/catalog/categories/property/create"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            <Add fontSize="small" />
+            New property
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+});
+
 export default function CategoryPropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,8 +178,6 @@ export default function CategoryPropertiesPage() {
   const fetchProperties = async () => {
     try {
       setLoading(true);
-      // Include system-managed (read-only) docs so they're visible and
-      // properly badged. Edits / deletes are blocked at the action layer.
       const data = await getCategoryProperty(undefined, {
         includeReadOnly: true,
       });
@@ -228,9 +276,6 @@ export default function CategoryPropertiesPage() {
   };
 
   const getMenuItems = (prop: Property): PopoverMenuItem[] => {
-    // Read-only (system-managed) properties: no Edit / Delete — they
-    // are regenerated from the parent tree via the category's
-    // "Re-run inheritance" action.
     if (prop.readOnly) {
       return [
         {
@@ -262,15 +307,13 @@ export default function CategoryPropertiesPage() {
   // ---------------- Early exits ----------------
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="h-8 w-56 animate-pulse rounded bg-muted" />
-          <div className="h-10 w-32 animate-pulse rounded bg-muted" />
+      <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="h-9 w-64 animate-pulse rounded-lg bg-muted" />
+          <div className="flex-1" />
+          <div className="h-9 w-32 animate-pulse rounded-lg bg-muted" />
         </div>
-        <div className="mb-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="h-9 w-full animate-pulse rounded bg-muted" />
-        </div>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
           <div className="space-y-3 p-5">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="flex items-center gap-4">
@@ -288,8 +331,8 @@ export default function CategoryPropertiesPage() {
 
   if (error) {
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-7xl items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
-        <div className="w-full max-w-sm rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -305,7 +348,7 @@ export default function CategoryPropertiesPage() {
 
   // Shared filter controls
   const filterInputEl = (
-    <div className="relative">
+    <div className="relative w-full">
       <Search
         fontSize="small"
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -334,22 +377,17 @@ export default function CategoryPropertiesPage() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl py-4">
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Category properties
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Manage property sets and their category mappings
-          </p>
-        </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
+    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+      {/* -------------------------------------------------------------- */}
+      {/* Controls — no title (top bar renders the page name)            */}
+      {/* -------------------------------------------------------------- */}
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-2">
+        {/* Mobile: Filters + New property */}
+        <div className="flex items-center gap-2 md:hidden">
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:hidden"
+            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
@@ -363,32 +401,36 @@ export default function CategoryPropertiesPage() {
 
           <Link
             href="/catalog/categories/property/create"
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 sm:flex-initial"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             <Add fontSize="small" />
             New property
           </Link>
         </div>
-      </div>
 
-      {/* Desktop filter bar */}
-      <div className="hidden sm:block">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-            <div className="lg:col-span-6">{filterInputEl}</div>
-            <div className="lg:col-span-3">{sortSelectEl}</div>
-          </div>
+        {/* Desktop: search · sort · clear · New property */}
+        <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
+          <div className="min-w-0 max-w-sm flex-1">{filterInputEl}</div>
+          <div className="w-40 shrink-0">{sortSelectEl}</div>
           {hasActiveFilters && (
-            <div className="mt-3 flex justify-end border-t border-border pt-3">
-              <button
-                onClick={handleClearFilters}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
-              >
-                <Close fontSize="small" />
-                Clear filters
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              aria-label="Clear filters"
+              title="Clear filters"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <Close fontSize="small" />
+            </button>
           )}
+
+          <Link
+            href="/catalog/categories/property/create"
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            <Add fontSize="small" />
+            New property
+          </Link>
         </div>
       </div>
 
@@ -434,9 +476,9 @@ export default function CategoryPropertiesPage() {
       </BottomSheet>
 
       {/* Card */}
-      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All properties
@@ -454,13 +496,13 @@ export default function CategoryPropertiesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Name
                 </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Mappings
                 </th>
-                <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -468,44 +510,11 @@ export default function CategoryPropertiesPage() {
             <tbody className="divide-y divide-border">
               {visibleProperties.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-5 py-16">
-                    <div className="flex flex-col items-center justify-center text-center">
-                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                        {filterText.trim() ? (
-                          <SearchOff className="text-muted-foreground" />
-                        ) : (
-                          <Layers className="text-muted-foreground" />
-                        )}
-                      </div>
-                      <p className="text-sm font-medium text-foreground">
-                        {filterText.trim()
-                          ? "No properties match your search"
-                          : "No properties yet"}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {filterText.trim()
-                          ? "Try adjusting or clearing your search."
-                          : "Create your first property to get started."}
-                      </p>
-                      <div className="mt-4">
-                        {filterText.trim() ? (
-                          <button
-                            onClick={handleClearFilters}
-                            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
-                          >
-                            Clear filters
-                          </button>
-                        ) : (
-                          <Link
-                            href="/catalog/categories/property/create"
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
-                          >
-                            <Add fontSize="small" />
-                            New property
-                          </Link>
-                        )}
-                      </div>
-                    </div>
+                  <td colSpan={3}>
+                    <EmptyState
+                      isFiltering={filterText.trim() !== ""}
+                      onClear={handleClearFilters}
+                    />
                   </td>
                 </tr>
               ) : (
@@ -514,7 +523,7 @@ export default function CategoryPropertiesPage() {
                     key={prop._id}
                     className="group transition-colors hover:bg-muted/40"
                   >
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-foreground">
                           {prop.name}
@@ -535,12 +544,12 @@ export default function CategoryPropertiesPage() {
                         </div>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-5 py-4">
+                    <td className="whitespace-nowrap px-4 py-3">
                       <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                         {prop.mappings?.length || prop.sets?.length || 0} sets
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-5 py-4 text-right">
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
                       <div className="flex justify-end">
                         <PopoverMenu
                           items={getMenuItems(prop)}

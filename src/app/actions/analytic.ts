@@ -1,3 +1,4 @@
+// app/actions/analytic.ts
 "use server";
 import { connection } from "@/utils/connection";
 import Order from "@/models/Order";
@@ -15,77 +16,70 @@ export async function getUserAnalytics(): Promise<UserAnalytics> {
   try {
     await connection();
 
-    // Get total users count
+    // ---------- Counts ----------
     const totalUsers = await User.countDocuments();
-
-    // Get active users count
     const activeUsers = await User.countDocuments({ status: "active" });
 
-    // Get users by status
+    // ---------- By status ----------
     const usersByStatusResult = await User.aggregate([
-      {
-        $group: {
-          _id: "$status",
-          count: { $sum: 1 },
-        },
-      },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
     ]);
 
-    // Format users by status
     const usersByStatus: any = { active: 0, inactive: 0 };
     usersByStatusResult.forEach((item) => {
       usersByStatus[item._id] = item.count;
     });
 
-    // Get users by role
+    // ---------- By role ----------
     const usersByRoleResult = await User.aggregate([
-      {
-        $group: {
-          _id: "$role",
-          count: { $sum: 1 },
-        },
-      },
+      { $group: { _id: "$role", count: { $sum: 1 } } },
     ]);
 
-    // Format users by role
     const usersByRole: UsersByRole = {};
     usersByRoleResult.forEach((item) => {
-      usersByRole[item._id || "user"] = item.count;
+      usersByRole[item._id || "customer"] = item.count;
     });
 
-    // Get monthly signups for the current year
+    // ---------- Monthly signups (current year) ----------
+    // FIX: `createdAt` (from timestamps), not `created_at`.
     const currentYear = new Date().getFullYear();
     const monthlySignups = Array(12).fill(0);
+
+    const startOfYear = new Date(currentYear, 0, 1);
+    const endOfYear = new Date(currentYear, 11, 31, 23, 59, 59, 999);
 
     const signupsByMonth = await User.aggregate([
       {
         $match: {
-          created_at: {
-            $gte: new Date(`${currentYear}-01-01`),
-            $lte: new Date(`${currentYear}-12-31`),
-          },
+          createdAt: { $gte: startOfYear, $lte: endOfYear },
         },
       },
       {
         $group: {
-          _id: { $month: "$created_at" },
+          _id: { $month: "$createdAt" },
           count: { $sum: 1 },
         },
       },
     ]);
 
     signupsByMonth.forEach((item) => {
-      monthlySignups[item._id - 1] = item.count;
+      if (item._id >= 1 && item._id <= 12) {
+        monthlySignups[item._id - 1] = item.count;
+      }
     });
 
-    // Get recent users
+    // ---------- Recent users ----------
+    // FIX: select `fullName` (schema field) instead of `name`,
+    // and use `createdAt` / `updatedAt` / `lastLoginAt`.
     const recentUsers = await User.find()
-      .sort({ created_at: -1 })
+      .sort({ createdAt: -1 })
       .limit(5)
-      .select("name email role status created_at updated_at")
-      .lean();
+      .select(
+        "fullName email image role status createdAt updatedAt lastLoginAt",
+      )
+      .lean<any[]>();
 
-    // Calculate user growth rate (compared to previous month)
+    // ---------- Growth rate vs. previous month ----------
     const currentMonth = new Date().getMonth();
     const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
     const currentMonthSignups = monthlySignups[currentMonth];
@@ -100,6 +94,15 @@ export async function getUserAnalytics(): Promise<UserAnalytics> {
           ? 100
           : 0;
 
+    // ---------- Serialize recent users ----------
+    // Every date is optional — never call `.toISOString()` blindly.
+    const safeDate = (value: any): string | null => {
+      if (!value) return null;
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString().split("T")[0];
+    };
+
     return {
       totalUsers,
       activeUsers,
@@ -108,17 +111,18 @@ export async function getUserAnalytics(): Promise<UserAnalytics> {
       usersByStatus,
       usersByRole,
       monthlySignups,
-      recentUsers: recentUsers.map(
-        (user) =>
-          ({
-            ...user,
-            _id: user._id?.toString(),
-            joinDate: user.created_at.toISOString().split("T")[0],
-            lastActive: user.updated_at
-              ? user.updated_at.toISOString().split("T")[0]
-              : "Never",
-          }) as any,
-      ),
+      recentUsers: recentUsers.map((user) => ({
+        _id: String(user._id ?? ""),
+        // `name` is what the UI consumes — pull it from `fullName`.
+        name: user.fullName ?? "",
+        email: user.email ?? "",
+        image: user.image ?? null,
+        role: user.role ?? "customer",
+        status: user.status ?? "active",
+        joinDate: safeDate(user.createdAt) ?? "",
+        lastActive:
+          safeDate(user.lastLoginAt) ?? safeDate(user.updatedAt) ?? "Never",
+      })) as any,
     };
   } catch (error) {
     console.error("Failed to fetch user analytics:", error);
@@ -130,10 +134,8 @@ export async function getOrderAnalytics() {
   try {
     await connection();
 
-    // Get total orders count
     const totalOrders = await Order.countDocuments();
 
-    // Get revenue analytics
     const revenueData = await Order.aggregate([
       {
         $match: {
@@ -150,17 +152,10 @@ export async function getOrderAnalytics() {
       },
     ]);
 
-    // Get orders by status
     const ordersByStatus = await Order.aggregate([
-      {
-        $group: {
-          _id: "$orderStatus",
-          count: { $sum: 1 },
-        },
-      },
+      { $group: { _id: "$orderStatus", count: { $sum: 1 } } },
     ]);
 
-    // Get recent orders
     const recentOrders = await Order.find()
       .sort({ createdAt: -1 })
       .limit(5)
@@ -171,10 +166,13 @@ export async function getOrderAnalytics() {
       totalOrders,
       totalRevenue: revenueData[0]?.totalRevenue || 0,
       averageOrderValue: revenueData[0]?.averageOrderValue || 0,
-      ordersByStatus: ordersByStatus.reduce((acc, curr) => {
-        acc[curr._id] = curr.count;
-        return acc;
-      }, {}),
+      ordersByStatus: ordersByStatus.reduce(
+        (acc, curr) => {
+          acc[curr._id] = curr.count;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
       recentOrders: JSON.parse(JSON.stringify(recentOrders)),
     };
   } catch (error) {
@@ -187,31 +185,15 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
   try {
     await connection();
 
-    // Get total products count
     const totalProducts = await Product.countDocuments();
-
-    // Get active products count
     const activeProducts = await Product.countDocuments({ status: "active" });
-
-    // Get out of stock products count
     const outOfStock = await Product.countDocuments({ quantity: { $lte: 0 } });
+    const lowStock = await Product.countDocuments({ quantity: { $lte: 1 } });
 
-    // Get low stock products count
-    const lowStock = await Product.countDocuments({
-      quantity: { $lte: 1 },
-    });
-
-    // Get products by status
     const productsByStatusResult = await Product.aggregate([
-      {
-        $group: {
-          _id: "$status",
-          count: { $sum: 1 },
-        },
-      },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
     ]);
 
-    // Format products by status
     const productsByStatus: Record<string, number> = {
       active: 0,
       inactive: 0,
@@ -221,7 +203,6 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
       productsByStatus[item._id] = item.count;
     });
 
-    // Get products by category
     const productsByCategoryResult = await Product.aggregate([
       {
         $lookup: {
@@ -231,27 +212,15 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
           as: "category",
         },
       },
-      {
-        $unwind: {
-          path: "$category",
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-      {
-        $group: {
-          _id: "$category.name",
-          count: { $sum: 1 },
-        },
-      },
+      { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
+      { $group: { _id: "$category.name", count: { $sum: 1 } } },
     ]);
 
-    // Format products by category
     const productsByCategory: Record<string, number> = {};
     productsByCategoryResult.forEach((item) => {
       productsByCategory[item._id] = item.count;
     });
 
-    // Get monthly additions for the current year
     const currentYear = new Date().getFullYear();
     const monthlyAdditions = Array(12).fill(0);
 
@@ -260,7 +229,7 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
         $match: {
           createdAt: {
             $gte: new Date(`${currentYear}-01-01`),
-            $lte: new Date(`${currentYear}-12-31`),
+            $lte: new Date(`${currentYear}-12-31T23:59:59`),
           },
         },
       },
@@ -276,7 +245,6 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
       monthlyAdditions[item._id - 1] = item.count;
     });
 
-    // Get recent products
     const recentProducts = await Product.find()
       .populate({
         path: "categoryId",
@@ -419,24 +387,24 @@ export async function getOverviewData() {
   try {
     await connection();
 
-    // Get user statistics
+    // ---------- Users ----------
     const totalUsers = await User.countDocuments();
     const activeUsers = await User.countDocuments({ status: "active" });
+
+    // FIX: `createdAt`, not `created_at`.
     const newUsersThisMonth = await User.countDocuments({
-      created_at: {
+      createdAt: {
         $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
       },
     });
 
-    // Get product statistics
+    // ---------- Products ----------
     const totalProducts = await Product.countDocuments();
     const activeProducts = await Product.countDocuments({ status: "active" });
     const outOfStock = await Product.countDocuments({ quantity: { $lte: 0 } });
-    const lowStock = await Product.countDocuments({
-      quantity: { $lte: 1 },
-    });
+    const lowStock = await Product.countDocuments({ quantity: { $lte: 1 } });
 
-    // Get order statistics
+    // ---------- Orders ----------
     const totalOrders = await Order.countDocuments();
     const completedOrders = await Order.countDocuments({
       orderStatus: "completed",
@@ -451,12 +419,13 @@ export async function getOverviewData() {
     const averageOrderValue =
       completedOrders > 0 ? totalRevenue / completedOrders : 0;
 
-    // Get recent activity
+    // ---------- Recent activity ----------
+    // FIX: use `fullName` / `createdAt` — schema fields.
     const recentUsers = await User.find()
-      .sort({ created_at: -1 })
+      .sort({ createdAt: -1 })
       .limit(3)
-      .select("name email created_at")
-      .lean();
+      .select("fullName email createdAt")
+      .lean<any[]>();
 
     const recentProducts = await Product.find()
       .sort({ createdAt: -1 })
@@ -470,25 +439,30 @@ export async function getOverviewData() {
       .select("orderNumber total createdAt")
       .lean();
 
-    // Format recent activity
+    const safeIso = (value: any): string | null => {
+      if (!value) return null;
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    };
+
     const recentActivity = [
       ...recentUsers.map((user) => ({
         type: "user",
-        title: "New User Registered",
-        description: `${user.name} (${user.email}) joined`,
-        time: new Date(user.created_at).toLocaleDateString(),
+        title: "New user registered",
+        description: `${user.fullName || "Someone"} (${user.email ?? "—"}) joined`,
+        time: safeIso(user.createdAt) ?? new Date().toISOString(),
       })),
       ...recentProducts.map((product) => ({
         type: "product",
-        title: "New Product Added",
+        title: "New product added",
         description: `${product.name || product.sku || "Product"} was added`,
-        time: new Date(product.createdAt).toLocaleDateString(),
+        time: safeIso(product.createdAt) ?? new Date().toISOString(),
       })),
       ...recentOrders.map((order) => ({
         type: "order",
-        title: "New Order Placed",
+        title: "New order placed",
         description: `Order #${order.orderNumber} for $${order.total}`,
-        time: new Date(order.createdAt as any).toLocaleDateString(),
+        time: safeIso(order.createdAt) ?? new Date().toISOString(),
       })),
     ]
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())

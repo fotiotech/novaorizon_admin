@@ -12,16 +12,33 @@ export async function updateUserRoleAndPermissions(
   await connection();
 
   try {
-    const user = await User.findById(userId);
-    if (!user) {
-      throw new Error("User not found");
+    const ALLOWED_ROLES = ["customer", "seller", "admin", "support"];
+    if (!ALLOWED_ROLES.includes(role)) {
+      return { success: false, message: "Invalid role" };
     }
 
-    user.role = role;
-    user.permissions = permissions;
-    await user.save();
+    const sanitizedPermissions = Array.isArray(permissions)
+      ? Array.from(
+          new Set(
+            permissions
+              .filter((p): p is string => typeof p === "string")
+              .map((p) => p.trim())
+              .filter(Boolean),
+          ),
+        )
+      : [];
 
-    revalidatePath("/users"); // adjust path as needed
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { role, permissions: sanitizedPermissions } },
+      { new: true, runValidators: true },
+    );
+
+    if (!user) {
+      return { success: false, message: "User not found" };
+    }
+
+    revalidatePath("/users/permissions_roles");
     return { success: true, message: "User updated successfully" };
   } catch (error: any) {
     return { success: false, message: error.message };

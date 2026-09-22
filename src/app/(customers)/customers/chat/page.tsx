@@ -1,10 +1,21 @@
 // app/chat/page.tsx - Chat List Page
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useMemo, useState, memo } from "react";
 import { db } from "@/utils/firebasedb";
 import { collection, onSnapshot, deleteDoc, doc } from "firebase/firestore";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import {
+  Search,
+  SearchOff,
+  Chat as ChatIcon,
+  Delete,
+  MoreVert,
+  Close,
+} from "@mui/icons-material";
+import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
+import { toast } from "react-hot-toast";
 
 interface ChatRoom {
   roomId: string;
@@ -14,12 +25,59 @@ interface ChatRoom {
   lastMessage?: string;
 }
 
+const INPUT_CLASS =
+  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+
+const EmptyState = memo(function EmptyState({
+  isFiltering,
+  onClear,
+}: {
+  isFiltering: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        {isFiltering ? (
+          <SearchOff className="text-muted-foreground" />
+        ) : (
+          <ChatIcon className="text-muted-foreground" />
+        )}
+      </div>
+      <p className="text-sm font-medium text-foreground">
+        {isFiltering ? "No chats match your search" : "No active chats"}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {isFiltering
+          ? "Try adjusting or clearing your search."
+          : "Start a new conversation to see it here."}
+      </p>
+      {isFiltering && (
+        <div className="mt-4">
+          <button
+            onClick={onClear}
+            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+          >
+            Clear search
+          </button>
+        </div>
+      )}
+    </div>
+  );
+});
+
 export default function ChatListPage() {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
-  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<ChatRoom | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    if (!db) return;
+    if (!db) {
+      setLoading(false);
+      return;
+    }
     const roomsRef = collection(db, "chatRooms");
     const unsubscribe = onSnapshot(roomsRef, (snapshot) => {
       const parsedRooms = snapshot.docs.map((doc) => ({
@@ -32,102 +90,154 @@ export default function ChatListPage() {
         }),
       }));
       setRooms(parsedRooms);
+      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const handleDeleteRoom = async (roomId: string) => {
-    if (!confirm("Are you sure you want to delete this chat room?")) return;
-
+  const confirmDelete = async () => {
+    if (!deleteTarget || !db) return;
+    setIsDeleting(true);
+    const toastId = toast.loading("Deleting chat room…");
     try {
-      if (!db) return;
-      // Delete the chat room document
-      await deleteDoc(doc(db, "chatRooms", roomId));
-
-      // Note: In a real application, you might also want to delete all messages in the room
-      // This would require additional logic to delete the subcollection
-
-      console.log("Chat room deleted successfully");
-    } catch (error) {
-      console.error("Error deleting chat room:", error);
-      alert("Failed to delete chat room");
+      await deleteDoc(doc(db, "chatRooms", deleteTarget.roomId));
+      toast.success("Chat room deleted", { id: toastId });
+      setDeleteTarget(null);
+    } catch (err: any) {
+      console.error("Error deleting chat room:", err);
+      toast.error("Failed to delete chat room", { id: toastId });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
+  const visibleRooms = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return rooms;
+    return rooms.filter((r) => {
+      const haystack =
+        `${r.from ?? ""} ${r.product ?? ""} ${r.lastMessage ?? ""}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [rooms, query]);
+
+  const isFiltering = query.trim() !== "";
+
+  const getMenuItems = (room: ChatRoom): PopoverMenuItem[] => [
+    {
+      key: "delete",
+      label: "Delete room",
+      icon: <Delete fontSize="small" />,
+      danger: true,
+      onClick: () => setDeleteTarget(room),
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Chats</h1>
-          <button
-            onClick={() => router.push("/")}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-          >
-            Back to Home
-          </button>
+    <div className="mx-auto w-full max-w-4xl overflow-x-clip">
+      {/* Controls */}
+      <div className="mb-4 flex items-center gap-2">
+        <div className="relative min-w-0 max-w-sm flex-1">
+          <Search
+            fontSize="small"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search chats…"
+            className={`${INPUT_CLASS} pl-9`}
+          />
         </div>
+        {isFiltering && (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            aria-label="Clear search"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          >
+            <Close fontSize="small" />
+          </button>
+        )}
+      </div>
 
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          {rooms.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-gray-500 text-lg">
-                No active chats available.
-              </p>
-              <p className="text-gray-400 mt-2">
-                Start a new conversation to see it here.
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {rooms.map((room) => (
-                <div
-                  key={room.roomId}
-                  className="p-4 flex justify-between items-center hover:bg-gray-50 transition-colors"
-                >
-                  <Link
-                    href={`/chat/${room.roomId}`}
-                    className="flex-1 cursor-pointer"
-                  >
-                    <div>
-                      <h3 className="font-semibold text-gray-900">
-                        {room.from || "Unknown User"}
-                      </h3>
-                      <p className="text-gray-600 text-sm mt-1">
-                        {room.product || "No product specified"}
-                      </p>
-                      {room.lastMessage && (
-                        <p className="text-gray-400 text-xs mt-1 truncate">
-                          Last message: {room.lastMessage}
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-
-                  <button
-                    onClick={() => handleDeleteRoom(room.roomId)}
-                    className="ml-4 p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
-                    title="Delete chat room"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
+      {/* Card */}
+      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">All chats</h2>
+            {visibleRooms.length > 0 && (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {visibleRooms.length}
+              </span>
+            )}
+          </div>
+          {loading && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+              Loading…
+            </span>
           )}
         </div>
+
+        {visibleRooms.length === 0 ? (
+          <EmptyState isFiltering={isFiltering} onClear={() => setQuery("")} />
+        ) : (
+          <ul className="divide-y divide-border">
+            {visibleRooms.map((room) => (
+              <li
+                key={room.roomId}
+                className="group flex items-center gap-2 transition-colors hover:bg-muted/40"
+              >
+                <Link
+                  href={`/chat/${room.roomId}`}
+                  className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
+                    {(room.from?.[0] ?? "?").toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {room.from || "Unknown user"}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {room.product || "No product specified"}
+                    </p>
+                    {room.lastMessage && (
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
+                        {room.lastMessage}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+
+                <div className="pr-3">
+                  <PopoverMenu
+                    items={getMenuItems(room)}
+                    ariaLabel={`Actions for ${room.from ?? "chat"}`}
+                    trigger={<MoreVert fontSize="small" />}
+                    align="right"
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => {
+          if (!isDeleting) setDeleteTarget(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Delete chat room"
+        message={`Are you sure you want to delete the chat with "${deleteTarget?.from || "this user"}"? This cannot be undone.`}
+        confirmLabel={isDeleting ? "Deleting…" : "Delete"}
+        danger
+      />
     </div>
   );
 }

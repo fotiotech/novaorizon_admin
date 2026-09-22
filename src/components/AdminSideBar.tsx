@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -12,6 +13,8 @@ import {
   Search,
   Close,
   Settings,
+  ArrowForward,
+  KeyboardReturn,
 } from "@mui/icons-material";
 import { useSession } from "next-auth/react";
 import { SignIn } from "../app/(auth)/components/SignInButton";
@@ -39,6 +42,13 @@ const MAX_RESULTS = 20;
 
 type Direction = "forward" | "back" | "same";
 
+type SearchResult = {
+  name: string;
+  href: string;
+  icon?: React.ReactNode;
+  sectionTitle: string;
+};
+
 const itemBase =
   "group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 ease-out";
 const itemIdle = "text-foreground/80 hover:bg-muted/60 hover:text-foreground";
@@ -60,10 +70,20 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   // path[0] = section slug. path[1] = link href we drilled into to show children.
   const [path, setPath] = useState<string[]>([]);
   const [direction, setDirection] = useState<Direction>("same");
-  const [query, setQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const results = useMemo(() => {
+  // ── Overlay search state ─────────────────────────────────────────
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [mounted, setMounted] = useState(false);
+  const overlayInputRef = useRef<HTMLInputElement>(null);
+  const resultsListRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const results = useMemo<SearchResult[]>(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     return allLinks
@@ -101,15 +121,13 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   const sectionHasActiveRoute = (section: MenuSection) =>
     section.links.some(linkHasActiveRoute);
 
-  // Keep displayed path in sync with the URL: if the current route belongs
-  // to a section (or to a child under a section), reflect that.
+  // Keep displayed path in sync with the URL.
   useEffect(() => {
     if (!pathname) return;
 
     const owner = menuConfig.find(sectionHasActiveRoute);
     if (!owner) return;
 
-    // Did we land on a child of one of the section's links?
     const owningParent = owner.links.find((link) =>
       (link.children ?? []).some(
         (c) => pathname === c.href || pathname?.startsWith(c.href),
@@ -128,24 +146,74 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     });
   }, [pathname]);
 
+  // Close overlay when the route changes.
   useEffect(() => {
+    setSearchOpen(false);
     setQuery("");
   }, [pathname]);
 
+  // ⌘K / Ctrl+K opens the overlay.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        openSearch();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Lock body scroll while overlay is open.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [searchOpen]);
+
+  // Reset active index when results change.
+  useEffect(() => {
+    setActiveIdx(0);
+  }, [query]);
+
+  // Scroll the active item into view.
+  useEffect(() => {
+    if (!searchOpen || !searching) return;
+    const el =
+      resultsListRef.current?.querySelector<HTMLElement>(
+        `[data-active="true"]`,
+      );
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeIdx, searchOpen, searching]);
+
+  const openSearch = () => {
+    setQuery("");
+    setActiveIdx(0);
+    setSearchOpen(true);
+    // Focus the overlay input on the next tick (portal mounts after).
+    setTimeout(() => overlayInputRef.current?.focus(), 30);
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setQuery("");
+  };
+
+  const navigate = (href: string) => {
+    router.push(href);
+    closeSearch();
+    handleClose();
+  };
 
   const openSection = (slug: string) => {
     setDirection("forward");
     setPath([slug]);
+    closeSearch();
+    handleClose();
   };
   const openChildren = (sectionSlug: string, href: string) => {
     setDirection("forward");
@@ -211,66 +279,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 
   const ActiveBar = () => (
     <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
-  );
-
-  // ── Search view ───────────────────────────────────────────────────
-  const renderSearch = () => (
-    <>
-      <div className="mb-2 flex items-center gap-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-        <span>Results</span>
-        <span className="ml-auto tabular-nums">{results.length}</span>
-      </div>
-
-      {results.length === 0 ? (
-        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-          No matches for{" "}
-          <span className="font-medium text-foreground">“{query}”</span>
-        </div>
-      ) : (
-        <ul className="space-y-0.5">
-          {results.map((r, i) => {
-            const isActive =
-              pathname === r.href || pathname?.startsWith(r.href);
-            return (
-              <li
-                key={r.href}
-                className="stagger-item"
-                style={{ animationDelay: `${Math.min(i, 10) * 20}ms` }}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    router.push(r.href);
-                    setQuery("");
-                    handleClose();
-                  }}
-                  className={`${itemBase} ${
-                    isActive ? itemActive : itemIdle
-                  } justify-start`}
-                >
-                  {isActive && <ActiveBar />}
-                  <span className="shrink-0 text-muted-foreground [&>svg]:text-lg group-hover:text-foreground">
-                    {r.icon}
-                  </span>
-                  <div className="min-w-0 flex-1 text-left">
-                    <p className="truncate text-sm leading-tight">
-                      {highlight(r.name, query)}
-                    </p>
-                    <p className="truncate text-[11px] font-normal text-muted-foreground">
-                      {r.sectionTitle}
-                    </p>
-                  </div>
-                  <ChevronRight
-                    sx={{ fontSize: 16 }}
-                    className="shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-                  />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </>
   );
 
   // ── Root view ─────────────────────────────────────────────────────
@@ -344,8 +352,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           const isActive = linkHasActiveRoute(link);
           const hasChildren = (link.children?.length ?? 0) > 0;
 
-          // A link with children becomes a drill-in button instead of a
-          // navigable link — tapping the row reveals its sub-tree.
           if (hasChildren) {
             return (
               <li
@@ -479,7 +485,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     </>
   );
 
-  // ── Header: [logo · close] / [pill search] ────────────────────────
+  // ── Header: [logo · close] / [search trigger] ─────────────────────
   const renderHeader = () => (
     <div className="shrink-0 border-b border-border/60 px-4 pb-3 pt-4">
       {/* Line 1: logo + close */}
@@ -522,58 +528,24 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
         )}
       </div>
 
-      {/* Line 2: full-width search */}
-      <div
-        className={`flex w-full items-center gap-2 rounded-full border border-border bg-transparent px-3 py-1.5 transition-colors duration-150 ${
-          searching ? "border-primary/50" : "focus-within:border-primary/50"
-        }`}
+      {/* Line 2: search trigger (opens overlay) */}
+      <button
+        type="button"
+        onClick={openSearch}
+        aria-label="Open search"
+        className="flex w-full items-center gap-2 rounded-full border border-border bg-transparent px-3 py-1.5 text-left transition-colors duration-150 hover:border-primary/40 focus:outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/30"
       >
         <Search
           sx={{ fontSize: 15 }}
           className="shrink-0 text-muted-foreground/70"
         />
-        <input
-          ref={searchInputRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              setQuery("");
-              e.currentTarget.blur();
-            }
-          }}
-          placeholder="Search…"
-          aria-label="Search menu links"
-          className="
-            m-0 h-auto w-auto min-w-0 flex-1
-            rounded-none border-0 bg-transparent p-0
-            text-sm leading-none text-foreground
-            placeholder:text-muted-foreground/60
-            outline-none ring-0 shadow-none appearance-none
-            focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none
-            [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_transparent]
-            [&:-webkit-autofill]:[-webkit-text-fill-color:inherit]
-            [&:-webkit-autofill]:transition-[background-color_9999s]
-          "
-        />
-        {query ? (
-          <button
-            type="button"
-            onClick={() => {
-              setQuery("");
-              searchInputRef.current?.focus();
-            }}
-            aria-label="Clear search"
-            className="shrink-0 text-muted-foreground/70 transition-colors hover:text-foreground"
-          >
-            <Close sx={{ fontSize: 15 }} />
-          </button>
-        ) : (
-          <kbd className="hidden shrink-0 items-center rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-[10px] font-medium leading-none text-muted-foreground/70 md:inline-flex">
-            ⌘K
-          </kbd>
-        )}
-      </div>
+        <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground/60">
+          Search…
+        </span>
+        <kbd className="hidden shrink-0 items-center rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-[10px] font-medium leading-none text-muted-foreground/70 md:inline-flex">
+          ⌘K
+        </kbd>
+      </button>
     </div>
   );
 
@@ -634,6 +606,285 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     </div>
   );
 
+  // ── Overlay: search palette ──────────────────────────────────────
+  const overlayKeyHandler = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeSearch();
+      return;
+    }
+    if (searching) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIdx((i) => Math.min(i + 1, results.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIdx((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter" && results[activeIdx]) {
+        e.preventDefault();
+        navigate(results[activeIdx].href);
+      }
+    } else {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const total = mainSections.length;
+        setActiveIdx((i) =>
+          e.key === "ArrowDown"
+            ? Math.min(i + 1, total - 1)
+            : Math.max(i - 1, 0),
+        );
+      } else if (e.key === "Enter" && mainSections[activeIdx]) {
+        e.preventDefault();
+        openSection(mainSections[activeIdx].slug);
+      }
+    }
+  };
+
+  const renderOverlay = () => {
+    if (!mounted || !searchOpen) return null;
+
+    return createPortal(
+      <div
+        className="fixed inset-0 z-[100] flex flex-col sm:items-center sm:justify-start sm:p-4 sm:pt-[10vh]"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search menu"
+      >
+        {/* Backdrop */}
+        <button
+          type="button"
+          aria-label="Close search"
+          onClick={closeSearch}
+          className="absolute inset-0 cursor-default bg-foreground/30 backdrop-blur-sm"
+        />
+
+        {/* Panel */}
+        <div
+          className="
+            relative flex flex-1 flex-col overflow-hidden bg-card text-card-foreground
+            sm:flex-none sm:h-auto sm:w-full sm:max-w-xl
+            sm:max-h-[75vh] sm:rounded-xl sm:border sm:border-border
+            sm:shadow-2xl
+            search-panel-enter
+          "
+        >
+          {/* Input row */}
+          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+            <Search
+              sx={{ fontSize: 18 }}
+              className="shrink-0 text-muted-foreground"
+            />
+            <input
+              ref={overlayInputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={overlayKeyHandler}
+              placeholder="Search menu links…"
+              aria-label="Search menu links"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              className="
+                m-0 h-auto w-auto min-w-0 flex-1
+                rounded-none border-0 bg-transparent p-0
+                text-base leading-none text-foreground
+                placeholder:text-muted-foreground/60
+                outline-none ring-0 shadow-none appearance-none
+                focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none
+                [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_transparent]
+                [&:-webkit-autofill]:[-webkit-text-fill-color:inherit]
+                [&:-webkit-autofill]:transition-[background-color_9999s]
+              "
+            />
+
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  overlayInputRef.current?.focus();
+                }}
+                aria-label="Clear search"
+                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Close sx={{ fontSize: 16 }} />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={closeSearch}
+              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:hidden"
+            >
+              Cancel
+            </button>
+          </div>
+
+          {/* Results / suggestions */}
+          <div
+            ref={resultsListRef}
+            className="flex-1 overflow-y-auto overscroll-contain px-2 py-2"
+          >
+            {!searching ? (
+              // ── Suggestions when query is empty ──
+              <>
+                <div className="mb-1.5 flex items-center gap-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  <span>Browse sections</span>
+                  <span className="ml-auto tabular-nums">
+                    {mainSections.length}
+                  </span>
+                </div>
+
+                <ul className="space-y-0.5">
+                  {mainSections.map((section, i) => {
+                    const isActive = activeIdx === i;
+                    const hasActive = sectionHasActiveRoute(section);
+                    return (
+                      <li key={section.slug}>
+                        <button
+                          type="button"
+                          onMouseEnter={() => setActiveIdx(i)}
+                          onClick={() => openSection(section.slug)}
+                          data-active={isActive ? "true" : "false"}
+                          className={`${itemBase} ${
+                            isActive
+                              ? "bg-muted/70 text-foreground"
+                              : hasActive
+                                ? itemActive
+                                : itemIdle
+                          } justify-between`}
+                        >
+                          {hasActive && <ActiveBar />}
+                          <span className="flex items-center gap-3">
+                            <span className="text-muted-foreground [&>svg]:text-lg group-hover:text-foreground">
+                              {section.links[0]?.icon}
+                            </span>
+                            <span>{section.title}</span>
+                          </span>
+                          <ArrowForward
+                            sx={{ fontSize: 14 }}
+                            className="shrink-0 text-muted-foreground/50"
+                          />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                <p className="mt-4 px-3 text-[11px] text-muted-foreground/70">
+                  Tip: start typing to search across every link.
+                </p>
+              </>
+            ) : results.length === 0 ? (
+              // ── No matches ──
+              <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <Search className="text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium text-foreground">
+                  No matches for “{query}”
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Try a section name like{" "}
+                  <span className="font-medium text-foreground/80">Orders</span>
+                  ,{" "}
+                  <span className="font-medium text-foreground/80">
+                    Products
+                  </span>
+                  , or a URL fragment.
+                </p>
+              </div>
+            ) : (
+              // ── Filtered results ──
+              <>
+                <div className="mb-1.5 flex items-center gap-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  <span>Results</span>
+                  <span className="ml-auto tabular-nums">{results.length}</span>
+                </div>
+
+                <ul className="space-y-0.5">
+                  {results.map((r, i) => {
+                    const isActive = activeIdx === i;
+                    const isCurrent =
+                      pathname === r.href || pathname?.startsWith(r.href);
+                    return (
+                      <li key={r.href}>
+                        <button
+                          type="button"
+                          onMouseEnter={() => setActiveIdx(i)}
+                          onClick={() => navigate(r.href)}
+                          data-active={isActive ? "true" : "false"}
+                          className={`${itemBase} ${
+                            isActive
+                              ? "bg-muted/70 text-foreground"
+                              : isCurrent
+                                ? itemActive
+                                : itemIdle
+                          } justify-start`}
+                        >
+                          {isCurrent && <ActiveBar />}
+                          <span className="shrink-0 text-muted-foreground [&>svg]:text-lg group-hover:text-foreground">
+                            {r.icon}
+                          </span>
+                          <div className="min-w-0 flex-1 text-left">
+                            <p className="truncate text-sm leading-tight">
+                              {highlight(r.name, query)}
+                            </p>
+                            <p className="truncate text-[11px] font-normal text-muted-foreground">
+                              {r.sectionTitle}
+                            </p>
+                          </div>
+                          {isActive ? (
+                            <KeyboardReturn
+                              sx={{ fontSize: 14 }}
+                              className="shrink-0 text-muted-foreground"
+                            />
+                          ) : (
+                            <ChevronRight
+                              sx={{ fontSize: 16 }}
+                              className="shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+                            />
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+          </div>
+
+          {/* Footer hint — desktop only */}
+          <div className="hidden items-center justify-between border-t border-border px-4 py-2 text-[11px] text-muted-foreground sm:flex">
+            <span className="flex items-center gap-2">
+              <kbd className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px]">
+                ↑
+              </kbd>
+              <kbd className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px]">
+                ↓
+              </kbd>
+              navigate
+              <kbd className="ml-2 rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px]">
+                ⏎
+              </kbd>
+              open
+              <kbd className="ml-2 rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px]">
+                esc
+              </kbd>
+              close
+            </span>
+            <span>
+              {searching
+                ? `${results.length} result${results.length === 1 ? "" : "s"}`
+                : `${mainSections.length} sections`}
+            </span>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  };
+
   // ── Content ───────────────────────────────────────────────────────
   const content = (
     <>
@@ -642,23 +893,19 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
       <nav className="scrollbar-hide flex-1 overflow-y-auto px-2.5 py-3">
         <div
           key={
-            searching
-              ? "__search"
-              : currentParentLink
-                ? `__children:${currentParentLink.href}`
-                : currentSection
-                  ? currentSection.slug
-                  : "root"
+            currentParentLink
+              ? `__children:${currentParentLink.href}`
+              : currentSection
+                ? currentSection.slug
+                : "root"
           }
           className={viewAnimClass}
         >
-          {searching
-            ? renderSearch()
-            : currentParentLink && currentSection
-              ? renderChildren(currentSection, currentParentLink)
-              : currentSection
-                ? renderSection(currentSection)
-                : renderRoot()}
+          {currentParentLink && currentSection
+            ? renderChildren(currentSection, currentParentLink)
+            : currentSection
+              ? renderSection(currentSection)
+              : renderRoot()}
         </div>
       </nav>
 
@@ -732,6 +979,8 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           animation: badgePop 180ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
         }
       `}</style>
+
+      {renderOverlay()}
     </>
   );
 
