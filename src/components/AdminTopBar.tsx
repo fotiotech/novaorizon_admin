@@ -142,7 +142,7 @@ const AdminTopBar = ({
             onClick={() => setSideBarToggle((v) => !v)}
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
-            <Menu sx={{ fontSize: 24 }} />
+            <Menu sx={{ fontSize: 20 }} />
           </button>
         </div>
 
