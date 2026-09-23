@@ -50,7 +50,7 @@ type SearchResult = {
 };
 
 const itemBase =
-  "group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 ease-out";
+  "group relative flex w-full items-center gap-3.5 rounded-lg px-3.5 py-2.5 text-[15px] font-medium transition-colors duration-150 ease-out";
 const itemIdle = "text-foreground/80 hover:bg-muted/60 hover:text-foreground";
 const itemActive = "bg-primary/10 text-primary";
 
@@ -228,6 +228,14 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     setPath([]);
   };
 
+  // Close the sidebar. Only used for explicit dismissals (the ✕ button),
+  // so it works on every screen size.
+  const closeSidebar = () => {
+    setSideBarToggle(false);
+  };
+
+  // Used when following a link. On desktop we keep the sidebar open so
+  // the user can keep navigating; on mobile/tablet we close the drawer.
   const handleClose = () => {
     if (screenSize <= 1024) setSideBarToggle(false);
   };
@@ -237,17 +245,17 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   const renderBadges = (link: MenuLink) => (
     <>
       {link.showUnreadCount && unreadCount > 0 && (
-        <span className="badge-pop ml-auto rounded-full bg-destructive px-2 py-0.5 text-[11px] font-semibold leading-none text-destructive-foreground">
+        <span className="badge-pop ml-auto rounded-full bg-destructive px-2 py-0.5 text-xs font-semibold leading-none text-destructive-foreground">
           {unreadCount > 99 ? "99+" : unreadCount}
         </span>
       )}
       {link.showContactCount && newContactCount > 0 && (
-        <span className="badge-pop ml-auto rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold leading-none text-white">
+        <span className="badge-pop ml-auto rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold leading-none text-white">
           {newContactCount > 99 ? "99+" : newContactCount}
         </span>
       )}
       {link.showOrderCount && unreadOrderCount > 0 && (
-        <span className="badge-pop ml-auto rounded-full bg-destructive px-2 py-0.5 text-[11px] font-semibold leading-none text-destructive-foreground">
+        <span className="badge-pop ml-auto rounded-full bg-destructive px-2 py-0.5 text-xs font-semibold leading-none text-destructive-foreground">
           {unreadOrderCount > 99 ? "99+" : unreadOrderCount}
         </span>
       )}
@@ -278,7 +286,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   };
 
   const ActiveBar = () => (
-    <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
+    <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
   );
 
   // ── Root view ─────────────────────────────────────────────────────
@@ -300,14 +308,14 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
               } justify-between`}
             >
               {hasActive && <ActiveBar />}
-              <span className="flex items-center gap-3">
-                <span className="text-muted-foreground [&>svg]:text-lg group-hover:text-foreground">
+              <span className="flex items-center gap-3.5">
+                <span className="text-muted-foreground [&>svg]:text-xl group-hover:text-foreground">
                   {section.links[0]?.icon}
                 </span>
                 <span>{section.title}</span>
               </span>
               <ChevronRight
-                sx={{ fontSize: 16 }}
+                sx={{ fontSize: 18 }}
                 className="text-muted-foreground/50 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-muted-foreground"
               />
             </button>
@@ -320,29 +328,29 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   // ── Section view ──────────────────────────────────────────────────
   const renderSection = (section: MenuSection) => (
     <>
-      <div className="mb-2 flex items-center gap-1.5 px-1">
+      <div className="mb-3 flex items-center gap-2 px-1">
         <button
           type="button"
           onClick={goBack}
           aria-label="Back to menu"
-          className="-ml-0.5 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground active:scale-90"
+          className="-ml-1 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground active:scale-90"
         >
-          <ArrowBack sx={{ fontSize: 16 }} />
+          <ArrowBack sx={{ fontSize: 18 }} />
         </button>
 
         <nav
           aria-label="Breadcrumb"
-          className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70"
+          className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70"
         >
           <button
             type="button"
             onClick={goToRoot}
             className="flex items-center gap-1 transition-colors hover:text-foreground"
           >
-            <Home sx={{ fontSize: 13 }} />
+            <Home sx={{ fontSize: 15 }} />
             <span>Menu</span>
           </button>
-          <ChevronRight sx={{ fontSize: 13 }} className="opacity-50" />
+          <ChevronRight sx={{ fontSize: 14 }} className="opacity-50" />
           <span className="truncate text-foreground/80">{section.title}</span>
         </nav>
       </div>
@@ -367,14 +375,14 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                   } justify-between`}
                 >
                   {isActive && <ActiveBar />}
-                  <span className="flex items-center gap-3">
-                    <span className="text-muted-foreground [&>svg]:text-lg group-hover:text-foreground">
+                  <span className="flex items-center gap-3.5">
+                    <span className="text-muted-foreground [&>svg]:text-xl group-hover:text-foreground">
                       {link.icon}
                     </span>
                     <span>{link.name}</span>
                   </span>
                   <ChevronRight
-                    sx={{ fontSize: 16 }}
+                    sx={{ fontSize: 18 }}
                     className="text-muted-foreground/50 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-muted-foreground"
                   />
                 </button>
@@ -396,8 +404,8 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                 } justify-between`}
               >
                 {isActive && <ActiveBar />}
-                <span className="flex items-center gap-3">
-                  <span className="text-muted-foreground [&>svg]:text-lg group-hover:text-foreground">
+                <span className="flex items-center gap-3.5">
+                  <span className="text-muted-foreground [&>svg]:text-xl group-hover:text-foreground">
                     {link.icon}
                   </span>
                   <span>{link.name}</span>
@@ -414,29 +422,29 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   // ── Children view (level 2) ───────────────────────────────────────
   const renderChildren = (section: MenuSection, parent: MenuLink) => (
     <>
-      <div className="mb-2 flex items-center gap-1.5 px-1">
+      <div className="mb-3 flex items-center gap-2 px-1">
         <button
           type="button"
           onClick={goBack}
           aria-label="Back"
-          className="-ml-0.5 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground active:scale-90"
+          className="-ml-1 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground active:scale-90"
         >
-          <ArrowBack sx={{ fontSize: 16 }} />
+          <ArrowBack sx={{ fontSize: 18 }} />
         </button>
 
         <nav
           aria-label="Breadcrumb"
-          className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70"
+          className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70"
         >
           <button
             type="button"
             onClick={goToRoot}
             className="flex items-center gap-1 transition-colors hover:text-foreground"
           >
-            <Home sx={{ fontSize: 13 }} />
+            <Home sx={{ fontSize: 15 }} />
             <span>Menu</span>
           </button>
-          <ChevronRight sx={{ fontSize: 13 }} className="opacity-50" />
+          <ChevronRight sx={{ fontSize: 14 }} className="opacity-50" />
           <button
             type="button"
             onClick={() => {
@@ -447,7 +455,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           >
             {section.title}
           </button>
-          <ChevronRight sx={{ fontSize: 13 }} className="opacity-50" />
+          <ChevronRight sx={{ fontSize: 14 }} className="opacity-50" />
           <span className="truncate text-foreground/80">{parent.name}</span>
         </nav>
       </div>
@@ -470,8 +478,8 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                 } justify-between`}
               >
                 {isActive && <ActiveBar />}
-                <span className="flex items-center gap-3">
-                  <span className="text-muted-foreground [&>svg]:text-lg group-hover:text-foreground">
+                <span className="flex items-center gap-3.5">
+                  <span className="text-muted-foreground [&>svg]:text-xl group-hover:text-foreground">
                     {link.icon}
                   </span>
                   <span>{link.name}</span>
@@ -487,45 +495,45 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 
   // ── Header: [logo · close] / [search trigger] ─────────────────────
   const renderHeader = () => (
-    <div className="shrink-0 border-b border-border/60 px-4 pb-3 pt-4">
+    <div className="shrink-0 border-b border-border/60 px-4 pb-3.5 pt-4.5">
       {/* Line 1: logo + close */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3.5 flex items-center justify-between">
         <Link
           href="/"
-          className="flex items-center gap-2.5"
+          className="flex items-center gap-3"
           onClick={handleClose}
         >
-          <div className="rounded-lg bg-primary/10 p-1.5">
-            <Image src="/logo.png" alt="logo" width={28} height={19} />
+          <div className="rounded-lg bg-primary/10 p-2">
+            <Image src="/logo.png" alt="logo" width={32} height={22} />
           </div>
-          <span className="text-sm font-semibold tracking-tight text-foreground">
+          <span className="text-base font-semibold tracking-tight text-foreground">
             Novaorizon
           </span>
         </Link>
 
-        {!isLargeScreen && (
-          <button
-            title="Close sidebar"
-            type="button"
-            onClick={handleClose}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground active:scale-90"
+        {/* Explicit close button — always rendered, works on all screens */}
+        <button
+          title="Close sidebar"
+          type="button"
+          onClick={closeSidebar}
+          aria-label="Close sidebar"
+          className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground active:scale-90"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        )}
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
       </div>
 
       {/* Line 2: search trigger (opens overlay) */}
@@ -533,16 +541,16 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
         type="button"
         onClick={openSearch}
         aria-label="Open search"
-        className="flex w-full items-center gap-2 rounded-full border border-border bg-transparent px-3 py-1.5 text-left transition-colors duration-150 hover:border-primary/40 focus:outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/30"
+        className="flex w-full items-center gap-2.5 rounded-full border border-border bg-transparent px-3.5 py-2 text-left transition-colors duration-150 hover:border-primary/40 focus:outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/30"
       >
         <Search
-          sx={{ fontSize: 15 }}
+          sx={{ fontSize: 17 }}
           className="shrink-0 text-muted-foreground/70"
         />
-        <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground/60">
+        <span className="min-w-0 flex-1 truncate text-[15px] text-muted-foreground/60">
           Search…
         </span>
-        <kbd className="hidden shrink-0 items-center rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-[10px] font-medium leading-none text-muted-foreground/70 md:inline-flex">
+        <kbd className="hidden shrink-0 items-center rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-[11px] font-medium leading-none text-muted-foreground/70 md:inline-flex">
           ⌘K
         </kbd>
       </button>
@@ -555,22 +563,22 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     settingsSection && sectionHasActiveRoute(settingsSection);
 
   const renderFooter = () => (
-    <div className="flex shrink-0 items-center gap-2 border-t border-border/60 px-3 py-3">
+    <div className="flex shrink-0 items-center gap-2.5 border-t border-border/60 px-3.5 py-3.5">
       {user ? (
         <Link
           href="/profile"
           onClick={handleClose}
-          className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/60"
+          className="group flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/60"
         >
-          <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
             {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[9px] font-semibold leading-none text-destructive-foreground">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
             {user?.email?.charAt(0).toUpperCase() || "U"}
           </div>
-          <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/90">
+          <p className="min-w-0 flex-1 truncate text-[15px] font-medium text-foreground/90">
             {user?.name ?? user?.email ?? "Account"}
           </p>
         </Link>
@@ -589,14 +597,14 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           }}
           aria-label={settingsSection.title}
           aria-current={settingsInView ? "page" : undefined}
-          className={`group relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 active:scale-90 ${
+          className={`group relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 active:scale-90 ${
             settingsInView || settingsHasActiveRoute
               ? "bg-primary/10 text-primary"
               : "text-muted-foreground/80 hover:bg-muted/60 hover:text-foreground"
           }`}
         >
           <Settings
-            sx={{ fontSize: 18 }}
+            sx={{ fontSize: 20 }}
             className={`transition-transform duration-500 ${
               settingsInView ? "rotate-90" : "group-hover:rotate-45"
             }`}
@@ -669,9 +677,9 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           "
         >
           {/* Input row */}
-          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5">
             <Search
-              sx={{ fontSize: 18 }}
+              sx={{ fontSize: 20 }}
               className="shrink-0 text-muted-foreground"
             />
             <input
@@ -687,7 +695,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
               className="
                 m-0 h-auto w-auto min-w-0 flex-1
                 rounded-none border-0 bg-transparent p-0
-                text-base leading-none text-foreground
+                text-[17px] leading-none text-foreground
                 placeholder:text-muted-foreground/60
                 outline-none ring-0 shadow-none appearance-none
                 focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none
@@ -705,16 +713,16 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                   overlayInputRef.current?.focus();
                 }}
                 aria-label="Clear search"
-                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                <Close sx={{ fontSize: 16 }} />
+                <Close sx={{ fontSize: 18 }} />
               </button>
             )}
 
             <button
               type="button"
               onClick={closeSearch}
-              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:hidden"
+              className="shrink-0 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:hidden"
             >
               Cancel
             </button>
@@ -723,12 +731,12 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           {/* Results / suggestions */}
           <div
             ref={resultsListRef}
-            className="flex-1 overflow-y-auto overscroll-contain px-2 py-2"
+            className="flex-1 overflow-y-auto overscroll-contain px-2.5 py-2.5"
           >
             {!searching ? (
               // ── Suggestions when query is empty ──
               <>
-                <div className="mb-1.5 flex items-center gap-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                <div className="mb-2 flex items-center gap-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
                   <span>Browse sections</span>
                   <span className="ml-auto tabular-nums">
                     {mainSections.length}
@@ -755,14 +763,14 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                           } justify-between`}
                         >
                           {hasActive && <ActiveBar />}
-                          <span className="flex items-center gap-3">
-                            <span className="text-muted-foreground [&>svg]:text-lg group-hover:text-foreground">
+                          <span className="flex items-center gap-3.5">
+                            <span className="text-muted-foreground [&>svg]:text-xl group-hover:text-foreground">
                               {section.links[0]?.icon}
                             </span>
                             <span>{section.title}</span>
                           </span>
                           <ArrowForward
-                            sx={{ fontSize: 14 }}
+                            sx={{ fontSize: 16 }}
                             className="shrink-0 text-muted-foreground/50"
                           />
                         </button>
@@ -771,20 +779,20 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                   })}
                 </ul>
 
-                <p className="mt-4 px-3 text-[11px] text-muted-foreground/70">
+                <p className="mt-4 px-3 text-xs text-muted-foreground/70">
                   Tip: start typing to search across every link.
                 </p>
               </>
             ) : results.length === 0 ? (
               // ── No matches ──
               <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
-                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                   <Search className="text-muted-foreground" />
                 </div>
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-[15px] font-medium text-foreground">
                   No matches for “{query}”
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-[13px] text-muted-foreground">
                   Try a section name like{" "}
                   <span className="font-medium text-foreground/80">Orders</span>
                   ,{" "}
@@ -797,7 +805,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
             ) : (
               // ── Filtered results ──
               <>
-                <div className="mb-1.5 flex items-center gap-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                <div className="mb-2 flex items-center gap-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
                   <span>Results</span>
                   <span className="ml-auto tabular-nums">{results.length}</span>
                 </div>
@@ -823,25 +831,25 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                           } justify-start`}
                         >
                           {isCurrent && <ActiveBar />}
-                          <span className="shrink-0 text-muted-foreground [&>svg]:text-lg group-hover:text-foreground">
+                          <span className="shrink-0 text-muted-foreground [&>svg]:text-xl group-hover:text-foreground">
                             {r.icon}
                           </span>
                           <div className="min-w-0 flex-1 text-left">
-                            <p className="truncate text-sm leading-tight">
+                            <p className="truncate text-[15px] leading-tight">
                               {highlight(r.name, query)}
                             </p>
-                            <p className="truncate text-[11px] font-normal text-muted-foreground">
+                            <p className="truncate text-xs font-normal text-muted-foreground">
                               {r.sectionTitle}
                             </p>
                           </div>
                           {isActive ? (
                             <KeyboardReturn
-                              sx={{ fontSize: 14 }}
+                              sx={{ fontSize: 16 }}
                               className="shrink-0 text-muted-foreground"
                             />
                           ) : (
                             <ChevronRight
-                              sx={{ fontSize: 16 }}
+                              sx={{ fontSize: 18 }}
                               className="shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
                             />
                           )}
@@ -855,20 +863,20 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           </div>
 
           {/* Footer hint — desktop only */}
-          <div className="hidden items-center justify-between border-t border-border px-4 py-2 text-[11px] text-muted-foreground sm:flex">
+          <div className="hidden items-center justify-between border-t border-border px-4 py-2.5 text-xs text-muted-foreground sm:flex">
             <span className="flex items-center gap-2">
-              <kbd className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px]">
+              <kbd className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[11px]">
                 ↑
               </kbd>
-              <kbd className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px]">
+              <kbd className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[11px]">
                 ↓
               </kbd>
               navigate
-              <kbd className="ml-2 rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px]">
+              <kbd className="ml-2 rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[11px]">
                 ⏎
               </kbd>
               open
-              <kbd className="ml-2 rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px]">
+              <kbd className="ml-2 rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[11px]">
                 esc
               </kbd>
               close
@@ -890,7 +898,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     <>
       {renderHeader()}
 
-      <nav className="scrollbar-hide flex-1 overflow-y-auto px-2.5 py-3">
+      <nav className="scrollbar-hide flex-1 overflow-y-auto px-3 py-3.5">
         <div
           key={
             currentParentLink
@@ -986,8 +994,15 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 
   if (isLargeScreen) {
     return (
-      <aside className="relative flex h-full w-64 flex-col overflow-hidden border-r border-border/60 bg-background text-foreground">
-        {content}
+      <aside
+        aria-hidden={!sideBarToggle}
+        className={`relative flex h-full shrink-0 flex-col overflow-hidden border-border/60 bg-background text-foreground transition-[width,border-right-width] duration-300 ease-out ${
+          sideBarToggle ? "w-64 border-r" : "w-0 border-r-0"
+        }`}
+      >
+        {/* Inner wrapper keeps content at a fixed width so it doesn't
+            reflow while the outer element animates. */}
+        <div className="flex h-full w-64 flex-col">{content}</div>
       </aside>
     );
   }

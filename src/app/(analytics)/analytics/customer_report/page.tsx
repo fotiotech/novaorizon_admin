@@ -24,8 +24,7 @@ interface UserAnalytics {
   recentUsers: any[];
 }
 
-const surfaceClass =
-  "rounded-lg border border-border bg-card text-card-foreground";
+const surfaceClass = "rounded-lg bg-card text-card-foreground";
 
 const MONTHS = [
   "Jan",
@@ -182,18 +181,18 @@ const MonthlyChart = memo(function MonthlyChart({
 /* ------------------------------------------------------------------ */
 const Skeleton = memo(function Skeleton() {
   return (
-    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+    <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="rounded-lg border border-border bg-card p-4">
+          <div key={i} className="rounded-lg bg-card p-4">
             <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
             <div className="mt-3 h-7 w-24 animate-pulse rounded bg-muted" />
             <div className="mt-2 h-3 w-20 animate-pulse rounded bg-muted" />
           </div>
         ))}
       </div>
-      <div className="mt-4 rounded-lg border border-border bg-card">
-        <div className="border-b border-border px-4 py-3">
+      <div className="mt-4 rounded-lg bg-card">
+        <div className="px-4 py-3">
           <div className="h-4 w-40 animate-pulse rounded bg-muted" />
         </div>
         <div className="h-40 p-4">
@@ -269,12 +268,12 @@ export default function CustomerReportsPage() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
             onClick={() => void load()}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-destructive/40 px-4 py-1.5 text-sm font-medium transition hover:bg-destructive/10"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-destructive/15 px-4 py-1.5 text-sm font-medium transition hover:bg-destructive/25"
           >
             <Refresh sx={{ fontSize: 16 }} />
             Retry
@@ -285,7 +284,7 @@ export default function CustomerReportsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+    <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       <div className="flex flex-col gap-4">
         {/* Stat cards */}
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -319,7 +318,7 @@ export default function CustomerReportsPage() {
 
         {/* Monthly signups */}
         <section className={surfaceClass}>
-          <div className="border-b border-border px-4 py-3">
+          <div className="px-4 py-3">
             <h2 className="text-sm font-semibold text-foreground">
               Monthly signups
             </h2>
@@ -333,7 +332,7 @@ export default function CustomerReportsPage() {
         {/* Two-column distributions */}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <section className={surfaceClass}>
-            <div className="border-b border-border px-4 py-3">
+            <div className="px-4 py-3">
               <h2 className="text-sm font-semibold text-foreground">
                 By status
               </h2>
@@ -342,7 +341,7 @@ export default function CustomerReportsPage() {
           </section>
 
           <section className={surfaceClass}>
-            <div className="border-b border-border px-4 py-3">
+            <div className="px-4 py-3">
               <h2 className="text-sm font-semibold text-foreground">By role</h2>
             </div>
             <DistributionBar data={roleRows} />
@@ -351,7 +350,7 @@ export default function CustomerReportsPage() {
 
         {/* Recent customers */}
         <section className={surfaceClass}>
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between px-4 py-3">
             <h2 className="text-sm font-semibold text-foreground">
               Recent customers
             </h2>
@@ -365,7 +364,7 @@ export default function CustomerReportsPage() {
           </div>
 
           {data?.recentUsers?.length ? (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/60">
               {data.recentUsers.map((user: any) => (
                 <li
                   key={user._id}

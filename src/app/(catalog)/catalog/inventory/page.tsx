@@ -122,7 +122,7 @@ const StatCard = memo(function StatCard({
   } as const;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+    <div className="rounded-xl bg-card p-5">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
@@ -288,7 +288,7 @@ const InventoryPage: React.FC = () => {
 
   /* ---------------- Render ---------------- */
   return (
-    <div className="w-full max-w-7xl overflow-x-clip py-6">
+    <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
@@ -304,10 +304,7 @@ const InventoryPage: React.FC = () => {
       </Snackbar>
 
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Inventory
-        </h1>
+      <div className=" flex flex-col gap-1">
         <p className="text-sm text-muted-foreground">
           Track stock levels and replenish what&apos;s running low
         </p>
@@ -315,14 +312,14 @@ const InventoryPage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <div>
             <span className="font-semibold">Error: </span>
             {error}
           </div>
           <button
             onClick={() => void loadInventory()}
-            className="flex-none rounded-md border border-destructive/40 px-2.5 py-1 text-xs font-medium transition hover:bg-destructive/10"
+            className="flex-none rounded-md bg-destructive/15 px-2.5 py-1 text-xs font-medium transition hover:bg-destructive/25"
           >
             Retry
           </button>
@@ -357,7 +354,7 @@ const InventoryPage: React.FC = () => {
 
       {/* Low stock alert panel */}
       {stats && stats.lowStockProducts.length > 0 && (
-        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-50/60 p-4 dark:bg-amber-500/10">
+        <div className="mb-6 rounded-xl bg-amber-50/60 p-4 dark:bg-amber-500/10">
           <div className="mb-3 flex items-center gap-2">
             <Warning
               fontSize="small"
@@ -392,8 +389,8 @@ const InventoryPage: React.FC = () => {
       )}
 
       {/* Table / Cards wrapper */}
-      <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+      <div className="min-w-0 overflow-hidden rounded-xl bg-card text-card-foreground">
+        <div className="flex items-center justify-between px-5 py-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All inventory
@@ -431,7 +428,7 @@ const InventoryPage: React.FC = () => {
               <div className="w-full overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-border bg-muted/40">
+                    <tr className="bg-muted/40">
                       <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Product
                       </th>
@@ -455,7 +452,7 @@ const InventoryPage: React.FC = () => {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody className="divide-y divide-border/60">
                     {products.map((prod) => {
                       const isEditing = editingProduct === prod._id;
                       return (
@@ -547,7 +544,7 @@ const InventoryPage: React.FC = () => {
                                 <button
                                   onClick={handleCancel}
                                   disabled={saving}
-                                  className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                                  className="rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   Cancel
                                 </button>
@@ -556,7 +553,7 @@ const InventoryPage: React.FC = () => {
                               <button
                                 onClick={() => handleEdit(prod)}
                                 aria-label={`Edit inventory for ${prod.productName}`}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
                               >
                                 <Edit fontSize="small" />
                               </button>
@@ -571,7 +568,7 @@ const InventoryPage: React.FC = () => {
             </div>
 
             {/* ---------------- MOBILE CARDS ---------------- */}
-            <ul className="divide-y divide-border md:hidden">
+            <ul className="divide-y divide-border/60 md:hidden">
               {products.map((prod) => {
                 const isEditing = editingProduct === prod._id;
                 return (
@@ -589,7 +586,7 @@ const InventoryPage: React.FC = () => {
                         <button
                           onClick={() => handleEdit(prod)}
                           aria-label={`Edit inventory for ${prod.productName}`}
-                          className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                          className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
                         >
                           <Edit fontSize="small" />
                         </button>
@@ -648,7 +645,7 @@ const InventoryPage: React.FC = () => {
                           <button
                             onClick={handleCancel}
                             disabled={saving}
-                            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Cancel
                           </button>

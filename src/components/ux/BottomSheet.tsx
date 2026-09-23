@@ -48,7 +48,7 @@ export const BottomSheet = ({
               leaveFrom="translate-y-0"
               leaveTo="translate-y-full"
             >
-              <Dialog.Panel className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-border bg-card shadow-xl">
+              <Dialog.Panel className="w-full max-w-xl max-h-[85vh] rounded-t-2xl border-t border-border bg-card shadow-xl">
                 {/* Drag handle */}
                 <div className="pt-3 pb-1 flex justify-center">
                   <div className="h-1.5 w-12 rounded-full bg-muted-foreground/30" />
@@ -68,7 +68,7 @@ export const BottomSheet = ({
                   </button>
                 </div>
 
-                <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] h-full  overflow-y-auto">
                   {children}
                 </div>
               </Dialog.Panel>

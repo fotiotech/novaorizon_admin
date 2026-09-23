@@ -1,3 +1,4 @@
+// app/catalog/categories/_component/CategoryList.tsx
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -338,7 +339,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
     : listRowsFiltered.length;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+    <div className="overflow-hidden rounded-xl bg-card text-card-foreground">
       <style>{`
         @keyframes browseIn {
           from { opacity: 0; transform: translateX(16px); }
@@ -371,7 +372,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
       `}</style>
 
       {/* Card header */}
-      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+      <div className="flex items-center justify-between px-5 py-4">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
           {displayCount > 0 && (
@@ -384,7 +385,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
 
       {/* Breadcrumbs (browse mode only, hidden while searching) */}
       {browseMode && !isSearching && breadcrumbItems.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1 border-b border-border px-5 py-2.5 text-sm">
+        <div className="flex flex-wrap items-center gap-1 px-5 py-2.5 text-sm">
           {breadcrumbItems.map((item, idx) => {
             const isLast = idx === breadcrumbItems.length - 1;
             return (
@@ -416,7 +417,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
 
       {/* Search-results banner (browse mode while searching) */}
       {browseMode && isSearching && (
-        <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-5 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 bg-muted/30 px-5 py-2 text-xs text-muted-foreground">
           <Search fontSize="small" />
           <span>
             Searching all categories —{" "}
@@ -433,7 +434,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
       )}
 
       {showFilter && !hideFilter && (
-        <div className="border-b border-border p-3">
+        <div className="p-3">
           <div className="relative">
             <Search
               fontSize="small"
@@ -444,7 +445,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
               placeholder={filterPlaceholder}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 pl-9 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 pl-9 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
             />
           </div>
         </div>
@@ -480,7 +481,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border bg-muted/40">
+                <tr className="bg-muted/40">
                   <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Category
                   </th>
@@ -495,7 +496,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border/60">
                 {rowsToRender.map((row) => {
                   const hasChildren = hasChildrenById(row._id);
                   const own = asPropertyRef(row.property);

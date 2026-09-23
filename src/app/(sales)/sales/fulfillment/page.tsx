@@ -207,7 +207,7 @@ export default function CarrierListPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+    <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       {/* -------------------------------------------------------------- */}
       {/* Controls — no title (top bar renders the page name)            */}
       {/* -------------------------------------------------------------- */}

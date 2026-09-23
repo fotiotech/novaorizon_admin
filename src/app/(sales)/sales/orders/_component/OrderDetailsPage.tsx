@@ -5,78 +5,138 @@ import InvoiceDisplay from "@/components/InvoiceDisplay";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { memo } from "react";
+import { ArrowBack, Inventory2, Receipt, OpenInNew } from "@mui/icons-material";
 
 interface OrderDetailsClientProps {
-  order: any; // Replace with your actual Order type
+  order: any;
 }
 
-export default function OrderDetailsClient({ order }: OrderDetailsClientProps) {
-  const router = useRouter();
+/* ------------------------------------------------------------------ */
+/* Badge styles — mirror the list page                                 */
+/* ------------------------------------------------------------------ */
+const statusStyles: Record<string, string> = {
+  completed:
+    "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+  processing:
+    "bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/20",
+  shipped:
+    "bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:ring-indigo-500/20",
+  "in transit":
+    "bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-500/20",
+  pending:
+    "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
+  cancelled:
+    "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+  return_requested:
+    "bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-400 dark:ring-orange-500/20",
+  returned:
+    "bg-slate-100 text-slate-700 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
+};
 
+const paymentStyles: Record<string, string> = {
+  paid: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+  cod_pending:
+    "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20",
+  pending:
+    "bg-slate-100 text-slate-700 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20",
+  failed:
+    "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+  cancelled:
+    "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+  refunded:
+    "bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-500/20",
+};
+
+const Badge = memo(function Badge({
+  status,
+  map,
+}: {
+  status: string;
+  map: Record<string, string>;
+}) {
+  const key = status?.toLowerCase() ?? "";
+  const cls = map[key] ?? map.pending;
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
-      {/* Back button */}
-      <button
-        onClick={() => router.back()}
-        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        ← Back to orders
-      </button>
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${cls}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {status?.replace(/_/g, " ") || "—"}
+    </span>
+  );
+});
 
+/* ------------------------------------------------------------------ */
+/* Pure content — used by both the popup and the standalone page.      */
+/* No outer padding, no navigation chrome.                             */
+/* ------------------------------------------------------------------ */
+export const OrderDetailsContent = memo(function OrderDetailsContent({
+  order,
+  actions,
+}: {
+  order: any;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
       {/* Order Header */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-foreground">
+      <header className="flex flex-wrap items-center gap-3">
+        <h2 className="text-xl font-semibold tracking-tight text-foreground">
           Order #{order.orderNumber}
-        </h1>
-        <span
-          className={`px-3 py-1 rounded-full text-sm font-semibold ${
-            order.paymentStatus === "paid"
-              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-          }`}
-        >
-          {order.paymentStatus}
-        </span>
-      </div>
+        </h2>
+        <Badge status={order.orderStatus} map={statusStyles} />
+        <Badge status={order.paymentStatus} map={paymentStyles} />
+      </header>
 
       {/* Order Info Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-card border border-border rounded-lg p-6">
-        <div>
-          <h2 className="text-sm font-medium text-muted-foreground">
-            Order Date
-          </h2>
-          <p className="text-foreground">
-            {new Date(order.createdAt).toLocaleString()}
-          </p>
+      <section className="rounded-lg bg-muted/40 p-4">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              Order date
+            </p>
+            <p className="mt-1 text-sm text-foreground">
+              {new Date(order.createdAt).toLocaleString()}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              Status
+            </p>
+            <p className="mt-1 text-sm capitalize text-foreground">
+              {order.orderStatus?.replace(/_/g, " ") || "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              Customer
+            </p>
+            <p className="mt-1 truncate text-sm font-medium text-foreground">
+              {order.firstName} {order.lastName}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {order.email}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              Total
+            </p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+              <Prices amount={order.total} />
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-sm font-medium text-muted-foreground">Status</h2>
-          <p className="text-foreground capitalize">{order.orderStatus}</p>
-        </div>
-        <div>
-          <h2 className="text-sm font-medium text-muted-foreground">
-            Customer
-          </h2>
-          <p className="text-foreground">
-            {order.firstName} {order.lastName}
-          </p>
-          <p className="text-sm text-muted-foreground">{order.email}</p>
-        </div>
-        <div>
-          <h2 className="text-sm font-medium text-muted-foreground">Total</h2>
-          <p className="text-2xl font-bold text-foreground">
-            <Prices amount={order.total} />
-          </p>
-        </div>
-      </div>
+      </section>
 
       {/* Shipping & Billing */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">
-            Shipping Address
-          </h2>
-          <p className="text-foreground">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <section className="rounded-lg bg-muted/40 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">
+            Shipping address
+          </h3>
+          <p className="text-sm leading-relaxed text-foreground">
             {order.shippingAddress?.street}
             <br />
             {order.shippingAddress?.city},{" "}
@@ -85,12 +145,12 @@ export default function OrderDetailsClient({ order }: OrderDetailsClientProps) {
             <br />
             {order.shippingAddress?.country}
           </p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">
-            Billing Address
-          </h2>
-          <p className="text-foreground">
+        </section>
+        <section className="rounded-lg bg-muted/40 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">
+            Billing address
+          </h3>
+          <p className="text-sm leading-relaxed text-foreground">
             {order.billingAddress?.street}
             <br />
             {order.billingAddress?.city},{" "}
@@ -99,89 +159,137 @@ export default function OrderDetailsClient({ order }: OrderDetailsClientProps) {
             <br />
             {order.billingAddress?.country}
           </p>
-        </div>
+        </section>
       </div>
 
-      {/* Products */}
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Products</h2>
-        <ul className="divide-y divide-border">
-          {order.products.map((item: any) => (
-            <li key={item.productId?.toString()} className="py-4 flex gap-4">
-              {item.main_image && (
-                <Image
-                  src={item.main_image}
-                  alt={item.name}
-                  width={80}
-                  height={80}
-                  className="rounded-lg object-cover"
-                />
-              )}
-              <div className="flex-1">
-                <p className="font-medium text-foreground">{item.name}</p>
-                <p className="text-sm text-muted-foreground">
+      {/* Products + Totals */}
+      <section className="rounded-lg bg-muted/40 p-4">
+        <h3 className="mb-3 text-sm font-semibold text-foreground">Products</h3>
+        <ul className="divide-y divide-border/60">
+          {order.products?.map((item: any) => (
+            <li
+              key={item.productId?.toString() ?? item._id}
+              className="flex gap-3 py-3 first:pt-0"
+            >
+              <div className="flex h-14 w-14 flex-none items-center justify-center overflow-hidden rounded-lg bg-background">
+                {item.main_image ? (
+                  <Image
+                    src={item.main_image}
+                    alt={item.name}
+                    width={56}
+                    height={56}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <Inventory2
+                    fontSize="small"
+                    className="text-muted-foreground"
+                  />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {item.name}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   Qty: {item.quantity} × <Prices amount={item.price} />
                 </p>
-                <p className="text-sm font-semibold text-foreground mt-1">
-                  Subtotal: <Prices amount={item.price * item.quantity} />
+                <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">
+                  <Prices amount={item.price * item.quantity} />
                 </p>
               </div>
             </li>
           ))}
         </ul>
-        <div className="border-t border-border pt-4 mt-4 flex justify-between text-foreground">
-          <span>Subtotal</span>
-          <span>
-            <Prices amount={order.subtotal || order.total} />
-          </span>
-        </div>
-        {order.discount > 0 && (
-          <div className="flex justify-between text-muted-foreground text-sm">
-            <span>Discount</span>
-            <span>
-              -<Prices amount={order.discount} />
-            </span>
+
+        {/* Totals */}
+        <dl className="mt-4 space-y-1.5 border-t border-border/60 pt-4 text-sm">
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">Subtotal</dt>
+            <dd className="tabular-nums text-foreground">
+              <Prices amount={order.subtotal || order.total} />
+            </dd>
           </div>
-        )}
-        {order.shippingCost > 0 && (
-          <div className="flex justify-between text-muted-foreground text-sm">
-            <span>Shipping</span>
-            <span>
-              <Prices amount={order.shippingCost} />
-            </span>
+          {order.discount > 0 && (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Discount</dt>
+              <dd className="tabular-nums text-emerald-600 dark:text-emerald-400">
+                -<Prices amount={order.discount} />
+              </dd>
+            </div>
+          )}
+          {order.shippingCost > 0 && (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Shipping</dt>
+              <dd className="tabular-nums text-foreground">
+                <Prices amount={order.shippingCost} />
+              </dd>
+            </div>
+          )}
+          {order.tax > 0 && (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Tax</dt>
+              <dd className="tabular-nums text-foreground">
+                <Prices amount={order.tax} />
+              </dd>
+            </div>
+          )}
+          <div className="flex justify-between border-t border-border/60 pt-3 text-base font-semibold">
+            <dt className="text-foreground">Total</dt>
+            <dd className="tabular-nums text-foreground">
+              <Prices amount={order.total} />
+            </dd>
           </div>
-        )}
-        {order.tax > 0 && (
-          <div className="flex justify-between text-muted-foreground text-sm">
-            <span>Tax</span>
-            <span>
-              <Prices amount={order.tax} />
-            </span>
-          </div>
-        )}
-        <div className="flex justify-between text-lg font-bold text-foreground border-t border-border pt-4 mt-4">
-          <span>Total</span>
-          <span>
-            <Prices amount={order.total} />
-          </span>
-        </div>
-      </div>
+        </dl>
+      </section>
 
       {/* Invoice */}
       {order.paymentStatus === "paid" && (
-        <InvoiceDisplay orderNumber={order.orderNumber} />
+        <section className="rounded-lg bg-muted/40 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Receipt fontSize="small" className="text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Invoice</h3>
+          </div>
+          <InvoiceDisplay orderNumber={order.orderNumber} />
+        </section>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-4">
-        <Link
-          href="/sales/orders"
-          className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
-        >
-          Back to All Orders
-        </Link>
-        {/* Additional actions like invoice, etc. can go here */}
-      </div>
+      {actions ? (
+        <div className="flex flex-wrap gap-2 pt-1">{actions}</div>
+      ) : null}
+    </div>
+  );
+});
+OrderDetailsContent.displayName = "OrderDetailsContent";
+
+/* ------------------------------------------------------------------ */
+/* Standalone page wrapper — used at /sales/orders/[orderNumber]      */
+/* ------------------------------------------------------------------ */
+export default function OrderDetailsClient({ order }: OrderDetailsClientProps) {
+  const router = useRouter();
+
+  return (
+    <div className="mx-auto w-full max-w-4xl overflow-x-clip">
+      <button
+        onClick={() => router.back()}
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+      >
+        <ArrowBack sx={{ fontSize: 16 }} />
+        Back to orders
+      </button>
+
+      <OrderDetailsContent
+        order={order}
+        actions={
+          <Link
+            href="/sales/orders"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
+          >
+            <ArrowBack sx={{ fontSize: 16 }} />
+            Back to all orders
+          </Link>
+        }
+      />
     </div>
   );
 }

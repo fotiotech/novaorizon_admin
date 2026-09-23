@@ -13,6 +13,7 @@ import {
   Edit,
   MoreVert,
   SearchOff,
+  OpenInNew,
 } from "@mui/icons-material";
 import Link from "next/link";
 import React, { useEffect, useState, useCallback, useMemo, memo } from "react";
@@ -23,6 +24,7 @@ import { Modal } from "@/components/ux/Modal";
 import { BottomSheet } from "@/components/ux/BottomSheet";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 import { useUnreadOrderNotifications } from "@/app/(dashboard)/dashboard/notifications/_component/hooks/useUnreadOrderNotifications";
+import { OrderDetailsContent } from "./_component/OrderDetailsPage";
 
 type OrderStatus =
   | "pending"
@@ -150,8 +152,26 @@ function formatDate(iso: string | Date): string {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* isMobile — swaps Modal ↔ BottomSheet for the details popup         */
+/* ------------------------------------------------------------------ */
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 const AllOrderPage = () => {
   const { markAllRead } = useUnreadOrderNotifications();
+  const isMobile = useIsMobile();
+
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -169,6 +189,11 @@ const AllOrderPage = () => {
   const [selectedNewStatus, setSelectedNewStatus] =
     useState<OrderStatus>("pending");
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  /* Order details popup state */
+  const [viewOrderNumber, setViewOrderNumber] = useState<string | null>(null);
+  const [viewOrderData, setViewOrderData] = useState<any | null>(null);
+  const [viewOrderLoading, setViewOrderLoading] = useState(false);
 
   const [filters, setFilters] = useState<FilterOptions>({
     search: "",
@@ -279,6 +304,29 @@ const AllOrderPage = () => {
     }
   };
 
+  /* ---------- Order details popup ---------- */
+  const openOrderDetails = async (orderNumber: string) => {
+    setViewOrderNumber(orderNumber);
+    setViewOrderData(null);
+    setViewOrderLoading(true);
+    try {
+      const res = await findOrders({ orderNumber, limit: 1 });
+      const fullOrder = res && "orders" in res ? res.orders?.[0] : null;
+      setViewOrderData(fullOrder ?? null);
+    } catch (err) {
+      console.error("Failed to load order details:", err);
+      setViewOrderData(null);
+    } finally {
+      setViewOrderLoading(false);
+    }
+  };
+
+  const closeOrderDetails = () => {
+    setViewOrderNumber(null);
+    setViewOrderData(null);
+    setViewOrderLoading(false);
+  };
+
   const goToPage = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
@@ -311,7 +359,7 @@ const AllOrderPage = () => {
       key: "view",
       label: "View details",
       icon: <Visibility fontSize="small" />,
-      href: `/sales/orders/${order.orderNumber}`,
+      onClick: () => openOrderDetails(order.orderNumber),
     },
     {
       key: "status",
@@ -335,14 +383,36 @@ const AllOrderPage = () => {
 
   const hasActiveFilters = activeFilterCount > 0;
 
+  const detailsActions = viewOrderData ? (
+    <Link
+      href={`/sales/orders/${viewOrderData.orderNumber}`}
+      className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
+    >
+      <OpenInNew sx={{ fontSize: 16 }} />
+      Open full page
+    </Link>
+  ) : null;
+
+  const detailsBody = viewOrderLoading ? (
+    <div className="flex items-center justify-center py-16">
+      <span className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+    </div>
+  ) : viewOrderData ? (
+    <OrderDetailsContent order={viewOrderData} actions={detailsActions} />
+  ) : (
+    <p className="py-8 text-center text-sm text-muted-foreground">
+      Failed to load order details.
+    </p>
+  );
+
   return (
-    <div className="w-full max-w-7xl overflow-x-clip">
+    <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       {/* Mobile filters trigger — only visible below md */}
       <div className="mb-4 flex md:hidden">
         <button
           type="button"
           onClick={() => setIsMobileFiltersOpen(true)}
-          className="relative inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+          className="relative inline-flex items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
           aria-label="Open filters"
         >
           <FilterList fontSize="small" />
@@ -375,12 +445,12 @@ const AllOrderPage = () => {
             onFilterChange={handleFilterChange}
             initialFilters={filters}
           />
-          <div className="flex items-center gap-2 border-t border-border pt-2">
+          <div className="flex items-center gap-2 pt-2">
             <button
               type="button"
               onClick={handleClearFilters}
               disabled={activeFilterCount === 0}
-              className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-xl bg-muted px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Clear all
             </button>
@@ -396,9 +466,9 @@ const AllOrderPage = () => {
       </BottomSheet>
 
       {/* Card */}
-      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
+      <div className="min-w-0 overflow-hidden rounded-lg bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All orders
@@ -431,7 +501,7 @@ const AllOrderPage = () => {
                 <col style={{ width: "12%" }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-border bg-muted/40">
+                <tr className="bg-muted/40">
                   <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Order
                   </th>
@@ -455,7 +525,7 @@ const AllOrderPage = () => {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border/60">
                 {orders.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
@@ -469,12 +539,13 @@ const AllOrderPage = () => {
                       className="group transition-colors hover:bg-muted/40"
                     >
                       <td className="px-4 py-3">
-                        <Link
-                          href={`/sales/orders/${order.orderNumber}`}
-                          className="block truncate font-medium text-foreground transition hover:text-primary"
+                        <button
+                          type="button"
+                          onClick={() => openOrderDetails(order.orderNumber)}
+                          className="block max-w-full truncate text-left font-medium text-foreground transition hover:text-primary"
                         >
                           #{order.orderNumber}
-                        </Link>
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -534,18 +605,19 @@ const AllOrderPage = () => {
           {orders.length === 0 ? (
             <EmptyState hasActiveFilters={hasActiveFilters} />
           ) : (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/60">
               {orders.map((order: any) => (
                 <li key={order._id} className="p-4">
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-3">
-                        <Link
-                          href={`/sales/orders/${order.orderNumber}`}
-                          className="truncate font-medium text-foreground transition hover:text-primary"
+                        <button
+                          type="button"
+                          onClick={() => openOrderDetails(order.orderNumber)}
+                          className="truncate text-left font-medium text-foreground transition hover:text-primary"
                         >
                           #{order.orderNumber}
-                        </Link>
+                        </button>
                         <span className="shrink-0 text-sm font-semibold text-foreground">
                           CFA {order.total?.toFixed(2) || "0.00"}
                         </span>
@@ -592,7 +664,7 @@ const AllOrderPage = () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-4 border-t border-border px-4 py-2.5">
+          <div className="flex items-center justify-between gap-4 px-4 py-2.5">
             <p className="text-xs text-muted-foreground">
               Showing{" "}
               <span className="font-medium text-foreground">
@@ -606,7 +678,7 @@ const AllOrderPage = () => {
               <button
                 onClick={() => goToPage(page - 1)}
                 disabled={page === 1}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Previous
               </button>
@@ -617,7 +689,7 @@ const AllOrderPage = () => {
               <button
                 onClick={() => goToPage(page + 1)}
                 disabled={page === totalPages}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next
               </button>
@@ -625,6 +697,30 @@ const AllOrderPage = () => {
           </div>
         )}
       </div>
+
+      {/* Order details popup — Modal on desktop, BottomSheet on mobile */}
+      {isMobile ? (
+        <BottomSheet
+          isOpen={!!viewOrderNumber}
+          onClose={closeOrderDetails}
+          title={
+            viewOrderNumber ? `Order #${viewOrderNumber}` : "Order details"
+          }
+        >
+          {detailsBody}
+        </BottomSheet>
+      ) : (
+        <Modal
+          isOpen={!!viewOrderNumber}
+          onClose={closeOrderDetails}
+          title={
+            viewOrderNumber ? `Order #${viewOrderNumber}` : "Order details"
+          }
+          size="xl"
+        >
+          {detailsBody}
+        </Modal>
+      )}
 
       {/* Delete confirmation */}
       <ConfirmDialog
@@ -680,7 +776,7 @@ const AllOrderPage = () => {
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+              className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
               onClick={() => setIsStatusModalOpen(false)}
               disabled={updatingStatus}
             >

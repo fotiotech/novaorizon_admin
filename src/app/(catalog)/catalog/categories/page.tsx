@@ -234,7 +234,7 @@ const Categories = () => {
   );
 
   return (
-    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+    <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       <Toaster position="top-right" richColors />
 
       {/* -------------------------------------------------------------- */}
@@ -246,7 +246,7 @@ const Categories = () => {
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+            className="relative inline-flex items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
@@ -262,7 +262,7 @@ const Categories = () => {
             type="button"
             onClick={handleToggleMode}
             aria-pressed={!browseMode}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
           >
             {browseMode ? (
               <>
@@ -279,7 +279,7 @@ const Categories = () => {
 
           <Link
             href="/catalog/categories/property"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
           >
             Properties
           </Link>
@@ -302,7 +302,7 @@ const Categories = () => {
             onClick={handleToggleMode}
             aria-pressed={!browseMode}
             title={browseMode ? "Switch to list view" : "Switch to browse view"}
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
           >
             {browseMode ? (
               <>
@@ -319,7 +319,7 @@ const Categories = () => {
 
           <Link
             href="/catalog/categories/property"
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
           >
             Properties
           </Link>
@@ -336,7 +336,7 @@ const Categories = () => {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <span>
             <strong className="font-medium">Error:</strong> {error}
           </span>
@@ -364,12 +364,12 @@ const Categories = () => {
             {filterInputEl}
           </div>
 
-          <div className="flex items-center gap-2 border-t border-border pt-2">
+          <div className="flex items-center gap-2 pt-2">
             <button
               type="button"
               onClick={() => setFilterText("")}
               disabled={!hasActiveFilters}
-              className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-xl bg-muted px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Clear
             </button>
@@ -386,11 +386,11 @@ const Categories = () => {
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="border-b border-border px-4 py-3">
+        <div className="overflow-hidden rounded-lg bg-card">
+          <div className="px-4 py-3">
             <div className="h-5 w-32 animate-pulse rounded bg-muted" />
           </div>
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-border/60">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-4 px-4 py-3">
                 <div className="h-9 w-9 flex-none animate-pulse rounded-lg bg-muted" />

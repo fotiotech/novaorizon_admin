@@ -313,7 +313,7 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({
   // -----------------------------------------------------------------
   if (loading) {
     return (
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="mx-auto w-full max-w-6xl overflow-x-clip rounded-xl border border-border bg-card">
         <div className="border-b border-border px-5 py-4">
           <div className="h-5 w-32 animate-pulse rounded bg-muted" />
         </div>
@@ -337,7 +337,7 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({
   const selectedCategory = categories.find((c) => c._id === selectedId);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+    <div className="mx-auto w-full max-w-4xl overflow-x-clip rounded-xl border border-border bg-card">
       {/* Keyframes + animation classes */}
       <style>{`
         @keyframes browseIn {

@@ -183,7 +183,7 @@ const EmptyState = memo(function EmptyState({
         {hasActiveFilters ? (
           <button
             onClick={onClearFilters}
-            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+            className="rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/80"
           >
             Clear filters
           </button>
@@ -673,12 +673,12 @@ export default function ProductsPage() {
 
   if (showSkeleton) {
     return (
-      <div className="w-full max-w-7xl overflow-x-clip">
+      <div className="mx-auto w-full max-w-6xl overflow-x-clip">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="h-7 w-32 animate-pulse rounded bg-muted" />
           <div className="h-9 w-64 animate-pulse rounded bg-muted" />
         </div>
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="overflow-hidden rounded-lg bg-card">
           <div className="space-y-4 p-6">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-4">
@@ -699,12 +699,12 @@ export default function ProductsPage() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
             onClick={() => void fetchProducts()}
-            className="mt-4 rounded-lg border border-destructive/40 px-4 py-1.5 text-sm font-medium transition hover:bg-destructive/10"
+            className="mt-4 rounded-lg bg-destructive/15 px-4 py-1.5 text-sm font-medium transition hover:bg-destructive/25"
           >
             Retry
           </button>
@@ -714,7 +714,7 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="w-full max-w-7xl overflow-x-clip">
+    <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       {/* -------------------------------------------------------------- */}
       {/* Header — inline on desktop: title · search · filters · action  */}
       {/* -------------------------------------------------------------- */}
@@ -724,7 +724,7 @@ export default function ProductsPage() {
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
@@ -775,7 +775,7 @@ export default function ProductsPage() {
 
       {/* Draft banner */}
       {draftSummary && (
-        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-50/60 p-3.5 sm:flex-row sm:items-center sm:justify-between dark:bg-amber-500/10">
+        <div className="mb-4 flex flex-col gap-3 rounded-lg bg-amber-50/60 p-3.5 sm:flex-row sm:items-center sm:justify-between dark:bg-amber-500/10">
           <div className="flex min-w-0 items-start gap-3">
             <EditNote className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
             <div className="min-w-0">
@@ -799,7 +799,7 @@ export default function ProductsPage() {
               type="button"
               onClick={handleDiscardDraft}
               disabled={isDiscardingDraft}
-              className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-muted px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isDiscardingDraft ? "Discarding…" : "Discard"}
             </button>
@@ -841,12 +841,12 @@ export default function ProductsPage() {
             {statusSelectEl}
           </div>
 
-          <div className="flex items-center gap-2 border-t border-border pt-2">
+          <div className="flex items-center gap-2 pt-2">
             <button
               type="button"
               onClick={handleClearFilters}
               disabled={!hasActiveFilters}
-              className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-xl bg-muted px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Clear all
             </button>
@@ -862,9 +862,9 @@ export default function ProductsPage() {
       </BottomSheet>
 
       {/* Card */}
-      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
+      <div className="min-w-0 overflow-hidden rounded-lg bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All products
@@ -896,7 +896,7 @@ export default function ProductsPage() {
                 <col style={{ width: "6%" }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-border bg-muted/40">
+                <tr className="bg-muted/40">
                   <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Product
                   </th>
@@ -917,7 +917,7 @@ export default function ProductsPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border/60">
                 {products.length === 0 ? (
                   <tr>
                     <td colSpan={6}>
@@ -1031,7 +1031,7 @@ export default function ProductsPage() {
               />
             )
           ) : (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/60">
               {products.map((product) => (
                 <li key={product._id} className="p-4">
                   <div className="flex items-start gap-3">
@@ -1102,7 +1102,7 @@ export default function ProductsPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-4 border-t border-border px-4 py-2.5">
+          <div className="flex items-center justify-between gap-4 px-4 py-2.5">
             <p className="text-xs text-muted-foreground">
               Showing{" "}
               <span className="font-medium text-foreground">
@@ -1115,7 +1115,7 @@ export default function ProductsPage() {
               <button
                 onClick={() => goToPage(page - 1)}
                 disabled={page === 1 || loading}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Previous
               </button>
@@ -1126,7 +1126,7 @@ export default function ProductsPage() {
               <button
                 onClick={() => goToPage(page + 1)}
                 disabled={page === totalPages || loading}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next
               </button>
@@ -1174,7 +1174,7 @@ export default function ProductsPage() {
           aria-modal="true"
         >
           <div
-            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
+            className="w-full rounded-t-2xl bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight">
@@ -1212,7 +1212,7 @@ export default function ProductsPage() {
                 type="button"
                 onClick={() => setCategoryTarget(null)}
                 disabled={isSavingCategory}
-                className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -1240,7 +1240,7 @@ export default function ProductsPage() {
           aria-modal="true"
         >
           <div
-            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
+            className="w-full rounded-t-2xl bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight">
@@ -1274,7 +1274,7 @@ export default function ProductsPage() {
                 type="button"
                 onClick={() => setStatusTarget(null)}
                 disabled={isSavingStatus}
-                className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -1302,7 +1302,7 @@ export default function ProductsPage() {
           aria-modal="true"
         >
           <div
-            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
+            className="w-full rounded-t-2xl bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight">
@@ -1336,7 +1336,7 @@ export default function ProductsPage() {
                 type="button"
                 onClick={() => setQuantityTarget(null)}
                 disabled={isSavingQuantity}
-                className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>

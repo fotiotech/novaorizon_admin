@@ -1,3 +1,4 @@
+// app/(catalog)/catalog/products/component/Fields.tsx
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback, memo } from "react";
@@ -66,30 +67,37 @@ interface FieldProps {
 }
 
 const INPUT_CLASS =
-  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50";
+  "w-full rounded-lg border border-gray-300 bg-background px-3.5 py-2.5 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600";
 const LABEL_CLASS = "mb-1.5 block text-xs font-medium text-muted-foreground";
-const CHECK_BORDER = "border-input";
+const CHECK_BORDER = "border-gray-300 dark:border-gray-600";
 const CHECK_BG = "bg-primary border-primary";
+
+// Gray border shared between both color modes for react-select.
+// (react-select styles are plain JS objects, so we can't rely on the
+// `dark:` variant here — a mid-gray reads well on both surfaces.)
+const RS_BORDER_GRAY = "hsl(0 0% 70%)";
 
 const customSelectStyles = {
   control: (provided: any, state: any) => ({
     ...provided,
     backgroundColor: "hsl(var(--background))",
-    borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--input))",
+    borderColor: state.isFocused ? "hsl(var(--ring))" : RS_BORDER_GRAY,
+    borderWidth: "1px",
     borderRadius: "0.5rem",
     boxShadow: state.isFocused ? "0 0 0 2px hsl(var(--ring) / 0.25)" : "none",
-    minHeight: "38px",
+    minHeight: "42px",
     fontSize: "0.875rem",
     transition: "border-color 150ms ease, box-shadow 150ms ease",
     "&:hover": {
-      borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--border))",
+      borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(0 0% 55%)",
     },
   }),
+  valueContainer: (p: any) => ({ ...p, padding: "4px 12px" }),
   menu: (provided: any) => ({
     ...provided,
     backgroundColor: "hsl(var(--popover))",
     color: "hsl(var(--popover-foreground))",
-    border: "1px solid hsl(var(--border))",
+    border: `1px solid ${RS_BORDER_GRAY}`,
     borderRadius: "0.5rem",
     overflow: "hidden",
     boxShadow: "0 8px 24px hsl(var(--foreground) / 0.08)",
@@ -133,7 +141,7 @@ const customSelectStyles = {
   }),
   indicatorSeparator: (p: any) => ({
     ...p,
-    backgroundColor: "hsl(var(--border))",
+    backgroundColor: RS_BORDER_GRAY,
   }),
   dropdownIndicator: (p: any) => ({
     ...p,
@@ -227,7 +235,7 @@ const DescriptionField: React.FC<{
         <button
           type="button"
           onClick={() => setIsSheetOpen(true)}
-          className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-left text-sm shadow-sm transition hover:bg-muted/40 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+          className="w-full rounded-lg border border-gray-300 bg-background px-3.5 py-2.5 text-left text-sm shadow-sm transition hover:bg-muted/40 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 dark:border-gray-600"
         >
           {previewText ? (
             <span className="line-clamp-3 text-foreground">{previewText}</span>
@@ -244,13 +252,6 @@ const DescriptionField: React.FC<{
           title={name || "Description"}
           height="85vh"
         >
-          {/*
-            Sheet body is a flex column with a bounded height:
-            - Editor cell: min-h-0 flex-1 → eats every pixel above
-              the Done row, and the editor's `fillContainer` mode
-              stretches to match.
-            - Done row: flex-none → natural height only.
-          */}
           <div className="flex h-full min-h-0 flex-col gap-3">
             <div className="min-h-0 flex-1">
               <RichTextEditorWrapper
@@ -520,7 +521,7 @@ const Fields: React.FC<FieldProps> = React.memo(
                           : "";
                     handleAttributeChange(code, newVal);
                   }}
-                  className="w-28"
+                  className="w-32"
                   classNamePrefix="react-select"
                   placeholder="Unit"
                   isClearable={!isRequired}
@@ -663,7 +664,7 @@ const Fields: React.FC<FieldProps> = React.memo(
                   }`}
                 />
                 <div
-                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full border border-border bg-background shadow-sm transition-transform ${
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full border border-gray-300 bg-background shadow-sm transition-transform dark:border-gray-600 ${
                     value ? "translate-x-5" : ""
                   }`}
                 />
@@ -730,7 +731,7 @@ const Fields: React.FC<FieldProps> = React.memo(
               <input
                 title="color"
                 type="color"
-                className="h-9 w-9 cursor-pointer rounded-lg border border-input bg-background p-0.5"
+                className="h-11 w-11 cursor-pointer rounded-lg border border-gray-300 bg-background p-1 dark:border-gray-600"
                 value={asString(field as StringFieldValue) || "#000000"}
                 onChange={(e) => handleAttributeChange(code, e.target.value)}
                 required={isRequired}

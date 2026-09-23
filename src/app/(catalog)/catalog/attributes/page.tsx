@@ -302,7 +302,7 @@ const Attributes = () => {
           <div className="h-9 w-64 animate-pulse rounded bg-muted" />
           <div className="h-9 w-32 animate-pulse rounded bg-muted" />
         </div>
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="overflow-hidden rounded-lg bg-card">
           <div className="space-y-3 p-5">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-4">
@@ -361,7 +361,7 @@ const Attributes = () => {
           <button
             type="button"
             onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
             aria-label="Open filters"
           >
             <FilterList fontSize="small" />
@@ -409,7 +409,7 @@ const Attributes = () => {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <span>
             <strong className="font-medium">Error:</strong> {error}
           </span>
@@ -425,7 +425,7 @@ const Attributes = () => {
 
       {/* Success */}
       {success && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-emerald-50/60 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
           <span>
             <strong className="font-medium">Success:</strong> {success}
           </span>
@@ -460,12 +460,12 @@ const Attributes = () => {
             {sortSelectEl}
           </div>
 
-          <div className="flex items-center gap-2 border-t border-border pt-2">
+          <div className="flex items-center gap-2 pt-2">
             <button
               type="button"
               onClick={handleClearFilters}
               disabled={!hasActiveFilters}
-              className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-xl bg-muted px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Clear all
             </button>
@@ -481,9 +481,9 @@ const Attributes = () => {
       </BottomSheet>
 
       {/* Card */}
-      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
+      <div className="min-w-0 overflow-hidden rounded-lg bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All attributes
@@ -510,7 +510,7 @@ const Attributes = () => {
                 <col style={{ width: "6%" }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-border bg-muted/40">
+                <tr className="bg-muted/40">
                   <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Name
                   </th>
@@ -534,7 +534,7 @@ const Attributes = () => {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border/60">
                 {visibleAttributes.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
@@ -605,7 +605,7 @@ const Attributes = () => {
           {visibleAttributes.length === 0 ? (
             <EmptyState isFiltering={isFiltering} />
           ) : (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/60">
               {visibleAttributes.map((attr) => {
                 const optionsPreview = formatOptions(attr.option);
                 return (

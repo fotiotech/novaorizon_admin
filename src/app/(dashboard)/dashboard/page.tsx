@@ -115,8 +115,7 @@ const doughnutOptions: ChartOptions<"doughnut"> = {
 /*  Surface tokens                                                     */
 /* ------------------------------------------------------------------ */
 
-const surfaceClass =
-  "rounded-lg border border-border bg-card text-card-foreground";
+const surfaceClass = "rounded-lg bg-card text-card-foreground";
 
 /* ------------------------------------------------------------------ */
 /*  Chart wrapper with a centered value                                */
@@ -388,13 +387,10 @@ export default function AdminOverview() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+      <div className="mx-auto w-full max-w-6xl overflow-x-clip">
         <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="rounded-lg border border-border bg-card p-4"
-            >
+            <div key={i} className="rounded-lg bg-card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
                 <div className="h-3 w-16 animate-pulse rounded bg-muted" />
@@ -410,7 +406,7 @@ export default function AdminOverview() {
             </div>
           ))}
         </div>
-        <div className="rounded-lg border border-border bg-card">
+        <div className="rounded-lg bg-card">
           <div className="space-y-3 p-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-3">
@@ -431,7 +427,7 @@ export default function AdminOverview() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
         </div>
@@ -500,7 +496,7 @@ export default function AdminOverview() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl overflow-x-clip">
+    <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       <div className="flex flex-col gap-4">
         {/* Summary cards */}
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -577,7 +573,7 @@ export default function AdminOverview() {
 
         {/* Recent activity */}
         <section className={`${surfaceClass} overflow-hidden`}>
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-foreground">
                 Recent activity
@@ -593,7 +589,7 @@ export default function AdminOverview() {
           </div>
 
           {overviewData?.recentActivity?.length ? (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/60">
               {overviewData.recentActivity.map((activity, index) => {
                 const { Icon, classes } = activityMeta(activity.type);
                 return (
@@ -634,7 +630,7 @@ export default function AdminOverview() {
             <Link
               key={href}
               href={href}
-              className={`${surfaceClass} group flex items-center gap-3 p-4 transition-colors hover:border-primary/30 hover:bg-muted/40`}
+              className={`${surfaceClass} group flex items-center gap-3 p-4 transition-colors hover:bg-muted/40`}
             >
               <span
                 className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${classes}`}

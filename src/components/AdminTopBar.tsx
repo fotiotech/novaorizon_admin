@@ -132,17 +132,21 @@ const AdminTopBar = ({
   const hasMenu = siblingCount > 0;
 
   return (
-    <header className="relative z-40 flex items-center justify-between gap-2 bg-background/80 pl-1 pr-3 lg:px-4 py-2 backdrop-blur-sm">
+    <header className="relative z-40 flex items-center justify-between gap-2 bg-background/80 pl-1 pr-3 lg:px-4 py-2.5 backdrop-blur-sm">
       {/* Left: menu toggle + page title (dropdown if section has siblings) */}
       <div className="flex min-w-0 items-center gap-2">
-        <div className={screenSize >= 1024 ? "hidden" : ""}>
+        {/* Toggle shown on every screen size so the sidebar can be
+            reopened after being closed on large screens too. */}
+        <div>
           <button
             title="Toggle menu"
             type="button"
             onClick={() => setSideBarToggle((v) => !v)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+            aria-expanded={sideBarToggle}
+            aria-label="Toggle sidebar"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
-            <Menu sx={{ fontSize: 20 }} />
+            <Menu sx={{ fontSize: 22 }} />
           </button>
         </div>
 
@@ -158,18 +162,18 @@ const AdminTopBar = ({
                   titleOpen ? "bg-muted/60" : "hover:bg-muted/60"
                 }`}
               >
-                <h1 className="truncate text-base font-semibold text-foreground">
+                <h1 className="truncate text-lg font-semibold text-foreground">
                   {nav.current.name}
                 </h1>
                 <ExpandMore
-                  sx={{ fontSize: 18 }}
+                  sx={{ fontSize: 20 }}
                   className={`shrink-0 text-muted-foreground transition-transform duration-200 ${
                     titleOpen ? "rotate-180" : ""
                   }`}
                 />
               </button>
             ) : (
-              <h1 className="truncate text-base font-semibold text-foreground">
+              <h1 className="truncate text-lg font-semibold text-foreground">
                 {nav.current.name}
               </h1>
             )}
@@ -177,9 +181,9 @@ const AdminTopBar = ({
             {hasMenu && titleOpen && (
               <div
                 role="menu"
-                className="title-dropdown-enter absolute left-0 top-full z-[60] mt-2 w-56 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-lg"
+                className="title-dropdown-enter absolute left-0 top-full z-[60] mt-2 w-60 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-lg"
               >
-                <div className="border-b border-border/60 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                <div className="border-b border-border/60 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                   {nav.current.parentName ?? nav.current.sectionTitle}
                 </div>
 
@@ -196,14 +200,14 @@ const AdminTopBar = ({
                             setTitleOpen(false);
                           }}
                           aria-current={isCurrent ? "page" : undefined}
-                          className={`group flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-sm transition-colors ${
+                          className={`group flex w-full items-center gap-2.5 px-3 py-2 text-left text-[15px] transition-colors ${
                             isCurrent
                               ? "bg-primary/10 text-primary"
                               : "text-foreground/80 hover:bg-muted/60 hover:text-foreground"
                           }`}
                         >
                           {s.icon && (
-                            <span className="shrink-0 text-muted-foreground [&>svg]:text-base group-hover:text-foreground">
+                            <span className="shrink-0 text-muted-foreground [&>svg]:text-lg group-hover:text-foreground">
                               {s.icon}
                             </span>
                           )}
@@ -225,18 +229,18 @@ const AdminTopBar = ({
       </div>
 
       {/* Right cluster: theme + notifications */}
-      <div className="flex shrink-0 items-center gap-1.5">
-        <div className="flex h-9 items-center">
+      <div className="flex shrink-0 items-center gap-2">
+        <div className="flex h-10 items-center">
           <ThemeToggle />
         </div>
 
         <Link
           href="/dashboard/notifications"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+          className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
         >
-          <Notifications sx={{ fontSize: 20 }} />
+          <Notifications sx={{ fontSize: 22 }} />
           {unreadNotifications > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-semibold text-destructive-foreground">
               {unreadNotifications > 99 ? "99+" : unreadNotifications}
             </span>
           )}

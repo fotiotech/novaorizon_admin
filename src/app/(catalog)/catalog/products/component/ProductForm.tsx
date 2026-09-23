@@ -971,8 +971,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-4xl overflow-x-clip">
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="border-b border-border px-4 py-3">
+        <div className="overflow-hidden rounded-lg bg-card">
+          <div className="px-4 py-3">
             <div className="h-5 w-40 animate-pulse rounded bg-muted" />
           </div>
           <div className="space-y-3 p-4">
@@ -988,7 +988,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
   if (!productData.categoryId && !loading) {
     return (
       <div className="mx-auto w-full max-w-3xl overflow-x-clip">
-        <div className="rounded-lg border border-amber-500/30 bg-amber-50/60 p-4 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+        <div className="rounded-lg bg-amber-50/60 p-4 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
           Please select a category first to load product attributes.
         </div>
       </div>
@@ -999,13 +999,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const showVariantsToggle = hasVariantConfig && !isFetchingAttributes;
 
   return (
-    <div className="mx-auto w-full max-w-4xl overflow-x-clip">
+    <div className="mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-4xl flex-col overflow-x-clip">
       <form
         onSubmit={handleSubmit}
-        className="overflow-clip rounded-lg border border-border bg-card text-card-foreground"
+        className="flex flex-1 flex-col overflow-clip rounded-lg bg-card text-card-foreground"
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <h1 className="text-sm font-semibold text-foreground">
               {initialProductId ? "Edit product" : "New product"}
@@ -1045,9 +1045,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
         </div>
 
         {/* Body */}
-        <div className="px-4 py-5">
+        <div className="flex-1 px-4 py-5">
           {error && (
-            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-sm text-destructive">
+            <div className="mb-4 rounded-lg bg-destructive/10 p-3.5 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -1057,7 +1057,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
               <CircularProgress />
             </div>
           ) : renderSteps.length === 0 ? (
-            <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+            <div className="rounded-lg bg-muted/40 p-4 text-sm text-muted-foreground">
               {steps.length === 0
                 ? "No attribute sets mapped to this category."
                 : "No product fields are configured for this category."}
@@ -1121,14 +1121,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
           )}
         </div>
 
-        {/* Sticky action bar */}
-        <div className="sticky bottom-0 z-20 flex items-center justify-between gap-2 border-t border-border bg-card px-4 py-3">
+        {/* Sticky action bar — always pinned to the bottom */}
+        <div className="sticky bottom-0 z-20 mt-auto flex items-center justify-between gap-2 bg-card px-4 py-3">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCancelClick}
               disabled={isSubmitting}
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel
             </button>
@@ -1137,7 +1137,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 type="button"
                 onClick={handlePrev}
                 disabled={isSubmitting}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Previous
               </button>
