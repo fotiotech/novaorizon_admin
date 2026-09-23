@@ -202,7 +202,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     setDirection("forward");
     setPath([slug]);
     closeSearch();
-    handleClose();
   };
   const openChildren = (sectionSlug: string, href: string) => {
     setDirection("forward");
