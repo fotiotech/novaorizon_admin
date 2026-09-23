@@ -969,10 +969,12 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     return (
       <aside
         aria-hidden={!sideBarToggle}
-        className={`relative flex h-full shrink-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground shadow-sm transition-[width] duration-300 ease-out ${
+        className={`sticky top-0 flex h-screen shrink-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground shadow-sm transition-[width] duration-300 ease-out ${
           sideBarToggle ? "w-64" : "w-0"
         }`}
       >
+        {/* Inner wrapper keeps content at a fixed width so it doesn't
+            reflow while the outer element animates. */}
         <div className="flex h-full w-64 flex-col">{content}</div>
       </aside>
     );

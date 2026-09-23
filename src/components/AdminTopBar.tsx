@@ -132,11 +132,9 @@ const AdminTopBar = ({
   const hasMenu = siblingCount > 0;
 
   return (
-    <header className="relative z-40 flex items-center justify-between gap-2 bg-background/80 pl-1 pr-3 lg:px-4 py-2.5 backdrop-blur-sm">
+    <header className="sticky top-0 z-40 flex items-center justify-between gap-2 bg-background py-2.5 pl-1 pr-3  lg:px-4">
       {/* Left: menu toggle + page title (dropdown if section has siblings) */}
       <div className="flex min-w-0 items-center gap-2">
-        {/* Toggle shown on every screen size so the sidebar can be
-            reopened after being closed on large screens too. */}
         <div>
           <button
             title="Toggle menu"
