@@ -330,13 +330,15 @@ td {
   --chart-4: 0 72% 50%;
   --chart-5: 45 100% 50%;
 
-  --sidebar: 0 0% 98.5%;
+  /* Sidebar sits one notch off the pure-white background so it reads
+     as a distinct panel without a hard border seam. */
+  --sidebar: 0 0% 96%;
   --sidebar-foreground: 0 0% 9%;
   --sidebar-primary: 210 100% 50%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 0 0% 96%;
+  --sidebar-accent: 0 0% 92%;
   --sidebar-accent-foreground: 0 0% 9%;
-  --sidebar-border: 0 0% 90%;
+  --sidebar-border: 0 0% 88%;
   --sidebar-ring: 210 100% 50%;
 
   /* ---- Direct named colors (light) ---- */
@@ -365,12 +367,12 @@ td {
   --input: 0 0% 100%;
   --ring: var(--primary);
 
-  /* ---- Sidebar (dark) ---- */
+  /* ---- Sidebar (dark) — one notch deeper than background ---- */
   --sidebar: 233 31% 18%;
   --sidebar-foreground: 0 0% 98.5%;
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 233 31% 30%;
+  --sidebar-accent: 233 31% 26%;
   --sidebar-accent-foreground: 0 0% 98.5%;
   --sidebar-border: 233 31% 60%;
   --sidebar-ring: var(--primary);
