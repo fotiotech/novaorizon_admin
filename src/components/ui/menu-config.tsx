@@ -148,6 +148,19 @@ export const attributeLinks: MenuLink[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────
+// POS sub-tree — rendered as the `children` of Channels → POS so the
+// sidebar can drill in: Channels → POS → Dashboard / Sales / Products /
+// Customers / Reports.
+// ─────────────────────────────────────────────────────────────────────
+export const posLinks: MenuLink[] = [
+  { name: "Dashboard", href: "/channels/pos", icon: <Assessment /> },
+  { name: "Sales", href: "/sales/orders", icon: <ShoppingBag /> },
+  { name: "Products", href: "/catalog/products", icon: <Inventory2 /> },
+  { name: "Customers", href: "/customers/customers", icon: <Person2 /> },
+  { name: "Reports", href: "/channels/pos/reports", icon: <Assessment /> },
+];
+
+// ─────────────────────────────────────────────────────────────────────
 // Full menu.
 // ─────────────────────────────────────────────────────────────────────
 export const rawMenuConfig = [
@@ -238,7 +251,12 @@ export const rawMenuConfig = [
         icon: <Campaign />,
         children: storeLinks,
       },
-      { name: "POS", href: "/channels/pos", icon: <GetAppRounded /> },
+      {
+        name: "POS",
+        href: "/channels/pos",
+        icon: <GetAppRounded />,
+        children: posLinks,
+      },
     ],
   },
   {

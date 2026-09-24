@@ -9,6 +9,7 @@ import {
   runCategoryInheritance,
 } from "@/app/actions/category";
 import type { AttributeSetResult } from "@/app/actions/category_property";
+import { getCategoryProductCounts } from "@/app/actions/products";
 import { Category as Cat } from "@/constant/types";
 import CategoryForm from "./_component/CategoryForm";
 import CategoryList from "./_component/CategoryList";
@@ -29,12 +30,18 @@ import PropertyViewerModal from "@/components/ux/PropertyViewerModal";
 
 const Categories = () => {
   const [categories, setCategories] = useState<Cat[]>([]);
+  const [productCounts, setProductCounts] = useState<Record<string, number>>(
+    {},
+  );
   const [editId, setEditId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Cat | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  // Parent pre-selection for the "Add child" action.
+  const [parentIdForNew, setParentIdForNew] = useState<string | null>(null);
 
   const [filterText, setFilterText] = useState("");
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
@@ -50,12 +57,12 @@ const Categories = () => {
 
   useEffect(() => {
     fetchCategories();
+    fetchProductCounts();
   }, []);
 
   // -------------------------------------------------------------------
   //  Auto-enter the synthetic "All Category" root whenever browse mode
-  //  is active and we're at the top level. The user should never see a
-  //  level that only contains the single wrapper node.
+  //  is active and we're at the top level.
   // -------------------------------------------------------------------
   useEffect(() => {
     if (!browseMode) return;
@@ -92,12 +99,28 @@ const Categories = () => {
     }
   };
 
+  const fetchProductCounts = async () => {
+    try {
+      const counts = await getCategoryProductCounts();
+      setProductCounts(counts || {});
+    } catch (err) {
+      console.error("Error fetching product counts:", err);
+      // Silent — the column just shows 0.
+    }
+  };
+
+  const refreshAll = async () => {
+    await Promise.all([fetchCategories(), fetchProductCounts()]);
+  };
+
   const handleDelete = async (id: string) => {
     try {
       const result = await deleteCategory(id);
       if (result.success) {
         setCategories(categories.filter((cat) => cat._id !== id));
         setBrowsePath((prev) => (prev.includes(id) ? [] : prev));
+        // Products whose category was unset → refresh counts.
+        fetchProductCounts();
         toast.success("Category deleted successfully");
       } else {
         toast.error(result.error || "Failed to delete category");
@@ -123,22 +146,33 @@ const Categories = () => {
 
   const handleEditClick = (category: Cat) => {
     setEditId(category._id as string);
+    setParentIdForNew(null);
     setShowForm(true);
   };
 
   const handleNewCategory = () => {
     setEditId(null);
+    setParentIdForNew(null);
+    setShowForm(true);
+  };
+
+  // "Add child" — open the create form with the parent pre-selected.
+  const handleAddChild = (category: Cat) => {
+    setEditId(null);
+    setParentIdForNew(category._id as string);
     setShowForm(true);
   };
 
   const handleCancelEdit = () => {
     setEditId(null);
+    setParentIdForNew(null);
     setShowForm(false);
   };
 
-  const handleSuccess = () => {
-    fetchCategories();
+  const handleSuccess = async () => {
+    await refreshAll();
     setEditId(null);
+    setParentIdForNew(null);
     setShowForm(false);
     toast.success(editId ? "Category updated" : "Category created");
   };
@@ -237,9 +271,7 @@ const Categories = () => {
     <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       <Toaster position="top-right" richColors />
 
-      {/* -------------------------------------------------------------- */}
-      {/* Controls — no title (top bar renders the page name)            */}
-      {/* -------------------------------------------------------------- */}
+      {/* Controls */}
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-2">
         {/* Mobile: 2×2 grid of controls */}
         <div className="grid grid-cols-2 gap-2 lg:hidden">
@@ -293,7 +325,7 @@ const Categories = () => {
           </button>
         </div>
 
-        {/* Desktop: inline search · List/Browse · Properties · New */}
+        {/* Desktop */}
         <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
           <div className="min-w-0 max-w-sm flex-1">{filterInputEl}</div>
 
@@ -413,8 +445,10 @@ const Categories = () => {
         size="xl"
       >
         <CategoryForm
+          key={editId ?? parentIdForNew ?? "new"}
           categoryId={editId || undefined}
           categories={categories}
+          initialParentId={parentIdForNew || undefined}
           onSuccess={handleSuccess}
           onCancel={handleCancelEdit}
           mode={editId ? "edit" : "create"}
@@ -425,12 +459,14 @@ const Categories = () => {
       {!loading && (
         <CategoryList
           categories={categories as any[]}
+          productCounts={productCounts}
           title={browseMode ? "Browse categories" : "All categories"}
           emptyMessage="No categories found. Create your first category!"
           onEditCategory={handleEditClick as any}
           onDeleteCategory={handleDeleteClick as any}
           onRunInheritance={handleRunInheritance as any}
           onViewProperty={handleViewProperty as any}
+          onAddChild={handleAddChild as any}
           showFilter={true}
           hideFilter={true}
           filterValue={filterText}

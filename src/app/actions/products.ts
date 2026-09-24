@@ -1253,3 +1253,30 @@ export async function updateProductStockLevel(
     };
   }
 }
+
+// ==================================================================
+// CATEGORY PRODUCT COUNTS
+//
+// Returns a `{ [categoryId]: count }` map of direct product counts.
+// Used by the CategoryList "Products" column.
+// ==================================================================
+export async function getCategoryProductCounts(): Promise<
+  Record<string, number>
+> {
+  try {
+    await connection();
+    const rows = await Product.aggregate([
+      { $match: { categoryId: { $ne: null } } },
+      { $group: { _id: "$categoryId", count: { $sum: 1 } } },
+    ]);
+
+    const map: Record<string, number> = {};
+    for (const r of rows) {
+      if (r && r._id) map[String(r._id)] = Number(r.count) || 0;
+    }
+    return map;
+  } catch (error) {
+    console.error("Error fetching category product counts:", error);
+    return {};
+  }
+}

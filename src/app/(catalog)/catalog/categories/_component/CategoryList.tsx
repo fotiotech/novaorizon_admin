@@ -13,6 +13,8 @@ import {
   SubdirectoryArrowRight,
   AccountTree,
   Visibility,
+  Add,
+  Inventory2,
 } from "@mui/icons-material";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 
@@ -39,19 +41,22 @@ interface CategoryNode {
 interface CategoryListProps {
   /** Flat list of every category. */
   categories: CategoryNode[];
+  /** Direct product counts keyed by category id. */
+  productCounts?: Record<string, number>;
   title?: string;
   emptyMessage?: string;
   onEditCategory: (category: CategoryNode) => void;
   onDeleteCategory: (category: CategoryNode) => void;
   onRunInheritance: (category: CategoryNode) => void;
   onViewProperty: (category: CategoryNode) => void;
+  /** Opens the create form pre-filled with this category as the parent. */
+  onAddChild?: (category: CategoryNode) => void;
   showFilter?: boolean;
   filterPlaceholder?: string;
   filterValue?: string;
   onFilterChange?: (value: string) => void;
   hideFilter?: boolean;
   // ---------- View mode ----------
-  /** true → drill-down browse; false → flat list. */
   browseMode?: boolean;
   browsePath?: string[];
   onOpenCategory?: (category: CategoryNode) => void;
@@ -88,12 +93,14 @@ const isAllCategoryName = (name: string): boolean => {
 
 const CategoryList: React.FC<CategoryListProps> = ({
   categories,
+  productCounts = {},
   title = "Categories",
   emptyMessage = "No categories found",
   onEditCategory,
   onDeleteCategory,
   onRunInheritance,
   onViewProperty,
+  onAddChild,
   showFilter = true,
   filterPlaceholder = "Search categories…",
   filterValue,
@@ -136,9 +143,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
   );
 
   // -------------------------------------------------------------------
-  //  Synthetic-root detection (excluded from list + search results).
-  //   - Any root named "All Category" / "All Categories".
-  //   - If there is exactly ONE root, treat it as synthetic too.
+  //  Synthetic-root detection.
   // -------------------------------------------------------------------
   const syntheticRootIds = useMemo(() => {
     const ids = new Set<string>();
@@ -186,7 +191,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
   }, [browseMode, allNodesList, browseCurrentParentId]);
 
   // -------------------------------------------------------------------
-  //  List mode: every real (non-synthetic) category, alphabetical.
+  //  List mode
   // -------------------------------------------------------------------
   const listRows = useMemo(() => {
     return allNodesList
@@ -200,7 +205,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
     return listRows.filter((n) => n.name.toLowerCase().includes(q));
   }, [listRows, filter, isSearching]);
 
-  // Global search across every category — excluding synthetic roots.
   const searchResults = useMemo(() => {
     if (!isSearching) return [] as CategoryNode[];
     const q = filter.trim().toLowerCase();
@@ -211,9 +215,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
   }, [allNodesList, filter, isSearching, syntheticRootIds]);
 
   // -------------------------------------------------------------------
-  //  Breadcrumbs — only shown in browse mode.
-  //  Rule: skip the synthetic home crumb when the path already starts at
-  //  a root (that root IS the first crumb).
+  //  Breadcrumbs — only in browse mode.
   // -------------------------------------------------------------------
   const breadcrumbItems = useMemo<BreadcrumbItem[]>(() => {
     if (!browseMode) return [];
@@ -295,6 +297,9 @@ const CategoryList: React.FC<CategoryListProps> = ({
   const hasChildrenById = (id: string): boolean =>
     (childrenCountById.get(id) ?? 0) > 0;
 
+  // Parent column is only meaningful in flat list mode.
+  const showParentColumn = !browseMode;
+
   const getMenuItems = (row: CategoryNode): PopoverMenuItem[] => {
     const items: PopoverMenuItem[] = [
       {
@@ -303,13 +308,23 @@ const CategoryList: React.FC<CategoryListProps> = ({
         icon: <Edit fontSize="small" />,
         onClick: () => onEditCategory(row),
       },
-      {
-        key: "view-property",
-        label: "View property",
-        icon: <Visibility fontSize="small" />,
-        onClick: () => onViewProperty(row),
-      },
     ];
+
+    if (onAddChild) {
+      items.push({
+        key: "add-child",
+        label: "Add child category",
+        icon: <Add fontSize="small" />,
+        onClick: () => onAddChild(row),
+      });
+    }
+
+    items.push({
+      key: "view-property",
+      label: "View property",
+      icon: <Visibility fontSize="small" />,
+      onClick: () => onViewProperty(row),
+    });
 
     if (row.inheritProperty && getParentId(row)) {
       items.push({
@@ -479,18 +494,34 @@ const CategoryList: React.FC<CategoryListProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col className="w-[40%]" />
+                {showParentColumn && <col className="w-[20%]" />}
+                <col className="w-[10%]" />
+                <col className="w-[20%]" />
+                <col className="w-[10%]" />
+              </colgroup>
               <thead>
                 <tr className="bg-muted/40">
                   <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Category
                   </th>
+
+                  {showParentColumn && (
+                    <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Parent
+                    </th>
+                  )}
+
                   <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Parent
+                    Products
                   </th>
+
                   <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Property
                   </th>
+
                   <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Actions
                   </th>
@@ -504,14 +535,16 @@ const CategoryList: React.FC<CategoryListProps> = ({
                     !!row.inheritProperty && !!getParentId(row);
                   const isInherited = inheriting && !!row.hasInheritedSnapshot;
                   const pendingSync = inheriting && !row.hasInheritedSnapshot;
+                  const productCount = productCounts[row._id] ?? 0;
 
                   return (
                     <tr
                       key={row._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
+                      {/* Category — capped width so truncate kicks in */}
+                      <td className="max-w-0 px-5 py-3">
+                        <div className="flex min-w-0 items-center gap-2">
                           {browseMode && hasChildren ? (
                             <button
                               type="button"
@@ -531,23 +564,29 @@ const CategoryList: React.FC<CategoryListProps> = ({
                             <FolderOpen fontSize="small" />
                           </div>
 
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             {browseMode && hasChildren ? (
                               <button
                                 type="button"
                                 onClick={() => onOpenCategory?.(row)}
-                                className="block max-w-full truncate text-left font-medium text-foreground hover:underline"
+                                className="block w-full truncate text-left font-medium text-foreground hover:underline"
                                 title={row.name}
                               >
                                 {row.name}
                               </button>
                             ) : (
-                              <div className="truncate font-medium text-foreground">
+                              <div
+                                className="truncate font-medium text-foreground"
+                                title={row.name}
+                              >
                                 {row.name}
                               </div>
                             )}
                             {row.url_slug && (
-                              <div className="truncate font-mono text-xs text-muted-foreground">
+                              <div
+                                className="truncate font-mono text-xs text-muted-foreground"
+                                title={row.url_slug}
+                              >
                                 {row.url_slug}
                               </div>
                             )}
@@ -561,28 +600,55 @@ const CategoryList: React.FC<CategoryListProps> = ({
                         </div>
                       </td>
 
+                      {showParentColumn && (
+                        <td className="max-w-0 px-5 py-3">
+                          {row.parentName ? (
+                            <span className="inline-flex w-full min-w-0 items-center gap-1.5 text-muted-foreground">
+                              <SubdirectoryArrowRight
+                                fontSize="small"
+                                className="flex-none text-muted-foreground/70"
+                              />
+                              <span className="truncate" title={row.parentName}>
+                                {row.parentName}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-xs italic text-muted-foreground/60">
+                              — root —
+                            </span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Products count */}
                       <td className="px-5 py-3">
-                        {row.parentName ? (
-                          <span className="inline-flex max-w-[16rem] items-center gap-1.5 text-muted-foreground">
-                            <SubdirectoryArrowRight
+                        {productCount > 0 ? (
+                          <span
+                            className="inline-flex items-center gap-1.5 text-foreground"
+                            title={`${productCount} product${
+                              productCount === 1 ? "" : "s"
+                            } directly in this category`}
+                          >
+                            <Inventory2
                               fontSize="small"
-                              className="flex-none text-muted-foreground/70"
+                              className="text-muted-foreground"
                             />
-                            <span className="truncate" title={row.parentName}>
-                              {row.parentName}
+                            <span className="font-medium tabular-nums">
+                              {productCount}
                             </span>
                           </span>
                         ) : (
                           <span className="text-xs italic text-muted-foreground/60">
-                            — root —
+                            —
                           </span>
                         )}
                       </td>
 
-                      <td className="px-5 py-3">
+                      {/* Property */}
+                      <td className="max-w-0 px-5 py-3">
                         {own || isInherited ? (
                           <span
-                            className="inline-flex max-w-[16rem] items-center gap-1.5"
+                            className="inline-flex w-full min-w-0 items-center gap-1.5"
                             title={
                               own
                                 ? own.code
@@ -623,7 +689,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
                         <div className="flex justify-end">
                           <PopoverMenu
                             items={getMenuItems(row)}
-                            ariaLabel={`Actions for ${row.name}`}
+                            aria-label={`Actions for ${row.name}`}
                             trigger={<MoreVert fontSize="small" />}
                             align="right"
                           />

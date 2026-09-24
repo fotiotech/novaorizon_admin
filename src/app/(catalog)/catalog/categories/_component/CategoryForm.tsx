@@ -27,6 +27,8 @@ interface CategoryFormProps {
   onSuccess: () => void;
   onCancel?: () => void;
   mode?: "create" | "edit";
+  /** Pre-fills the Parent Category field (used by the "Add child" action). */
+  initialParentId?: string;
 }
 
 const CategoryForm: React.FC<CategoryFormProps> = ({
@@ -35,11 +37,12 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   onSuccess,
   onCancel,
   mode = "create",
+  initialParentId,
 }) => {
   const [categoryData, setCategoryData] = useState<Cat>({
     _id: "",
     name: "",
-    parentId: "",
+    parentId: initialParentId || "",
     description: "",
     imageUrl: [],
     property: "",
@@ -174,6 +177,22 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       setInheritProperty(false);
     }
   }, [canInherit, inheritProperty]);
+
+  // Pre-fill the search box with the parent's name when opened via "Add child".
+  // Runs whenever `categories` becomes available (which may be after mount).
+  useEffect(() => {
+    if (mode !== "create" || !initialParentId) return;
+    const parent: any = categories.find((c) => c._id === initialParentId);
+    if (parent) {
+      setParentSearch(parent.name);
+      // Make sure the stored parentId is correct even if categories loaded late.
+      setCategoryData((prev) =>
+        prev.parentId === initialParentId
+          ? prev
+          : { ...prev, parentId: initialParentId },
+      );
+    }
+  }, [initialParentId, categories, mode]);
 
   const handleInputChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -315,7 +334,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       setCategoryData({
         _id: "",
         name: "",
-        parentId: "",
+        parentId: initialParentId || "",
         description: "",
         imageUrl: [],
         property: "",
@@ -341,7 +360,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6 max-h-[75vh] overflow-y-auto pr-2"
+    >
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
           <strong className="font-bold">Error:</strong>
