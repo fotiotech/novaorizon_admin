@@ -39,9 +39,7 @@ interface CategoryNode {
 }
 
 interface CategoryListProps {
-  /** Flat list of every category. */
   categories: CategoryNode[];
-  /** Direct product counts keyed by category id. */
   productCounts?: Record<string, number>;
   title?: string;
   emptyMessage?: string;
@@ -49,14 +47,12 @@ interface CategoryListProps {
   onDeleteCategory: (category: CategoryNode) => void;
   onRunInheritance: (category: CategoryNode) => void;
   onViewProperty: (category: CategoryNode) => void;
-  /** Opens the create form pre-filled with this category as the parent. */
   onAddChild?: (category: CategoryNode) => void;
   showFilter?: boolean;
   filterPlaceholder?: string;
   filterValue?: string;
   onFilterChange?: (value: string) => void;
   hideFilter?: boolean;
-  // ---------- View mode ----------
   browseMode?: boolean;
   browsePath?: string[];
   onOpenCategory?: (category: CategoryNode) => void;
@@ -142,9 +138,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
     [allNodesList],
   );
 
-  // -------------------------------------------------------------------
-  //  Synthetic-root detection.
-  // -------------------------------------------------------------------
   const syntheticRootIds = useMemo(() => {
     const ids = new Set<string>();
     for (const r of rootCategories) {
@@ -263,6 +256,28 @@ const CategoryList: React.FC<CategoryListProps> = ({
     nodesById,
   ]);
 
+  // Pre-compute every derived value once; shared by mobile cards + desktop table.
+  const enrichedRows = useMemo(() => {
+    return rowsToRender.map((row) => {
+      const hasChildren = (childrenCountById.get(row._id) ?? 0) > 0;
+      const own = asPropertyRef(row.property);
+      const inheriting = !!row.inheritProperty && !!getParentId(row);
+      const isInherited = inheriting && !!row.hasInheritedSnapshot;
+      const pendingSync = inheriting && !row.hasInheritedSnapshot;
+      const productCount = productCounts[row._id] ?? 0;
+      const childCount = childrenCountById.get(row._id) ?? 0;
+      return {
+        row,
+        hasChildren,
+        own,
+        isInherited,
+        pendingSync,
+        productCount,
+        childCount,
+      };
+    });
+  }, [rowsToRender, childrenCountById, productCounts]);
+
   // -------------------------------------------------------------------
   //  Animation
   // -------------------------------------------------------------------
@@ -293,9 +308,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
       : navDirection === "out"
         ? "browse-anim-out"
         : "browse-anim-fade";
-
-  const hasChildrenById = (id: string): boolean =>
-    (childrenCountById.get(id) ?? 0) > 0;
 
   // Parent column is only meaningful in flat list mode.
   const showParentColumn = !browseMode;
@@ -387,7 +399,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
       `}</style>
 
       {/* Card header */}
-      <div className="flex items-center justify-between px-5 py-4">
+      <div className="flex items-center justify-between px-4 py-4 sm:px-5">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
           {displayCount > 0 && (
@@ -398,9 +410,9 @@ const CategoryList: React.FC<CategoryListProps> = ({
         </div>
       </div>
 
-      {/* Breadcrumbs (browse mode only, hidden while searching) */}
+      {/* Breadcrumbs */}
       {browseMode && !isSearching && breadcrumbItems.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1 px-5 py-2.5 text-sm">
+        <div className="flex flex-wrap items-center gap-1 px-4 py-2.5 text-sm sm:px-5">
           {breadcrumbItems.map((item, idx) => {
             const isLast = idx === breadcrumbItems.length - 1;
             return (
@@ -412,14 +424,14 @@ const CategoryList: React.FC<CategoryListProps> = ({
                   />
                 )}
                 {isLast ? (
-                  <span className="font-medium text-foreground">
+                  <span className="max-w-[12rem] truncate font-medium text-foreground sm:max-w-none">
                     {item.name}
                   </span>
                 ) : (
                   <button
                     type="button"
                     onClick={() => onBreadcrumbClick?.(item.pathIndex)}
-                    className="rounded px-1.5 py-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                    className="max-w-[10rem] truncate rounded px-1.5 py-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground sm:max-w-none"
                   >
                     {item.name}
                   </button>
@@ -430,9 +442,9 @@ const CategoryList: React.FC<CategoryListProps> = ({
         </div>
       )}
 
-      {/* Search-results banner (browse mode while searching) */}
+      {/* Search-results banner */}
       {browseMode && isSearching && (
-        <div className="flex items-center gap-2 bg-muted/30 px-5 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 bg-muted/30 px-4 py-2 text-xs text-muted-foreground sm:px-5">
           <Search fontSize="small" />
           <span>
             Searching all categories —{" "}
@@ -468,7 +480,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
 
       {/* Animated content region */}
       <div key={animationKey} className={animationClass}>
-        {rowsToRender.length === 0 ? (
+        {enrichedRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
               {filter.trim() ? (
@@ -493,214 +505,373 @@ const CategoryList: React.FC<CategoryListProps> = ({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full table-fixed text-sm">
-              <colgroup>
-                <col className="w-[40%]" />
-                {showParentColumn && <col className="w-[20%]" />}
-                <col className="w-[10%]" />
-                <col className="w-[20%]" />
-                <col className="w-[10%]" />
-              </colgroup>
-              <thead>
-                <tr className="bg-muted/40">
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Category
-                  </th>
-
-                  {showParentColumn && (
-                    <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Parent
-                    </th>
-                  )}
-
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Products
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Property
-                  </th>
-
-                  <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {rowsToRender.map((row) => {
-                  const hasChildren = hasChildrenById(row._id);
-                  const own = asPropertyRef(row.property);
-                  const inheriting =
-                    !!row.inheritProperty && !!getParentId(row);
-                  const isInherited = inheriting && !!row.hasInheritedSnapshot;
-                  const pendingSync = inheriting && !row.hasInheritedSnapshot;
-                  const productCount = productCounts[row._id] ?? 0;
-
-                  return (
-                    <tr
-                      key={row._id}
-                      className="group transition-colors hover:bg-muted/40"
-                    >
-                      {/* Category — capped width so truncate kicks in */}
-                      <td className="max-w-0 px-5 py-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          {browseMode && hasChildren ? (
-                            <button
-                              type="button"
-                              onClick={() => onOpenCategory?.(row)}
-                              className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                              aria-label={`Open ${row.name}`}
-                            >
-                              <KeyboardArrowRight fontSize="small" />
-                            </button>
-                          ) : (
-                            <span className="inline-flex h-6 w-6 flex-none items-center justify-center">
-                              <span className="h-1.5 w-1.5 rounded-full bg-border" />
-                            </span>
-                          )}
-
-                          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                            <FolderOpen fontSize="small" />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            {browseMode && hasChildren ? (
-                              <button
-                                type="button"
-                                onClick={() => onOpenCategory?.(row)}
-                                className="block w-full truncate text-left font-medium text-foreground hover:underline"
-                                title={row.name}
-                              >
-                                {row.name}
-                              </button>
-                            ) : (
-                              <div
-                                className="truncate font-medium text-foreground"
-                                title={row.name}
-                              >
-                                {row.name}
-                              </div>
-                            )}
-                            {row.url_slug && (
-                              <div
-                                className="truncate font-mono text-xs text-muted-foreground"
-                                title={row.url_slug}
-                              >
-                                {row.url_slug}
-                              </div>
-                            )}
-                          </div>
-
-                          {hasChildren && (
-                            <span className="ml-2 inline-flex flex-none items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                              {childrenCountById.get(row._id) ?? 0}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {showParentColumn && (
-                        <td className="max-w-0 px-5 py-3">
-                          {row.parentName ? (
-                            <span className="inline-flex w-full min-w-0 items-center gap-1.5 text-muted-foreground">
-                              <SubdirectoryArrowRight
-                                fontSize="small"
-                                className="flex-none text-muted-foreground/70"
-                              />
-                              <span className="truncate" title={row.parentName}>
-                                {row.parentName}
-                              </span>
-                            </span>
-                          ) : (
-                            <span className="text-xs italic text-muted-foreground/60">
-                              — root —
-                            </span>
-                          )}
-                        </td>
+          <>
+            {/* ============================================================ */}
+            {/* Mobile: card list (< md)                                     */}
+            {/* ============================================================ */}
+            <div className="divide-y divide-border/60 md:hidden">
+              {enrichedRows.map(
+                ({
+                  row,
+                  hasChildren,
+                  own,
+                  isInherited,
+                  pendingSync,
+                  productCount,
+                  childCount,
+                }) => (
+                  <div
+                    key={row._id}
+                    className="px-4 py-3 transition-colors hover:bg-muted/40"
+                  >
+                    {/* Top row */}
+                    <div className="flex items-start gap-2.5">
+                      {browseMode && hasChildren ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenCategory?.(row)}
+                          className="-ml-1 mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                          aria-label={`Open ${row.name}`}
+                        >
+                          <KeyboardArrowRight fontSize="small" />
+                        </button>
+                      ) : (
+                        <span className="-ml-1 mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center">
+                          <span className="h-1.5 w-1.5 rounded-full bg-border" />
+                        </span>
                       )}
 
-                      {/* Products count */}
-                      <td className="px-5 py-3">
-                        {productCount > 0 ? (
+                      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                        <FolderOpen fontSize="small" />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        {browseMode && hasChildren ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenCategory?.(row)}
+                            className="block w-full truncate text-left font-medium text-foreground"
+                            title={row.name}
+                          >
+                            {row.name}
+                          </button>
+                        ) : (
+                          <div
+                            className="truncate font-medium text-foreground"
+                            title={row.name}
+                          >
+                            {row.name}
+                          </div>
+                        )}
+                        {row.url_slug && (
+                          <div
+                            className="truncate font-mono text-xs text-muted-foreground"
+                            title={row.url_slug}
+                          >
+                            {row.url_slug}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="-mr-1 flex-none">
+                        <PopoverMenu
+                          items={getMenuItems(row)}
+                          ariaLabel={`Actions for ${row.name}`}
+                          trigger={<MoreVert fontSize="small" />}
+                          align="right"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Meta chips */}
+                    {(showParentColumn && row.parentName) ||
+                    hasChildren ||
+                    productCount > 0 ||
+                    own ||
+                    isInherited ||
+                    pendingSync ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-[4.25rem]">
+                        {showParentColumn && row.parentName && (
                           <span
-                            className="inline-flex items-center gap-1.5 text-foreground"
+                            className="inline-flex max-w-[12rem] items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                            title={`Parent: ${row.parentName}`}
+                          >
+                            <SubdirectoryArrowRight
+                              style={{ fontSize: 13 }}
+                              className="flex-none opacity-70"
+                            />
+                            <span className="truncate">{row.parentName}</span>
+                          </span>
+                        )}
+
+                        {hasChildren && (
+                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            {childCount} sub
+                          </span>
+                        )}
+
+                        {productCount > 0 && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground"
                             title={`${productCount} product${
                               productCount === 1 ? "" : "s"
                             } directly in this category`}
                           >
                             <Inventory2
-                              fontSize="small"
-                              className="text-muted-foreground"
+                              style={{ fontSize: 13 }}
+                              className="flex-none text-muted-foreground"
                             />
-                            <span className="font-medium tabular-nums">
-                              {productCount}
-                            </span>
-                          </span>
-                        ) : (
-                          <span className="text-xs italic text-muted-foreground/60">
-                            —
+                            <span className="tabular-nums">{productCount}</span>
                           </span>
                         )}
-                      </td>
 
-                      {/* Property */}
-                      <td className="max-w-0 px-5 py-3">
-                        {own || isInherited ? (
+                        {own && (
                           <span
-                            className="inline-flex w-full min-w-0 items-center gap-1.5"
+                            className="inline-flex max-w-[12rem] items-center rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground"
                             title={
-                              own
-                                ? own.code
-                                  ? `${own.name} (${own.code})`
-                                  : own.name
-                                : "Inherited property"
+                              own.code ? `${own.name} (${own.code})` : own.name
                             }
                           >
-                            <span className="truncate text-foreground">
-                              {own?.name ?? "Inherited"}
-                            </span>
-
-                            {isInherited && (
-                              <span
-                                className="flex-none rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                                title="Merged from ancestors + own property (own wins)"
-                              >
-                                Inherited
-                              </span>
-                            )}
-                            {pendingSync && (
-                              <span
-                                className="flex-none rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                                title="Inheritance is on but no snapshot has been generated yet. Use 'Re-run inheritance'."
-                              >
-                                Pending sync
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-xs italic text-muted-foreground/60">
-                            —
+                            <span className="truncate">{own.name}</span>
                           </span>
                         )}
-                      </td>
 
-                      <td className="px-5 py-3 text-right">
-                        <div className="flex justify-end">
-                          <PopoverMenu
-                            items={getMenuItems(row)}
-                            aria-label={`Actions for ${row.name}`}
-                            trigger={<MoreVert fontSize="small" />}
-                            align="right"
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        {isInherited && (
+                          <span
+                            className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            title="Merged from ancestors + own property (own wins)"
+                          >
+                            Inherited
+                          </span>
+                        )}
+                        {pendingSync && (
+                          <span
+                            className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                            title="Inheritance is on but no snapshot has been generated yet. Use 'Re-run inheritance'."
+                          >
+                            Pending sync
+                          </span>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ),
+              )}
+            </div>
+
+            {/* ============================================================ */}
+            {/* Desktop: table (≥ md)                                        */}
+            {/* ============================================================ */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col className="w-[40%]" />
+                  {showParentColumn && <col className="w-[20%]" />}
+                  <col className="w-[10%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[10%]" />
+                </colgroup>
+                <thead>
+                  <tr className="bg-muted/40">
+                    <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Category
+                    </th>
+
+                    {showParentColumn && (
+                      <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Parent
+                      </th>
+                    )}
+
+                    <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Products
+                    </th>
+
+                    <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Property
+                    </th>
+
+                    <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {enrichedRows.map(
+                    ({
+                      row,
+                      hasChildren,
+                      own,
+                      isInherited,
+                      pendingSync,
+                      productCount,
+                      childCount,
+                    }) => (
+                      <tr
+                        key={row._id}
+                        className="group transition-colors hover:bg-muted/40"
+                      >
+                        {/* Category — capped width so truncate kicks in */}
+                        <td className="max-w-0 px-5 py-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            {browseMode && hasChildren ? (
+                              <button
+                                type="button"
+                                onClick={() => onOpenCategory?.(row)}
+                                className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                aria-label={`Open ${row.name}`}
+                              >
+                                <KeyboardArrowRight fontSize="small" />
+                              </button>
+                            ) : (
+                              <span className="inline-flex h-6 w-6 flex-none items-center justify-center">
+                                <span className="h-1.5 w-1.5 rounded-full bg-border" />
+                              </span>
+                            )}
+
+                            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                              <FolderOpen fontSize="small" />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              {browseMode && hasChildren ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenCategory?.(row)}
+                                  className="block w-full truncate text-left font-medium text-foreground hover:underline"
+                                  title={row.name}
+                                >
+                                  {row.name}
+                                </button>
+                              ) : (
+                                <div
+                                  className="truncate font-medium text-foreground"
+                                  title={row.name}
+                                >
+                                  {row.name}
+                                </div>
+                              )}
+                              {row.url_slug && (
+                                <div
+                                  className="truncate font-mono text-xs text-muted-foreground"
+                                  title={row.url_slug}
+                                >
+                                  {row.url_slug}
+                                </div>
+                              )}
+                            </div>
+
+                            {hasChildren && (
+                              <span className="ml-2 inline-flex flex-none items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                                {childCount}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {showParentColumn && (
+                          <td className="max-w-0 px-5 py-3">
+                            {row.parentName ? (
+                              <span className="inline-flex w-full min-w-0 items-center gap-1.5 text-muted-foreground">
+                                <SubdirectoryArrowRight
+                                  fontSize="small"
+                                  className="flex-none text-muted-foreground/70"
+                                />
+                                <span
+                                  className="truncate"
+                                  title={row.parentName}
+                                >
+                                  {row.parentName}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-xs italic text-muted-foreground/60">
+                                — root —
+                              </span>
+                            )}
+                          </td>
+                        )}
+
+                        <td className="px-5 py-3">
+                          {productCount > 0 ? (
+                            <span
+                              className="inline-flex items-center gap-1.5 text-foreground"
+                              title={`${productCount} product${
+                                productCount === 1 ? "" : "s"
+                              } directly in this category`}
+                            >
+                              <Inventory2
+                                fontSize="small"
+                                className="text-muted-foreground"
+                              />
+                              <span className="font-medium tabular-nums">
+                                {productCount}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-xs italic text-muted-foreground/60">
+                              —
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="max-w-0 px-5 py-3">
+                          {own || isInherited ? (
+                            <span
+                              className="inline-flex w-full min-w-0 items-center gap-1.5"
+                              title={
+                                own
+                                  ? own.code
+                                    ? `${own.name} (${own.code})`
+                                    : own.name
+                                  : "Inherited property"
+                              }
+                            >
+                              <span className="truncate text-foreground">
+                                {own?.name ?? "Inherited"}
+                              </span>
+
+                              {isInherited && (
+                                <span
+                                  className="flex-none rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                                  title="Merged from ancestors + own property (own wins)"
+                                >
+                                  Inherited
+                                </span>
+                              )}
+                              {pendingSync && (
+                                <span
+                                  className="flex-none rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                                  title="Inheritance is on but no snapshot has been generated yet. Use 'Re-run inheritance'."
+                                >
+                                  Pending sync
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-xs italic text-muted-foreground/60">
+                              —
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-5 py-3 text-right">
+                          <div className="flex justify-end">
+                            <PopoverMenu
+                              items={getMenuItems(row)}
+                              ariaLabel={`Actions for ${row.name}`}
+                              trigger={<MoreVert fontSize="small" />}
+                              align="right"
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
