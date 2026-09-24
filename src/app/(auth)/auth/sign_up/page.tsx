@@ -1,6 +1,7 @@
 "use client";
 
 import { signup } from "@/app/lib/actions";
+import { EMAIL_REGEX } from "@/app/lib/definitions";
 import Image from "next/image";
 import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
@@ -62,7 +63,7 @@ export default function SignupForm() {
       ?.value;
     const pass = password;
     if (!emailInput) e.email = "Email is required.";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput))
+    else if (!EMAIL_REGEX.test(emailInput))
       e.email = "Please enter a valid email.";
     if (!pass) e.password = "Password is required.";
     else if (pass.length < 8) e.password = "Must be at least 8 characters.";
@@ -326,38 +327,24 @@ export default function SignupForm() {
                 profile.
               </p>
 
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Order &amp; account updates
+              </p>
               <div className="space-y-2">
-                <ToggleRow
-                  name="notifyEmail"
-                  label="Email notifications"
-                  defaultChecked
-                />
-                <ToggleRow
-                  name="notifyPush"
-                  label="Push notifications"
-                  defaultChecked
-                />
-                <ToggleRow name="notifySms" label="SMS notifications" />
-                <ToggleRow
-                  name="notifyWhatsapp"
-                  label="WhatsApp notifications"
-                />
-                <ToggleRow
-                  name="orderUpdates"
-                  label="Order updates"
-                  defaultChecked
-                />
+                <ToggleRow name="notifyEmail" label="Email" defaultChecked />
+                <ToggleRow name="notifyPush" label="Push" defaultChecked />
+                <ToggleRow name="notifySms" label="SMS" />
+                <ToggleRow name="notifyWhatsapp" label="WhatsApp" />
               </div>
 
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-4 mb-2">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">
                 Marketing
               </p>
               <div className="space-y-2">
                 <ToggleRow
                   name="marketingEmail"
-                  label="Promotions & offers by email"
+                  label="Promotions, offers & newsletter by email"
                 />
-                <ToggleRow name="newsletter" label="Weekly newsletter" />
               </div>
             </div>
 

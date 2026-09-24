@@ -2,8 +2,15 @@
 
 import { FormState, SignupFormSchema } from "./definitions";
 import User from "@/models/User";
+import NewsletterSubscriber from "@/models/NewsletterSubscriber";
 import { connection } from "@/utils/connection";
 import crypto from "crypto";
+
+/** Read a checkbox that may be absent when unchecked. */
+const bool = (formData: FormData, name: string, def = false) => {
+  const v = formData.get(name);
+  return v === null ? def : v === "on";
+};
 
 export async function signup(state: FormState, formData: FormData) {
   const validatedFields = SignupFormSchema.safeParse({
@@ -12,13 +19,12 @@ export async function signup(state: FormState, formData: FormData) {
     fullName: formData.get("fullName"),
     phoneCountryCode: formData.get("phoneCountryCode"),
     phoneNumber: formData.get("phoneNumber"),
-    notifyEmail: formData.get("notifyEmail") === "on",
-    notifySms: formData.get("notifySms") === "on",
-    notifyPush: formData.get("notifyPush") === "on",
-    notifyWhatsapp: formData.get("notifyWhatsapp") === "on",
-    marketingEmail: formData.get("marketingEmail") === "on",
-    orderUpdates: formData.get("orderUpdates") === "on",
-    newsletter: formData.get("newsletter") === "on",
+
+    notifyEmail: bool(formData, "notifyEmail", true),
+    notifyPush: bool(formData, "notifyPush", true),
+    notifySms: bool(formData, "notifySms"),
+    notifyWhatsapp: bool(formData, "notifyWhatsapp"),
+    marketingEmail: bool(formData, "marketingEmail"),
   });
 
   if (!validatedFields.success) {
@@ -34,12 +40,10 @@ export async function signup(state: FormState, formData: FormData) {
     phoneCountryCode,
     phoneNumber,
     notifyEmail,
-    notifySms,
     notifyPush,
+    notifySms,
     notifyWhatsapp,
     marketingEmail,
-    orderUpdates,
-    newsletter,
   } = validatedFields.data;
 
   try {
@@ -60,7 +64,7 @@ export async function signup(state: FormState, formData: FormData) {
     const hasName = Boolean(fullName?.trim());
     const hasPhone = Boolean(num);
 
-    // language / currency / theme use model defaults now;
+    // language / currency / theme use model defaults;
     // the user can edit them from /profile via the modal.
     const newUser = new User({
       name: fullName,
@@ -79,7 +83,6 @@ export async function signup(state: FormState, formData: FormData) {
       },
 
       preferences: {
-        // language/currency/theme intentionally omitted → use schema defaults
         notifications: {
           email: notifyEmail,
           sms: notifySms,
@@ -89,15 +92,13 @@ export async function signup(state: FormState, formData: FormData) {
         marketing: {
           email: marketingEmail,
         },
-        orderUpdates,
-        newsletter,
         consentedAt: new Date(),
       },
 
       verificationToken: token,
       tokenExpiry: expires,
 
-      role: "user",
+      role: "customer",
       profileCompleted: hasName && hasPhone,
     });
 
@@ -107,6 +108,38 @@ export async function signup(state: FormState, formData: FormData) {
       return {
         message: "An error occurred while creating your account.",
       };
+    }
+
+    // ── Newsletter sync: single source of truth ─────────
+    // Non-fatal: a failure here must NOT block account creation.
+    if (marketingEmail) {
+      try {
+        const normalized = email.trim().toLowerCase();
+        const existing = await NewsletterSubscriber.findOne({
+          email: normalized,
+        });
+
+        if (existing) {
+          if (existing.status !== "subscribed") {
+            existing.status = "subscribed";
+            existing.subscribedAt = new Date();
+            existing.unsubscribedAt = null;
+          }
+          if (!existing.userId) existing.userId = user._id;
+          await existing.save();
+        } else {
+          await NewsletterSubscriber.create({
+            email: normalized,
+            source: "signup",
+            userId: user._id,
+            unsubscribeToken: crypto.randomBytes(24).toString("hex"),
+            status: "subscribed",
+            subscribedAt: new Date(),
+          });
+        }
+      } catch (err) {
+        console.error("[signup] newsletter sync failed:", err);
+      }
     }
 
     return {

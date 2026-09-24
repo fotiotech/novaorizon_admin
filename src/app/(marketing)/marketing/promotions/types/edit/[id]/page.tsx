@@ -1,5 +1,4 @@
-// app/promotion-types/edit/[id]/page.tsx
-
+// app/marketing/promotions/types/edit/[id]/page.tsx
 import { PromotionTypeForm } from "@/app/(marketing)/components/PromotionTypeForm";
 import {
   getPromotionType,
@@ -15,13 +14,14 @@ interface EditPageProps {
 }
 
 export default async function EditPromotionTypePage(props: EditPageProps) {
-  const params = await props.params;
+  const { id } = await props.params;
+
   let promotionType: any = null;
   let properties: any[] = [];
 
   try {
     [promotionType, properties] = await Promise.all([
-      getPromotionType(params.id, true),
+      getPromotionType(id, true),
       listPromotionTypeProperties({}, { limit: 100 }).then(
         (result) => result?.data ?? [],
       ),
@@ -42,17 +42,18 @@ export default async function EditPromotionTypePage(props: EditPageProps) {
   const initialValues = {
     ...promotionType,
     properties:
-      promotionType.properties?.map((p: any) => p._id.toString()) || [],
+      promotionType.properties?.map((p: any) =>
+        typeof p === "object" ? p._id.toString() : p.toString(),
+      ) ?? [],
   };
 
   async function handleUpdate(data: any) {
     "use server";
-    await updatePromotionType(params.id, data);
+    await updatePromotionType(id, data);
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-2xl font-bold mb-6">Edit Promotion Type</h1>
+    <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
       <PromotionTypeForm
         initialValues={initialValues}
         availableProperties={availableProperties}

@@ -1,18 +1,30 @@
 // components/DynamicPromotionForm.tsx
-'use client';
+"use client";
 
-import { useForm, Controller, useWatch } from 'react-hook-form';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useForm, Controller } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 // --- Types ---
 interface PropertyDefinition {
   _id: string;
   code: string;
   name: string;
-  type: 'text' | 'number' | 'select' | 'multi-select' | 'checkbox' | 'radio' | 'boolean' | 'date' | 'url';
+  type:
+    | "text"
+    | "textarea"
+    | "number"
+    | "select"
+    | "multi-select"
+    | "checkbox"
+    | "radio"
+    | "boolean"
+    | "date"
+    | "color"
+    | "file"
+    | "url";
   isRequired: boolean;
   options?: string[];
   validation?: {
@@ -33,7 +45,6 @@ interface PromotionType {
   properties: PropertyDefinition[];
 }
 
-// Base form values (common fields)
 interface BaseFormValues {
   promotionTypeId: string;
   name: string;
@@ -57,7 +68,6 @@ interface BaseFormValues {
   propertyValues: Record<string, any>;
 }
 
-// Props
 interface DynamicPromotionFormProps {
   promotionTypes: PromotionType[];
   initialValues?: Partial<BaseFormValues>;
@@ -66,13 +76,12 @@ interface DynamicPromotionFormProps {
   otherPromotions?: { label: string; value: string }[];
 }
 
-// --- Helper to build static base schema ---
 const baseSchema = z.object({
-  promotionTypeId: z.string().min(1, 'Promotion type is required'),
-  name: z.string().min(1, 'Name is required').trim(),
+  promotionTypeId: z.string().min(1, "Promotion type is required"),
+  name: z.string().min(1, "Name is required").trim(),
   description: z.string().optional(),
-  startDate: z.string().min(1, 'Start date is required'),
-  endDate: z.string().min(1, 'End date is required'),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().min(1, "End date is required"),
   isActive: z.boolean().default(true),
   priority: z.number().default(0),
   customerEligibility: z.object({
@@ -87,12 +96,20 @@ const baseSchema = z.object({
   }),
   stackable: z.boolean().default(false),
   exclusiveWith: z.array(z.string()).default([]),
-  propertyValues: z.record(z.any()).default({}),
+  propertyValues: z.record(z.string(), z.any()).default({}),
 });
 
 type FormValues = z.infer<typeof baseSchema>;
 
-// --- Component ---
+// ─── Shared visual tokens ────────────────────────────────────────────
+const labelCls = "block text-[13px] font-medium text-foreground mb-1.5";
+const inputCls =
+  "w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground/50 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60";
+const errorCls = "mt-1.5 text-[13px] text-destructive";
+const fieldsetCls = "rounded-xl border border-border bg-card p-5 space-y-4";
+const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
+const helperCls = "mt-1.5 text-[12px] text-muted-foreground";
+
 export function DynamicPromotionForm({
   promotionTypes,
   initialValues,
@@ -103,7 +120,9 @@ export function DynamicPromotionForm({
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [selectedTypeId, setSelectedTypeId] = useState<string>(initialValues?.promotionTypeId || '');
+  const [selectedTypeId, setSelectedTypeId] = useState<string>(
+    initialValues?.promotionTypeId || "",
+  );
 
   const {
     control,
@@ -111,26 +130,28 @@ export function DynamicPromotionForm({
     register,
     setValue,
     getValues,
+    setError,
+    clearErrors,
     formState: { errors },
-    reset,
     watch,
   } = useForm<FormValues>({
     resolver: zodResolver(baseSchema) as any,
     defaultValues: {
-      promotionTypeId: initialValues?.promotionTypeId || '',
-      name: initialValues?.name || '',
-      description: initialValues?.description || '',
+      promotionTypeId: initialValues?.promotionTypeId || "",
+      name: initialValues?.name || "",
+      description: initialValues?.description || "",
       startDate: initialValues?.startDate
         ? new Date(initialValues.startDate).toISOString().slice(0, 16)
-        : '',
+        : "",
       endDate: initialValues?.endDate
         ? new Date(initialValues.endDate).toISOString().slice(0, 16)
-        : '',
+        : "",
       isActive: initialValues?.isActive ?? true,
       priority: initialValues?.priority || 0,
       customerEligibility: {
         allCustomers: initialValues?.customerEligibility?.allCustomers ?? true,
-        customerGroupIds: initialValues?.customerEligibility?.customerGroupIds || [],
+        customerGroupIds:
+          initialValues?.customerEligibility?.customerGroupIds || [],
         minOrderAmount: initialValues?.customerEligibility?.minOrderAmount || 0,
       },
       usageLimits: {
@@ -144,36 +165,44 @@ export function DynamicPromotionForm({
     },
   });
 
-  const selectedType = promotionTypes.find((t) => t._id === selectedTypeId);
-  const allCustomers = watch('customerEligibility.allCustomers');
+  const selectedType = useMemo(
+    () => promotionTypes.find((t) => t._id === selectedTypeId),
+    [promotionTypes, selectedTypeId],
+  );
+  const allCustomers = watch("customerEligibility.allCustomers");
 
-  // Reset property values when type changes
   useEffect(() => {
-    if (selectedTypeId && selectedType) {
-      const newPropertyValues: Record<string, any> = {};
-      selectedType.properties.forEach((prop) => {
-        // Preserve existing values if they match the same type (e.g., when editing)
-        const existing = getValues('propertyValues')?.[prop.code];
-        newPropertyValues[prop.code] = existing !== undefined ? existing : (prop.defaultValue ?? '');
-      });
-      setValue('propertyValues', newPropertyValues);
+    if (!selectedType) return;
+    const current = getValues("propertyValues") || {};
+    const next: Record<string, any> = {};
+    for (const prop of selectedType.properties) {
+      next[prop.code] =
+        current[prop.code] !== undefined
+          ? current[prop.code]
+          : (prop.defaultValue ?? "");
     }
-  }, [selectedTypeId, selectedType, setValue, getValues]);
+    setValue("propertyValues", next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTypeId]);
 
-  // Watch property values for validation on change
-  const propertyValues = watch('propertyValues');
-
-  // --- Validation helper for property fields ---
-  const validateProperty = (prop: PropertyDefinition, value: any): string | true => {
+  const validateProperty = (
+    prop: PropertyDefinition,
+    value: any,
+  ): string | true => {
     if (prop.isRequired) {
-      if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+      if (
+        value === undefined ||
+        value === null ||
+        value === "" ||
+        (Array.isArray(value) && value.length === 0)
+      ) {
         return `${prop.name} is required`;
       }
-      if (typeof value === 'number' && isNaN(value)) {
+      if (typeof value === "number" && isNaN(value)) {
         return `${prop.name} is required`;
       }
     }
-    if (prop.type === 'number') {
+    if (prop.type === "number") {
       const num = Number(value);
       if (!isNaN(num)) {
         if (prop.validation?.min !== undefined && num < prop.validation.min) {
@@ -184,128 +213,152 @@ export function DynamicPromotionForm({
         }
       }
     }
-    if (prop.type === 'text' || prop.type === 'url') {
-      if (typeof value === 'string') {
-        if (prop.validation?.minLength && value.length < prop.validation.minLength) {
+    if (
+      prop.type === "text" ||
+      prop.type === "textarea" ||
+      prop.type === "url"
+    ) {
+      if (typeof value === "string") {
+        if (
+          prop.validation?.minLength &&
+          value.length < prop.validation.minLength
+        ) {
           return `Minimum length is ${prop.validation.minLength}`;
         }
-        if (prop.validation?.maxLength && value.length > prop.validation.maxLength) {
+        if (
+          prop.validation?.maxLength &&
+          value.length > prop.validation.maxLength
+        ) {
           return `Maximum length is ${prop.validation.maxLength}`;
         }
-        if (prop.validation?.pattern && !new RegExp(prop.validation.pattern).test(value)) {
-          return 'Invalid format';
+        if (
+          prop.validation?.pattern &&
+          !new RegExp(prop.validation.pattern).test(value)
+        ) {
+          return "Invalid format";
         }
       }
     }
     return true;
   };
 
-  // --- Submit handler ---
   const onFormSubmit = async (data: FormValues) => {
-    // Validate dynamic properties
-    let hasError = false;
-    const propertyErrors: Record<string, string> = {};
+    clearErrors();
+
     if (selectedType) {
+      let hasError = false;
       for (const prop of selectedType.properties) {
         const value = data.propertyValues?.[prop.code];
         const result = validateProperty(prop, value);
         if (result !== true) {
-          propertyErrors[prop.code] = result;
+          setError(`propertyValues.${prop.code}` as any, {
+            type: "manual",
+            message: result,
+          });
           hasError = true;
         }
       }
-    }
-    if (hasError) {
-      // Set errors manually on the propertyValues field
-      // We'll store them in a state to display
-      // For simplicity, we'll throw an error
-      setSubmitError('Please fix the property validation errors.');
-      // You could also set errors on the form using setError, but that's complex for nested fields
-      // Instead, we'll rely on the inline validation in the render function
-      return;
+      if (hasError) {
+        setSubmitError("Please fix the highlighted fields.");
+        return;
+      }
     }
 
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      // Convert dates to Date objects before submitting
       const payload = {
         ...data,
         startDate: new Date(data.startDate),
         endDate: new Date(data.endDate),
       };
       await onSubmit(payload);
-      router.push('/promotions');
+      router.push("/marketing/promotions");
     } catch (err: any) {
-      setSubmitError(err.message || 'Something went wrong');
+      setSubmitError(err.message || "Something went wrong");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // --- Render property field with Controller ---
   const renderPropertyField = (prop: PropertyDefinition) => {
     const fieldName = `propertyValues.${prop.code}` as const;
     const error = (errors.propertyValues as any)?.[prop.code]?.message;
 
     return (
-      <div key={prop._id} className="mb-4">
-        <label className="block text-sm font-medium">
-          {prop.name} {prop.isRequired && <span className="text-red-500">*</span>}
+      <div key={prop._id}>
+        <label className={labelCls}>
+          {prop.name}
+          {prop.isRequired && <span className="ml-1 text-destructive">*</span>}
         </label>
         <Controller
           name={fieldName}
           control={control}
           rules={{
             required: prop.isRequired ? `${prop.name} is required` : false,
-            ...(prop.type === 'number' && {
+            ...(prop.type === "number" && {
               min: prop.validation?.min,
               max: prop.validation?.max,
               valueAsNumber: true,
             }),
-            ...(prop.type === 'text' && {
+            ...((prop.type === "text" ||
+              prop.type === "textarea" ||
+              prop.type === "url") && {
               minLength: prop.validation?.minLength,
               maxLength: prop.validation?.maxLength,
-              pattern: prop.validation?.pattern ? new RegExp(prop.validation.pattern) : undefined,
+              pattern: prop.validation?.pattern
+                ? new RegExp(prop.validation.pattern)
+                : undefined,
             }),
           }}
           render={({ field }) => {
             const { onChange, onBlur, value, ref } = field;
 
             switch (prop.type) {
-              case 'text':
-              case 'url':
+              case "text":
+              case "url":
                 return (
                   <input
                     ref={ref}
-                    type={prop.type === 'url' ? 'url' : 'text'}
-                    value={value || ''}
+                    type={prop.type === "url" ? "url" : "text"}
+                    value={value || ""}
                     onChange={onChange}
                     onBlur={onBlur}
-                    className="mt-1 w-full border rounded px-3 py-2"
+                    className={inputCls}
                   />
                 );
-              case 'number':
+              case "textarea":
+                return (
+                  <textarea
+                    ref={ref}
+                    value={value || ""}
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    rows={3}
+                    className={`${inputCls} resize-y`}
+                  />
+                );
+              case "number":
                 return (
                   <input
                     ref={ref}
                     type="number"
-                    value={value ?? ''}
+                    value={value ?? ""}
                     onChange={(e) => onChange(e.target.valueAsNumber)}
                     onBlur={onBlur}
-                    className="mt-1 w-full border rounded px-3 py-2"
+                    className={inputCls}
                   />
                 );
-              case 'select':
+              case "select":
                 return (
                   <select
                     ref={ref}
-                    value={value || ''}
+                    value={value || ""}
                     onChange={onChange}
                     onBlur={onBlur}
-                    className="mt-1 w-full border rounded px-3 py-2"
+                    className={inputCls}
                   >
-                    <option value="">Select...</option>
+                    <option value="">Select…</option>
                     {prop.options?.map((opt) => (
                       <option key={opt} value={opt}>
                         {opt}
@@ -313,21 +366,21 @@ export function DynamicPromotionForm({
                     ))}
                   </select>
                 );
-              case 'multi-select':
+              case "multi-select":
                 return (
                   <select
                     ref={ref}
                     multiple
                     value={Array.isArray(value) ? value : []}
                     onChange={(e) => {
-                      const options = e.target.options;
-                      const selected = Array.from(options)
-                        .filter((opt) => opt.selected)
-                        .map((opt) => opt.value);
+                      const opts = e.target.options;
+                      const selected = Array.from(opts)
+                        .filter((o) => o.selected)
+                        .map((o) => o.value);
                       onChange(selected);
                     }}
                     onBlur={onBlur}
-                    className="mt-1 w-full border rounded px-3 py-2"
+                    className={`${inputCls} h-auto`}
                     size={4}
                   >
                     {prop.options?.map((opt) => (
@@ -337,68 +390,103 @@ export function DynamicPromotionForm({
                     ))}
                   </select>
                 );
-              case 'checkbox':
+              case "checkbox":
                 return (
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-1">
                     {prop.options?.map((opt) => (
-                      <label key={opt} className="flex items-center">
+                      <label
+                        key={opt}
+                        className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground"
+                      >
                         <input
                           type="checkbox"
                           checked={Array.isArray(value) && value.includes(opt)}
                           onChange={(e) => {
                             const current = Array.isArray(value) ? value : [];
-                            if (e.target.checked) {
-                              onChange([...current, opt]);
-                            } else {
-                              onChange(current.filter((v: string) => v !== opt));
-                            }
+                            if (e.target.checked) onChange([...current, opt]);
+                            else
+                              onChange(
+                                current.filter((v: string) => v !== opt),
+                              );
                           }}
                           onBlur={onBlur}
-                          className="mr-2"
+                          className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
                         />
                         {opt}
                       </label>
                     ))}
                   </div>
                 );
-              case 'radio':
+              case "radio":
                 return (
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-1">
                     {prop.options?.map((opt) => (
-                      <label key={opt} className="flex items-center">
+                      <label
+                        key={opt}
+                        className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground"
+                      >
                         <input
                           type="radio"
                           value={opt}
                           checked={value === opt}
                           onChange={() => onChange(opt)}
                           onBlur={onBlur}
-                          className="mr-2"
+                          className="h-4 w-4 border-border text-primary focus:ring-2 focus:ring-primary/20"
                         />
                         {opt}
                       </label>
                     ))}
                   </div>
                 );
-              case 'boolean':
+              case "boolean":
                 return (
-                  <input
-                    ref={ref}
-                    type="checkbox"
-                    checked={!!value}
-                    onChange={(e) => onChange(e.target.checked)}
-                    onBlur={onBlur}
-                    className="mt-1"
-                  />
+                  <label className="flex cursor-pointer items-center gap-2.5 pt-1 text-[14px] text-foreground">
+                    <input
+                      ref={ref}
+                      type="checkbox"
+                      checked={!!value}
+                      onChange={(e) => onChange(e.target.checked)}
+                      onBlur={onBlur}
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                    Enabled
+                  </label>
                 );
-              case 'date':
+              case "date":
                 return (
                   <input
                     ref={ref}
                     type="datetime-local"
-                    value={value || ''}
+                    value={value || ""}
                     onChange={onChange}
                     onBlur={onBlur}
-                    className="mt-1 w-full border rounded px-3 py-2"
+                    className={inputCls}
+                  />
+                );
+              case "color":
+                return (
+                  <div className="flex items-center gap-3">
+                    <input
+                      ref={ref}
+                      type="color"
+                      value={value || "#000000"}
+                      onChange={onChange}
+                      onBlur={onBlur}
+                      className="h-10 w-14 cursor-pointer rounded-lg border border-border bg-background p-1"
+                    />
+                    <span className="text-[13px] text-muted-foreground">
+                      {value || "#000000"}
+                    </span>
+                  </div>
+                );
+              case "file":
+                return (
+                  <input
+                    ref={ref}
+                    type="file"
+                    onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+                    onBlur={onBlur}
+                    className="block w-full text-[14px] text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3.5 file:py-2 file:text-[13px] file:font-medium file:text-foreground hover:file:bg-muted/80"
                   />
                 );
               default:
@@ -406,209 +494,257 @@ export function DynamicPromotionForm({
                   <input
                     ref={ref}
                     type="text"
-                    value={value || ''}
+                    value={value || ""}
                     onChange={onChange}
                     onBlur={onBlur}
-                    className="mt-1 w-full border rounded px-3 py-2"
+                    className={inputCls}
                   />
                 );
             }
           }}
         />
-        {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
-        {/* Additional validation messages from the manual check can be shown here */}
-        {!error && submitError && (errors.propertyValues as any)?.[prop.code]?.message && (
-          <p className="text-red-500 text-sm mt-1">
-            {(errors.propertyValues as any)[prop.code].message}
-          </p>
-        )}
+        {error && <p className={errorCls}>{error}</p>}
       </div>
     );
   };
 
   return (
-    <form onSubmit={handleSubmit(onFormSubmit as any)} className="space-y-6 max-w-3xl">
-      {submitError && <div className="p-3 bg-red-50 text-red-700 rounded">{submitError}</div>}
+    <form
+      onSubmit={handleSubmit(onFormSubmit as any)}
+      className="mx-auto w-full max-w-3xl space-y-6 pb-24"
+    >
+      {submitError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
+          {submitError}
+        </div>
+      )}
 
-      {/* Promotion Type */}
-      <div>
-        <label className="block text-sm font-medium">Promotion Type *</label>
-        <select
-          {...register('promotionTypeId')}
-          onChange={(e) => setSelectedTypeId(e.target.value)}
-          className="mt-1 w-full border rounded px-3 py-2"
-        >
-          <option value="">Select a promotion type...</option>
-          {promotionTypes.map((type) => (
-            <option key={type._id} value={type._id}>
-              {type.name} ({type.calculationType})
-            </option>
-          ))}
-        </select>
-        {errors.promotionTypeId && (
-          <p className="text-red-500 text-sm">{errors.promotionTypeId.message}</p>
+      {/* ── Type ─────────────────────────────────────────────── */}
+      <div className={fieldsetCls}>
+        <div>
+          <label className={labelCls}>
+            Promotion type <span className="text-destructive">*</span>
+          </label>
+          <select
+            {...register("promotionTypeId")}
+            onChange={(e) => setSelectedTypeId(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">Select a promotion type…</option>
+            {promotionTypes.map((type) => (
+              <option key={type._id} value={type._id}>
+                {type.name} · {type.calculationType.replace("_", " ")}
+              </option>
+            ))}
+          </select>
+          {errors.promotionTypeId && (
+            <p className={errorCls}>{errors.promotionTypeId.message}</p>
+          )}
+        </div>
+
+        {selectedType && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-primary/5 px-3.5 py-2.5 text-[13px]">
+            <span className="font-medium text-foreground">
+              {selectedType.name}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="capitalize text-muted-foreground">
+              {selectedType.calculationType.replace("_", " ")}
+            </span>
+          </div>
         )}
       </div>
 
       {selectedType && (
         <>
-          {/* Type Info */}
-          <div className="bg-blue-50 p-4 rounded">
-            <p className="text-sm text-blue-700">
-              <strong>Type:</strong> {selectedType.name}
-            </p>
-            <p className="text-sm text-blue-700">
-              <strong>Calculation:</strong> {selectedType.calculationType.replace('_', ' ')}
-            </p>
-          </div>
-
-          {/* Dynamic Properties */}
+          {/* ── Dynamic properties ─────────────────────────────── */}
           {selectedType.properties.length > 0 && (
-            <fieldset className="border p-4 rounded">
-              <legend className="text-sm font-medium">Properties</legend>
-              <div className="space-y-4">
-                {selectedType.properties.map((prop) => renderPropertyField(prop))}
+            <fieldset className={fieldsetCls}>
+              <legend className={legendCls}>Properties</legend>
+              <div className="space-y-5">
+                {selectedType.properties.map((prop) =>
+                  renderPropertyField(prop),
+                )}
               </div>
             </fieldset>
           )}
 
-          {/* Common Fields */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium">Name *</label>
-              <input {...register('name')} className="mt-1 w-full border rounded px-3 py-2" />
-              {errors.name && <p className="text-red-500 text-sm">{errors.name.message}</p>}
+          {/* ── Basic details ──────────────────────────────────── */}
+          <fieldset className={fieldsetCls}>
+            <legend className={legendCls}>Details</legend>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="sm:col-span-2">
+                <label className={labelCls}>
+                  Name <span className="text-destructive">*</span>
+                </label>
+                <input {...register("name")} className={inputCls} />
+                {errors.name && (
+                  <p className={errorCls}>{errors.name.message}</p>
+                )}
+              </div>
+              <div>
+                <label className={labelCls}>Priority</label>
+                <input
+                  type="number"
+                  {...register("priority", { valueAsNumber: true })}
+                  className={inputCls}
+                />
+              </div>
             </div>
+
             <div>
-              <label className="block text-sm font-medium">Priority</label>
+              <label className={labelCls}>Description</label>
+              <textarea
+                {...register("description")}
+                rows={3}
+                className={`${inputCls} resize-y`}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>
+                  Start date <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  {...register("startDate")}
+                  className={inputCls}
+                />
+                {errors.startDate && (
+                  <p className={errorCls}>{errors.startDate.message}</p>
+                )}
+              </div>
+              <div>
+                <label className={labelCls}>
+                  End date <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  {...register("endDate")}
+                  className={inputCls}
+                />
+                {errors.endDate && (
+                  <p className={errorCls}>{errors.endDate.message}</p>
+                )}
+              </div>
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
+              <input
+                type="checkbox"
+                {...register("isActive")}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+              />
+              Active
+            </label>
+          </fieldset>
+
+          {/* ── Eligibility ────────────────────────────────────── */}
+          <fieldset className={fieldsetCls}>
+            <legend className={legendCls}>Customer eligibility</legend>
+
+            <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
+              <input
+                type="checkbox"
+                {...register("customerEligibility.allCustomers")}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+              />
+              All customers
+            </label>
+
+            {!allCustomers && (
+              <div>
+                <label className={labelCls}>Customer groups</label>
+                <select
+                  multiple
+                  {...register("customerEligibility.customerGroupIds")}
+                  className={`${inputCls} h-auto`}
+                  size={3}
+                >
+                  {customerGroups.map((g) => (
+                    <option key={g.value} value={g.value}>
+                      {g.label}
+                    </option>
+                  ))}
+                </select>
+                <p className={helperCls}>Hold Ctrl/Cmd to select multiple.</p>
+              </div>
+            )}
+
+            <div>
+              <label className={labelCls}>Minimum order amount</label>
               <input
                 type="number"
-                {...register('priority', { valueAsNumber: true })}
-                className="mt-1 w-full border rounded px-3 py-2"
+                step="0.01"
+                {...register("customerEligibility.minOrderAmount", {
+                  valueAsNumber: true,
+                })}
+                className={inputCls}
               />
             </div>
-          </div>
+          </fieldset>
 
-          <div>
-            <label className="block text-sm font-medium">Description</label>
-            <textarea
-              {...register('description')}
-              rows={3}
-              className="mt-1 w-full border rounded px-3 py-2"
-            />
-          </div>
+          {/* ── Usage limits ───────────────────────────────────── */}
+          <fieldset className={fieldsetCls}>
+            <legend className={legendCls}>Usage limits</legend>
 
-          {/* Date Range */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium">Start Date *</label>
-              <input
-                type="datetime-local"
-                {...register('startDate')}
-                className="mt-1 w-full border rounded px-3 py-2"
-              />
-              {errors.startDate && <p className="text-red-500 text-sm">{errors.startDate.message}</p>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium">End Date *</label>
-              <input
-                type="datetime-local"
-                {...register('endDate')}
-                className="mt-1 w-full border rounded px-3 py-2"
-              />
-              {errors.endDate && <p className="text-red-500 text-sm">{errors.endDate.message}</p>}
-            </div>
-          </div>
-
-          <div className="flex items-center">
-            <input type="checkbox" {...register('isActive')} className="mr-2" />
-            <label className="text-sm font-medium">Active</label>
-          </div>
-
-          {/* Customer Eligibility */}
-          <fieldset className="border p-4 rounded">
-            <legend className="text-sm font-medium">Customer Eligibility</legend>
-            <div className="space-y-2">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  {...register('customerEligibility.allCustomers')}
-                  className="mr-2"
-                />
-                <label>All Customers</label>
-              </div>
-              {!allCustomers && (
-                <div>
-                  <label className="block text-sm">Customer Groups</label>
-                  <select
-                    multiple
-                    {...register('customerEligibility.customerGroupIds')}
-                    className="mt-1 w-full border rounded px-3 py-2"
-                    size={3}
-                  >
-                    {customerGroups.map((g) => (
-                      <option key={g.value} value={g.value}>
-                        {g.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+            <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="block text-sm">Minimum Order Amount</label>
+                <label className={labelCls}>Total uses</label>
                 <input
                   type="number"
-                  step="0.01"
-                  {...register('customerEligibility.minOrderAmount', { valueAsNumber: true })}
-                  className="mt-1 w-full border rounded px-3 py-2"
+                  placeholder="Unlimited"
+                  {...register("usageLimits.totalUses", {
+                    valueAsNumber: true,
+                  })}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Per customer</label>
+                <input
+                  type="number"
+                  placeholder="Unlimited"
+                  {...register("usageLimits.perCustomer", {
+                    valueAsNumber: true,
+                  })}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Per order</label>
+                <input
+                  type="number"
+                  {...register("usageLimits.perOrder", {
+                    valueAsNumber: true,
+                  })}
+                  className={inputCls}
                 />
               </div>
             </div>
           </fieldset>
 
-          {/* Usage Limits */}
-          <fieldset className="border p-4 rounded">
-            <legend className="text-sm font-medium">Usage Limits</legend>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm">Total Uses</label>
-                <input
-                  type="number"
-                  {...register('usageLimits.totalUses', { valueAsNumber: true })}
-                  className="mt-1 w-full border rounded px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm">Per Customer</label>
-                <input
-                  type="number"
-                  {...register('usageLimits.perCustomer', { valueAsNumber: true })}
-                  className="mt-1 w-full border rounded px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm">Per Order</label>
-                <input
-                  type="number"
-                  {...register('usageLimits.perOrder', { valueAsNumber: true })}
-                  className="mt-1 w-full border rounded px-3 py-2"
-                />
-              </div>
-            </div>
-          </fieldset>
+          {/* ── Stacking ───────────────────────────────────────── */}
+          <fieldset className={fieldsetCls}>
+            <legend className={legendCls}>Stacking</legend>
 
-          {/* Stacking */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center">
-              <input type="checkbox" {...register('stackable')} className="mr-2" />
-              <label className="text-sm font-medium">Stackable</label>
-            </div>
+            <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
+              <input
+                type="checkbox"
+                {...register("stackable")}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+              />
+              Stackable with other promotions
+            </label>
+
             <div>
-              <label className="block text-sm">Exclusive With</label>
+              <label className={labelCls}>Exclusive with</label>
               <select
                 multiple
-                {...register('exclusiveWith')}
-                className="mt-1 w-full border rounded px-3 py-2"
+                {...register("exclusiveWith")}
+                className={`${inputCls} h-auto`}
                 size={3}
               >
                 {otherPromotions.map((p) => (
@@ -617,25 +753,29 @@ export function DynamicPromotionForm({
                   </option>
                 ))}
               </select>
+              <p className={helperCls}>
+                Cannot be combined with the selected promotions.
+              </p>
             </div>
-          </div>
+          </fieldset>
         </>
       )}
 
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          {isSubmitting ? 'Saving...' : 'Save'}
-        </button>
+      {/* ── Sticky action bar ────────────────────────────────── */}
+      <div className="sticky bottom-0 -mx-4 flex items-center justify-end gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <button
           type="button"
           onClick={() => router.back()}
-          className="border px-4 py-2 rounded hover:bg-gray-50"
+          className="rounded-lg border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground transition hover:bg-muted"
         >
           Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded-lg bg-primary px-4 py-2.5 text-[14px] font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+        >
+          {isSubmitting ? "Saving…" : "Save promotion"}
         </button>
       </div>
     </form>

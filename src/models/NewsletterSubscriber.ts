@@ -1,11 +1,13 @@
 // models/NewsletterSubscriber.ts
-import mongoose, { Schema, Document, Model } from "mongoose";
+import mongoose, { Schema, Document, Model, Types } from "mongoose";
+
+export type NewsletterStatus = "subscribed" | "unsubscribed" | "bounced";
 
 export interface NewsletterSubscriberDocument extends Document {
   email: string;
-  status: "subscribed" | "unsubscribed" | "bounced";
+  status: NewsletterStatus;
   source: string;
-  userId?: string | null;
+  userId?: Types.ObjectId | null;
   unsubscribeToken: string;
   subscribedAt: Date;
   unsubscribedAt?: Date | null;
@@ -30,7 +32,12 @@ const NewsletterSubscriberSchema = new Schema<NewsletterSubscriberDocument>(
       index: true,
     },
     source: { type: String, default: "footer" },
-    userId: { type: String, default: null },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
     unsubscribeToken: { type: String, required: true, index: true },
     subscribedAt: { type: Date, default: Date.now },
     unsubscribedAt: { type: Date, default: null },

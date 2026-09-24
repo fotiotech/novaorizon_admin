@@ -2,11 +2,17 @@
 import { z } from "zod";
 
 export const promotionSchema = z.object({
+  promotionTypeId: z.string().min(1, "Promotion type is required"),
   name: z.string().min(1, "Name is required").trim(),
   description: z.string().optional(),
-  type: z.enum(["percentage", "fixed_amount", "buy_x_get_y", "free_shipping", "bundle_discount"]),
-  startDate: z.string().or(z.date()).transform((val) => new Date(val)),
-  endDate: z.string().or(z.date()).transform((val) => new Date(val)),
+  startDate: z
+    .string()
+    .or(z.date())
+    .transform((val) => new Date(val)),
+  endDate: z
+    .string()
+    .or(z.date())
+    .transform((val) => new Date(val)),
   isActive: z.boolean().default(true),
   priority: z.number().default(0),
   customerEligibility: z.object({
@@ -21,7 +27,7 @@ export const promotionSchema = z.object({
   }),
   stackable: z.boolean().default(false),
   exclusiveWith: z.array(z.string()).default([]),
-  property: z.array(z.string()).default([]),
+  propertyValues: z.record(z.string(), z.any()).default({}),
 });
 
 export type PromotionFormValues = z.infer<typeof promotionSchema>;

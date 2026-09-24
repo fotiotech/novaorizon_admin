@@ -1,5 +1,4 @@
-// app/promotion-types/create/page.tsx
-
+// app/marketing/promotions/types/create/page.tsx
 import { PromotionTypeForm } from "@/app/(marketing)/components/PromotionTypeForm";
 import {
   listPromotionTypeProperties,
@@ -29,8 +28,7 @@ export default async function CreatePromotionTypePage() {
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-2xl font-bold mb-6">Create Promotion Type</h1>
+    <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
       <PromotionTypeForm
         availableProperties={availableProperties}
         onSubmit={handleCreate}

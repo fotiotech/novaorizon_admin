@@ -58,11 +58,23 @@ export interface MenuSection {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Content sub-tree — extracted from app/marketing/content/page.tsx.
-// Rendered as the `children` of the Marketing → Content link, so the
-// sidebar can drill in: Marketing → Content → Navigation / Menus / …
+// Convention for drill-down sub-trees:
+//
+// Every parent link that has a `children` array repeats itself as the
+// FIRST entry of that array, pointing at its own href with the same
+// name and icon. The sidebar's row in the section list only opens the
+// sub-tree — it does not navigate — so that first child is what makes
+// the parent page reachable.
+//
+// Section-level roots (Analytics, Sales, Catalog, Customers, Marketing,
+// Channels, Settings) are not part of this convention because they have
+// no `children` of their own.
 // ─────────────────────────────────────────────────────────────────────
-export const contentLinks: MenuLink[] = [
+
+// ─────────────────────────────────────────────────────────────────────
+// Content sub-tree — Marketing → Content.
+// ─────────────────────────────────────────────────────────────────────
+export const navigationLinks: MenuLink[] = [
   {
     name: "Navigation",
     href: "/marketing/content/navigation",
@@ -72,6 +84,25 @@ export const contentLinks: MenuLink[] = [
     name: "Menus",
     href: "/marketing/content/navigation/menus",
     icon: <MenuOpen />,
+  },
+  {
+    name: "Collestions",
+    href: "/marketing/content/navigation/collections",
+    icon: <ImageIcon />,
+  },
+];
+
+export const contentLinks: MenuLink[] = [
+  {
+    name: "Content",
+    href: "/marketing/content",
+    icon: <Code />,
+  },
+  {
+    name: "Navigation",
+    href: "/marketing/content/navigation",
+    icon: <MenuIcon />,
+    children: navigationLinks,
   },
   {
     name: "Hero Content",
@@ -86,20 +117,14 @@ export const contentLinks: MenuLink[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────
-// Marketing — merged.
-// Layout additions: "Promotion Type", "Properties".
-// Renamed: "Email Marketing" → "Email Campaigns" (layout name wins).
-// Content now exposes a nested sub-tree via `contentLinks`.
+// Promotions sub-tree — Marketing → Promotions.
 // ─────────────────────────────────────────────────────────────────────
-export const marketingLinks: MenuLink[] = [
+export const promotionLinks: MenuLink[] = [
   {
-    name: "Content",
-    href: "/marketing/content",
-    icon: <Code />,
-    children: contentLinks,
+    name: "Promotions",
+    href: "/marketing/promotions",
+    icon: <Discount />,
   },
-  { name: "Campaigns", href: "/marketing/campaigns", icon: <Discount /> },
-  { name: "Promotions", href: "/marketing/promotions", icon: <Discount /> },
   {
     name: "Promotion Type",
     href: "/marketing/promotions/types",
@@ -109,6 +134,27 @@ export const marketingLinks: MenuLink[] = [
     name: "Properties",
     href: "/marketing/promotions/properties",
     icon: <Assignment />,
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────
+// Marketing — merged.
+// Renamed: "Email Marketing" → "Email Campaigns".
+// Content and Promotions now expose nested sub-trees.
+// ─────────────────────────────────────────────────────────────────────
+export const marketingLinks: MenuLink[] = [
+  {
+    name: "Content",
+    href: "/marketing/content",
+    icon: <Code />,
+    children: contentLinks,
+  },
+  { name: "Advertising", href: "/marketing/ads", icon: <Discount /> },
+  {
+    name: "Promotions",
+    href: "/marketing/promotions",
+    icon: <Discount />,
+    children: promotionLinks,
   },
   {
     name: "Email Campaigns",
@@ -123,11 +169,10 @@ export const marketingLinks: MenuLink[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────
-// Store sub-tree — extracted from app/channels/store/layout.tsx.
-// Rendered as the `children` of the Channels → Store link so the sidebar
-// can drill in: Channels → Store → Pages/Posts/Media/Blog/Tags/FAQs.
+// Store sub-tree — Channels → Store.
 // ─────────────────────────────────────────────────────────────────────
 export const storeLinks: MenuLink[] = [
+  { name: "Store", href: "/channels/store", icon: <Campaign /> },
   { name: "Pages", href: "/channels/store/pges", icon: <Description /> },
   { name: "Posts", href: "/channels/store/posts", icon: <Article /> },
   { name: "Media", href: "/channels/store/media", icon: <ImageIcon /> },
@@ -137,8 +182,7 @@ export const storeLinks: MenuLink[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────
-// Attributes sub-tree — extracted from app/catalog/attributes/layout.tsx.
-// Rendered as the `children` of the Catalog → Attributes link.
+// Attributes sub-tree — Catalog → Attributes.
 // ─────────────────────────────────────────────────────────────────────
 export const attributeLinks: MenuLink[] = [
   { name: "Attributes", href: "/catalog/attributes", icon: <Assignment /> },
@@ -148,15 +192,14 @@ export const attributeLinks: MenuLink[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────
-// POS sub-tree — rendered as the `children` of Channels → POS so the
-// sidebar can drill in: Channels → POS → Dashboard / Sales / Products /
-// Customers / Reports.
+// POS sub-tree — Channels → POS.
+//
+// "POS" replaces the old "Dashboard" entry as the first row: it points
+// at the same href (/channels/pos) and keeps the parent-as-first-child
+// convention consistent across every drill-down.
 // ─────────────────────────────────────────────────────────────────────
 export const posLinks: MenuLink[] = [
-  { name: "Dashboard", href: "/channels/pos", icon: <Assessment /> },
-  { name: "Sales", href: "/sales/orders", icon: <ShoppingBag /> },
-  { name: "Products", href: "/catalog/products", icon: <Inventory2 /> },
-  { name: "Customers", href: "/customers/customers", icon: <Person2 /> },
+  { name: "POS", href: "/channels/pos", icon: <Assessment /> },
   { name: "Reports", href: "/channels/pos/reports", icon: <Assessment /> },
 ];
 
@@ -309,6 +352,10 @@ export const mainSections = menuConfig.filter((s) => s.slug !== SETTINGS_SLUG);
 
 // Flat search index — parents + children, so typing "Pages" finds
 // /channels/store/pages with "Channels › Store" as the context label.
+//
+// Parents repeat themselves as the first entry of their own `children`,
+// so we filter that duplicate out of the child index — otherwise every
+// parent would appear twice in search.
 export const allLinks = menuConfig.flatMap((section) => {
   const parents = section.links.map((link) => ({
     name: link.name,
@@ -317,12 +364,14 @@ export const allLinks = menuConfig.flatMap((section) => {
     sectionTitle: section.title,
   }));
   const children = section.links.flatMap((link) =>
-    (link.children ?? []).map((child) => ({
-      name: child.name,
-      href: child.href,
-      icon: child.icon,
-      sectionTitle: `${section.title} › ${link.name}`,
-    })),
+    (link.children ?? [])
+      .filter((child) => child.href !== link.href)
+      .map((child) => ({
+        name: child.name,
+        href: child.href,
+        icon: child.icon,
+        sectionTitle: `${section.title} › ${link.name}`,
+      })),
   );
   return [...parents, ...children];
 });
@@ -350,6 +399,11 @@ const matches = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(href + "/");
 
 // Flat index of every navigable link, deepest href first.
+//
+// Parents are pushed before children, and Array.find returns the first
+// match, so an exact match on a parent's own href resolves to the
+// parent entry (no parentName → section-level siblings). This is the
+// correct behaviour when the user is on the parent's own page.
 const flatIndex: ActiveLinkInfo[] = menuConfig
   .flatMap((section) => {
     const parents: ActiveLinkInfo[] = section.links.map((link) => ({
@@ -406,15 +460,19 @@ export function findNavContext(pathname: string | null): NavContext | null {
 
   if (current.parentName) {
     // Child link → siblings are the other children of the same parent.
+    // Filter out the parent's own mirror entry so the dropdown doesn't
+    // offer the current page as one of its own siblings.
     const section = menuConfig.find((s) => s.title === current.sectionTitle);
     const parent = section?.links.find((l) => l.name === current.parentName);
-    siblings = (parent?.children ?? []).map((c) => ({
-      name: c.name,
-      href: c.href,
-      sectionTitle: current.sectionTitle,
-      parentName: current.parentName,
-      icon: c.icon,
-    }));
+    siblings = (parent?.children ?? [])
+      .filter((c) => c.href !== parent?.href)
+      .map((c) => ({
+        name: c.name,
+        href: c.href,
+        sectionTitle: current.sectionTitle,
+        parentName: current.parentName,
+        icon: c.icon,
+      }));
   } else {
     // Parent link → siblings are the other top-level links in the section.
     const section = menuConfig.find((s) => s.title === current.sectionTitle);

@@ -55,7 +55,6 @@ const UserSchema = new Schema(
       default: "customer",
       index: true,
     },
-    permissions: { type: [String], default: [] },
 
     // NextAuth / adapter collections
     accounts: { type: [Schema.Types.Mixed], default: [] },
@@ -113,13 +112,23 @@ const UserSchema = new Schema(
       timezone: { type: String, default: "UTC" },
       country: { type: String, default: null, uppercase: true, trim: true },
 
-      // Opt-in / opt-out matrix
+      /**
+       * Service notifications (order/account updates).
+       * There is no separate `orderUpdates` flag — if a channel is on,
+       * service messages go through it.
+       */
       notifications: {
         email: { type: Boolean, default: true },
         sms: { type: Boolean, default: false },
         push: { type: Boolean, default: true },
         whatsapp: { type: Boolean, default: false },
       },
+
+      /**
+       * Marketing consent. `email` is the single opt-in captured at signup
+       * and is kept in sync with the NewsletterSubscriber collection.
+       * Other channels are reserved for future use.
+       */
       marketing: {
         email: { type: Boolean, default: false },
         sms: { type: Boolean, default: false },
@@ -127,10 +136,9 @@ const UserSchema = new Schema(
         whatsapp: { type: Boolean, default: false },
         productRecommendations: { type: Boolean, default: false },
       },
-      orderUpdates: { type: Boolean, default: true },
+
       priceDropAlerts: { type: Boolean, default: false },
       backInStockAlerts: { type: Boolean, default: false },
-      newsletter: { type: Boolean, default: false },
 
       // Consent audit trail (GDPR / CAN-SPAM)
       consentedAt: { type: Date, default: null },

@@ -403,80 +403,94 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     </>
   );
 
-  const renderChildren = (section: MenuSection, parent: MenuLink) => (
-    <>
-      <div className="mb-3 flex items-center gap-2 px-1">
-        <button
-          type="button"
-          onClick={goBack}
-          aria-label="Back"
-          className="-ml-1 rounded-md p-2 text-sidebar-foreground/60 transition-colors hover:bg-foreground/5 hover:text-sidebar-foreground active:scale-90"
-        >
-          <ArrowBack sx={{ fontSize: 18 }} />
-        </button>
+  const renderChildren = (section: MenuSection, parent: MenuLink) => {
+    const children = parent.children ?? [];
 
-        <nav
-          aria-label="Breadcrumb"
-          className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60"
-        >
+    // Deepest match wins — same rule the flat index uses. A child's own
+    // href beats the parent mirror's href on a deeper route, and the
+    // parent mirror only lights up on the parent's exact URL.
+    let bestHref = "";
+    for (const c of children) {
+      const hit =
+        pathname === c.href ||
+        (pathname ? pathname.startsWith(c.href + "/") : false);
+      if (hit && c.href.length > bestHref.length) bestHref = c.href;
+    }
+
+    return (
+      <>
+        <div className="mb-3 flex items-center gap-2 px-1">
           <button
             type="button"
-            onClick={goToRoot}
-            className="flex items-center gap-1 transition-colors hover:text-sidebar-foreground"
+            onClick={goBack}
+            aria-label="Back"
+            className="-ml-1 rounded-md p-2 text-sidebar-foreground/60 transition-colors hover:bg-foreground/5 hover:text-sidebar-foreground active:scale-90"
           >
-            <Home sx={{ fontSize: 15 }} />
-            <span>Menu</span>
+            <ArrowBack sx={{ fontSize: 18 }} />
           </button>
-          <ChevronRight sx={{ fontSize: 14 }} className="opacity-50" />
-          <button
-            type="button"
-            onClick={() => {
-              setDirection("back");
-              setPath([section.slug]);
-            }}
-            className="truncate transition-colors hover:text-sidebar-foreground"
-          >
-            {section.title}
-          </button>
-          <ChevronRight sx={{ fontSize: 14 }} className="opacity-50" />
-          <span className="truncate text-sidebar-foreground/90">
-            {parent.name}
-          </span>
-        </nav>
-      </div>
 
-      <ul className="space-y-0.5">
-        {(parent.children ?? []).map((link, i) => {
-          const isActive =
-            pathname === link.href || pathname?.startsWith(link.href);
-          return (
-            <li
-              key={link.href}
-              className="stagger-item"
-              style={{ animationDelay: `${i * 25}ms` }}
+          <nav
+            aria-label="Breadcrumb"
+            className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60"
+          >
+            <button
+              type="button"
+              onClick={goToRoot}
+              className="flex items-center gap-1 transition-colors hover:text-sidebar-foreground"
             >
-              <Link
-                href={link.href}
-                onClick={handleClose}
-                className={`${itemBase} ${
-                  isActive ? itemActive : itemIdle
-                } justify-between`}
+              <Home sx={{ fontSize: 15 }} />
+              <span>Menu</span>
+            </button>
+            <ChevronRight sx={{ fontSize: 14 }} className="opacity-50" />
+            <button
+              type="button"
+              onClick={() => {
+                setDirection("back");
+                setPath([section.slug]);
+              }}
+              className="truncate transition-colors hover:text-sidebar-foreground"
+            >
+              {section.title}
+            </button>
+            <ChevronRight sx={{ fontSize: 14 }} className="opacity-50" />
+            <span className="truncate text-sidebar-foreground/90">
+              {parent.name}
+            </span>
+          </nav>
+        </div>
+
+        <ul className="space-y-0.5">
+          {children.map((link, i) => {
+            const isActive = link.href === bestHref;
+            return (
+              <li
+                key={link.href}
+                className="stagger-item"
+                style={{ animationDelay: `${i * 25}ms` }}
               >
-                {isActive && <ActiveBar />}
-                <span className="flex items-center gap-3.5">
-                  <span className="text-sidebar-foreground/60 [&>svg]:text-xl group-hover:text-sidebar-foreground">
-                    {link.icon}
+                <Link
+                  href={link.href}
+                  onClick={handleClose}
+                  className={`${itemBase} ${
+                    isActive ? itemActive : itemIdle
+                  } justify-between`}
+                >
+                  {isActive && <ActiveBar />}
+                  <span className="flex items-center gap-3.5">
+                    <span className="text-sidebar-foreground/60 [&>svg]:text-xl group-hover:text-sidebar-foreground">
+                      {link.icon}
+                    </span>
+                    <span>{link.name}</span>
                   </span>
-                  <span>{link.name}</span>
-                </span>
-                {renderBadges(link)}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </>
-  );
+                  {renderBadges(link)}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </>
+    );
+  };
 
   const renderHeader = () => (
     <div className="shrink-0 px-4 pb-3.5 pt-4.5">

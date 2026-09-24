@@ -1,37 +1,42 @@
-// app/marketing/promotion/properties/edit/[id]/page.tsx
-
-import { PromotionPropertyForm } from '@/app/(marketing)/components/PromotionPropertyForm';
-import { getPromotionProperty, updatePromotionProperty } from '@/app/actions/promotion';
-import { notFound } from 'next/navigation';
+// app/marketing/promotions/properties/edit/[id]/page.tsx
+import { PromotionPropertyForm } from "@/app/(marketing)/components/PromotionPropertyForm";
+import {
+  getPromotionProperty,
+  updatePromotionProperty,
+} from "@/app/actions/promotion";
+import { notFound } from "next/navigation";
 
 interface EditPageProps {
   params: Promise<{ id: string }>;
 }
 
 export default async function EditPromotionPropertyPage(props: EditPageProps) {
-  const params = await props.params;
-  const property:any = await getPromotionProperty(params.id);
+  const { id } = await props.params;
+  const property: any = await getPromotionProperty(id);
 
   if (!property) {
     notFound();
   }
 
-  // Convert to the form's expected shape
   const initialValues = {
     ...property,
-    // Ensure option is an array (it might be undefined)
-    option: property?.option || [],
+    // Model stores `options`; the form + schema now use the same name.
+    // Fall back to [] for older docs that predate the field.
+    options: Array.isArray(property?.options) ? property.options : [],
+    sortOrder: typeof property?.sortOrder === "number" ? property.sortOrder : 0,
   };
 
   async function handleUpdate(data: any) {
-    'use server';
-    await updatePromotionProperty(params.id, data);
+    "use server";
+    await updatePromotionProperty(id, data);
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-2xl font-bold mb-6">Edit Promotion Property</h1>
-      <PromotionPropertyForm initialValues={initialValues} onSubmit={handleUpdate} />
+    <div className="mx-auto w-full max-w-xl px-4 py-6 sm:px-6">
+      <PromotionPropertyForm
+        initialValues={initialValues}
+        onSubmit={handleUpdate}
+      />
     </div>
   );
 }

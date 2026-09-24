@@ -1,17 +1,23 @@
 // components/PromotionTypeForm.tsx
-'use client';
+"use client";
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 const promotionTypeSchema = z.object({
-  name: z.string().min(1, 'Name is required').trim(),
-  code: z.string().min(1, 'Code is required').trim(),
+  name: z.string().min(1, "Name is required").trim(),
+  code: z.string().min(1, "Code is required").trim(),
   description: z.string().optional(),
-  calculationType: z.enum(['percentage', 'fixed_amount', 'buy_x_get_y', 'free_shipping', 'bundle_discount']),
+  calculationType: z.enum([
+    "percentage",
+    "fixed_amount",
+    "buy_x_get_y",
+    "free_shipping",
+    "bundle_discount",
+  ]),
   properties: z.array(z.string()).default([]),
   isActive: z.boolean().default(true),
   icon: z.string().optional(),
@@ -25,7 +31,20 @@ interface PromotionTypeFormProps {
   availableProperties: { label: string; value: string }[];
 }
 
-export function PromotionTypeForm({ initialValues, onSubmit, availableProperties }: PromotionTypeFormProps) {
+// ─── Shared visual tokens ────────────────────────────────────────────
+const labelCls = "block text-[13px] font-medium text-foreground mb-1.5";
+const inputCls =
+  "w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground/50 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15";
+const errorCls = "mt-1.5 text-[13px] text-destructive";
+const fieldsetCls = "rounded-xl border border-border bg-card p-5 space-y-4";
+const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
+const helperCls = "mt-1.5 text-[12px] text-muted-foreground";
+
+export function PromotionTypeForm({
+  initialValues,
+  onSubmit,
+  availableProperties,
+}: PromotionTypeFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,13 +56,13 @@ export function PromotionTypeForm({ initialValues, onSubmit, availableProperties
   } = useForm<PromotionTypeFormValues>({
     resolver: zodResolver(promotionTypeSchema) as any,
     defaultValues: {
-      name: '',
-      code: '',
-      description: '',
-      calculationType: 'percentage',
+      name: "",
+      code: "",
+      description: "",
+      calculationType: "percentage",
       properties: [],
       isActive: true,
-      icon: '',
+      icon: "",
       ...initialValues,
     },
   });
@@ -53,87 +72,144 @@ export function PromotionTypeForm({ initialValues, onSubmit, availableProperties
     setError(null);
     try {
       await onSubmit(data);
-      router.push('/marketing/promotions/types');
+      router.push("/marketing/promotions/types");
     } catch (err: any) {
-      setError(err.message || 'Something went wrong');
+      setError(err.message || "Something went wrong");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6 max-w-2xl">
-      {error && <div className="p-3 bg-red-50 text-red-700 rounded">{error}</div>}
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium">Name *</label>
-          <input {...register('name')} className="mt-1 w-full border rounded px-3 py-2" />
-          {errors.name && <p className="text-red-500 text-sm">{errors.name.message}</p>}
+    <form
+      onSubmit={handleSubmit(onFormSubmit)}
+      className="mx-auto w-full max-w-2xl space-y-6 pb-24"
+    >
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
+          {error}
         </div>
-        <div>
-          <label className="block text-sm font-medium">Code *</label>
-          <input {...register('code')} className="mt-1 w-full border rounded px-3 py-2" />
-          {errors.code && <p className="text-red-500 text-sm">{errors.code.message}</p>}
+      )}
+
+      <fieldset className={fieldsetCls}>
+        <legend className={legendCls}>Basic info</legend>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={labelCls}>
+              Name <span className="text-destructive">*</span>
+            </label>
+            <input
+              {...register("name")}
+              placeholder="e.g., Seasonal discount"
+              className={inputCls}
+            />
+            {errors.name && <p className={errorCls}>{errors.name.message}</p>}
+          </div>
+          <div>
+            <label className={labelCls}>
+              Code <span className="text-destructive">*</span>
+            </label>
+            <input
+              {...register("code")}
+              placeholder="e.g., seasonal_discount"
+              className={inputCls}
+            />
+            {errors.code && <p className={errorCls}>{errors.code.message}</p>}
+          </div>
         </div>
-      </div>
 
-      <div>
-        <label className="block text-sm font-medium">Description</label>
-        <textarea {...register('description')} rows={3} className="mt-1 w-full border rounded px-3 py-2" />
-      </div>
+        <div>
+          <label className={labelCls}>Description</label>
+          <textarea
+            {...register("description")}
+            rows={3}
+            placeholder="Optional, shown to admins only"
+            className={`${inputCls} resize-y`}
+          />
+        </div>
+      </fieldset>
 
-      <div>
-        <label className="block text-sm font-medium">Calculation Type *</label>
-        <select {...register('calculationType')} className="mt-1 w-full border rounded px-3 py-2">
-          <option value="percentage">Percentage</option>
-          <option value="fixed_amount">Fixed Amount</option>
-          <option value="buy_x_get_y">Buy X Get Y</option>
-          <option value="free_shipping">Free Shipping</option>
-          <option value="bundle_discount">Bundle Discount</option>
-        </select>
-        {errors.calculationType && <p className="text-red-500 text-sm">{errors.calculationType.message}</p>}
-      </div>
+      <fieldset className={fieldsetCls}>
+        <legend className={legendCls}>Calculation</legend>
 
-      <div>
-        <label className="block text-sm font-medium">Properties</label>
-        <select
-          multiple
-          {...register('properties')}
-          className="mt-1 w-full border rounded px-3 py-2"
-          size={4}
-        >
-          {availableProperties.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </select>
-        <p className="text-sm text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
-      </div>
+        <div>
+          <label className={labelCls}>
+            Calculation type <span className="text-destructive">*</span>
+          </label>
+          <select {...register("calculationType")} className={inputCls}>
+            <option value="percentage">Percentage</option>
+            <option value="fixed_amount">Fixed amount</option>
+            <option value="buy_x_get_y">Buy X Get Y</option>
+            <option value="free_shipping">Free shipping</option>
+            <option value="bundle_discount">Bundle discount</option>
+          </select>
+          {errors.calculationType && (
+            <p className={errorCls}>{errors.calculationType.message}</p>
+          )}
+        </div>
 
-      <div>
-        <label className="block text-sm font-medium">Icon (optional)</label>
-        <input {...register('icon')} className="mt-1 w-full border rounded px-3 py-2" placeholder="e.g., 🎉" />
-      </div>
+        <div>
+          <label className={labelCls}>Icon</label>
+          <input
+            {...register("icon")}
+            placeholder="e.g., 🎉"
+            className={`${inputCls} max-w-[140px]`}
+          />
+          <p className={helperCls}>
+            Optional emoji or short glyph shown next to the type.
+          </p>
+        </div>
+      </fieldset>
 
-      <div className="flex items-center">
-        <input type="checkbox" {...register('isActive')} className="mr-2" />
-        <label className="text-sm font-medium">Active</label>
-      </div>
+      <fieldset className={fieldsetCls}>
+        <legend className={legendCls}>Properties</legend>
 
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          {isSubmitting ? 'Saving...' : 'Save'}
-        </button>
+        <div>
+          <label className={labelCls}>Attached properties</label>
+          <select
+            multiple
+            {...register("properties")}
+            className={`${inputCls} h-auto`}
+            size={5}
+          >
+            {availableProperties.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <p className={helperCls}>Hold Ctrl/Cmd to select multiple.</p>
+        </div>
+      </fieldset>
+
+      <fieldset className={fieldsetCls}>
+        <legend className={legendCls}>Visibility</legend>
+
+        <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
+          <input
+            type="checkbox"
+            {...register("isActive")}
+            className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+          />
+          Active
+        </label>
+      </fieldset>
+
+      <div className="sticky bottom-0 -mx-4 flex items-center justify-end gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <button
           type="button"
           onClick={() => router.back()}
-          className="border px-4 py-2 rounded hover:bg-gray-50"
+          className="rounded-lg border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground transition hover:bg-muted"
         >
           Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded-lg bg-primary px-4 py-2.5 text-[14px] font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+        >
+          {isSubmitting ? "Saving…" : "Save type"}
         </button>
       </div>
     </form>

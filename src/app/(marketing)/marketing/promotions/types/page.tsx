@@ -1,91 +1,94 @@
-// app/promotion-types/page.tsx
-import { DeleteButton } from '@/app/(marketing)/components/DeleteButton';
-import { listPromotionTypes } from '@/app/actions/promotionType';
-import Link from 'next/link';
+// app/marketing/promotions/types/page.tsx
+import { DeleteButton } from "@/app/(marketing)/components/DeleteButton";
+import { listPromotionTypes } from "@/app/actions/promotionType";
+import Link from "next/link";
 
 export default async function PromotionTypesPage() {
   const { data: types, total } = await listPromotionTypes({}, { limit: 100 });
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Promotion Types</h1>
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-[13px] text-muted-foreground">
+          {total} {total === 1 ? "type" : "types"}
+        </p>
         <Link
           href="/marketing/promotions/types/create"
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          className="rounded-lg bg-primary px-4 py-2.5 text-[14px] font-medium text-primary-foreground transition hover:bg-primary/90"
         >
-          New Promotion Type
+          New type
         </Link>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <table className="w-full text-left text-[14px]">
+          <thead className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Code
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Calculation
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Properties
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
+              <th className="px-5 py-3">Name</th>
+              <th className="px-5 py-3">Code</th>
+              <th className="px-5 py-3">Calculation</th>
+              <th className="px-5 py-3">Properties</th>
+              <th className="px-5 py-3">Status</th>
+              <th className="px-5 py-3 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-border">
             {types.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                  No promotion types found.
+                <td colSpan={6} className="px-5 py-12 text-center">
+                  <p className="text-[15px] font-medium text-foreground">
+                    No promotion types yet
+                  </p>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    Types define the calculation logic a promotion uses.
+                  </p>
                 </td>
               </tr>
             ) : (
               types.map((type: any) => (
-                <tr key={type._id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      {type.icon && <span className="mr-2">{type.icon}</span>}
-                      <span className="font-medium">{type.name}</span>
+                <tr key={type._id} className="transition hover:bg-muted/30">
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-2">
+                      {type.icon && (
+                        <span className="text-base leading-none">
+                          {type.icon}
+                        </span>
+                      )}
+                      <span className="font-medium text-foreground">
+                        {type.name}
+                      </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-5 py-3.5 font-mono text-[12px] text-muted-foreground">
                     {type.code}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {type.calculationType.replace('_', ' ')}
+                  <td className="px-5 py-3.5 text-[13px] capitalize text-muted-foreground">
+                    {type.calculationType.replace(/_/g, " ")}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {type.properties?.length || 0}
+                  <td className="px-5 py-3.5 text-[13px] text-muted-foreground">
+                    {type.properties?.length ?? 0}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-5 py-3.5">
                     <span
-                      className={`px-2 py-1 text-xs rounded-full ${
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
                         type.isActive
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? "bg-emerald-500/10 text-emerald-600"
+                          : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {type.isActive ? 'Active' : 'Inactive'}
+                      {type.isActive ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                    <Link
-                      href={`/marketing/promotions/types/edit/${type._id}`}
-                      className="text-blue-600 hover:text-blue-900 mr-3"
-                    >
-                      Edit
-                    </Link>
-                    <DeleteButton id={type._id} name={type.name} />
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center justify-end gap-3 text-[13px]">
+                      <Link
+                        href={`/marketing/promotions/types/edit/${type._id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        Edit
+                      </Link>
+                      <DeleteButton id={type._id} name={type.name} />
+                    </div>
                   </td>
                 </tr>
               ))
@@ -93,7 +96,6 @@ export default async function PromotionTypesPage() {
           </tbody>
         </table>
       </div>
-      <div className="mt-4 text-sm text-gray-600">Total: {total} types</div>
     </div>
   );
 }
