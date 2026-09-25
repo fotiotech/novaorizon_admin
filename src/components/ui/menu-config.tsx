@@ -117,27 +117,6 @@ export const contentLinks: MenuLink[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────
-// Promotions sub-tree — Marketing → Promotions.
-// ─────────────────────────────────────────────────────────────────────
-export const promotionLinks: MenuLink[] = [
-  {
-    name: "Promotions",
-    href: "/marketing/promotions",
-    icon: <Discount />,
-  },
-  {
-    name: "Promotion Type",
-    href: "/marketing/promotions/types",
-    icon: <Category />,
-  },
-  {
-    name: "Properties",
-    href: "/marketing/promotions/properties",
-    icon: <Assignment />,
-  },
-];
-
-// ─────────────────────────────────────────────────────────────────────
 // Marketing — merged.
 // Renamed: "Email Marketing" → "Email Campaigns".
 // Content and Promotions now expose nested sub-trees.
@@ -154,15 +133,14 @@ export const marketingLinks: MenuLink[] = [
     name: "Promotions",
     href: "/marketing/promotions",
     icon: <Discount />,
-    children: promotionLinks,
   },
   {
-    name: "Email Campaigns",
-    href: "/marketing/email_marketing",
+    name: "Email/SMS",
+    href: "/marketing/email_sms",
     icon: <Email />,
   },
   {
-    name: "Affiliate Marketing",
+    name: "Affiliate",
     href: "/marketing/affiliate",
     icon: <Code />,
   },

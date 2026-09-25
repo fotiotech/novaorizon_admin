@@ -691,6 +691,95 @@ export async function findProducts(
   }
 }
 
+// app/actions/products.ts — add after findProducts
+
+/**
+ * Paginated product list for admin pickers (promotion composer, bundles,
+ * etc.). Returns a lightweight shape — only the fields a picker needs —
+ * so it stays fast on large catalogs.
+ *
+ * Return shape mirrors `listPromotions` / `listPromotionProperties`:
+ *   { data, total, limit, skip }
+ */
+export async function listProducts(
+  filter: {
+    search?: string;
+    categoryId?: string;
+    brandId?: string;
+    isActive?: boolean;
+  } = {},
+  options: { limit?: number; skip?: number; sort?: any } = {},
+): Promise<{
+  data: {
+    _id: string;
+    name: string;
+    price: number;
+    sku?: string;
+    image?: string;
+  }[];
+  total: number;
+  limit: number;
+  skip: number;
+}> {
+  try {
+    await connection();
+
+    const { limit = 100, skip = 0, sort = { createdAt: -1 } } = options;
+
+    // Build query from the filter. All fields are optional.
+    const query: any = {};
+
+    if (filter.isActive !== undefined) {
+      query.isActive = filter.isActive;
+    }
+    if (
+      filter.categoryId &&
+      mongoose.Types.ObjectId.isValid(filter.categoryId)
+    ) {
+      query.categoryId = new mongoose.Types.ObjectId(filter.categoryId);
+    }
+    if (filter.brandId && mongoose.Types.ObjectId.isValid(filter.brandId)) {
+      query.brand = new mongoose.Types.ObjectId(filter.brandId);
+    }
+    if (filter.search && filter.search.trim()) {
+      // Text prefix match. If you have a text index on `name`, swap for
+      // `{ $text: { $search: filter.search } }` for better relevance.
+      query.name = { $regex: filter.search.trim(), $options: "i" };
+    }
+
+    const [rows, total] = await Promise.all([
+      Product.find(query)
+        .select("_id name price sku images")
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
+      Product.countDocuments(query),
+    ]);
+
+    const data = rows.map((p: any) => ({
+      _id: p._id.toString(),
+      name: p.name,
+      price: p.price,
+      sku: p.sku,
+      image: Array.isArray(p.images) ? (p.images[0] ?? "") : "",
+    }));
+
+    return { data, total, limit, skip };
+  } catch (error: any) {
+    console.error("[listProducts] Error:", error);
+    // Return an empty result rather than throwing — callers fall back to
+    // an empty picker instead of a 500 on the whole page.
+    return {
+      data: [],
+      total: 0,
+      limit: options.limit ?? 100,
+      skip: options.skip ?? 0,
+    };
+  }
+}
+
 export async function getProductFilterCategories(): Promise<
   { id: string; name: string }[]
 > {

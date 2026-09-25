@@ -8,6 +8,8 @@ export interface NewsletterSubscriberDocument extends Document {
   status: NewsletterStatus;
   source: string;
   userId?: Types.ObjectId | null;
+  phone?: string | null;
+  smsConsent?: boolean;
   unsubscribeToken: string;
   subscribedAt: Date;
   unsubscribedAt?: Date | null;
@@ -36,6 +38,18 @@ const NewsletterSubscriberSchema = new Schema<NewsletterSubscriberDocument>(
       type: Schema.Types.ObjectId,
       ref: "User",
       default: null,
+      index: true,
+    },
+    phone: {
+      type: String,
+      trim: true,
+      default: null,
+      sparse: true,
+      index: true,
+    },
+    smsConsent: {
+      type: Boolean,
+      default: false,
       index: true,
     },
     unsubscribeToken: { type: String, required: true, index: true },

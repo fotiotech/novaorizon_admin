@@ -123,7 +123,12 @@ export async function getNewsletterSubscribers(options?: {
   total: number;
   totalPages: number;
   currentPage: number;
-  counts: Record<string, number>;
+  counts: {
+    all: number;
+    subscribed: number;
+    unsubscribed: number;
+    bounced: number;
+  };
 }> {
   await connection();
 

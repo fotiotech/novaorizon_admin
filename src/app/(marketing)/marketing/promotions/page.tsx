@@ -1,16 +1,16 @@
 // app/marketing/promotions/page.tsx
-import { listPromotions } from "@/app/actions/promotion";
 import Link from "next/link";
+import { listPromotions, deletePromotion } from "@/app/actions/promotion";
+import { DeletePromotionButton } from "../../components/DeletePromotionButton";
 
 export default async function PromotionsPage() {
-  const { data: promotions } = await listPromotions({}, { limit: 100 });
+  const { data: promotions, total } = await listPromotions({}, { limit: 100 });
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
       <div className="mb-5 flex items-center justify-between gap-3">
         <p className="text-[13px] text-muted-foreground">
-          {promotions.length}{" "}
-          {promotions.length === 1 ? "promotion" : "promotions"}
+          {total} {total === 1 ? "promotion" : "promotions"}
         </p>
         <Link
           href="/marketing/promotions/create"
@@ -31,40 +31,57 @@ export default async function PromotionsPage() {
         </div>
       ) : (
         <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-          {promotions.map((p: any) => (
-            <li
-              key={p._id}
-              className="flex items-center justify-between gap-4 px-5 py-4"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-[15px] font-medium text-foreground">
-                    {p.name}
-                  </span>
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                      p.isActive
-                        ? "bg-emerald-500/10 text-emerald-600"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {p.isActive ? "Active" : "Inactive"}
-                  </span>
-                </div>
-                {p.promotionTypeId?.name && (
-                  <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
-                    {p.promotionTypeId.name}
-                  </p>
-                )}
-              </div>
-              <Link
-                href={`/marketing/promotions/edit/${p._id}`}
-                className="shrink-0 text-[13px] font-medium text-primary hover:underline"
+          {promotions.map((p: any) => {
+            const calcType = p.promotionType?.calculationType;
+            const label = calcType ? calcType.replace(/_/g, " ") : "—";
+            return (
+              <li
+                key={p._id.toString()}
+                className="flex items-center justify-between gap-4 px-5 py-4"
               >
-                Edit
-              </Link>
-            </li>
-          ))}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-[15px] font-medium text-foreground">
+                      {p.name}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        p.isActive
+                          ? "bg-emerald-500/10 text-emerald-600"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {p.isActive ? "Active" : "Inactive"}
+                    </span>
+                    {p.code && (
+                      <span className="shrink-0 rounded bg-muted px-2 py-0.5 font-mono text-[11px] text-foreground">
+                        {p.code}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 truncate text-[13px] capitalize text-muted-foreground">
+                    {label}
+                    {p.customerEligibility?.minOrderAmount > 0
+                      ? ` · min ${p.customerEligibility.minOrderAmount}`
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3 text-[13px]">
+                  <Link
+                    href={`/marketing/promotions/edit/${p._id.toString()}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    Edit
+                  </Link>
+                  <DeletePromotionButton
+                    id={p._id.toString()}
+                    name={p.name}
+                    action={deletePromotion}
+                  />
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
