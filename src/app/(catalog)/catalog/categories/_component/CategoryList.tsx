@@ -855,7 +855,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
                           )}
                         </td>
 
-                        <td className="px-5 py-3 text-right">
+                        <td className=" px-5 py-3 text-right">
                           <div className="flex justify-end">
                             <PopoverMenu
                               items={getMenuItems(row)}
