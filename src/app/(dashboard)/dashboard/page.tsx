@@ -115,7 +115,7 @@ const doughnutOptions: ChartOptions<"doughnut"> = {
 /*  Surface tokens                                                     */
 /* ------------------------------------------------------------------ */
 
-const surfaceClass = "rounded-lg bg-card text-card-foreground";
+const surfaceClass = "rounded-lg bg-card text-card-foreground shadow-sm";
 
 /* ------------------------------------------------------------------ */
 /*  Chart wrapper with a centered value                                */
@@ -390,7 +390,7 @@ export default function AdminOverview() {
       <div className="mx-auto w-full max-w-6xl overflow-x-clip">
         <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-lg bg-card p-4">
+            <div key={i} className="rounded-lg bg-card p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
                 <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
                 <div className="h-3 w-16 animate-pulse rounded bg-muted" />
@@ -406,7 +406,7 @@ export default function AdminOverview() {
             </div>
           ))}
         </div>
-        <div className="rounded-lg bg-card">
+        <div className="rounded-lg bg-card shadow-sm">
           <div className="space-y-3 p-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-3">
@@ -427,7 +427,7 @@ export default function AdminOverview() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-5 text-center text-destructive shadow-sm">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
         </div>
