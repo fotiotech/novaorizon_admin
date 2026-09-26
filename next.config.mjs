@@ -25,6 +25,7 @@ const nextConfig = {
       },
     ],
   },
+  compress: false,
   reactCompiler: true,
   reactStrictMode: true,
 };
