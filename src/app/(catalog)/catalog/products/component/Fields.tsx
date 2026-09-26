@@ -37,6 +37,21 @@ const asNumberInput = (v: NumberFieldValue): number | "" => {
   return "";
 };
 
+/** Used to decide whether a floating label should sit "up". */
+const hasDisplayValue = (v: unknown): boolean => {
+  if (v === undefined || v === null) return false;
+  if (typeof v === "string") return v.trim() !== "";
+  if (typeof v === "number" || typeof v === "boolean") return true;
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === "object") {
+    if (isUnitValue(v)) {
+      return v.value !== "" && v.value !== undefined && v.value !== null;
+    }
+    return Object.keys(v).length > 0;
+  }
+  return false;
+};
+
 // ------------------------------------------------------------------
 // useIsMobile
 // ------------------------------------------------------------------
@@ -66,49 +81,88 @@ interface FieldProps {
   isRequired?: boolean;
 }
 
-const INPUT_CLASS =
-  "w-full rounded-lg border border-gray-300 bg-background px-4 py-3 text-base text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600";
-const LABEL_CLASS = "mb-2 block text-sm font-medium text-muted-foreground";
-const CHECK_BORDER = "border-gray-300 dark:border-gray-600";
+// ------------------------------------------------------------------
+// Style tokens
+// ------------------------------------------------------------------
+// Plain label used for fields that don't float (checkbox, radio, boolean, …)
+const LABEL_CLASS = "mb-1.5 block text-sm font-medium text-muted-foreground";
+
+// The input — compact, matching the Facebook Ads form fields.
+const FIELD_INPUT_CLASS = [
+  "peer w-full rounded-lg border border-input bg-background",
+  "px-3 py-2 text-sm leading-5 text-foreground",
+  "outline-none transition placeholder:text-transparent",
+  "focus:border-ring focus:ring-1 focus:ring-ring/30",
+  "disabled:cursor-not-allowed disabled:opacity-50",
+].join(" ");
+
+// Floating label — sits ON the top border when floated up, centered when down.
+// A small horizontal padding + background chip hides the border line behind it.
+const FLOATING_LABEL_BASE =
+  "pointer-events-none absolute left-2 z-10 select-none rounded bg-background px-1 transition-all duration-150";
+const FLOATING_LABEL_UP =
+  "top-0 -translate-y-1/2 text-[10px] font-medium leading-4 text-muted-foreground";
+const FLOATING_LABEL_DOWN =
+  "top-1/2 -translate-y-1/2 text-sm leading-5 text-muted-foreground";
+// `peer-focus` wins over the static positioning classes because it carries
+// a pseudo-class (higher specificity). Keep both transforms in sync so the
+// label slides up cleanly on focus.
+const FLOATING_LABEL_PEER_FOCUS =
+  "peer-focus:top-0 peer-focus:-translate-y-1/2 peer-focus:text-[10px] peer-focus:font-medium peer-focus:leading-4";
+
+const FloatingLabel: React.FC<{
+  htmlFor?: string;
+  floated: boolean;
+  required?: boolean;
+  children: React.ReactNode;
+}> = ({ htmlFor, floated, required, children }) => (
+  <label
+    htmlFor={htmlFor}
+    className={`${FLOATING_LABEL_BASE} ${
+      floated ? FLOATING_LABEL_UP : FLOATING_LABEL_DOWN
+    } ${FLOATING_LABEL_PEER_FOCUS}`}
+  >
+    {children}
+    {required && <span className="ml-0.5 text-destructive">*</span>}
+  </label>
+);
+FloatingLabel.displayName = "FloatingLabel";
+
+const CHECK_BORDER = "border-input";
 const CHECK_BG = "bg-primary border-primary";
 
-// Gray border shared between both color modes for react-select.
-// (react-select styles are plain JS objects, so we can't rely on the
-// `dark:` variant here — a mid-gray reads well on both surfaces.)
-const RS_BORDER_GRAY = "hsl(0 0% 70%)";
+// Border color used inside react-select's JS style objects — matches
+// `border-input` from the surrounding form.
+const RS_BORDER = "hsl(var(--input))";
+const RS_BORDER_FOCUS = "hsl(var(--ring))";
 
 const customSelectStyles = {
   control: (provided: any, state: any) => ({
     ...provided,
     backgroundColor: "hsl(var(--background))",
-    borderColor: state.isFocused ? "hsl(var(--ring))" : RS_BORDER_GRAY,
+    borderColor: state.isFocused ? RS_BORDER_FOCUS : RS_BORDER,
     borderWidth: "1px",
     borderRadius: "0.5rem",
-    // Focus ring only (accessibility outline, not a decorative shadow).
-    boxShadow: state.isFocused ? "0 0 0 2px hsl(var(--ring) / 0.25)" : "none",
-    minHeight: "50px",
-    fontSize: "1rem",
+    boxShadow: state.isFocused ? "0 0 0 1px hsl(var(--ring) / 0.3)" : "none",
+    minHeight: "42px",
+    fontSize: "0.875rem",
     transition: "border-color 150ms ease, box-shadow 150ms ease",
-    "&:hover": {
-      borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(0 0% 55%)",
-    },
   }),
-  valueContainer: (p: any) => ({ ...p, padding: "6px 14px" }),
   menu: (provided: any) => ({
     ...provided,
     backgroundColor: "hsl(var(--popover))",
     color: "hsl(var(--popover-foreground))",
-    border: `1px solid ${RS_BORDER_GRAY}`,
+    border: `1px solid ${RS_BORDER}`,
     borderRadius: "0.5rem",
     overflow: "hidden",
-    boxShadow: "none",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
   }),
   menuPortal: (provided: any) => ({ ...provided, zIndex: 9999 }),
   menuList: (provided: any) => ({ ...provided, padding: 4 }),
   option: (provided: any, state: any) => ({
     ...provided,
-    fontSize: "1rem",
-    padding: "10px 12px",
+    fontSize: "0.875rem",
+    padding: "7px 12px",
     backgroundColor: state.isSelected
       ? "hsl(var(--primary))"
       : state.isFocused
@@ -121,7 +175,7 @@ const customSelectStyles = {
     borderRadius: "0.375rem",
   }),
   singleValue: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
-  placeholder: (p: any) => ({ ...p, color: "hsl(var(--muted-foreground))" }),
+  placeholder: (p: any) => ({ ...p, color: "transparent" }),
   input: (p: any) => ({ ...p, color: "hsl(var(--foreground))" }),
   multiValue: (p: any) => ({
     ...p,
@@ -131,7 +185,7 @@ const customSelectStyles = {
   multiValueLabel: (p: any) => ({
     ...p,
     color: "hsl(var(--secondary-foreground))",
-    fontSize: "0.9375rem",
+    fontSize: "0.8125rem",
   }),
   multiValueRemove: (p: any) => ({
     ...p,
@@ -143,7 +197,7 @@ const customSelectStyles = {
   }),
   indicatorSeparator: (p: any) => ({
     ...p,
-    backgroundColor: RS_BORDER_GRAY,
+    backgroundColor: RS_BORDER,
   }),
   dropdownIndicator: (p: any) => ({
     ...p,
@@ -162,9 +216,23 @@ const customSelectStyles = {
   noOptionsMessage: (p: any) => ({
     ...p,
     color: "hsl(var(--muted-foreground))",
-    fontSize: "1rem",
+    fontSize: "0.875rem",
   }),
-} as const;
+};
+
+/**
+ * Because the floating label now sits on the top border (not inside the
+ * input), the value-container padding doesn't need to change when floated.
+ * We keep the helper so callers don't have to change, but it returns the
+ * same padding in both states.
+ */
+const selectStyles = (_floated: boolean) => ({
+  ...customSelectStyles,
+  valueContainer: (p: any) => ({
+    ...p,
+    padding: "6px 12px",
+  }),
+});
 
 const PORTAL_PROPS = {
   menuPortalTarget: typeof document !== "undefined" ? document.body : undefined,
@@ -224,7 +292,6 @@ const DescriptionField: React.FC<{
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const value = asString(field);
 
-  // ---- Mobile: preview button → bottom sheet ---------------------
   if (isMobile) {
     const previewText = value
       .replace(/<[^>]*>/g, " ")
@@ -237,7 +304,7 @@ const DescriptionField: React.FC<{
         <button
           type="button"
           onClick={() => setIsSheetOpen(true)}
-          className="w-full rounded-lg border border-gray-300 bg-background px-4 py-3 text-left text-base transition hover:bg-muted/40 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 dark:border-gray-600"
+          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-left text-sm transition hover:bg-muted/40 focus:border-ring focus:outline-none"
         >
           {previewText ? (
             <span className="line-clamp-3 text-foreground">{previewText}</span>
@@ -279,7 +346,6 @@ const DescriptionField: React.FC<{
     );
   }
 
-  // ---- Desktop: inline, height-bounded editor ---------------------
   return (
     <RichTextEditorWrapper
       value={value}
@@ -311,6 +377,7 @@ const Fields: React.FC<FieldProps> = React.memo(
     const [brands, setBrands] = useState<Brand[]>([]);
     const [carriers, setCarriers] = useState<Carrier[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [selectFocused, setSelectFocused] = useState(false);
 
     useEffect(() => {
       let isActive = true;
@@ -406,6 +473,16 @@ const Fields: React.FC<FieldProps> = React.memo(
       [field],
     );
 
+    // Which field types render their own floating label inside the shell?
+    const hasFloatingLabel =
+      type === "text" ||
+      type === "number" ||
+      type === "url" ||
+      type === "date" ||
+      type === "select" ||
+      type === "multi-select" ||
+      (type === "textarea" && code !== "description");
+
     const renderField = () => {
       switch (type) {
         case "file":
@@ -428,15 +505,25 @@ const Fields: React.FC<FieldProps> = React.memo(
 
         case "text":
           return (
-            <input
-              type="text"
-              className={INPUT_CLASS}
-              value={asString(field as StringFieldValue)}
-              placeholder={`Enter ${name}`}
-              onChange={(e) => handleAttributeChange(code, e.target.value)}
-              required={isRequired}
-              aria-required={isRequired}
-            />
+            <div className="relative">
+              <input
+                id={`field-${code}`}
+                type="text"
+                className={FIELD_INPUT_CLASS}
+                value={asString(field as StringFieldValue)}
+                placeholder=" "
+                onChange={(e) => handleAttributeChange(code, e.target.value)}
+                required={isRequired}
+                aria-required={isRequired}
+              />
+              <FloatingLabel
+                htmlFor={`field-${code}`}
+                floated={hasDisplayValue(field)}
+                required={isRequired}
+              >
+                {name}
+              </FloatingLabel>
+            </div>
           );
 
         case "textarea":
@@ -453,14 +540,24 @@ const Fields: React.FC<FieldProps> = React.memo(
             );
           }
           return (
-            <textarea
-              className={`${INPUT_CLASS} resize-y`}
-              value={asString(field as StringFieldValue)}
-              placeholder={`Enter ${name}`}
-              onChange={(e) => handleAttributeChange(code, e.target.value)}
-              required={isRequired}
-              rows={5}
-            />
+            <div className="relative">
+              <textarea
+                id={`field-${code}`}
+                className={`${FIELD_INPUT_CLASS} min-h-[96px] resize-y`}
+                value={asString(field as StringFieldValue)}
+                placeholder=" "
+                onChange={(e) => handleAttributeChange(code, e.target.value)}
+                required={isRequired}
+                rows={4}
+              />
+              <FloatingLabel
+                htmlFor={`field-${code}`}
+                floated={hasDisplayValue(field)}
+                required={isRequired}
+              >
+                {name}
+              </FloatingLabel>
+            </div>
           );
 
         case "number": {
@@ -478,26 +575,37 @@ const Fields: React.FC<FieldProps> = React.memo(
             : (field as number | "");
           const currentUnit = unitValue?.unit;
 
-          const numberInput = (
-            <input
-              type="number"
-              className={INPUT_CLASS}
-              value={asNumberInput(currentValue as NumberFieldValue)}
-              onChange={(e) => {
-                const newValue =
-                  e.target.value === "" ? "" : Number(e.target.value);
-                if (familyUnits.length > 0 && currentUnit) {
-                  handleAttributeChange(code, {
-                    value: newValue,
-                    unit: currentUnit,
-                  });
-                } else {
-                  handleAttributeChange(code, newValue);
-                }
-              }}
-              required={isRequired}
-              aria-required={isRequired}
-            />
+          const numberField = (
+            <>
+              <input
+                id={`field-${code}`}
+                type="number"
+                className={FIELD_INPUT_CLASS}
+                value={asNumberInput(currentValue as NumberFieldValue)}
+                placeholder=" "
+                onChange={(e) => {
+                  const newValue =
+                    e.target.value === "" ? "" : Number(e.target.value);
+                  if (familyUnits.length > 0 && currentUnit) {
+                    handleAttributeChange(code, {
+                      value: newValue,
+                      unit: currentUnit,
+                    });
+                  } else {
+                    handleAttributeChange(code, newValue);
+                  }
+                }}
+                required={isRequired}
+                aria-required={isRequired}
+              />
+              <FloatingLabel
+                htmlFor={`field-${code}`}
+                floated={hasDisplayValue(currentValue)}
+                required={isRequired}
+              >
+                {name}
+              </FloatingLabel>
+            </>
           );
 
           if (familyUnits.length > 0) {
@@ -507,7 +615,7 @@ const Fields: React.FC<FieldProps> = React.memo(
             }));
             return (
               <div className="flex gap-2">
-                <div className="min-w-0 flex-1">{numberInput}</div>
+                <div className="relative min-w-0 flex-1">{numberField}</div>
                 <Select
                   options={unitOptions}
                   value={
@@ -523,7 +631,7 @@ const Fields: React.FC<FieldProps> = React.memo(
                           : "";
                     handleAttributeChange(code, newVal);
                   }}
-                  className="w-36"
+                  className="w-32"
                   classNamePrefix="react-select"
                   placeholder="Unit"
                   isClearable={!isRequired}
@@ -533,41 +641,55 @@ const Fields: React.FC<FieldProps> = React.memo(
               </div>
             );
           }
-          return numberInput;
+          return <div className="relative">{numberField}</div>;
         }
 
         case "select": {
           if (code === "brand") {
             const selected =
               brandOptions.find((o) => o.value === selectedBrandId) ?? null;
+            const floated = !!selected || selectFocused;
             return (
-              <Select
-                options={brandOptions}
-                value={selected}
-                onChange={handleBrandChange}
-                styles={customSelectStyles}
-                classNamePrefix="react-select"
-                required={isRequired}
-                placeholder="Select brand…"
-                isLoading={brands.length === 0 && !error}
-                {...PORTAL_PROPS}
-              />
+              <div className="relative">
+                <Select
+                  {...PORTAL_PROPS}
+                  options={brandOptions}
+                  value={selected}
+                  onChange={handleBrandChange}
+                  styles={selectStyles(floated)}
+                  classNamePrefix="react-select"
+                  placeholder=" "
+                  isLoading={brands.length === 0 && !error}
+                  onFocus={() => setSelectFocused(true)}
+                  onBlur={() => setSelectFocused(false)}
+                />
+                <FloatingLabel floated={floated} required={isRequired}>
+                  {name}
+                </FloatingLabel>
+              </div>
             );
           }
           if (code === "carrier") {
+            const selected =
+              carrierOptions.find((o) => o.value === rawCarrier) ?? null;
+            const floated = !!selected || selectFocused;
             return (
-              <Select
-                options={carrierOptions}
-                value={
-                  carrierOptions.find((o) => o.value === rawCarrier) ?? null
-                }
-                onChange={handleCarrierChange}
-                styles={customSelectStyles}
-                classNamePrefix="react-select"
-                required={isRequired}
-                placeholder="Select carrier…"
-                {...PORTAL_PROPS}
-              />
+              <div className="relative">
+                <Select
+                  {...PORTAL_PROPS}
+                  options={carrierOptions}
+                  value={selected}
+                  onChange={handleCarrierChange}
+                  styles={selectStyles(floated)}
+                  classNamePrefix="react-select"
+                  placeholder=" "
+                  onFocus={() => setSelectFocused(true)}
+                  onBlur={() => setSelectFocused(false)}
+                />
+                <FloatingLabel floated={floated} required={isRequired}>
+                  {name}
+                </FloatingLabel>
+              </div>
             );
           }
           const selectedValue =
@@ -575,30 +697,37 @@ const Fields: React.FC<FieldProps> = React.memo(
           const current = option.includes(selectedValue)
             ? { value: selectedValue, label: selectedValue }
             : null;
+          const floated = !!current || selectFocused;
           return (
-            <Select
-              options={genericOptions}
-              value={current}
-              onChange={handleGenericChange}
-              styles={customSelectStyles}
-              classNamePrefix="react-select"
-              required={isRequired}
-              placeholder="Select…"
-              {...PORTAL_PROPS}
-            />
+            <div className="relative">
+              <Select
+                {...PORTAL_PROPS}
+                options={genericOptions}
+                value={current}
+                onChange={handleGenericChange}
+                styles={selectStyles(floated)}
+                classNamePrefix="react-select"
+                placeholder=" "
+                onFocus={() => setSelectFocused(true)}
+                onBlur={() => setSelectFocused(false)}
+              />
+              <FloatingLabel floated={floated} required={isRequired}>
+                {name}
+              </FloatingLabel>
+            </div>
           );
         }
 
         case "checkbox": {
           const values = asStringArray(field as ArrayFieldValue);
           return (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               {option.map((opt) => {
                 const checked = values.includes(opt);
                 return (
                   <label
                     key={opt}
-                    className="inline-flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-2 py-2 transition hover:bg-muted"
+                    className="inline-flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-2 py-1.5 transition hover:bg-muted"
                   >
                     <input
                       type="checkbox"
@@ -620,11 +749,11 @@ const Fields: React.FC<FieldProps> = React.memo(
                       className={`flex flex-none items-center justify-center rounded border transition-colors ${
                         checked ? CHECK_BG : CHECK_BORDER
                       }`}
-                      style={{ width: 22, height: 22 }}
+                      style={{ width: 20, height: 20 }}
                     >
                       {checked && (
                         <svg
-                          className="h-4 w-4 text-primary-foreground"
+                          className="h-3.5 w-3.5 text-primary-foreground"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -638,7 +767,7 @@ const Fields: React.FC<FieldProps> = React.memo(
                         </svg>
                       )}
                     </div>
-                    <span className="text-base text-foreground">{opt}</span>
+                    <span className="text-sm text-foreground">{opt}</span>
                   </label>
                 );
               })}
@@ -664,15 +793,15 @@ const Fields: React.FC<FieldProps> = React.memo(
                   className={`rounded-full transition-colors ${
                     value ? "bg-primary" : "bg-input"
                   }`}
-                  style={{ width: 52, height: 28 }}
+                  style={{ width: 44, height: 24 }}
                 />
                 <div
-                  className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full border border-gray-300 bg-background transition-transform dark:border-gray-600 ${
-                    value ? "translate-x-6" : ""
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full border border-input bg-background transition-transform ${
+                    value ? "translate-x-5" : ""
                   }`}
                 />
               </div>
-              <span className="text-base text-foreground">
+              <span className="text-sm text-foreground">
                 {value ? "Yes" : "No"}
               </span>
             </label>
@@ -682,13 +811,13 @@ const Fields: React.FC<FieldProps> = React.memo(
         case "radio": {
           const value = asString(field as StringFieldValue);
           return (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               {option.map((opt) => {
                 const checked = value === opt;
                 return (
                   <label
                     key={opt}
-                    className="inline-flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-2 py-2 transition hover:bg-muted"
+                    className="inline-flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-2 py-1.5 transition hover:bg-muted"
                   >
                     <input
                       type="radio"
@@ -702,13 +831,13 @@ const Fields: React.FC<FieldProps> = React.memo(
                       className={`flex flex-none items-center justify-center rounded-full border transition-colors ${
                         checked ? "border-primary" : CHECK_BORDER
                       }`}
-                      style={{ width: 22, height: 22 }}
+                      style={{ width: 20, height: 20 }}
                     >
                       {checked && (
-                        <div className="h-3 w-3 rounded-full bg-primary" />
+                        <div className="h-2.5 w-2.5 rounded-full bg-primary" />
                       )}
                     </div>
-                    <span className="text-base text-foreground">{opt}</span>
+                    <span className="text-sm text-foreground">{opt}</span>
                   </label>
                 );
               })}
@@ -718,14 +847,25 @@ const Fields: React.FC<FieldProps> = React.memo(
 
         case "date":
           return (
-            <input
-              title="date"
-              type="date"
-              className={INPUT_CLASS}
-              value={asString(field as StringFieldValue)}
-              onChange={(e) => handleAttributeChange(code, e.target.value)}
-              required={isRequired}
-            />
+            <div className="relative">
+              <input
+                id={`field-${code}`}
+                title="date"
+                type="date"
+                className={FIELD_INPUT_CLASS}
+                value={asString(field as StringFieldValue)}
+                placeholder=" "
+                onChange={(e) => handleAttributeChange(code, e.target.value)}
+                required={isRequired}
+              />
+              <FloatingLabel
+                htmlFor={`field-${code}`}
+                floated={hasDisplayValue(field)}
+                required={isRequired}
+              >
+                {name}
+              </FloatingLabel>
+            </div>
           );
 
         case "color":
@@ -734,13 +874,13 @@ const Fields: React.FC<FieldProps> = React.memo(
               <input
                 title="color"
                 type="color"
-                className="cursor-pointer rounded-lg border border-gray-300 bg-background p-1 dark:border-gray-600"
-                style={{ width: 52, height: 52 }}
+                className="cursor-pointer rounded-lg border border-input bg-background p-1"
+                style={{ width: 40, height: 40 }}
                 value={asString(field as StringFieldValue) || "#000000"}
                 onChange={(e) => handleAttributeChange(code, e.target.value)}
                 required={isRequired}
               />
-              <span className="font-mono text-sm text-muted-foreground">
+              <span className="font-mono text-xs text-muted-foreground">
                 {asString(field as StringFieldValue) || "#000000"}
               </span>
             </div>
@@ -748,36 +888,54 @@ const Fields: React.FC<FieldProps> = React.memo(
 
         case "url":
           return (
-            <input
-              title="url"
-              type="url"
-              className={INPUT_CLASS}
-              value={asString(field as StringFieldValue)}
-              onChange={(e) => handleAttributeChange(code, e.target.value)}
-              placeholder="https://…"
-              required={isRequired}
-            />
+            <div className="relative">
+              <input
+                id={`field-${code}`}
+                title="url"
+                type="url"
+                className={FIELD_INPUT_CLASS}
+                value={asString(field as StringFieldValue)}
+                placeholder=" "
+                onChange={(e) => handleAttributeChange(code, e.target.value)}
+                required={isRequired}
+              />
+              <FloatingLabel
+                htmlFor={`field-${code}`}
+                floated={hasDisplayValue(field)}
+                required={isRequired}
+              >
+                {name}
+              </FloatingLabel>
+            </div>
           );
 
-        case "multi-select":
+        case "multi-select": {
+          const floated = selectedMultiValues.length > 0 || selectFocused;
           return (
-            <Select
-              isMulti
-              options={genericOptions}
-              value={selectedMultiValues}
-              onChange={(opts) =>
-                handleAttributeChange(
-                  code,
-                  (opts as MultiValue<any>).map((o) => o.value),
-                )
-              }
-              styles={customSelectStyles}
-              classNamePrefix="react-select"
-              required={isRequired}
-              placeholder="Select…"
-              {...PORTAL_PROPS}
-            />
+            <div className="relative">
+              <Select
+                {...PORTAL_PROPS}
+                isMulti
+                options={genericOptions}
+                value={selectedMultiValues}
+                onChange={(opts) =>
+                  handleAttributeChange(
+                    code,
+                    (opts as MultiValue<any>).map((o) => o.value),
+                  )
+                }
+                styles={selectStyles(floated)}
+                classNamePrefix="react-select"
+                placeholder=" "
+                onFocus={() => setSelectFocused(true)}
+                onBlur={() => setSelectFocused(false)}
+              />
+              <FloatingLabel floated={floated} required={isRequired}>
+                {name}
+              </FloatingLabel>
+            </div>
           );
+        }
 
         default:
           return (
@@ -790,11 +948,13 @@ const Fields: React.FC<FieldProps> = React.memo(
     };
 
     return (
-      <div className="mb-6">
-        <label className={LABEL_CLASS} htmlFor={`field-${code}`}>
-          {name}
-          {isRequired && <span className="ml-0.5 text-destructive">*</span>}
-        </label>
+      <div className="mb-4">
+        {!hasFloatingLabel && (
+          <label className={LABEL_CLASS} htmlFor={`field-${code}`}>
+            {name}
+            {isRequired && <span className="ml-0.5 text-destructive">*</span>}
+          </label>
+        )}
         <div>{renderField()}</div>
         {error && <p className="mt-1.5 text-sm text-destructive">{error}</p>}
       </div>

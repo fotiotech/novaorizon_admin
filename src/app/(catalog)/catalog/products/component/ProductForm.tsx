@@ -251,10 +251,8 @@ const GroupRenderer = memo(
 
     if (normalizedCode === "productRelationships") {
       return (
-        <section key={id} className="mb-5">
-          <h2 className="mb-2.5 text-sm font-semibold text-foreground">
-            {name}
-          </h2>
+        <section key={id} className="mb-4">
+          <h2 className="mb-2 text-sm font-semibold text-foreground">{name}</h2>
           <ManageRelatedProduct
             id={productId}
             product={productData}
@@ -278,9 +276,9 @@ const GroupRenderer = memo(
     }
 
     return (
-      <section key={id} className="mb-5">
-        <h2 className="mb-2.5 text-sm font-semibold text-foreground">{name}</h2>
-        <div className="flex flex-col gap-3.5">
+      <section key={id} className="mb-4">
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{name}</h2>
+        <div className="flex flex-col gap-2.5">
           {attributes.map((a) => (
             <div key={a.id}>
               <AttributeField
@@ -971,13 +969,16 @@ const ProductForm: React.FC<ProductFormProps> = ({
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-4xl overflow-x-clip">
-        <div className="overflow-hidden rounded-lg bg-card">
+        <div className="overflow-hidden rounded-lg bg-muted/50 dark:bg-card">
           <div className="px-4 py-3">
             <div className="h-5 w-40 animate-pulse rounded bg-muted" />
           </div>
           <div className="space-y-3 p-4">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-12 animate-pulse rounded-lg bg-muted" />
+              <div
+                key={i}
+                className="h-11 animate-pulse rounded-lg bg-white dark:bg-muted"
+              />
             ))}
           </div>
         </div>
@@ -1002,10 +1003,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
     <div className="mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-4xl flex-col overflow-x-clip">
       <form
         onSubmit={handleSubmit}
-        className="flex flex-1 flex-col overflow-clip rounded-lg bg-card text-card-foreground"
+        className="flex flex-1 flex-col overflow-clip rounded-lg bg-muted/50 text-foreground dark:bg-card"
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <h1 className="text-sm font-semibold text-foreground">
               {initialProductId ? "Edit product" : "New product"}
@@ -1057,7 +1058,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
               <CircularProgress />
             </div>
           ) : renderSteps.length === 0 ? (
-            <div className="rounded-lg bg-muted/40 p-4 text-sm text-muted-foreground">
+            <div className="rounded-lg bg-white p-4 text-sm text-muted-foreground dark:bg-background">
               {steps.length === 0
                 ? "No attribute sets mapped to this category."
                 : "No product fields are configured for this category."}
@@ -1066,7 +1067,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
             <>
               <div
                 ref={stepperViewportRef}
-                className="mb-6 w-full overflow-x-auto"
+                className="mb-5 w-full overflow-x-auto"
               >
                 <Stepper
                   key={`stepper-${renderSteps.length}`}
@@ -1094,7 +1095,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 </Stepper>
               </div>
 
-              <div className="space-y-5">
+              {/* No white wrapper — fields keep the gray form background,
+                  and each individual input is white from Fields.tsx. */}
+              <div className="space-y-4">
                 {activeStep?.kind === "variants" ? (
                   <VariantsManager
                     productId={productId}
@@ -1122,13 +1125,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
         </div>
 
         {/* Sticky action bar — always pinned to the bottom */}
-        <div className="sticky bottom-0 z-20 mt-auto flex items-center justify-between gap-2 bg-card px-4 py-3">
+        <div className="sticky bottom-0 z-20 mt-auto flex items-center justify-between gap-2 border-t border-border/60 bg-muted/80 px-4 py-3 backdrop-blur-sm dark:bg-card/80">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCancelClick}
               disabled={isSubmitting}
-              className="rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 dark:bg-muted"
             >
               Cancel
             </button>
@@ -1137,7 +1140,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 type="button"
                 onClick={handlePrev}
                 disabled={isSubmitting}
-                className="rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 dark:bg-muted"
               >
                 Previous
               </button>
