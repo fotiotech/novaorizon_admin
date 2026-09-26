@@ -135,7 +135,7 @@ export const marketingLinks: MenuLink[] = [
     icon: <Discount />,
   },
   {
-    name: "Email/SMS",
+    name: "Email/SMS/Push",
     href: "/marketing/email_sms",
     icon: <Email />,
   },
@@ -188,6 +188,11 @@ export const rawMenuConfig = [
   {
     title: "Analytics",
     links: [
+      {
+        name: "Live",
+        href: "/analytics/live",
+        icon: <Assessment />,
+      },
       {
         name: "Sales Analytics",
         href: "/analytics/sales_reports",
