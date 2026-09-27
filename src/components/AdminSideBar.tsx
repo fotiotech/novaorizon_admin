@@ -493,7 +493,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   };
 
   const renderHeader = () => (
-    <div className="shrink-0 p-4">
+    <div className="shrink-0 p-3">
       <div className="mb-3.5 flex items-center justify-between">
         <Link
           href="/"
