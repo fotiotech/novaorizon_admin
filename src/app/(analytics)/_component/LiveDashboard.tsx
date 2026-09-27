@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLiveEvents, type LiveEvent } from "@/hooks/useLiveEvents";
 import { HotRightNow } from "./HotRightNow";
 import type { HotItem } from "@/lib/events/eventQueries";
+import { VisitorHistory } from "./VisitorHistory";
 
 // ─── Constants ────────────────────────────────────────────
 const FIVE_MIN = 5 * 60 * 1000;
@@ -82,7 +83,7 @@ export function LiveDashboard({ initialEvents = [], initialHot = [] }: Props) {
       <StatusBar status={status} count={events.length} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Active users" hint="last 5m" value={activeUsers} />
+        <Stat label="Visitors" hint="last 5m" value={activeUsers} />
         <Stat label="Events" hint="last 1m" value={eventsLastMin} />
         <Stat label="Total" hint="in buffer" value={events.length} />
         <Stat
@@ -97,6 +98,7 @@ export function LiveDashboard({ initialEvents = [], initialHot = [] }: Props) {
           <ActivityFeed events={events} />
         </div>
         <div className="space-y-4">
+          <VisitorHistory />
           <HotRightNow initial={initialHot} windowMinutes={15} />
           <EventBreakdown breakdown={breakdown} />
         </div>
