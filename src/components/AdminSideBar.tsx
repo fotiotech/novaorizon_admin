@@ -499,13 +499,26 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           href="/"
           className="flex items-center gap-3"
           onClick={handleClose}
+          aria-label="Home"
         >
-          <div className="rounded-lg bg-primary/10 p-2">
-            <Image src="/logo.png" alt="logo" width={32} height={22} />
-          </div>
-          <span className="text-base font-semibold tracking-tight text-sidebar-foreground">
-            Novaorizon
-          </span>
+          {/* Light mode logo — visible only when <html> is NOT .dark */}
+          <Image
+            src="/light-logo.png"
+            alt="logo"
+            width={32}
+            height={22}
+            priority
+            className="block h-[44px] w-auto dark:hidden"
+          />
+          {/* Dark mode logo — visible only when <html> IS .dark */}
+          <Image
+            src="/dark-logo.png"
+            alt="logo"
+            width={32}
+            height={22}
+            priority
+            className="hidden h-[44px] w-auto dark:block"
+          />
         </Link>
 
         <button
