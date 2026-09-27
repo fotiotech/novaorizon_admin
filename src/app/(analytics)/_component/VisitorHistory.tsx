@@ -54,25 +54,25 @@ export function VisitorHistory() {
   const maxVisitors = Math.max(1, ...points.map((p) => p.visitors));
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <div className="text-sm font-medium text-slate-900">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <div className="text-sm font-medium text-foreground">
           Visitor history
         </div>
         <div className="flex items-center gap-2">
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-muted-foreground">
             {totalVisitors.toLocaleString()} visitors · $
             {totalRevenue.toFixed(2)}
           </div>
-          <div className="flex rounded-md border border-slate-200 p-0.5">
+          <div className="flex rounded-md border border-border p-0.5">
             {(["day", "week", "month"] as Period[]).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
-                className={`px-2.5 py-1 text-xs font-medium rounded transition ${
+                className={`rounded px-2.5 py-1 text-xs font-medium transition ${
                   period === p
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-100"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 {p[0].toUpperCase() + p.slice(1)}
@@ -84,11 +84,11 @@ export function VisitorHistory() {
 
       <div className="p-4">
         {loading ? (
-          <div className="flex h-40 items-center justify-center text-xs text-slate-400">
+          <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
             Loading…
           </div>
         ) : points.length === 0 ? (
-          <div className="flex h-40 items-center justify-center text-xs text-slate-400">
+          <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
             No data for this range yet.
           </div>
         ) : (
@@ -103,7 +103,7 @@ export function VisitorHistory() {
                 />
               ))}
             </div>
-            <div className="mt-2 flex justify-between text-[10px] text-slate-400">
+            <div className="mt-2 flex justify-between text-[10px] text-muted-foreground/70">
               <span>{points[0]?.period}</span>
               <span>{points[points.length - 1]?.period}</span>
             </div>
@@ -132,12 +132,12 @@ function Bar({
       title={`${point.period}: ${point.visitors} visitors · ${point.events} events`}
     >
       <div
-        className="w-full rounded-sm bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-300 group-hover:from-blue-600 group-hover:to-blue-500"
+        className="w-full rounded-sm bg-primary/80 transition-all duration-300 group-hover:bg-primary"
         style={{ height: `${Math.max(pct, 2)}%`, minHeight: "2px" }}
       />
-      <div className="pointer-events-none absolute -top-9 left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] text-white group-hover:block">
+      <div className="pointer-events-none absolute -top-9 left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-[10px] text-popover-foreground shadow-md ring-1 ring-border group-hover:block">
         <div className="font-medium">{label}</div>
-        <div className="text-slate-300">
+        <div className="text-muted-foreground">
           {point.visitors} visitors · ${point.revenue.toFixed(2)}
         </div>
       </div>

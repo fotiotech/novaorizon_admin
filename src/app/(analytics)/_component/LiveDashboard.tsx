@@ -12,11 +12,13 @@ const FIVE_MIN = 5 * 60 * 1000;
 const ONE_MIN = 60 * 1000;
 const BUFFER_SIZE = 500;
 
+// Categorical signal colors — intentionally theme-independent.
+// These read clearly on both light and dark surfaces.
 const EVENT_META: Record<
   LiveEvent["eventType"],
   { label: string; emoji: string; dot: string }
 > = {
-  page_view: { label: "Page view", emoji: "👁️", dot: "bg-slate-400" },
+  page_view: { label: "Page view", emoji: "👁️", dot: "bg-muted-foreground" },
   view: { label: "Viewed", emoji: "🔍", dot: "bg-blue-500" },
   cart_add: { label: "Added to cart", emoji: "🛒", dot: "bg-amber-500" },
   purchase: { label: "Purchased", emoji: "💰", dot: "bg-emerald-500" },
@@ -32,15 +34,12 @@ interface Props {
 export function LiveDashboard({ initialEvents = [], initialHot = [] }: Props) {
   const { events, status } = useLiveEvents(BUFFER_SIZE, initialEvents);
 
-  // 🔥 Ticking clock — re-renders every 5s so time windows slide forward
-  // even when no new events arrive.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 5000);
     return () => clearInterval(id);
   }, []);
 
-  // ── Derived metrics ────────────────────────────────────
   const activeUsers = useMemo(() => {
     const set = new Set<string>();
     for (const e of events) {
@@ -121,16 +120,16 @@ function StatusBar({
   const map = {
     connecting: { dot: "bg-amber-400 animate-pulse", label: "Connecting" },
     open: { dot: "bg-emerald-500", label: "Live" },
-    closed: { dot: "bg-red-500", label: "Disconnected" },
+    closed: { dot: "bg-destructive", label: "Disconnected" },
   }[status];
 
   return (
     <div className="flex items-center justify-between text-xs">
-      <div className="flex items-center gap-2 text-slate-500">
+      <div className="flex items-center gap-2 text-muted-foreground">
         <span className={`h-1.5 w-1.5 rounded-full ${map.dot}`} />
         <span>{map.label}</span>
       </div>
-      <span className="tabular-nums text-slate-400">
+      <span className="tabular-nums text-muted-foreground/70">
         {count} events in buffer
       </span>
     </div>
@@ -146,20 +145,21 @@ function Stat({
   hint?: string;
   value: number | string;
 }) {
-  // Fade zeros so an empty window doesn't look like a broken value.
   const isEmpty =
     (typeof value === "number" && value === 0) ||
     (typeof value === "string" && value === "$0.00");
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+    <div className="rounded-lg border border-border bg-card px-4 py-3">
       <div className="flex items-baseline justify-between">
-        <div className="text-xs text-slate-500">{label}</div>
-        {hint && <div className="text-[10px] text-slate-400">{hint}</div>}
+        <div className="text-xs text-muted-foreground">{label}</div>
+        {hint && (
+          <div className="text-[10px] text-muted-foreground/60">{hint}</div>
+        )}
       </div>
       <div
         className={`mt-1 text-2xl font-semibold tracking-tight tabular-nums ${
-          isEmpty ? "text-slate-300" : "text-slate-900"
+          isEmpty ? "text-muted-foreground/40" : "text-foreground"
         }`}
       >
         {value}
@@ -172,18 +172,18 @@ function ActivityFeed({ events }: { events: LiveEvent[] }) {
   const recent = [...events].reverse().slice(0, 60);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-        <div className="text-sm font-medium text-slate-900">Live activity</div>
-        <div className="text-xs text-slate-400">newest first</div>
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+        <div className="text-sm font-medium text-foreground">Live activity</div>
+        <div className="text-xs text-muted-foreground/70">newest first</div>
       </div>
 
       {recent.length === 0 ? (
-        <div className="px-4 py-16 text-center text-sm text-slate-400">
+        <div className="px-4 py-16 text-center text-sm text-muted-foreground">
           Waiting for activity…
         </div>
       ) : (
-        <ul className="max-h-[640px] divide-y divide-slate-100 overflow-y-auto">
+        <ul className="max-h-[640px] divide-y divide-border/60 overflow-y-auto">
           {recent.map((e) => (
             <ActivityRow key={e._id} event={e} />
           ))}
@@ -204,47 +204,46 @@ function ActivityRow({ event: e }: { event: LiveEvent }) {
   const subtitle = e.product?.title ? e.metadata?.path : undefined;
 
   return (
-    <li className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50/70">
-      {/* avatar + event-type dot */}
+    <li className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/40">
       <div className="relative shrink-0">
         {e.product?.image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={e.product.image}
             alt=""
-            className="h-9 w-9 rounded-md bg-slate-100 object-cover"
+            className="h-9 w-9 rounded-md bg-muted object-cover"
           />
         ) : (
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-slate-100 text-sm">
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-sm">
             {meta.emoji}
           </div>
         )}
         <span
-          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${meta.dot}`}
+          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card ${meta.dot}`}
         />
       </div>
 
-      {/* main line */}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-slate-900">
+        <div className="truncate text-sm font-medium text-foreground">
           {title}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
+        <div className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
           <span>{meta.label}</span>
-          <span className="text-slate-300">·</span>
+          <span className="text-muted-foreground/40">·</span>
           <span>{formatRelative(e.timestamp)}</span>
           {subtitle && (
             <>
-              <span className="text-slate-300">·</span>
-              <span className="truncate text-slate-400">{subtitle}</span>
+              <span className="text-muted-foreground/40">·</span>
+              <span className="truncate text-muted-foreground/70">
+                {subtitle}
+              </span>
             </>
           )}
         </div>
       </div>
 
-      {/* score pill — only when meaningful */}
       {e.score > 1 && (
-        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium tabular-nums text-slate-600">
+        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
           +{e.score}
         </span>
       )}
@@ -258,23 +257,25 @@ function EventBreakdown({
   breakdown: { type: LiveEvent["eventType"]; count: number; pct: number }[];
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-4 py-3 text-sm font-medium text-slate-900">
+    <div className="rounded-lg border border-border bg-card">
+      <div className="border-b border-border/60 px-4 py-3 text-sm font-medium text-foreground">
         Event mix
       </div>
       <div className="space-y-3 p-4">
         {breakdown.length === 0 && (
-          <p className="text-xs text-slate-400">No events yet.</p>
+          <p className="text-xs text-muted-foreground">No events yet.</p>
         )}
         {breakdown.map(({ type, count, pct }) => {
           const meta = EVENT_META[type];
           return (
             <div key={type}>
               <div className="mb-1.5 flex items-center justify-between text-xs">
-                <span className="text-slate-600">{meta.label}</span>
-                <span className="tabular-nums text-slate-400">{count}</span>
+                <span className="text-muted-foreground">{meta.label}</span>
+                <span className="tabular-nums text-muted-foreground/70">
+                  {count}
+                </span>
               </div>
-              <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className={`h-full ${meta.dot} transition-all duration-300`}
                   style={{ width: `${pct}%` }}
