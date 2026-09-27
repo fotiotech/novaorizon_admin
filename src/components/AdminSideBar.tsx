@@ -505,8 +505,8 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           <Image
             src="/light-logo.png"
             alt="logo"
-            width={32}
-            height={22}
+            width={128} // real file width
+            height={88}
             priority
             className="block h-[44px] w-auto dark:hidden"
           />
@@ -514,8 +514,8 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           <Image
             src="/dark-logo.png"
             alt="logo"
-            width={32}
-            height={22}
+            width={128} // real file width
+            height={88}
             priority
             className="hidden h-[44px] w-auto dark:block"
           />
