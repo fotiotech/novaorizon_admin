@@ -1,3 +1,4 @@
+// admin/lib/events/eventQueries.ts
 import { connection } from "@/utils/connection";
 import { Event } from "@/models/Event";
 import { EventRollup } from "@/models/EventRollup";
@@ -18,14 +19,16 @@ export interface HotItem {
   };
 }
 
-// ─── Live stream reads ────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+//  Live feed reads
+// ─────────────────────────────────────────────────────────
 
-export async function getEventsSince(since: number, limit = 50) {
+export async function getEventsSince(since: number, limit = 100) {
   await connection();
   return Event.aggregate([
     {
       $match: {
-        isBot: { $ne: true }, // ← NOT `isBot: false`
+        isBot: { $ne: true },
         timestamp: { $gt: new Date(since) },
       },
     },
@@ -79,15 +82,68 @@ export async function getEventsSince(since: number, limit = 50) {
   ]);
 }
 
-export async function getRecentEvents(limit = 50) {
+export async function getRecentEvents(
+  limit = 100,
+  sinceMs = 24 * 60 * 60 * 1000,
+) {
   await connection();
-  return Event.find({ isBot: false })
-    .sort({ timestamp: -1 })
-    .limit(limit)
-    .lean();
+  const since = new Date(Date.now() - sinceMs);
+  return Event.aggregate([
+    { $match: { isBot: { $ne: true }, timestamp: { $gte: since } } },
+    { $sort: { timestamp: -1 } },
+    { $limit: limit },
+    {
+      $lookup: {
+        from: "products",
+        localField: "itemId",
+        foreignField: "_id",
+        as: "productArr",
+      },
+    },
+    {
+      $addFields: {
+        product: {
+          $cond: [
+            { $gt: [{ $size: { $ifNull: ["$productArr", []] } }, 0] },
+            { $arrayElemAt: ["$productArr", 0] },
+            null,
+          ],
+        },
+      },
+    },
+    { $unset: "productArr" },
+    {
+      $project: {
+        userId: 1,
+        itemId: 1,
+        eventType: 1,
+        score: 1,
+        metadata: 1,
+        timestamp: 1,
+        product: {
+          $cond: [
+            { $eq: ["$product", null] },
+            null,
+            {
+              _id: "$product._id",
+              title: "$product.name",
+              image: {
+                $arrayElemAt: [{ $ifNull: ["$product.images", []] }, 0],
+              },
+              price: "$product.price",
+              slug: "$product.slug",
+            },
+          ],
+        },
+      },
+    },
+  ]);
 }
 
-// ─── Hot right now (weighted, with trend) ─────────────────
+// ─────────────────────────────────────────────────────────
+//  Hot right now (weighted, with trend)
+// ─────────────────────────────────────────────────────────
+
 export async function getHotRightNow(
   windowMs = 15 * 60 * 1000,
   limit = 8,
@@ -112,10 +168,10 @@ export async function getHotRightNow(
     },
   };
 
-  const rows = await Event.aggregate([
+  return Event.aggregate([
     {
       $match: {
-        isBot: false,
+        isBot: { $ne: true },
         itemId: { $ne: null },
         timestamp: { $gte: prevStart },
         eventType: { $in: ["view", "cart_add", "purchase", "like"] },
@@ -171,21 +227,25 @@ export async function getHotRightNow(
         from: "products",
         localField: "_id",
         foreignField: "_id",
-        as: "product",
+        as: "productArr",
       },
     },
-    { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
     {
-      $match: {
-        $or: [{ product: { $exists: false } }, { "product.status": "active" }],
+      $addFields: {
+        product: {
+          $cond: [
+            { $gt: [{ $size: { $ifNull: ["$productArr", []] } }, 0] },
+            { $arrayElemAt: ["$productArr", 0] },
+            null,
+          ],
+        },
       },
     },
+    { $unset: "productArr" },
+    { $match: { product: { $ne: null }, "product.status": "active" } },
     {
       $project: {
         _id: { $toString: "$_id" },
-        title: "$product.title",
-        image: "$product.image",
-        price: "$product.price",
         score: 1,
         prevScore: 1,
         delta: { $subtract: ["$score", "$prevScore"] },
@@ -195,20 +255,24 @@ export async function getHotRightNow(
           purchase: "$purchase",
           like: "$like",
         },
+        title: "$product.name",
+        image: { $arrayElemAt: [{ $ifNull: ["$product.images", []] }, 0] },
+        price: "$product.price",
+        slug: "$product.slug",
       },
     },
   ]);
-
-  return rows as HotItem[];
 }
 
-// ─── Cart funnel ──────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+//  Aggregates
+// ─────────────────────────────────────────────────────────
+
 export async function getCartFunnel(sinceMs = 24 * 60 * 60 * 1000) {
   await connection();
   const since = new Date(Date.now() - sinceMs);
-
   const [row] = await Event.aggregate([
-    { $match: { isBot: false, timestamp: { $gte: since } } },
+    { $match: { isBot: { $ne: true }, timestamp: { $gte: since } } },
     {
       $group: {
         _id: null,
@@ -227,7 +291,6 @@ export async function getCartFunnel(sinceMs = 24 * 60 * 60 * 1000) {
     },
     { $project: { _id: 0 } },
   ]);
-
   return (
     row ?? {
       views: 0,
@@ -239,18 +302,16 @@ export async function getCartFunnel(sinceMs = 24 * 60 * 60 * 1000) {
   );
 }
 
-// ─── Abandoned carts ──────────────────────────────────────
 export async function getAbandonedCarts(
   sinceMs = 24 * 60 * 60 * 1000,
   limit = 50,
 ) {
   await connection();
   const since = new Date(Date.now() - sinceMs);
-
   return Event.aggregate([
     {
       $match: {
-        isBot: false,
+        isBot: { $ne: true },
         timestamp: { $gte: since },
         eventType: { $in: ["cart_add", "purchase"] },
       },
@@ -282,18 +343,16 @@ export async function getAbandonedCarts(
   ]);
 }
 
-// ─── Per-item cart conversion ─────────────────────────────
 export async function getCartConversion(
   limit = 10,
   sinceMs = 7 * 24 * 60 * 60 * 1000,
 ) {
   await connection();
   const since = new Date(Date.now() - sinceMs);
-
   return Event.aggregate([
     {
       $match: {
-        isBot: false,
+        isBot: { $ne: true },
         timestamp: { $gte: since },
         itemId: { $ne: null },
       },
@@ -334,13 +393,11 @@ export async function getCartConversion(
   ]);
 }
 
-// ─── Hourly sparkline (24h) ───────────────────────────────
 export async function getHourlyEvents(hours = 24) {
   await connection();
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-
   return Event.aggregate([
-    { $match: { isBot: false, timestamp: { $gte: since } } },
+    { $match: { isBot: { $ne: true }, timestamp: { $gte: since } } },
     {
       $group: {
         _id: {
@@ -359,7 +416,6 @@ export async function getHourlyEvents(hours = 24) {
   ]);
 }
 
-// ─── Rollup-backed trending (older than 1h) ───────────────
 export async function getTrendingFromRollups(days = 7, limit = 10) {
   await connection();
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);

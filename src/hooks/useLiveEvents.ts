@@ -1,4 +1,4 @@
-// app/hooks/useLiveEvents.ts
+// admin/hooks/useLiveEvents.ts
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -24,40 +24,54 @@ export interface LiveEvent {
 
 type ConnectionState = "connecting" | "open" | "closed";
 
+const POLL_INTERVAL = 3000;
+
 export function useLiveEvents(max = 200, initial: LiveEvent[] = []) {
   const [events, setEvents] = useState<LiveEvent[]>(initial);
-  const [status, setStatus] = useState<ConnectionState>("connecting");
-  const bufferRef = useRef<LiveEvent[]>([]);
-  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [status, setStatus] = useState<ConnectionState>("open");
+  const lastCheckRef = useRef<number>(Date.now());
+  const seenIdsRef = useRef<Set<string>>(new Set(initial.map((e) => e._id)));
 
   useEffect(() => {
-    const es = new EventSource("/api/analytics/stream");
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    es.onopen = () => setStatus("open");
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch(
+          `/api/analytics/recent?since=${lastCheckRef.current}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const fresh: LiveEvent[] = await res.json();
 
-    es.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === "connected") {
+        lastCheckRef.current = Date.now();
+
+        if (cancelled) return;
         setStatus("open");
-        return;
-      }
-      if (msg.type === "events" && Array.isArray(msg.events)) {
-        bufferRef.current.push(...msg.events);
-        if (!flushTimer.current) {
-          flushTimer.current = setTimeout(() => {
-            setEvents((prev) => [...prev, ...bufferRef.current].slice(-max));
-            bufferRef.current = [];
-            flushTimer.current = null;
-          }, 100);
+
+        if (fresh.length > 0) {
+          const newEvents = fresh.filter((e) => !seenIdsRef.current.has(e._id));
+          if (newEvents.length > 0) {
+            for (const e of newEvents) seenIdsRef.current.add(e._id);
+            setEvents((prev) => [...prev, ...newEvents].slice(-max));
+          }
+        }
+      } catch {
+        if (!cancelled) setStatus("closed");
+      } finally {
+        if (!cancelled) {
+          timer = setTimeout(poll, POLL_INTERVAL);
         }
       }
     };
 
-    es.onerror = () => setStatus("closed");
+    poll();
 
     return () => {
-      es.close();
-      if (flushTimer.current) clearTimeout(flushTimer.current);
+      cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [max]);
 

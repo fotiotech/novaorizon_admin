@@ -1,5 +1,5 @@
 // admin/app/(analytics)/analytics/live/page.tsx
-import { getRecentEvents, getHotRightNow } from "@/app/actions/events";
+import { getHotRightNow, getRecentEvents } from "@/lib/events/eventQueries";
 import { LiveDashboard } from "../../_component/LiveDashboard";
 
 export const dynamic = "force-dynamic";
