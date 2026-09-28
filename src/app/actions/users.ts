@@ -60,14 +60,17 @@ type LeanPreferences = {
 
 type LeanProfileDoc = {
   _id?: any;
-  fullName?: string | null;
+  name?: string | null;
   email?: string;
   image?: string | null;
+  dateOfBirth?: Date | null;
+  gender?: "male" | "female" | "other" | "prefer_not_to_say" | null;
   phone?: {
     countryCode?: string | null;
     number?: string | null;
     e164?: string | null;
   } | null;
+  phoneVerified?: boolean;
   preferences?: LeanPreferences | null;
   profileCompleted?: boolean;
   onboardingCompleted?: boolean;
@@ -100,9 +103,6 @@ export async function findUsers(_id?: string) {
   }
 }
 
-/**
- * Read the current user's profile + phone + preferences.
- */
 export async function getUserProfile() {
   const session = await auth();
   const userId = (session?.user as any)?.id;
@@ -112,7 +112,7 @@ export async function getUserProfile() {
 
   const user = await User.findById(userId)
     .select(
-      "fullName email image phone preferences profileCompleted onboardingCompleted role status",
+      "name email image dateOfBirth gender phone phoneVerified preferences profileCompleted onboardingCompleted role status",
     )
     .lean<LeanProfileDoc>();
 
@@ -126,7 +126,7 @@ export async function getUserProfile() {
 /* -------------------------------------------------------------------------- */
 
 export async function updateUserProfile(payload: {
-  fullName?: string;
+  name?: string;
   image?: string | null;
   dateOfBirth?: string | Date | null;
   gender?: "male" | "female" | "other" | "prefer_not_to_say" | null;
@@ -169,7 +169,7 @@ export async function updateUserProfile(payload: {
   try {
     const update: Record<string, any> = {};
 
-    if (payload.fullName !== undefined) update.fullName = payload.fullName;
+    if (payload.name !== undefined) update.name = payload.name;
     if (payload.image !== undefined) update.image = payload.image;
     if (payload.dateOfBirth !== undefined)
       update.dateOfBirth = payload.dateOfBirth;
@@ -189,7 +189,7 @@ export async function updateUserProfile(payload: {
 
     // ---- Load current doc once (typed via generic) ----
     const merged = await User.findById(userId)
-      .select("fullName phone image preferences")
+      .select("name phone image preferences")
       .lean<LeanProfileDoc | null>();
 
     if (!merged) return { error: "User not found" };
@@ -212,14 +212,14 @@ export async function updateUserProfile(payload: {
     }
 
     // ---- Recompute profileCompleted flag ----
-    const finalFullName = update.fullName ?? merged.fullName;
+    const finalName = update.name ?? merged.name;
     const finalPhone = update.phone ?? merged.phone;
     const finalImage = update.image ?? merged.image;
     const finalPrefs = (update.preferences ??
       merged.preferences ??
       {}) as LeanPreferences;
 
-    const hasName = Boolean((finalFullName ?? "").toString().trim());
+    const hasName = Boolean((finalName ?? "").toString().trim());
     const hasPhone = Boolean(finalPhone?.number);
     const hasAvatar = Boolean(finalImage);
     const hasPrefs = Boolean(
@@ -234,7 +234,7 @@ export async function updateUserProfile(payload: {
       { new: true, runValidators: true },
     )
       .select(
-        "fullName email image phone preferences profileCompleted onboardingCompleted role status",
+        "name email image phone preferences profileCompleted onboardingCompleted role status",
       )
       .lean<LeanProfileDoc>();
 

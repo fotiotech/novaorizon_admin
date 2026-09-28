@@ -1,8 +1,8 @@
 // app/(settings)/settings/local/unit/page.tsx
 "use client";
 
-import FamilyForm from "@/app/(settings)/settings/local/unit/_component/FamilyForm";
-import UnitForm from "@/app/(settings)/settings/local/unit/_component/UnitForm";
+import FamilyForm from "@/app/(catalog)/catalog/attributes/_component/unit/FamilyForm";
+import UnitForm from "@/app/(catalog)/catalog/attributes/_component/unit/UnitForm";
 import {
   getUnits,
   updateUnit,

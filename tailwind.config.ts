@@ -1,4 +1,7 @@
 import type { Config } from "tailwindcss";
+import tailwindScrollbar from "tailwind-scrollbar";
+import tailwindcssAnimate from "tailwindcss-animate";
+import tailwindcssTypography from "@tailwindcss/typography";
 
 const config: Config = {
   darkMode: ["class"],
@@ -122,11 +125,7 @@ const config: Config = {
       // ... rest of your extend (backgroundImage, keyframes, etc.)
     },
   },
-  plugins: [
-    require("tailwind-scrollbar"),
-    require("tailwindcss-animate"),
-    require("@tailwindcss/typography"),
-  ],
+  plugins: [tailwindScrollbar, tailwindcssAnimate, tailwindcssTypography],
 };
 
 export default config;

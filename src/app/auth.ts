@@ -1,4 +1,4 @@
-// auth.ts
+// auth.ts  (front app)
 import { connection } from "@/utils/connection";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import client from "./lib/db";
@@ -29,7 +29,6 @@ const providers: Provider[] = [
           throw new Error("Invalid credentials");
         }
 
-        // Uncomment if you enforce email verification
         // if (!user.isVerified) {
         //   throw new Error(
         //     "Your email address is unverified. Please check your inbox for the activation link.",
@@ -38,7 +37,7 @@ const providers: Provider[] = [
 
         return {
           id: user._id.toString(),
-          name: user.fullName || user.name,
+          name: user.name || user.fullName,
           email: user.email,
           role: user.role,
           image: user.image,
@@ -54,11 +53,11 @@ const providers: Provider[] = [
     clientSecret: process.env.AUTH_GOOGLE_SECRET!,
     async profile(profile) {
       return {
-        id: profile.sub,
+        // NOTE: `id` intentionally omitted — MongoDBAdapter assigns the _id
         name: profile.name,
         email: profile.email,
         image: profile.picture,
-        role: "user", // Default role for OAuth users
+        role: "user",
       };
     },
   }),
@@ -67,11 +66,11 @@ const providers: Provider[] = [
     clientSecret: process.env.AUTH_GITHUB_SECRET!,
     async profile(profile) {
       return {
-        id: profile.id.toString(),
+        // NOTE: `id` intentionally omitted — MongoDBAdapter assigns the _id
         name: profile.name || profile.login,
         email: profile.email,
         image: profile.avatar_url,
-        role: "user", // Default role for OAuth users
+        role: "user",
       };
     },
   }),
@@ -100,56 +99,20 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  cookies: {
-    sessionToken: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Secure-admin.session-token"
-          : "admin.session-token",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: process.env.NODE_ENV === "production",
-      },
-    },
-    callbackUrl: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Secure-admin.callback-url"
-          : "admin.callback-url",
-      options: {
-        sameSite: "lax",
-        path: "/",
-        secure: process.env.NODE_ENV === "production",
-      },
-    },
-    csrfToken: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Host-admin.csrf-token"
-          : "admin.csrf-token",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: process.env.NODE_ENV === "production",
-      },
-    },
-  },
+  // No custom `cookies` block needed here — the admin app already
+  // uses `admin.*` names, so this app can keep the NextAuth defaults.
   callbacks: {
     async jwt({ token, user, trigger, session }: any) {
-      // Add user info to token on sign in
       if (user) {
         token.id = user.id;
         token.role = user.role;
       }
 
-      // Safely update token with session data (whitelist fields only)
+      // ✅ Whitelist: only allow name/image to be updated by the client
       if (trigger === "update" && session) {
         token.name = session.user?.name ?? token.name;
         token.image = session.user?.image ?? token.image;
-        // Do NOT copy role or id from session
+        // never copy `role` or `id` from the client
       }
 
       return token;
@@ -162,13 +125,11 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       return session;
     },
     async redirect({ url, baseUrl }) {
-      // Allows relative callback URLs
       if (url.startsWith("/")) return `${baseUrl}${url}`;
-      // Allows callback URLs on the same origin
       else if (new URL(url).origin === baseUrl) return url;
       return baseUrl;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET, // ← must be DIFFERENT from admin app
   trustHost: true,
 } satisfies NextAuthConfig);

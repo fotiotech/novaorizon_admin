@@ -1,6 +1,24 @@
 // components/admin/menu-config.tsx
 // Single source of truth for admin navigation.
 // Layouts no longer declare their own link lists — everything lives here.
+//
+// Sections map 1:1 to the 15 core admin-panel modules:
+//
+//   1. Dashboard      — KPIs, live view, analytics overview
+//   2. Users & Access — admin users, roles, permissions, security
+//   3. Customers      — customer profiles, segments, CRM, chat
+//   4. Catalog        — products, categories, brands, attributes
+//   5. Inventory      — stock, warehouses, suppliers, POs
+//   6. Orders         — orders, drafts, fulfillment, invoices
+//   7. Payments       — transactions, gateways, refunds, payouts
+//   8. Shipping       — carriers, zones, labels, tracking
+//   9. Marketing      — ads, promotions, coupons, email/SMS, affiliates
+//  10. Channels       — storefront CMS + POS
+//  11. Support        — returns/RMA, tickets, chat, help center
+//  12. Localization   — taxes, currencies, languages, regions
+//  13. Integrations   — API, webhooks, apps, automation, import/export
+//  14. Reports        — reports, audit logs, compliance, backups
+//  15. Settings       — global config, feature flags
 
 import React from "react";
 import {
@@ -37,6 +55,18 @@ import {
   MenuOpen,
   Search,
   Shield,
+  Dashboard as DashboardIcon,
+  People,
+  VpnKey,
+  Receipt,
+  CreditCard,
+  Language,
+  Extension,
+  Settings as SettingsIcon,
+  Analytics as AnalyticsIcon,
+  Api,
+  FactCheck,
+  PointOfSale,
 } from "@mui/icons-material";
 
 export interface MenuLink {
@@ -47,7 +77,7 @@ export interface MenuLink {
   showContactCount?: boolean;
   showOrderCount?: boolean;
   absolute?: boolean;
-  /** Optional sub-tree — used for two-level drill-down (e.g. Store → Pages). */
+  /** Optional sub-tree — links may nest arbitrarily deep. */
   children?: MenuLink[];
 }
 
@@ -58,105 +88,35 @@ export interface MenuSection {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Convention for drill-down sub-trees:
+// Drill-down convention:
 //
-// Every parent link that has a `children` array repeats itself as the
-// FIRST entry of that array, pointing at its own href with the same
-// name and icon. The sidebar's row in the section list only opens the
-// sub-tree — it does not navigate — so that first child is what makes
-// the parent page reachable.
+// Links may nest arbitrarily deep via `children`. The sidebar row for
+// a parent opens its sub-tree (it does not navigate), so any parent
+// whose own landing page must remain reachable repeats itself as the
+// FIRST entry of its own `children` (same name + href). Navigation and
+// Attributes do this; Store / Content don't need to because their
+// landing pages are only opened from their parents.
 //
-// Section-level roots (Analytics, Sales, Catalog, Customers, Marketing,
-// Channels, Settings) are not part of this convention because they have
-// no `children` of their own.
+// Every helper below recurses the full tree:
+//   • allLinks       → flat search index, breadcrumb-labelled
+//   • flatIndex      → deepest-href-first lookup for the top bar
+//   • findNavContext → siblings at the same level, any depth
 // ─────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────
-// Content sub-tree — Marketing → Content.
+// Navigation sub-tree — Channels → Store → Content → Navigation.
 // ─────────────────────────────────────────────────────────────────────
 export const navigationLinks: MenuLink[] = [
   {
     name: "Navigation",
-    href: "/marketing/content/navigation",
+    href: "/channels/store/content/navigation",
     icon: <MenuIcon />,
   },
   {
     name: "Menus",
-    href: "/marketing/content/navigation/menus",
+    href: "/channels/store/content/navigation/menus",
     icon: <MenuOpen />,
   },
-  {
-    name: "Collestions",
-    href: "/marketing/content/navigation/collections",
-    icon: <ImageIcon />,
-  },
-];
-
-export const contentLinks: MenuLink[] = [
-  {
-    name: "Content",
-    href: "/marketing/content",
-    icon: <Code />,
-  },
-  {
-    name: "Navigation",
-    href: "/marketing/content/navigation",
-    icon: <MenuIcon />,
-    children: navigationLinks,
-  },
-  {
-    name: "Hero Content",
-    href: "/marketing/content/hero_content",
-    icon: <ImageIcon />,
-  },
-  {
-    name: "SEO Settings",
-    href: "/marketing/content/seo",
-    icon: <Search />,
-  },
-];
-
-// ─────────────────────────────────────────────────────────────────────
-// Marketing — merged.
-// Renamed: "Email Marketing" → "Email Campaigns".
-// Content and Promotions now expose nested sub-trees.
-// ─────────────────────────────────────────────────────────────────────
-export const marketingLinks: MenuLink[] = [
-  {
-    name: "Content",
-    href: "/marketing/content",
-    icon: <Code />,
-    children: contentLinks,
-  },
-  { name: "Advertising", href: "/marketing/ads", icon: <Discount /> },
-  {
-    name: "Promotions",
-    href: "/marketing/promotions",
-    icon: <Discount />,
-  },
-  {
-    name: "Email/SMS/Push",
-    href: "/marketing/email_sms",
-    icon: <Email />,
-  },
-  {
-    name: "Affiliate",
-    href: "/marketing/affiliate",
-    icon: <Code />,
-  },
-];
-
-// ─────────────────────────────────────────────────────────────────────
-// Store sub-tree — Channels → Store.
-// ─────────────────────────────────────────────────────────────────────
-export const storeLinks: MenuLink[] = [
-  { name: "Store", href: "/channels/store", icon: <Campaign /> },
-  { name: "Pages", href: "/channels/store/pges", icon: <Description /> },
-  { name: "Posts", href: "/channels/store/posts", icon: <Article /> },
-  { name: "Media", href: "/channels/store/media", icon: <ImageIcon /> },
-  { name: "Blog", href: "/channels/store/blog", icon: <Article /> },
-  { name: "Tags", href: "/channels/store/tags", icon: <Tag /> },
-  { name: "FAQs", href: "/channels/store/faqs", icon: <Help /> },
 ];
 
 // ─────────────────────────────────────────────────────────────────────
@@ -170,91 +130,60 @@ export const attributeLinks: MenuLink[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────
-// POS sub-tree — Channels → POS.
-//
-// "POS" replaces the old "Dashboard" entry as the first row: it points
-// at the same href (/channels/pos) and keeps the parent-as-first-child
-// convention consistent across every drill-down.
-// ─────────────────────────────────────────────────────────────────────
-export const posLinks: MenuLink[] = [
-  { name: "POS", href: "/channels/pos", icon: <Assessment /> },
-  { name: "Reports", href: "/channels/pos/reports", icon: <Assessment /> },
-];
-
-// ─────────────────────────────────────────────────────────────────────
-// Full menu.
+// Full menu — one section per module.
 // ─────────────────────────────────────────────────────────────────────
 export const rawMenuConfig = [
+  // ── 1. Dashboard & Analytics ──────────────────────────────────────
   {
-    title: "Analytics",
+    title: "Dashboard",
     links: [
       {
-        name: "Live",
-        href: "/analytics/live",
-        icon: <Assessment />,
+        name: "Overview",
+        href: "/dashboard/overview",
+        icon: <DashboardIcon />,
       },
+      { name: "Live", href: "/dashboard/live", icon: <AnalyticsIcon /> },
       {
         name: "Sales Analytics",
-        href: "/analytics/sales_reports",
+        href: "/dashboard/sales",
         icon: <Assessment />,
       },
       {
         name: "Customer Analytics",
-        href: "/analytics/customer_report",
+        href: "/dashboard/customers",
         icon: <BarChart />,
       },
       {
-        name: "Inventory Reports",
-        href: "/analytics/inventory_reports",
+        name: "Inventory Analytics",
+        href: "/dashboard/inventory",
         icon: <Inventory />,
       },
     ],
   },
+
+  // ── 2. User, Role & Access Management ─────────────────────────────
   {
-    title: "Sales",
+    title: "Users & Access",
     links: [
-      {
-        name: "Orders",
-        href: "/sales/orders",
-        icon: <ShoppingBag />,
-        showOrderCount: true,
-      },
-      {
-        name: "Fulfillment",
-        href: "/sales/fulfillment",
-        icon: <LocalShipping />,
-      },
-      { name: "Refunds", href: "/sales/refunds", icon: <Replay /> },
+      { name: "Users", href: "/users/users", icon: <People /> },
+      { name: "Roles", href: "/users/roles", icon: <Shield /> },
+      { name: "Permissions", href: "/users/permissions", icon: <VpnKey /> },
+      { name: "Teams", href: "/users/teams", icon: <GroupWork /> },
+      { name: "Security", href: "/users/security", icon: <Shield /> },
     ],
   },
-  {
-    title: "Catalog",
-    links: [
-      { name: "Products", href: "/catalog/products", icon: <Inventory2 /> },
-      { name: "Category", href: "/catalog/categories", icon: <Category /> },
-      { name: "Brands", href: "/catalog/brands", icon: <Tag /> },
-      {
-        name: "Attributes",
-        href: "/catalog/attributes",
-        icon: <Assignment />,
-        children: attributeLinks,
-      },
-      { name: "Inventory", href: "/catalog/inventory", icon: <Inventory /> },
-    ],
-  },
+
+  // ── 3. Customer & CRM ─────────────────────────────────────────────
   {
     title: "Customers",
     links: [
       { name: "Customers", href: "/customers/customers", icon: <Person2 /> },
-      {
-        name: "Segmentation",
-        href: "/customers/segmentation",
-        icon: <Segment />,
-      },
+      { name: "Segments", href: "/customers/segments", icon: <Segment /> },
       {
         name: "Messages",
         href: "/customers/messages",
-        icon: <Assignment />,
+        icon: <Email />,
+        showContactCount: true,
       },
       {
         name: "Chat",
@@ -262,57 +191,252 @@ export const rawMenuConfig = [
         icon: <Chat />,
         showUnreadCount: true,
       },
+      { name: "Reviews", href: "/customers/reviews", icon: <Assignment /> },
     ],
   },
+
+  // ── 4. Catalog & Product Management ───────────────────────────────
+  {
+    title: "Catalog",
+    links: [
+      { name: "Products", href: "/catalog/products", icon: <Inventory2 /> },
+      { name: "Categories", href: "/catalog/categories", icon: <Category /> },
+      { name: "Brands", href: "/catalog/brands", icon: <Tag /> },
+      {
+        name: "Attributes",
+        href: "/catalog/attributes",
+        icon: <Assignment />,
+        children: attributeLinks,
+      },
+      {
+        name: "Collections",
+        href: "/catalog/collections",
+        icon: <ImageIcon />,
+      },
+    ],
+  },
+
+  // ── 5. Inventory & Warehouse ──────────────────────────────────────
+  {
+    title: "Inventory",
+    links: [
+      { name: "Stock", href: "/inventory/stock", icon: <Inventory /> },
+      { name: "Locations", href: "/inventory/locations", icon: <Inventory2 /> },
+      {
+        name: "Purchase Orders",
+        href: "/inventory/purchase-orders",
+        icon: <Receipt />,
+      },
+      {
+        name: "Suppliers",
+        href: "/inventory/suppliers",
+        icon: <LocalShipping />,
+      },
+      { name: "Adjustments", href: "/inventory/adjustments", icon: <Tune /> },
+      { name: "Transfers", href: "/inventory/transfers", icon: <Replay /> },
+    ],
+  },
+
+  // ── 6. Orders & Fulfillment ───────────────────────────────────────
+  {
+    title: "Orders",
+    links: [
+      {
+        name: "Orders",
+        href: "/orders/orders",
+        icon: <ShoppingBag />,
+        showOrderCount: true,
+      },
+      { name: "Drafts", href: "/orders/drafts", icon: <Description /> },
+      {
+        name: "Fulfillment",
+        href: "/orders/fulfillment",
+        icon: <LocalShipping />,
+      },
+      { name: "Invoices", href: "/orders/invoices", icon: <Receipt /> },
+    ],
+  },
+
+  // ── 7. Payments & Transactions ────────────────────────────────────
+  {
+    title: "Payments",
+    links: [
+      {
+        name: "Transactions",
+        href: "/payments/transactions",
+        icon: <Payment />,
+      },
+      { name: "Gateways", href: "/payments/gateways", icon: <CreditCard /> },
+      { name: "Refunds", href: "/payments/refunds", icon: <Replay /> },
+      { name: "Disputes", href: "/payments/disputes", icon: <Assignment /> },
+      { name: "Payouts", href: "/payments/payouts", icon: <AccountBalance /> },
+    ],
+  },
+
+  // ── 8. Shipping & Logistics ───────────────────────────────────────
+  {
+    title: "Shipping",
+    links: [
+      {
+        name: "Shipments",
+        href: "/shipping/shipments",
+        icon: <LocalShipping />,
+      },
+      { name: "Carriers", href: "/shipping/carriers", icon: <LocalShipping /> },
+      { name: "Zones & Rates", href: "/shipping/zones", icon: <Public /> },
+      { name: "Labels", href: "/shipping/labels", icon: <Description /> },
+      { name: "Tracking", href: "/shipping/tracking", icon: <Search /> },
+    ],
+  },
+
+  // ── 9. Promotions & Marketing ─────────────────────────────────────
   {
     title: "Marketing",
-    links: marketingLinks,
+    links: [
+      { name: "Advertising", href: "/marketing/ads", icon: <Discount /> },
+      {
+        name: "Promotions",
+        href: "/marketing/promotions",
+        icon: <Discount />,
+      },
+      { name: "Coupons", href: "/marketing/coupons", icon: <Discount /> },
+      {
+        name: "Email/SMS/Push",
+        href: "/marketing/email_sms",
+        icon: <Email />,
+      },
+      { name: "Affiliates", href: "/marketing/affiliate", icon: <Code /> },
+      { name: "Campaigns", href: "/marketing/campaigns", icon: <Campaign /> },
+    ],
   },
+
+  // ── 10. Channels & Storefront CMS ─────────────────────────────────
   {
     title: "Channels",
     links: [
       {
         name: "Store",
         href: "/channels/store",
-        icon: <Campaign />,
-        children: storeLinks,
+        icon: <ImageIcon />,
+        children: [
+          {
+            name: "Content",
+            href: "/channels/store/content",
+            icon: <Code />,
+            children: [
+              {
+                name: "Navigation",
+                href: "/channels/store/content/navigation",
+                icon: <MenuIcon />,
+                children: navigationLinks,
+              },
+              {
+                name: "Hero Content",
+                href: "/channels/store/content/hero",
+                icon: <ImageIcon />,
+              },
+              {
+                name: "SEO Settings",
+                href: "/channels/store/content/seo",
+                icon: <Search />,
+              },
+            ],
+          },
+          {
+            name: "Pages",
+            href: "/channels/store/pages",
+            icon: <Description />,
+          },
+          { name: "Posts", href: "/channels/store/posts", icon: <Article /> },
+          { name: "Blog", href: "/channels/store/blog", icon: <Article /> },
+          { name: "Media", href: "/channels/store/media", icon: <ImageIcon /> },
+          { name: "Tags", href: "/channels/store/tags", icon: <Tag /> },
+          { name: "FAQs", href: "/channels/store/faqs", icon: <Help /> },
+        ],
+      },
+      { name: "POS", href: "/channels/pos", icon: <PointOfSale /> },
+    ],
+  },
+
+  // ── 11. Returns, Refunds & Customer Service ───────────────────────
+  {
+    title: "Support",
+    links: [
+      { name: "Returns", href: "/support/returns", icon: <Replay /> },
+      { name: "Tickets", href: "/support/tickets", icon: <Assignment /> },
+      { name: "Chat", href: "/support/chat", icon: <Chat /> },
+      { name: "Help Center", href: "/support/help", icon: <Help /> },
+      { name: "Disputes", href: "/support/disputes", icon: <Shield /> },
+    ],
+  },
+
+  // ── 12. Taxes, Currencies & Localization ──────────────────────────
+  {
+    title: "Localization",
+    links: [
+      { name: "Taxes", href: "/localization/taxes", icon: <AccountBalance /> },
+      {
+        name: "Currencies",
+        href: "/localization/currencies",
+        icon: <Payment />,
       },
       {
-        name: "POS",
-        href: "/channels/pos",
+        name: "Languages",
+        href: "/localization/languages",
+        icon: <Language />,
+      },
+      { name: "Regions", href: "/localization/regions", icon: <Public /> },
+    ],
+  },
+
+  // ── 13. Integrations, API & Automation ────────────────────────────
+  {
+    title: "Integrations",
+    links: [
+      { name: "API Keys", href: "/integrations/api", icon: <Api /> },
+      { name: "Webhooks", href: "/integrations/webhooks", icon: <Extension /> },
+      { name: "Apps", href: "/integrations/apps", icon: <Extension /> },
+      { name: "Automation", href: "/integrations/automation", icon: <Tune /> },
+      {
+        name: "Import / Export",
+        href: "/integrations/import-export",
         icon: <GetAppRounded />,
-        children: posLinks,
       },
     ],
   },
+
+  // ── 14. Reports, Compliance & Security ────────────────────────────
+  {
+    title: "Reports",
+    links: [
+      { name: "Reports", href: "/reports", icon: <Assessment /> },
+      {
+        name: "Audit Logs",
+        href: "/reports/audit-logs",
+        icon: <FactCheck />,
+      },
+      { name: "Compliance", href: "/reports/compliance", icon: <Shield /> },
+      { name: "Backups", href: "/reports/backups", icon: <Inventory2 /> },
+    ],
+  },
+
+  // ── 15. Settings & Configuration ──────────────────────────────────
   {
     title: "Settings",
     links: [
+      { name: "General", href: "/settings/general", icon: <SettingsIcon /> },
+      { name: "Store", href: "/settings/store", icon: <Campaign /> },
+      { name: "Checkout", href: "/settings/checkout", icon: <Payment /> },
       {
-        name: "General Settings",
-        href: "/settings/general",
+        name: "Notifications",
+        href: "/settings/notifications",
+        icon: <Email />,
+      },
+      {
+        name: "Feature Flags",
+        href: "/settings/feature-flags",
         icon: <Tune />,
       },
-      { name: "Users", href: "/settings/users", icon: <Person2 /> },
-      {
-        name: "Roles & Permissions",
-        href: "/settings/permissions_roles",
-        icon: <Shield />,
-      },
-      { name: "Payments", href: "/settings/payment", icon: <Payment /> },
-      {
-        name: "Shipping",
-        href: "/settings/shipping",
-        icon: <LocalShipping />,
-      },
-      {
-        name: "Tax Configuration",
-        href: "/settings/tax",
-        icon: <AccountBalance />,
-      },
-      { name: "Localization", href: "/settings/local", icon: <Public /> },
-      { name: "Finances", href: "/settings/finances", icon: <Assessment /> },
-      { name: "Returns", href: "/settings/returns", icon: <Replay /> },
     ],
   },
 ];
@@ -333,86 +457,106 @@ export const settingsSection =
   menuConfig.find((s) => s.slug === SETTINGS_SLUG) ?? null;
 export const mainSections = menuConfig.filter((s) => s.slug !== SETTINGS_SLUG);
 
-// Flat search index — parents + children, so typing "Pages" finds
-// /channels/store/pages with "Channels › Store" as the context label.
-//
-// Parents repeat themselves as the first entry of their own `children`,
-// so we filter that duplicate out of the child index — otherwise every
-// parent would appear twice in search.
-export const allLinks = menuConfig.flatMap((section) => {
-  const parents = section.links.map((link) => ({
-    name: link.name,
-    href: link.href,
-    icon: link.icon,
-    sectionTitle: section.title,
-  }));
-  const children = section.links.flatMap((link) =>
-    (link.children ?? [])
-      .filter((child) => child.href !== link.href)
-      .map((child) => ({
-        name: child.name,
-        href: child.href,
-        icon: child.icon,
-        sectionTitle: `${section.title} › ${link.name}`,
-      })),
-  );
-  return [...parents, ...children];
-});
+// ─────────────────────────────────────────────────────────────────────
+// Recursive walker — flattens any tree depth into a list of entries,
+// each carrying its ancestor chain (root → immediate parent).
+// ─────────────────────────────────────────────────────────────────────
+export interface LinkRef {
+  name: string;
+  href: string;
+}
 
-// ─────────────────────────────────────────────────────────────────────
-// Active-link lookup.
-// Given a pathname, returns the deepest matching link entry — a child
-// wins over its parent, and the most specific href wins over a shorter
-// prefix. Used by the top bar to render the current page title.
-// ─────────────────────────────────────────────────────────────────────
 export interface ActiveLinkInfo {
   /** The link's own display name. */
   name: string;
   /** The section it belongs to (e.g. "Channels"). */
   sectionTitle: string;
-  /** If this link is a child, the parent link's name (e.g. "Store"). */
-  parentName?: string;
   /** The matched href. */
   href: string;
   /** The link's icon, when present. */
   icon?: React.ReactNode;
+  /** Immediate parent name, when this link is nested. */
+  parentName?: string;
+  /** Immediate parent href — used to locate the sibling set. */
+  parentHref?: string;
+  /** Full ancestor chain (root → immediate parent). Empty for top-level links. */
+  ancestors: LinkRef[];
 }
 
+function walkLinks(
+  links: MenuLink[],
+  sectionTitle: string,
+  ancestors: LinkRef[],
+): ActiveLinkInfo[] {
+  const out: ActiveLinkInfo[] = [];
+  for (const link of links) {
+    const parent = ancestors[ancestors.length - 1];
+    out.push({
+      name: link.name,
+      href: link.href,
+      icon: link.icon,
+      sectionTitle,
+      parentName: parent?.name,
+      parentHref: parent?.href,
+      ancestors,
+    });
+    if (link.children?.length) {
+      out.push(
+        ...walkLinks(link.children, sectionTitle, [
+          ...ancestors,
+          { name: link.name, href: link.href },
+        ]),
+      );
+    }
+  }
+  return out;
+}
+
+// Breadcrumb label used by search results, e.g.
+// "Channels › Store › Content › Navigation".
+const breadcrumb = (sectionTitle: string, ancestors: LinkRef[]) =>
+  [sectionTitle, ...ancestors.map((a) => a.name)].join(" › ");
+
+// ─────────────────────────────────────────────────────────────────────
+// Flat search index — every navigable link at any depth.
+// Deduped by href, so a parent that repeats itself as the first child
+// of its own sub-tree only appears once (the shallower entry wins).
+// ─────────────────────────────────────────────────────────────────────
+export const allLinks = (() => {
+  const seen = new Set<string>();
+  return menuConfig.flatMap((section) =>
+    walkLinks(section.links, section.title, [])
+      .filter((entry) => {
+        if (seen.has(entry.href)) return false;
+        seen.add(entry.href);
+        return true;
+      })
+      .map((entry) => ({
+        name: entry.name,
+        href: entry.href,
+        icon: entry.icon,
+        sectionTitle: breadcrumb(entry.sectionTitle, entry.ancestors),
+      })),
+  );
+})();
+
+// ─────────────────────────────────────────────────────────────────────
+// Active-link lookup.
+// Deepest-href-first index, so the most specific page wins over a
+// shorter prefix. Same-length ties break in insertion order, which is
+// parent-before-mirror — so a shallow parent beats its own mirror entry
+// when both share an href (matches the previous single-level behaviour).
+// ─────────────────────────────────────────────────────────────────────
 const matches = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(href + "/");
 
-// Flat index of every navigable link, deepest href first.
-//
-// Parents are pushed before children, and Array.find returns the first
-// match, so an exact match on a parent's own href resolves to the
-// parent entry (no parentName → section-level siblings). This is the
-// correct behaviour when the user is on the parent's own page.
 const flatIndex: ActiveLinkInfo[] = menuConfig
-  .flatMap((section) => {
-    const parents: ActiveLinkInfo[] = section.links.map((link) => ({
-      name: link.name,
-      sectionTitle: section.title,
-      href: link.href,
-      icon: link.icon,
-    }));
-    const children: ActiveLinkInfo[] = section.links.flatMap((link) =>
-      (link.children ?? []).map((child) => ({
-        name: child.name,
-        sectionTitle: section.title,
-        parentName: link.name,
-        href: child.href,
-        icon: child.icon,
-      })),
-    );
-    return [...parents, ...children];
-  })
+  .flatMap((section) => walkLinks(section.links, section.title, []))
   .sort((a, b) => b.href.length - a.href.length);
 
 function matchLink(pathname: string): ActiveLinkInfo | null {
-  // Exact match wins outright.
   const exact = flatIndex.find((l) => l.href === pathname);
   if (exact) return exact;
-  // Otherwise the longest href the pathname descends from.
   return flatIndex.find((l) => matches(pathname, l.href)) ?? null;
 }
 
@@ -421,11 +565,22 @@ export function findActiveLink(pathname: string | null): ActiveLinkInfo | null {
   return matchLink(pathname);
 }
 
+// BFS lookup of a link object by href — returns the shallowest match,
+// which is what we want when a mirror entry shares its parent's href.
+function findLinkByHref(href: string): MenuLink | null {
+  const queue: MenuLink[] = menuConfig.flatMap((s) => s.links);
+  while (queue.length) {
+    const link = queue.shift()!;
+    if (link.href === href) return link;
+    if (link.children?.length) queue.push(...link.children);
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Active navigation context.
-// Returns the current link + its siblings (same section for a parent, or
-// same parent's children for a child) so the top bar can render a
-// "switch page" dropdown.
+// Returns the current link + its siblings at the same level (any depth)
+// so the top bar can render a "switch page" dropdown.
 // ─────────────────────────────────────────────────────────────────────
 export interface NavContext {
   /** The currently active link. */
@@ -439,33 +594,33 @@ export function findNavContext(pathname: string | null): NavContext | null {
   const current = matchLink(pathname);
   if (!current) return null;
 
-  let siblings: ActiveLinkInfo[] = [];
-
-  if (current.parentName) {
-    // Child link → siblings are the other children of the same parent.
-    // Filter out the parent's own mirror entry so the dropdown doesn't
-    // offer the current page as one of its own siblings.
-    const section = menuConfig.find((s) => s.title === current.sectionTitle);
-    const parent = section?.links.find((l) => l.name === current.parentName);
-    siblings = (parent?.children ?? [])
-      .filter((c) => c.href !== parent?.href)
+  // Nested link → siblings are the other children of the immediate parent.
+  // The current entry is excluded so the dropdown doesn't offer the page
+  // you're already on; any parent mirror entry with a different href stays.
+  if (current.parentHref) {
+    const parent = findLinkByHref(current.parentHref);
+    const siblings: ActiveLinkInfo[] = (parent?.children ?? [])
+      .filter((c) => c.href !== current.href)
       .map((c) => ({
         name: c.name,
         href: c.href,
-        sectionTitle: current.sectionTitle,
-        parentName: current.parentName,
         icon: c.icon,
+        sectionTitle: current.sectionTitle,
+        parentName: parent?.name,
+        parentHref: parent?.href,
+        ancestors: current.ancestors,
       }));
-  } else {
-    // Parent link → siblings are the other top-level links in the section.
-    const section = menuConfig.find((s) => s.title === current.sectionTitle);
-    siblings = (section?.links ?? []).map((l) => ({
-      name: l.name,
-      href: l.href,
-      sectionTitle: current.sectionTitle,
-      icon: l.icon,
-    }));
+    return { current, siblings };
   }
 
+  // Top-level link → siblings are the other top-level links in the section.
+  const section = menuConfig.find((s) => s.title === current.sectionTitle);
+  const siblings: ActiveLinkInfo[] = (section?.links ?? []).map((l) => ({
+    name: l.name,
+    href: l.href,
+    icon: l.icon,
+    sectionTitle: current.sectionTitle,
+    ancestors: [],
+  }));
   return { current, siblings };
 }

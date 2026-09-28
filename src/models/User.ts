@@ -61,7 +61,7 @@ const UserSchema = new Schema(
     sessions: { type: [Schema.Types.Mixed], default: [] },
 
     /* --------------------------------- Profile -------------------------------- */
-    fullName: { type: String, trim: true, default: null },
+    name: { type: String, trim: true, default: null },
     image: { type: String, default: null }, // avatar URL (S3 / Cloudinary / etc.)
 
     dateOfBirth: { type: Date, default: null }, // for birthday offers (optional)

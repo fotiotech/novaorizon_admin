@@ -20,36 +20,21 @@ const strongPassword = z
   });
 
 export const SignupFormSchema = z.object({
-  /* ── Step 1 — Account ───────────────────────────────── */
-  email: emailField,
-  password: strongPassword,
-
-  /* ── Step 2 — Profile ───────────────────────────────── */
-  fullName: z
+  name: z
     .string()
     .trim()
     .min(3, { message: "Name is too short." })
     .refine((v) => v.split(/\s+/).filter(Boolean).length >= 2, {
       message: "Please enter both your first and last name.",
     }),
-  phoneCountryCode: z.string().trim().optional().nullable(),
-  phoneNumber: z.string().trim().optional().nullable(),
-
-  /* ── Step 3 — Service notification channels ─────────── */
-  notifyEmail: z.boolean().default(true),
-  notifyPush: z.boolean().default(true),
-  notifySms: z.boolean().default(false),
-  notifyWhatsapp: z.boolean().default(false),
-
-  /* ── Step 3 — Marketing (single, explicit opt-in) ───── */
-  marketingEmail: z.boolean().default(false),
+  email: emailField,
+  password: strongPassword,
 });
 
 export type SignupInput = z.infer<typeof SignupFormSchema>;
 
 /**
  * Sign-in only checks presence — password *strength* is a signup concern.
- * Re-validating strength here would reject legacy users and leak policy hints.
  */
 export const SigninFormSchema = z.object({
   email: emailField,
@@ -59,11 +44,9 @@ export const SigninFormSchema = z.object({
 export type FormState =
   | {
       errors?: {
+        name?: string[];
         email?: string[];
         password?: string[];
-        fullName?: string[];
-        phoneNumber?: string[];
-        phoneCountryCode?: string[];
       };
       message?: string;
       error?: string;

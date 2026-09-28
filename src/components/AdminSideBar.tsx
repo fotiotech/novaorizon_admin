@@ -21,7 +21,7 @@ import { SignIn } from "../app/(auth)/components/SignInButton";
 import { useUnreadMessages } from "@/app/(customers)/customers/chat/_component/useUnreadMessages";
 import { useNewContactCount } from "@/hooks/useNewContactCount";
 import LeftSheet from "@/components/ux/LeftSheet";
-import { useUnreadOrderNotifications } from "@/app/(dashboard)/dashboard/notifications/_component/hooks/useUnreadOrderNotifications";
+import { useUnreadOrderNotifications } from "@/app/(settings)/settings/notifications/_component/hooks/useUnreadOrderNotifications";
 import {
   menuConfig,
   allLinks,
@@ -55,6 +55,74 @@ const itemIdle =
   "text-sidebar-foreground/80 hover:bg-foreground/5 hover:text-sidebar-foreground";
 const itemActive = "bg-primary/10 text-primary";
 
+// ─────────────────────────────────────────────────────────────────────
+// Route + tree helpers — kept in sync with menu-config.tsx conventions.
+// ─────────────────────────────────────────────────────────────────────
+
+const routeMatches = (pathname: string | null, href: string) =>
+  !!pathname && (pathname === href || pathname.startsWith(href + "/"));
+
+const linkMatchesRoute = (pathname: string | null, link: MenuLink): boolean =>
+  routeMatches(pathname, link.href) ||
+  (link.children ?? []).some((c) => linkMatchesRoute(pathname, c));
+
+const sectionMatchesRoute = (pathname: string | null, section: MenuSection) =>
+  section.links.some((l) => linkMatchesRoute(pathname, l));
+
+/**
+ * Walk the tree to find the chain of ancestor hrefs for a pathname — the
+ * links whose children should be shown in the sidebar. The matched link
+ * itself is excluded, so the deepest returned href is the *parent* of the
+ * current page (or empty for a top-level page).
+ *
+ * Examples:
+ *   /channels/store                     → []
+ *   /channels/store/content             → ["/channels/store"]
+ *   /channels/store/content/navigation  → ["/channels/store",
+ *                                          "/channels/store/content"]
+ *   /channels/store/content/navigation/menus
+ *                                       → ["/channels/store",
+ *                                          "/channels/store/content",
+ *                                          "/channels/store/content/navigation"]
+ */
+function findAncestorChain(
+  links: MenuLink[],
+  pathname: string,
+  ancestors: string[] = [],
+): string[] | null {
+  for (const link of links) {
+    const exact = pathname === link.href;
+    const under = pathname.startsWith(link.href + "/");
+    if (!exact && !under) continue;
+
+    // Pathname descends further — recurse into this link's subtree.
+    if (under && link.children?.length) {
+      const deeper = findAncestorChain(link.children, pathname, [
+        ...ancestors,
+        link.href,
+      ]);
+      if (deeper) return deeper;
+    }
+
+    // Exact match, or no deeper match: view this link's parent's children.
+    return ancestors;
+  }
+  return null;
+}
+
+/** Resolve a chain of hrefs to the corresponding MenuLink objects. */
+function resolveParentChain(section: MenuSection, hrefs: string[]): MenuLink[] {
+  const chain: MenuLink[] = [];
+  let pool = section.links;
+  for (const href of hrefs) {
+    const found = pool.find((l) => l.href === href);
+    if (!found) break;
+    chain.push(found);
+    pool = found.children ?? [];
+  }
+  return chain;
+}
+
 const AdminSideBar: React.FC<AdminSideBarProps> = ({
   sideBarToggle,
   screenSize,
@@ -68,6 +136,11 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   const newContactCount = useNewContactCount();
   const { count: unreadOrderCount } = useUnreadOrderNotifications();
 
+  // Drill-down stack: [sectionSlug, ...ancestorHrefs].
+  //   []                   → root (all sections)
+  //   ["channels"]         → section's top-level links
+  //   ["channels", hrefA]  → children of the link at hrefA
+  //   ["channels", hrefA, hrefB] → children of hrefB (a child of hrefA)
   const [path, setPath] = useState<string[]>([]);
   const [direction, setDirection] = useState<Direction>("same");
 
@@ -105,34 +178,24 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     [path],
   );
 
-  const currentParentLink: MenuLink | null = useMemo(() => {
-    if (!currentSection || path.length < 2) return null;
-    return currentSection.links.find((l) => l.href === path[1]) ?? null;
+  // Chain of MenuLink objects from section root down to (and including)
+  // the parent whose children are currently being rendered.
+  const parentChain = useMemo(() => {
+    if (!currentSection || path.length < 2) return [];
+    return resolveParentChain(currentSection, path.slice(1));
   }, [currentSection, path]);
 
-  const linkHasActiveRoute = (link: MenuLink) =>
-    pathname === link.href ||
-    pathname?.startsWith(link.href) ||
-    (link.children ?? []).some(
-      (c) => pathname === c.href || pathname?.startsWith(c.href),
-    );
+  const currentParent = parentChain[parentChain.length - 1] ?? null;
 
-  const sectionHasActiveRoute = (section: MenuSection) =>
-    section.links.some(linkHasActiveRoute);
-
+  // ── Sync drill-down stack from the current URL ────────────────────
   useEffect(() => {
     if (!pathname) return;
-    const owner = menuConfig.find(sectionHasActiveRoute);
+    const owner = menuConfig.find((s) => sectionMatchesRoute(pathname, s));
     if (!owner) return;
-    const owningParent = owner.links.find((link) =>
-      (link.children ?? []).some(
-        (c) => pathname === c.href || pathname?.startsWith(c.href),
-      ),
-    );
+    const ancestors = findAncestorChain(owner.links, pathname) ?? [];
+    const next = [owner.slug, ...ancestors];
+
     setPath((prev) => {
-      const next = owningParent
-        ? [owner.slug, owningParent.href]
-        : [owner.slug];
       const sameLength = prev.length === next.length;
       const sameValues = sameLength && prev.every((v, i) => v === next[i]);
       if (sameValues) return prev;
@@ -198,22 +261,34 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     handleClose();
   };
 
+  // ── Drill-down controls ───────────────────────────────────────────
   const openSection = (slug: string) => {
     setDirection("forward");
     setPath([slug]);
     closeSearch();
   };
-  const openChildren = (sectionSlug: string, href: string) => {
+
+  /** Push a link onto the stack — renders that link's children. */
+  const drillInto = (href: string) => {
     setDirection("forward");
-    setPath([sectionSlug, href]);
+    setPath((prev) => [...prev, href]);
   };
+
+  /** Pop one level. At section view, unwinds to root. */
   const goBack = () => {
     setDirection("back");
-    setPath((prev) => (prev.length > 1 ? [prev[0]] : []));
+    setPath((prev) => prev.slice(0, -1));
   };
+
   const goToRoot = () => {
     setDirection("back");
     setPath([]);
+  };
+
+  /** Truncate the stack to `depth` entries (0 = root, 1 = section, …). */
+  const goToLevel = (depth: number) => {
+    setDirection("back");
+    setPath((prev) => prev.slice(0, depth));
   };
 
   const closeSidebar = () => {
@@ -273,10 +348,134 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
   );
 
+  // ── Shared row renderer — Link for leaves, drill button for parents ──
+  const renderLinkItem = (link: MenuLink, index: number, isActive: boolean) => {
+    const hasChildren = (link.children?.length ?? 0) > 0;
+    const inner = (
+      <>
+        {isActive && <ActiveBar />}
+        <span className="flex items-center gap-3.5">
+          <span className="text-sidebar-foreground/60 [&>svg]:text-xl group-hover:text-sidebar-foreground">
+            {link.icon}
+          </span>
+          <span>{link.name}</span>
+        </span>
+      </>
+    );
+
+    return (
+      <li
+        key={link.href}
+        className="stagger-item"
+        style={{ animationDelay: `${index * 25}ms` }}
+      >
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => drillInto(link.href)}
+            className={`${itemBase} ${
+              isActive ? itemActive : itemIdle
+            } justify-between`}
+          >
+            {inner}
+            <ChevronRight
+              sx={{ fontSize: 18 }}
+              className="text-sidebar-foreground/40 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-sidebar-foreground/70"
+            />
+          </button>
+        ) : (
+          <Link
+            href={link.href}
+            onClick={handleClose}
+            className={`${itemBase} ${
+              isActive ? itemActive : itemIdle
+            } justify-between`}
+          >
+            {inner}
+            {renderBadges(link)}
+          </Link>
+        )}
+      </li>
+    );
+  };
+
+  // ── Breadcrumb (shared by section & children views) ───────────────
+  const renderBreadcrumb = (section: MenuSection, chain: MenuLink[]) => (
+    <nav
+      aria-label="Breadcrumb"
+      className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60"
+    >
+      <button
+        type="button"
+        onClick={goToRoot}
+        className="flex items-center gap-1 transition-colors hover:text-sidebar-foreground"
+      >
+        <Home sx={{ fontSize: 15 }} />
+        <span>Menu</span>
+      </button>
+
+      <ChevronRight sx={{ fontSize: 14 }} className="shrink-0 opacity-50" />
+
+      {chain.length === 0 ? (
+        <span className="truncate text-sidebar-foreground/90">
+          {section.title}
+        </span>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => goToLevel(1)}
+            className="truncate transition-colors hover:text-sidebar-foreground"
+          >
+            {section.title}
+          </button>
+          {chain.map((link, i) => {
+            const isLast = i === chain.length - 1;
+            return (
+              <React.Fragment key={`${link.href}-${i}`}>
+                <ChevronRight
+                  sx={{ fontSize: 14 }}
+                  className="shrink-0 opacity-50"
+                />
+                {isLast ? (
+                  <span className="truncate text-sidebar-foreground/90">
+                    {link.name}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => goToLevel(2 + i)}
+                    className="truncate transition-colors hover:text-sidebar-foreground"
+                  >
+                    {link.name}
+                  </button>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </>
+      )}
+    </nav>
+  );
+
+  const renderDrillHeader = (section: MenuSection, chain: MenuLink[]) => (
+    <div className="mb-3 flex items-center gap-2 px-1">
+      <button
+        type="button"
+        onClick={goBack}
+        aria-label="Back"
+        className="-ml-1 rounded-md p-2 text-sidebar-foreground/60 transition-colors hover:bg-foreground/5 hover:text-sidebar-foreground active:scale-90"
+      >
+        <ArrowBack sx={{ fontSize: 18 }} />
+      </button>
+      {renderBreadcrumb(section, chain)}
+    </div>
+  );
+
   const renderRoot = () => (
     <ul className="space-y-0.5">
       {mainSections.map((section, i) => {
-        const hasActive = sectionHasActiveRoute(section);
+        const hasActive = sectionMatchesRoute(pathname, section);
         return (
           <li
             key={section.slug}
@@ -310,183 +509,36 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 
   const renderSection = (section: MenuSection) => (
     <>
-      <div className="mb-3 flex items-center gap-2 px-1">
-        <button
-          type="button"
-          onClick={goBack}
-          aria-label="Back to menu"
-          className="-ml-1 rounded-md p-2 text-sidebar-foreground/60 transition-colors hover:bg-foreground/5 hover:text-sidebar-foreground active:scale-90"
-        >
-          <ArrowBack sx={{ fontSize: 18 }} />
-        </button>
-
-        <nav
-          aria-label="Breadcrumb"
-          className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60"
-        >
-          <button
-            type="button"
-            onClick={goToRoot}
-            className="flex items-center gap-1 transition-colors hover:text-sidebar-foreground"
-          >
-            <Home sx={{ fontSize: 15 }} />
-            <span>Menu</span>
-          </button>
-          <ChevronRight sx={{ fontSize: 14 }} className="opacity-50" />
-          <span className="truncate text-sidebar-foreground/90">
-            {section.title}
-          </span>
-        </nav>
-      </div>
-
+      {renderDrillHeader(section, [])}
       <ul className="space-y-0.5">
-        {section.links.map((link, i) => {
-          const isActive = linkHasActiveRoute(link);
-          const hasChildren = (link.children?.length ?? 0) > 0;
-
-          if (hasChildren) {
-            return (
-              <li
-                key={link.href}
-                className="stagger-item"
-                style={{ animationDelay: `${i * 25}ms` }}
-              >
-                <button
-                  type="button"
-                  onClick={() => openChildren(section.slug, link.href)}
-                  className={`${itemBase} ${
-                    isActive ? itemActive : itemIdle
-                  } justify-between`}
-                >
-                  {isActive && <ActiveBar />}
-                  <span className="flex items-center gap-3.5">
-                    <span className="text-sidebar-foreground/60 [&>svg]:text-xl group-hover:text-sidebar-foreground">
-                      {link.icon}
-                    </span>
-                    <span>{link.name}</span>
-                  </span>
-                  <ChevronRight
-                    sx={{ fontSize: 18 }}
-                    className="text-sidebar-foreground/40 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-sidebar-foreground/70"
-                  />
-                </button>
-              </li>
-            );
-          }
-
-          return (
-            <li
-              key={link.href}
-              className="stagger-item"
-              style={{ animationDelay: `${i * 25}ms` }}
-            >
-              <Link
-                href={link.href}
-                onClick={handleClose}
-                className={`${itemBase} ${
-                  isActive ? itemActive : itemIdle
-                } justify-between`}
-              >
-                {isActive && <ActiveBar />}
-                <span className="flex items-center gap-3.5">
-                  <span className="text-sidebar-foreground/60 [&>svg]:text-xl group-hover:text-sidebar-foreground">
-                    {link.icon}
-                  </span>
-                  <span>{link.name}</span>
-                </span>
-                {renderBadges(link)}
-              </Link>
-            </li>
-          );
-        })}
+        {section.links.map((link, i) =>
+          renderLinkItem(link, i, linkMatchesRoute(pathname, link)),
+        )}
       </ul>
     </>
   );
 
-  const renderChildren = (section: MenuSection, parent: MenuLink) => {
+  const renderChildren = (section: MenuSection, chain: MenuLink[]) => {
+    const parent = chain[chain.length - 1];
+    if (!parent) return null;
     const children = parent.children ?? [];
 
-    // Deepest match wins — same rule the flat index uses. A child's own
-    // href beats the parent mirror's href on a deeper route, and the
-    // parent mirror only lights up on the parent's exact URL.
+    // Deepest match at the current level wins — the parent's own mirror
+    // entry (same href) is only highlighted when no deeper sibling matches.
     let bestHref = "";
     for (const c of children) {
-      const hit =
-        pathname === c.href ||
-        (pathname ? pathname.startsWith(c.href + "/") : false);
-      if (hit && c.href.length > bestHref.length) bestHref = c.href;
+      if (routeMatches(pathname, c.href) && c.href.length > bestHref.length) {
+        bestHref = c.href;
+      }
     }
 
     return (
       <>
-        <div className="mb-3 flex items-center gap-2 px-1">
-          <button
-            type="button"
-            onClick={goBack}
-            aria-label="Back"
-            className="-ml-1 rounded-md p-2 text-sidebar-foreground/60 transition-colors hover:bg-foreground/5 hover:text-sidebar-foreground active:scale-90"
-          >
-            <ArrowBack sx={{ fontSize: 18 }} />
-          </button>
-
-          <nav
-            aria-label="Breadcrumb"
-            className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60"
-          >
-            <button
-              type="button"
-              onClick={goToRoot}
-              className="flex items-center gap-1 transition-colors hover:text-sidebar-foreground"
-            >
-              <Home sx={{ fontSize: 15 }} />
-              <span>Menu</span>
-            </button>
-            <ChevronRight sx={{ fontSize: 14 }} className="opacity-50" />
-            <button
-              type="button"
-              onClick={() => {
-                setDirection("back");
-                setPath([section.slug]);
-              }}
-              className="truncate transition-colors hover:text-sidebar-foreground"
-            >
-              {section.title}
-            </button>
-            <ChevronRight sx={{ fontSize: 14 }} className="opacity-50" />
-            <span className="truncate text-sidebar-foreground/90">
-              {parent.name}
-            </span>
-          </nav>
-        </div>
-
+        {renderDrillHeader(section, chain)}
         <ul className="space-y-0.5">
-          {children.map((link, i) => {
-            const isActive = link.href === bestHref;
-            return (
-              <li
-                key={link.href}
-                className="stagger-item"
-                style={{ animationDelay: `${i * 25}ms` }}
-              >
-                <Link
-                  href={link.href}
-                  onClick={handleClose}
-                  className={`${itemBase} ${
-                    isActive ? itemActive : itemIdle
-                  } justify-between`}
-                >
-                  {isActive && <ActiveBar />}
-                  <span className="flex items-center gap-3.5">
-                    <span className="text-sidebar-foreground/60 [&>svg]:text-xl group-hover:text-sidebar-foreground">
-                      {link.icon}
-                    </span>
-                    <span>{link.name}</span>
-                  </span>
-                  {renderBadges(link)}
-                </Link>
-              </li>
-            );
-          })}
+          {children.map((link, i) =>
+            renderLinkItem(link, i, link.href === bestHref),
+          )}
         </ul>
       </>
     );
@@ -501,20 +553,18 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           onClick={handleClose}
           aria-label="Home"
         >
-          {/* Light mode logo — visible only when <html> is NOT .dark */}
           <Image
             src="/light-logo.png"
             alt="logo"
-            width={128} // real file width
+            width={128}
             height={88}
             priority
             className="block h-[44px] w-auto dark:hidden"
           />
-          {/* Dark mode logo — visible only when <html> IS .dark */}
           <Image
             src="/dark-logo.png"
             alt="logo"
-            width={128} // real file width
+            width={128}
             height={88}
             priority
             className="hidden h-[44px] w-auto dark:block"
@@ -545,7 +595,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
         </button>
       </div>
 
-      {/* Search trigger — bg-card so it stands out against bg-sidebar */}
       <button
         type="button"
         onClick={openSearch}
@@ -568,7 +617,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 
   const settingsInView = currentSection?.slug === SETTINGS_SLUG;
   const settingsHasActiveRoute =
-    settingsSection && sectionHasActiveRoute(settingsSection);
+    settingsSection && sectionMatchesRoute(pathname, settingsSection);
 
   const renderFooter = () => (
     <div className="flex shrink-0 items-center gap-2.5 px-3.5 py-3.5">
@@ -749,7 +798,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                 <ul className="space-y-0.5">
                   {mainSections.map((section, i) => {
                     const isActive = activeIdx === i;
-                    const hasActive = sectionHasActiveRoute(section);
+                    const hasActive = sectionMatchesRoute(pathname, section);
                     return (
                       <li key={section.slug}>
                         <button
@@ -899,17 +948,11 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 
       <nav className="scrollbar-hide flex-1 overflow-y-auto px-3 py-3.5">
         <div
-          key={
-            currentParentLink
-              ? `__children:${currentParentLink.href}`
-              : currentSection
-                ? currentSection.slug
-                : "root"
-          }
+          key={path.length === 0 ? "__root" : path.join("|")}
           className={viewAnimClass}
         >
-          {currentParentLink && currentSection
-            ? renderChildren(currentSection, currentParentLink)
+          {currentSection && currentParent
+            ? renderChildren(currentSection, parentChain)
             : currentSection
               ? renderSection(currentSection)
               : renderRoot()}
@@ -999,8 +1042,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           sideBarToggle ? "w-64" : "w-0"
         }`}
       >
-        {/* Inner wrapper keeps content at a fixed width so it doesn't
-            reflow while the outer element animates. */}
         <div className="flex h-full w-64 flex-col">{content}</div>
       </aside>
     );

@@ -233,7 +233,7 @@ const AdminTopBar = ({
         </div>
 
         <Link
-          href="/dashboard/notifications"
+          href="/settings/notifications"
           className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
         >
           <Notifications sx={{ fontSize: 22 }} />
