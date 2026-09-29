@@ -11,13 +11,49 @@ import AttributeSet from "@/models/AttributeSet";
 import Attribute from "@/models/Attribute";
 import AttributeGroup from "@/models/AttributeGroup";
 import "@/models/UnitFamily";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { deleteS3Object } from "./s3";
 import {
   applyInheritedPropertyToCategory,
   buildAttributeSetsFromMappings,
   type AttributeSetResult,
 } from "./category_property";
+
+// ========================================================================
+//  Storefront revalidation
+//
+//  Any category mutation changes something the storefront renders:
+//   - /category              (category index)
+//   - /category/[slug]/[_id] (every individual category page)
+//   - /                      (homepage — menu may resolve to categories)
+//   - /sitemap.xml           (contains category URLs)
+//   - header-nav tag         (Header fetches NavBar / SideBar menus
+//                             which may resolve to a category collection)
+//
+//  `revalidatePath("/category", "layout")` invalidates the layout at
+//  that path AND every page beneath it, which covers every
+//  /category/[slug]/[_id] detail page in one call.
+// ========================================================================
+function revalidateCategoryConsumers() {
+  // Admin surfaces
+  revalidatePath("/categories");
+  revalidatePath("/catalog/categories/property");
+
+  // Storefront — index + every individual category page
+  revalidatePath("/category", "layout");
+
+  // Homepage renders <MenuRenderer location="Home">, which may feature
+  // categories via a rule or manual collection.
+  revalidatePath("/");
+
+  // Sitemap lists category URLs, so purge it now instead of waiting
+  // for the next hourly revalidate.
+  revalidatePath("/sitemap.xml");
+
+  // Header nav data cache. revalidatePath does NOT clear unstable_cache
+  // entries — only revalidateTag does.
+  revalidateTag("header-nav", "max");
+}
 
 // ========================================================================
 //  toPlain
@@ -276,8 +312,7 @@ export async function createCategory(
       await newCategory.save();
     }
 
-    revalidatePath("/categories");
-    revalidatePath("/catalog/categories/property");
+    revalidateCategoryConsumers();
 
     return { success: true };
   } catch (error: any) {
@@ -322,8 +357,7 @@ export async function runCategoryInheritance(
 
     const { warning } = await applyInheritedPropertyToCategory(categoryId);
 
-    revalidatePath("/categories");
-    revalidatePath("/catalog/categories/property");
+    revalidateCategoryConsumers();
 
     return warning ? { success: true, warning } : { success: true };
   } catch (error: any) {
@@ -361,8 +395,9 @@ export async function deleteCategory(id: string) {
     );
 
     await Category.findByIdAndDelete(id);
-    revalidatePath("/categories");
-    revalidatePath("/catalog/categories/property");
+
+    revalidateCategoryConsumers();
+
     return { success: true, message: "Category deleted successfully" };
   } catch (error) {
     console.error("Error deleting category:", error);
@@ -452,11 +487,56 @@ export async function deleteCategoryImage(
     );
     await category.save();
 
-    revalidatePath("/categories");
+    revalidateCategoryConsumers();
 
     return { success: true, data: toPlain(category.imageUrl) };
   } catch (error) {
     console.error("Error deleting category image:", error);
     return { success: false, error: "Failed to delete image" };
   }
+}
+
+// ========================================================================
+//  getCategoriesForTree
+//
+//  Lean read for tree rendering and the sitemap. No property populate.
+//  Returns the fields the storefront tree and sitemap both need,
+//  including `updatedAt` so the sitemap can emit a real `lastModified`.
+// ========================================================================
+export async function getCategoriesForTree(): Promise<
+  Array<{
+    _id: string;
+    name: string;
+    slug: string;
+    parentId: string | null;
+    imageUrl: string[];
+    description?: string;
+    sortOrder?: number;
+    updatedAt?: string;
+  }>
+> {
+  await connection();
+
+  const rows = await Category.find(
+    {},
+    "_id name slug parentId imageUrl description sortOrder updatedAt",
+  )
+    .sort({ sortOrder: 1, name: 1 })
+    .lean();
+
+  return rows.map((c: any) => ({
+    _id: String(c._id),
+    name: String(c.name ?? ""),
+    slug: String(c.slug ?? ""),
+    parentId: c.parentId ? String(c.parentId) : null,
+    imageUrl: Array.isArray(c.imageUrl) ? c.imageUrl.map(String) : [],
+    description: c.description ?? undefined,
+    sortOrder: typeof c.sortOrder === "number" ? c.sortOrder : undefined,
+    updatedAt:
+      c.updatedAt instanceof Date
+        ? c.updatedAt.toISOString()
+        : typeof c.updatedAt === "string"
+          ? c.updatedAt
+          : undefined,
+  }));
 }

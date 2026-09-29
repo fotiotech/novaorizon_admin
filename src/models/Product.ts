@@ -26,6 +26,7 @@ interface IRelatedProduct {
 export interface IProduct extends Document {
   productCode: IProductCode | null;
   name: string;
+  name_autocomplete: string;
   sku: string;
   slug: string;
   categoryId: mongoose.Types.ObjectId;
@@ -77,6 +78,7 @@ const ProductSchema = new Schema<IProduct>(
   {
     productCode: { type: ProductCodeSchema, default: null },
     name: { type: String, trim: true, default: "" },
+    name_autocomplete: { type: String, trim: true, default: "" },
     sku: { type: String, trim: true, default: "" },
     slug: {
       type: String,
@@ -135,45 +137,31 @@ const ProductSchema = new Schema<IProduct>(
   },
 );
 
-// ==================== INDEXES ====================
+ProductSchema.pre("save", function (next) {
+  if (this.isModified("name") || !this.name_autocomplete) {
+    this.name_autocomplete = this.name;
+  }
+  next();
+});
 
-// Text search on stable fields only. Attribute-specific filters use
-// dedicated compound indexes you add below as your filter list evolves.
-ProductSchema.index(
-  {
-    name: "text",
-    sku: "text", // ← added
-    description: "text",
-    shortDescription: "text",
-    tags: "text",
-  },
-  {
-    weights: {
-      name: 10,
-      sku: 8, // sku weighted high, after name
-      description: 5,
-      shortDescription: 3,
-      tags: 2,
-    },
-    name: "ProductTextIndex",
-  },
-);
+// Also cover findOneAndUpdate / updateOne paths
+ProductSchema.pre("findOneAndUpdate", function (next) {
+  const update = this.getUpdate() as any;
+  const newName = update?.name ?? update?.$set?.name;
+  if (newName) {
+    if (update.$set) update.$set.name_autocomplete = newName;
+    else update.name_autocomplete = newName;
+  }
+  next();
+});
 
-// ---- SKU lookup (exact / prefix) -------------------------------
+ProductSchema.index({ slug: 1 }, { unique: true }); // in schema definition
 ProductSchema.index({ sku: 1 });
-
-// ---- List-view sorts -------------------------------------------
-ProductSchema.index({ createdAt: -1 }); // no filter, newest first
-ProductSchema.index({ status: 1, createdAt: -1 }); // filter by status only
-ProductSchema.index({ status: 1, categoryId: 1, createdAt: -1 }); // filter by status + category
-
-// ---- Price-sorted browsing (ONLY if the UI offers price sort) --
+ProductSchema.index({ status: 1, createdAt: -1 });
+ProductSchema.index({ status: 1, categoryId: 1, createdAt: -1 });
 ProductSchema.index({ status: 1, categoryId: 1, price: 1 });
-
-// ---- Attribute filters -----------------------------------------
-// Add these one at a time, as you actually ship each filter.
-// Example shape: { status, categoryId, <attrCode>, <sortField> }
 ProductSchema.index({ status: 1, categoryId: 1, color: 1, price: 1 });
+ProductSchema.index({ createdAt: -1 });
 
 const Product =
   (mongoose.models.Product as mongoose.Model<IProduct>) ||

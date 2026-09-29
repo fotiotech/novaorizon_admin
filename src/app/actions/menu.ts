@@ -8,7 +8,7 @@ import Category from "@/models/Category";
 import Brand from "@/models/Brand";
 import Promotion from "@/models/Promotion";
 import Page from "@/models/Page";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import mongoose from "mongoose";
 import { deleteS3Object } from "./s3";
 import {
@@ -201,11 +201,23 @@ async function resolveCollectionItems(
   });
 }
 
-// ---------- Revalidate the paths that render menus ----------
-// Adjust the list if you render menus on more routes.
+// ---------- Revalidate the paths and caches that render menus ----------
 function revalidateMenuConsumers() {
+  // 1. Admin menus list page
   revalidatePath(MENUS_LIST_PATH);
-  revalidatePath("/", "layout"); // any page that renders a MenuRenderer
+
+  // 2. Header nav data cache.
+  //    Header.tsx fetches NavBar + SideBar menus via unstable_cache with
+  //    the tag "header-nav". revalidatePath does NOT invalidate
+  //    unstable_cache entries — only revalidateTag does. Without this,
+  //    the navbar keeps serving the old menu after an admin edit.
+  revalidateTag("header-nav", "max");
+
+  // 3. Every page that renders a <MenuRenderer> (Home, Section, etc.)
+  //    and any other surface that reads menus directly. This is a
+  //    sledgehammer, but menus change rarely and a stale menu across
+  //    the site is worse than a slightly slower rebuild.
+  revalidatePath("/", "layout");
 }
 
 // ---------- Get menus by location (with items) ----------
@@ -434,7 +446,6 @@ export async function updateMenu(id: string, menuData: any) {
         console.error("Failed to delete old menu background image:", err);
       }
     }
-
     revalidateMenuConsumers();
     revalidatePath(`${MENUS_LIST_PATH}/edit/${id}`);
     return {

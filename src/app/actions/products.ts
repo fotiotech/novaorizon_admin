@@ -1,7 +1,7 @@
 "use server";
 
 import { connection } from "@/utils/connection";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import slugify from "slugify";
 import mongoose from "mongoose";
 import Product from "@/models/Product";
@@ -57,6 +57,44 @@ const LIST_UNAUTHORIZED: ProductListResult = {
 const RECREATE_SOURCE_FIELD = "_recreateSourceId";
 
 const HEX_24 = /^[a-f0-9]{24}$/i;
+
+// ==================================================================
+// STOREFRONT REVALIDATION
+//
+// Every mutation in this file changes something that the public
+// storefront renders. This helper purges all the caches that care.
+//
+// Why `revalidatePath("/products", "layout")` and not just
+// `revalidatePath("/products")`:
+//   - "/products" alone only invalidates the exact listing page.
+//   - "/products", "layout" invalidates the layout at that path AND
+//     every page beneath it, which includes every
+//     /products/[slug]/[_id] detail page.
+// This is the sledgehammer, but product changes are relatively rare
+// and a stale product page is far worse than a slightly slower
+// rebuild. Same reasoning for /category.
+// ==================================================================
+function revalidateStorefrontAfterProductChange() {
+  // Google fetches this on a schedule. Purge now so new products
+  // appear in the next crawl instead of at the top of the hour.
+  revalidatePath("/sitemap.xml");
+
+  // /products (listing) + every /products/[slug]/[_id] detail page.
+  revalidatePath("/products", "layout");
+
+  // /category (index) + every /category/[slug]/[_id] page, since
+  // each renders a product grid that reflects the current catalog.
+  revalidatePath("/category", "layout");
+
+  // Homepage renders <MenuRenderer location="Home">, which may feature
+  // products via a rule or manual collection.
+  revalidatePath("/");
+
+  // Header nav data cache. If the NavBar menu resolves to a product
+  // collection, its items are stale after a product change.
+  // revalidatePath does NOT clear unstable_cache — only revalidateTag does.
+  revalidateTag("header-nav", "max");
+}
 
 // ---------- Helpers ----------
 function toObjectId(value: any): mongoose.Types.ObjectId | null {
@@ -906,6 +944,9 @@ export async function createProduct(formData: any): Promise<ProductResponse> {
     }
     revalidatePath("/catalog/products");
 
+    // Storefront caches.
+    revalidateStorefrontAfterProductChange();
+
     return {
       success: true,
       data: {
@@ -963,6 +1004,10 @@ export async function updateProduct(
 
     revalidatePath("/catalog/products");
     revalidatePath(`/catalog/products/edit/${id}`);
+
+    // Storefront caches.
+    revalidateStorefrontAfterProductChange();
+
     return { success: true, data: serialize(product) };
   } catch (error: any) {
     console.error("Error in updateProduct:", error);
@@ -1007,6 +1052,10 @@ export async function updateProductCategory(
 
     revalidatePath("/catalog/products");
     revalidatePath(`/catalog/products/edit/${productId}`);
+
+    // Storefront caches.
+    revalidateStorefrontAfterProductChange();
+
     return { success: true, data: serialize(product) };
   } catch (error: any) {
     console.error("Error updating product category:", error);
@@ -1051,6 +1100,12 @@ export async function updateProductStatus(
 
     revalidatePath("/catalog/products");
     revalidatePath(`/catalog/products/edit/${productId}`);
+
+    // Storefront caches. Status change controls visibility on the
+    // public site, so this is important — a product set to "draft"
+    // must disappear from listings immediately.
+    revalidateStorefrontAfterProductChange();
+
     return { success: true, data: serialize(product) };
   } catch (error: any) {
     console.error("Error updating product status:", error);
@@ -1134,7 +1189,8 @@ export async function recreateProduct(
       };
     }
 
-    // Original is intentionally NOT deleted here.
+    // Original is intentionally NOT deleted here, and the storefront
+    // is unaffected — only the staged draft changed, which is admin-only.
     revalidatePath("/catalog/products/new");
 
     return {
@@ -1177,6 +1233,11 @@ export async function deleteProduct(id: string): Promise<ProductResponse> {
 
     revalidatePath("/catalog/products");
     revalidatePath(`/catalog/products/edit/${id}`);
+
+    // Storefront caches — the product page should 404 immediately,
+    // and it must disappear from listings, category grids, and the sitemap.
+    revalidateStorefrontAfterProductChange();
+
     return { success: true, data: "Product deleted successfully" };
   } catch (error: any) {
     console.error("Error deleting product:", error);
@@ -1224,10 +1285,16 @@ export async function deleteProductImages(
         await deleteFromStorage(imageUrl);
         product.images = images.filter((u: string) => u !== imageUrl);
         await product.save();
+
+        // Storefront caches — the product page renders this image.
+        revalidateStorefrontAfterProductChange();
+
         return { success: true, data: serialize(product) };
       }
       return { success: false, error: "Image URL required" };
     } else if (imageUrl) {
+      // Orphaned image cleanup — nothing in the DB changed, so no
+      // storefront revalidation is needed.
       await deleteFromStorage(imageUrl);
       return { success: true, data: "Image deleted from storage" };
     }
@@ -1272,6 +1339,11 @@ export async function updateProductQuantity(
 
     revalidatePath("/catalog/products");
     revalidatePath(`/catalog/products/edit/${productId}`);
+
+    // Storefront caches. Quantity drives the "in stock" / "out of stock"
+    // badge on the product page and the availability flag in JSON-LD.
+    revalidateStorefrontAfterProductChange();
+
     return { success: true, data: serialize(product) };
   } catch (error: any) {
     console.error("Error updating product quantity:", error);
@@ -1333,6 +1405,10 @@ export async function updateProductStockLevel(
     revalidatePath("/inventory");
     revalidatePath("/catalog/products");
     revalidatePath(`/catalog/products/edit/${productId}`);
+
+    // Storefront caches. Same reasoning as updateProductQuantity.
+    revalidateStorefrontAfterProductChange();
+
     return { success: true, data: serialize(product) };
   } catch (error: any) {
     console.error("Error updating product stock level:", error);
