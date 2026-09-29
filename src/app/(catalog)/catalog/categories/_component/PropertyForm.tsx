@@ -371,7 +371,7 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
     <>
       <Toaster position="top-right" reverseOrder={false} />
 
-      <div className=" max-w-3xl py-4  sm:py-6">
+      <div className=" max-w-3xl mx-auto py-4  sm:py-6">
         <form
           onSubmit={handleSubmit}
           className="space-y-4 sm:space-y-5"

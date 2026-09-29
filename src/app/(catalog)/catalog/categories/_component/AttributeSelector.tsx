@@ -28,6 +28,8 @@ interface AttributeSelectorProps {
   allAttributes: AttributeOption[];
   filter: string;
   expanded: boolean;
+  /** When true, renders the selector body only — no header, no border wrapper. */
+  hideHeader?: boolean;
   onToggleExpand: () => void;
   onFilterChange: (value: string) => void;
   onToggleAttribute: (attrId: string) => void;
@@ -82,6 +84,7 @@ export default function AttributeSelector({
   allAttributes,
   filter,
   expanded,
+  hideHeader = false,
   onToggleExpand,
   onFilterChange,
   onToggleAttribute,
@@ -106,6 +109,213 @@ export default function AttributeSelector({
     return map;
   }, [selectedAttributes]);
 
+  // ----------------------------------------------------------------
+  // Body — reused for both the inline card and the modal body
+  // ----------------------------------------------------------------
+  const bodyContent = (
+    <div className={hideHeader ? "" : "p-3 sm:p-4"}>
+      {/* ── Pinned "Selected" strip (popup mode only) ──────────── */}
+      {hideHeader && hasAttributes && (
+        <div className="mb-3 rounded-lg border border-primary/30 bg-primary/5 p-2">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+              Selected · {attrCount}
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              Click a chip to remove
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {selectedAttributes.map((s) => {
+              const attr = allAttributes.find((a) => a._id === s.attribute);
+              if (!attr) return null;
+              return (
+                <button
+                  key={s.attribute}
+                  type="button"
+                  onClick={() => onToggleAttribute(s.attribute)}
+                  className="group inline-flex max-w-full items-center gap-1 rounded-full border border-primary/40 bg-background px-2 py-0.5 text-[11px] font-medium text-foreground transition hover:border-destructive hover:text-destructive"
+                  title="Remove"
+                >
+                  <span className="max-w-[9rem] truncate">{attr.name}</span>
+                  {s.isRequired && (
+                    <span
+                      className="text-amber-600 dark:text-amber-400"
+                      title="Required"
+                    >
+                      ★
+                    </span>
+                  )}
+                  {s.isHighlight && (
+                    <span
+                      className="text-pink-600 dark:text-pink-400"
+                      title="Highlight"
+                    >
+                      ◆
+                    </span>
+                  )}
+                  <svg
+                    className="h-3 w-3 shrink-0 opacity-50 transition group-hover:opacity-100"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Warn if none selected yet (popup mode) ─────────────── */}
+      {hideHeader && !hasAttributes && (
+        <div className="mb-2.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
+          Select at least one attribute for this group.
+        </div>
+      )}
+
+      <div className="relative mb-2.5">
+        <svg
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"
+          />
+        </svg>
+        <input
+          type="text"
+          placeholder="Search attributes…"
+          value={filter}
+          onChange={(e) => onFilterChange(e.target.value)}
+          className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="py-3 text-center text-xs text-muted-foreground">
+          No attributes match “{filter}”.
+        </p>
+      ) : (
+        <div
+          className={`grid grid-cols-1 gap-1.5 overflow-y-auto pr-1 [overflow-anchor:none] sm:gap-2 ${
+            hideHeader ? "max-h-none" : "max-h-80"
+          }`}
+        >
+          {filtered.map((attr) => {
+            const entry = flagsByAttr.get(attr._id);
+            const selected = !!entry;
+            const flags = entry ?? {
+              attribute: attr._id,
+              ...FLAG_DEFAULTS,
+            };
+
+            return (
+              <div
+                key={attr._id}
+                className={`rounded-lg border transition ${
+                  selected
+                    ? "border-primary/60 bg-primary/5"
+                    : "border-border bg-background hover:border-border/80 hover:bg-muted/30"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onToggleAttribute(attr._id)}
+                  aria-pressed={selected}
+                  className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left"
+                >
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                      selected
+                        ? "border-primary bg-primary"
+                        : "border-border bg-background"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {selected && (
+                      <svg
+                        className="h-3 w-3 text-primary-foreground"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={3}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                    {attr.name}
+                  </span>
+                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {attr.type}
+                  </span>
+                </button>
+
+                {selected && (
+                  <div className="flex flex-wrap gap-1.5 px-3 pb-2.5 pt-0">
+                    {FLAGS.map((flag) => {
+                      const active = flags[flag.key] === true;
+                      return (
+                        <button
+                          key={flag.key}
+                          type="button"
+                          onClick={() => onToggleFlag(attr._id, flag.key)}
+                          aria-pressed={active}
+                          title={flag.title}
+                          className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition ${
+                            active ? flag.activeClasses : flag.inactiveClasses
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full bg-current ${
+                              active ? "opacity-80" : "opacity-30"
+                            }`}
+                            aria-hidden="true"
+                          />
+                          {flag.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  // ----------------------------------------------------------------
+  // "Bare" mode (used inside the modal) — no header, no wrapper
+  // ----------------------------------------------------------------
+  if (hideHeader) {
+    return bodyContent;
+  }
+
+  // ----------------------------------------------------------------
+  // Default collapsible card mode
+  // ----------------------------------------------------------------
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
       <button
@@ -142,129 +352,7 @@ export default function AttributeSelector({
         </div>
       </button>
 
-      {expanded && (
-        <div className="p-3 sm:p-4">
-          <div className="relative mb-2.5">
-            <svg
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"
-              />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search attributes…"
-              value={filter}
-              onChange={(e) => onFilterChange(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </div>
-
-          {filtered.length === 0 ? (
-            <p className="py-3 text-center text-xs text-muted-foreground">
-              No attributes match “{filter}”.
-            </p>
-          ) : (
-            <div className="grid max-h-80 grid-cols-1 gap-1.5 overflow-y-auto pr-1 [overflow-anchor:none] sm:gap-2">
-              {filtered.map((attr) => {
-                const entry = flagsByAttr.get(attr._id);
-                const selected = !!entry;
-                const flags = entry ?? {
-                  attribute: attr._id,
-                  ...FLAG_DEFAULTS,
-                };
-
-                return (
-                  <div
-                    key={attr._id}
-                    className={`rounded-lg border transition ${
-                      selected
-                        ? "border-primary/60 bg-primary/5"
-                        : "border-border bg-background hover:border-border/80 hover:bg-muted/30"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => onToggleAttribute(attr._id)}
-                      aria-pressed={selected}
-                      className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left"
-                    >
-                      <span
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
-                          selected
-                            ? "border-primary bg-primary"
-                            : "border-border bg-background"
-                        }`}
-                        aria-hidden="true"
-                      >
-                        {selected && (
-                          <svg
-                            className="h-3 w-3 text-primary-foreground"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={3}
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        )}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                        {attr.name}
-                      </span>
-                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {attr.type}
-                      </span>
-                    </button>
-
-                    {selected && (
-                      <div className="flex flex-wrap gap-1.5 px-3 pb-2.5 pt-0">
-                        {FLAGS.map((flag) => {
-                          const active = flags[flag.key] === true;
-                          return (
-                            <button
-                              key={flag.key}
-                              type="button"
-                              onClick={() => onToggleFlag(attr._id, flag.key)}
-                              aria-pressed={active}
-                              title={flag.title}
-                              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition ${
-                                active
-                                  ? flag.activeClasses
-                                  : flag.inactiveClasses
-                              }`}
-                            >
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full bg-current ${
-                                  active ? "opacity-80" : "opacity-30"
-                                }`}
-                                aria-hidden="true"
-                              />
-                              {flag.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+      {expanded && bodyContent}
     </div>
   );
 }

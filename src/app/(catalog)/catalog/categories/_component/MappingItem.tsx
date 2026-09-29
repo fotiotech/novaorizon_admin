@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AttributeSelector from "./AttributeSelector";
 import GroupSelector from "./GroupSelector";
+import { Modal } from "@/components/ux/Modal";
 
 interface Mapping {
   id: string;
@@ -82,12 +83,11 @@ export default function MappingItem({
   const { id, set, groups } = mapping;
   const setErrorId = `set-error-${id}`;
 
-  // Only ONE group's attribute body is expanded at a time within this
-  // mapping. Clicking another group's header collapses the previous one.
+  // Which group's attribute modal is currently open (null = none).
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
 
-  // If the active group is removed from the mapping (deselected in
-  // GroupSelector), drop the stale pointer so nothing dangles.
+  // If the open group is removed from the mapping (deselected in
+  // GroupSelector), drop the stale pointer so the modal closes cleanly.
   useEffect(() => {
     if (activeGroupId && !groups.some((g) => g.group === activeGroupId)) {
       setActiveGroupId(null);
@@ -102,6 +102,15 @@ export default function MappingItem({
   const setTitle =
     allSets.find((s) => s._id === set)?.title || set || "Not selected";
   const isConfigured = !!set && totalGroups > 0 && totalAttributes > 0;
+
+  const activeGroup = groups.find((g) => g.group === activeGroupId) ?? null;
+  const activeGroupName = activeGroup
+    ? allGroups.find((g) => g._id === activeGroup.group)?.name ||
+      activeGroup.group
+    : "";
+  const activeAttrFilter = activeGroup
+    ? attrFilters[`${id}-${activeGroup.group}`] || ""
+    : "";
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
@@ -209,48 +218,132 @@ export default function MappingItem({
               />
 
               {groups.length > 0 && (
-                <div className="space-y-2.5 sm:space-y-3">
-                  {groups.map((group) => {
-                    const groupId = group.group;
-                    const groupName =
-                      allGroups.find((g) => g._id === groupId)?.name || groupId;
-                    const attrFilterKey = `${id}-${groupId}`;
-                    const attrFilter = attrFilters[attrFilterKey] || "";
-                    const isActive = activeGroupId === groupId;
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="block text-sm font-medium text-foreground">
+                      Attributes
+                    </label>
+                    <span className="text-xs text-muted-foreground">
+                      {groups.length} {groups.length === 1 ? "group" : "groups"}
+                    </span>
+                  </div>
 
-                    return (
-                      <AttributeSelector
-                        key={groupId}
-                        mappingId={id}
-                        groupId={groupId}
-                        groupName={groupName}
-                        selectedAttributes={group.attributes}
-                        allAttributes={allAttributes}
-                        filter={attrFilter}
-                        expanded={isActive}
-                        onToggleExpand={() =>
-                          setActiveGroupId((prev) =>
-                            prev === groupId ? null : groupId,
-                          )
-                        }
-                        onFilterChange={(value) =>
-                          onAttrFilterChange(groupId, value)
-                        }
-                        onToggleAttribute={(attrId) =>
-                          onToggleAttribute(groupId, attrId)
-                        }
-                        onToggleFlag={(attrId, flag) =>
-                          onToggleFlag(groupId, attrId, flag)
-                        }
-                      />
-                    );
-                  })}
+                  <div className="space-y-2.5 sm:space-y-3">
+                    {groups.map((group) => {
+                      const groupId = group.group;
+                      const groupName =
+                        allGroups.find((g) => g._id === groupId)?.name ||
+                        groupId;
+                      const attrCount = group.attributes.length;
+                      const requiredCount = group.attributes.filter(
+                        (a) => a.isRequired,
+                      ).length;
+                      const highlightCount = group.attributes.filter(
+                        (a) => a.isHighlight,
+                      ).length;
+                      const hasAttrs = attrCount > 0;
+
+                      return (
+                        <button
+                          key={groupId}
+                          type="button"
+                          onClick={() => setActiveGroupId(groupId)}
+                          className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition hover:border-primary/60 hover:bg-muted/30 sm:gap-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-sm font-medium text-foreground">
+                                {groupName}
+                              </span>
+                              <span
+                                className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                  hasAttrs
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                }`}
+                              >
+                                {attrCount} selected
+                              </span>
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                              {requiredCount > 0 && (
+                                <span>{requiredCount} required</span>
+                              )}
+                              {requiredCount > 0 && highlightCount > 0 && (
+                                <span className="text-border">•</span>
+                              )}
+                              {highlightCount > 0 && (
+                                <span>{highlightCount} highlighted</span>
+                              )}
+                              {requiredCount === 0 && highlightCount === 0 && (
+                                <span>
+                                  {hasAttrs
+                                    ? "No flags set"
+                                    : "Select at least one"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className="shrink-0 text-xs font-medium text-primary">
+                            {hasAttrs ? "Edit" : "Select"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
           )}
         </div>
       )}
+
+      {/* ---------------- Attribute selector modal ---------------- */}
+      <Modal
+        isOpen={!!activeGroupId}
+        onClose={() => setActiveGroupId(null)}
+        title={
+          activeGroupName ? `Attributes — ${activeGroupName}` : "Attributes"
+        }
+        size="lg"
+        fullScreenOnMobile
+      >
+        {activeGroup && (
+          <AttributeSelector
+            mappingId={id}
+            groupId={activeGroup.group}
+            groupName={activeGroupName}
+            selectedAttributes={activeGroup.attributes}
+            allAttributes={allAttributes}
+            filter={activeAttrFilter}
+            expanded={true}
+            hideHeader={true}
+            onToggleExpand={() => {}}
+            onFilterChange={(value) =>
+              onAttrFilterChange(activeGroup.group, value)
+            }
+            onToggleAttribute={(attrId) =>
+              onToggleAttribute(activeGroup.group, attrId)
+            }
+            onToggleFlag={(attrId, flag) =>
+              onToggleFlag(activeGroup.group, attrId, flag)
+            }
+          />
+        )}
+
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <span className="text-xs text-muted-foreground">
+            {activeGroup ? `${activeGroup.attributes.length} selected` : ""}
+          </span>
+          <button
+            type="button"
+            onClick={() => setActiveGroupId(null)}
+            className="admin-button"
+          >
+            Done
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
