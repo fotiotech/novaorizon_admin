@@ -18,7 +18,7 @@ import {
   getRelatedProducts,
 } from "./events";
 
-const MENUS_LIST_PATH = "/marketing/content/navigation/menus";
+const MENUS_LIST_PATH = "/channels/store/content/navigation/menus";
 
 // ---------- Helper: get model by target type ----------
 function getModelForTargetType(targetType: string) {

@@ -4,6 +4,9 @@
 import Promotion from "@/models/Promotion";
 import PromotionUsage from "@/models/PromotionUsage";
 import CustomerGroup from "@/models/CustomerGroup";
+import Product from "@/models/Product";
+import Category from "@/models/Category";
+import Brand from "@/models/Brand";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
@@ -17,9 +20,7 @@ function isValidObjectId(id: string): boolean {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
-/** Snapshot of the field definitions for a calculation type. Stored on
- *  each promotion so future changes to CALC_FIELDS don't retroactively
- *  alter existing promotions. */
+/** Snapshot of the field definitions for a calculation type. */
 function buildPropertySnapshot(calculationType: string) {
   const defs = CALC_FIELDS[calculationType] ?? [];
   return defs.map((d, i) => ({
@@ -34,16 +35,35 @@ function buildPropertySnapshot(calculationType: string) {
   }));
 }
 
+/** Normalise the scope payload coming from the composer. */
+function normalizeScope(scope: any) {
+  const appliesTo = scope?.appliesTo ?? "all";
+  return {
+    appliesTo,
+    productIds: appliesTo === "products" ? (scope?.productIds ?? []) : [],
+    categoryIds: appliesTo === "categories" ? (scope?.categoryIds ?? []) : [],
+    brandIds: appliesTo === "brands" ? (scope?.brandIds ?? []) : [],
+    excludeProductIds: scope?.excludeProductIds ?? [],
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Options for the composer
 // ─────────────────────────────────────────────────────────────────────
 export async function getPromotionOptions() {
   await ensureConnection();
 
-  const [customerGroups, promotions] = await Promise.all([
-    CustomerGroup.find().lean(),
-    Promotion.find().select("name _id").sort({ createdAt: -1 }).lean(),
-  ]);
+  const [customerGroups, promotions, products, categories, brands] =
+    await Promise.all([
+      CustomerGroup.find().lean(),
+      Promotion.find().select("name _id").sort({ createdAt: -1 }).lean(),
+      Product.find()
+        .select("name _id sku price image")
+        .sort({ createdAt: -1 })
+        .lean(),
+      Category.find().select("name _id slug").sort({ name: 1 }).lean(),
+      Brand.find().select("name _id url_slug").sort({ name: 1 }).lean(),
+    ]);
 
   return {
     customerGroups: customerGroups.map((g: any) => ({
@@ -53,6 +73,23 @@ export async function getPromotionOptions() {
     promotions: promotions.map((p: any) => ({
       label: p.name,
       value: p._id.toString(),
+    })),
+    products: products.map((p: any) => ({
+      value: p._id.toString(),
+      label: p.name,
+      sku: p.sku ?? undefined,
+      price: typeof p.price === "number" ? p.price : undefined,
+      image: Array.isArray(p.image) ? p.image[0] : (p.image ?? undefined),
+    })),
+    categories: categories.map((c: any) => ({
+      value: c._id.toString(),
+      label: c.name,
+      sublabel: c.slug ?? undefined,
+    })),
+    brands: brands.map((b: any) => ({
+      value: b._id.toString(),
+      label: b.name,
+      sublabel: b.url_slug ?? undefined,
     })),
   };
 }
@@ -68,7 +105,7 @@ export async function createPromotion(data: any) {
   }
 
   const promotionType = {
-    name: data.name, // mirrors the promotion name; harmless duplicate
+    name: data.name,
     code: data.code || undefined,
     description: data.description,
     calculationType: data.calculationType,
@@ -85,6 +122,7 @@ export async function createPromotion(data: any) {
     isActive: data.isActive ?? true,
     priority: data.priority ?? 0,
     promotionType,
+    scope: normalizeScope(data.scope),
     propertyValues: new Map(
       Object.entries(data.propertyValues ?? {}).filter(
         ([, v]) => v !== undefined && v !== null && v !== "",
@@ -126,9 +164,6 @@ export async function updatePromotion(id: string, data: any) {
   const existing: any = await Promotion.findById(id).lean();
   if (!existing) throw new Error("Promotion not found");
 
-  // If the calculation type changed, snapshot the new field set.
-  // Otherwise keep the existing property definitions so we don't
-  // silently rewrite history.
   const calculationType =
     data.calculationType ?? existing.promotionType?.calculationType;
   const typeChanged =
@@ -163,6 +198,10 @@ export async function updatePromotion(id: string, data: any) {
     stackable: data.stackable ?? existing.stackable,
     exclusiveWith: data.exclusiveWith ?? existing.exclusiveWith,
   };
+
+  if (data.scope !== undefined) {
+    update.scope = normalizeScope(data.scope);
+  }
 
   if (data.code !== undefined) {
     update.code = data.code ? data.code.trim().toUpperCase() : null;
@@ -201,8 +240,6 @@ export async function deletePromotion(id: string) {
     throw new Error("Invalid promotion ID");
   }
 
-  // Block deletion if the promotion has been redeemed — preserve the
-  // audit trail.
   const usageCount = await PromotionUsage.countDocuments({
     promotionId: id,
   });
@@ -229,6 +266,10 @@ export async function getPromotion(id: string) {
   const promotion = await Promotion.findById(id)
     .populate("customerEligibility.customerGroupIds")
     .populate("exclusiveWith")
+    .populate("scope.productIds")
+    .populate("scope.categoryIds")
+    .populate("scope.brandIds")
+    .populate("scope.excludeProductIds")
     .lean();
 
   return promotion;
@@ -248,4 +289,94 @@ export async function listPromotions(
   ]);
 
   return { data, total, limit, skip };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Product-side promotion scope
+//
+// The promotion owns scope.productIds; the product form is just a
+// write-back UI for it. Only "products"-scoped promotions are exposed
+// here — adding a product ID to an "all"/"categories"/"brands"
+// promotion is a no-op in the resolver, so it shouldn't be selectable.
+// ─────────────────────────────────────────────────────────────────────
+
+/** Every product-scoped promotion, active or not — the admin may need
+ *  to see and unselect one that was deactivated after being attached. */
+export async function getSelectablePromotions() {
+  await ensureConnection();
+
+  const promotions = await Promotion.find({
+    "scope.appliesTo": "products",
+  })
+    .select("name code isActive promotionType.calculationType")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return promotions.map((p: any) => ({
+    value: p._id.toString(),
+    label: p.name,
+    sublabel: p.code ?? undefined,
+    badge: p.promotionType?.calculationType ?? undefined,
+    inactive: p.isActive === false,
+  }));
+}
+
+/** Product-scoped promotions that currently include this product.
+ *  Deliberately does NOT filter on isActive so an inactive-but-attached
+ *  promotion survives a product save untouched. */
+export async function getProductPromotions(
+  productId: string,
+): Promise<string[]> {
+  await ensureConnection();
+  if (!isValidObjectId(productId)) return [];
+
+  const promotions = await Promotion.find({
+    "scope.appliesTo": "products",
+    "scope.productIds": productId,
+  })
+    .select("_id")
+    .lean();
+
+  return promotions.map((p: any) => p._id.toString());
+}
+
+/** Reconcile scope.productIds for product-scoped promotions against the
+ *  form's selection. Other scopes are untouched. */
+export async function syncProductPromotions(
+  productId: string,
+  promotionIds: string[],
+): Promise<{ success: true }> {
+  await ensureConnection();
+  if (!isValidObjectId(productId)) {
+    throw new Error("Invalid product ID");
+  }
+
+  const validIds = promotionIds.filter(isValidObjectId);
+
+  // Remove this product from any product-scoped promotion not in the
+  // new list.
+  await Promotion.updateMany(
+    {
+      "scope.appliesTo": "products",
+      "scope.productIds": productId,
+      _id: { $nin: validIds },
+    },
+    { $pull: { "scope.productIds": productId } },
+  );
+
+  // Add to every selected product-scoped promotion that doesn't have
+  // it yet.
+  if (validIds.length > 0) {
+    await Promotion.updateMany(
+      {
+        _id: { $in: validIds },
+        "scope.appliesTo": "products",
+        "scope.productIds": { $ne: productId },
+      },
+      { $addToSet: { "scope.productIds": productId } },
+    );
+  }
+
+  revalidatePath("/marketing/promotions");
+  return { success: true };
 }

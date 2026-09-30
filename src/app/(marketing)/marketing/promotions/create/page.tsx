@@ -1,18 +1,9 @@
 // app/marketing/promotions/create/page.tsx
 import { createPromotion, getPromotionOptions } from "@/app/actions/promotion";
-import { listProducts } from "@/app/actions/products";
 import { PromotionComposer } from "@/app/(marketing)/components/PromotionComposer";
 
 export default async function CreatePromotionPage() {
-  const [options, productsResult] = await Promise.all([
-    getPromotionOptions(),
-    listProducts({}, { limit: 500 }).catch(() => ({ data: [] })),
-  ]);
-
-  const products = (productsResult?.data ?? []).map((p: any) => ({
-    label: p.name,
-    value: p._id.toString(),
-  }));
+  const options = await getPromotionOptions();
 
   async function handleCreate(data: any) {
     "use server";
@@ -24,7 +15,9 @@ export default async function CreatePromotionPage() {
       <PromotionComposer
         customerGroups={options.customerGroups}
         otherPromotions={options.promotions}
-        products={products}
+        products={options.products}
+        categories={options.categories}
+        brands={options.brands}
         onSubmit={handleCreate}
       />
     </div>

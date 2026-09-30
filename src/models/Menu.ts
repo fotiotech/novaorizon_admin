@@ -18,7 +18,7 @@ export interface IMenu {
     | "Home"
     | "Section"
     | "Footer"
-    | "product_related";
+    | "ProductRelated";
   display: "List" | "Grid" | "Carousel" | "Dropdown" | "MegaMenu";
   position?: "left" | "center" | "right" | "full";
   columns?: number;
@@ -79,7 +79,7 @@ const MenuSchema: Schema = new Schema(
         "Home",
         "Section",
         "Footer",
-        "product_related",
+        "ProductRelated",
       ],
     },
     // --- Display ---

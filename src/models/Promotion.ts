@@ -3,11 +3,6 @@ import { Schema, model, models } from "mongoose";
 
 // ─────────────────────────────────────────────────────────────────────
 // Sub-schema — a single configurable field on a promotion.
-//
-// Was `models/PromotionTypeProperty.ts` (its own collection, with a
-// globally-unique `code`). Now embedded per promotion, which is the
-// correct scope: two promotions both defining `min_order_amount` is
-// fine, they're independent.
 // ─────────────────────────────────────────────────────────────────────
 const promotionPropertySchema = new Schema(
   {
@@ -45,20 +40,11 @@ const promotionPropertySchema = new Schema(
     },
     sortOrder: { type: Number, default: 0 },
   },
-  // Keep _id so React keys survive across renders when iterating the
-  // array in the composer form.
   { _id: true },
 );
 
 // ─────────────────────────────────────────────────────────────────────
-// Sub-schema — the promotion's type.
-//
-// Was `models/PromotionType.ts`. Now embedded: a promotion owns exactly
-// one type definition, so a separate collection bought us nothing but
-// an extra join on every read.
-//
-// `_id: false` because the type is a singleton per promotion — no
-// separate identity to track.
+// Sub-schema — the promotion's type (embedded).
 // ─────────────────────────────────────────────────────────────────────
 const promotionTypeSchema = new Schema(
   {
@@ -84,16 +70,45 @@ const promotionTypeSchema = new Schema(
 );
 
 // ─────────────────────────────────────────────────────────────────────
+// Sub-schema — what products the promotion applies to.
+//
+// The promotion is the source of truth. The storefront evaluator
+// resolves "does this promotion apply to product P?" by:
+//
+//   appliesTo === "all"        → always applies
+//   appliesTo === "products"   → P._id ∈ productIds
+//   appliesTo === "categories" → P.categoryId ∈ categoryIds
+//   appliesTo === "brands"     → P.brand ∈ brandIds
+//
+// `excludeProductIds` is a carve-out that runs after the above.
+// Bundle/`buy_x_get_y` still use their own structural product lists
+// inside `propertyValues` — that's definition, not scope.
+// ─────────────────────────────────────────────────────────────────────
+const promotionScopeSchema = new Schema(
+  {
+    appliesTo: {
+      type: String,
+      enum: ["all", "products", "categories", "brands"],
+      default: "all",
+    },
+    productIds: [{ type: Schema.Types.ObjectId, ref: "Product" }],
+    categoryIds: [{ type: Schema.Types.ObjectId, ref: "Category" }],
+    brandIds: [{ type: Schema.Types.ObjectId, ref: "Brand" }],
+    excludeProductIds: [{ type: Schema.Types.ObjectId, ref: "Product" }],
+  },
+  { _id: false },
+);
+
+// ─────────────────────────────────────────────────────────────────────
 // Main promotion schema
 // ─────────────────────────────────────────────────────────────────────
 const promotionSchema = new Schema(
   {
-    // Was a ref to PromotionType. Now an embedded document.
     promotionType: { type: promotionTypeSchema, required: true },
 
-    // Values for the properties declared in `promotionType.properties`.
-    // Still a Map keyed by `code` — the storefront evaluator reads from
-    // here with `propertyValues.get(code)`.
+    // Which products this promotion can be applied to.
+    scope: { type: promotionScopeSchema, default: () => ({}) },
+
     propertyValues: {
       type: Map,
       of: Schema.Types.Mixed,
@@ -103,10 +118,6 @@ const promotionSchema = new Schema(
     name: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
 
-    // Customer-facing code.
-    // - Present → code-gated.
-    // - Absent  → auto-applies to any eligible cart.
-    // `unique + sparse` so missing codes don't collide.
     code: {
       type: String,
       trim: true,
@@ -142,16 +153,19 @@ const promotionSchema = new Schema(
 // Primary lookup for the storefront: active promotions inside a window.
 promotionSchema.index({ isActive: 1, startDate: 1, endDate: 1 });
 
-// Secondary: filter by calculation type (used by admin list views and
-// reporting). The sub-doc field is addressable with dot notation.
+// Filter by calculation type (admin list views, reporting).
 promotionSchema.index({ "promotionType.calculationType": 1 });
+
+// Scope lookups — resolve "which promotions apply to this product?"
+promotionSchema.index({ "scope.appliesTo": 1, "scope.productIds": 1 });
+promotionSchema.index({ "scope.appliesTo": 1, "scope.categoryIds": 1 });
+promotionSchema.index({ "scope.appliesTo": 1, "scope.brandIds": 1 });
 
 export const Promotion =
   models.Promotion || model("Promotion", promotionSchema);
 
 export default Promotion;
 
-// Optional — handy type helpers for callers that want them.
 export type PromotionPropertyDoc = {
   _id?: any;
   code: string;
@@ -168,4 +182,12 @@ export type PromotionPropertyDoc = {
     maxLength?: number;
   };
   sortOrder: number;
+};
+
+export type PromotionScopeDoc = {
+  appliesTo: "all" | "products" | "categories" | "brands";
+  productIds: any[];
+  categoryIds: any[];
+  brandIds: any[];
+  excludeProductIds: any[];
 };

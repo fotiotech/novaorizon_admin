@@ -215,7 +215,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           bgUpload.setFiles([]);
         }
         setTimeout(() => {
-          router.push("/marketing/content/navigation/menus");
+          router.push("/channels/store/content/navigation/menus");
           router.refresh();
         }, 1500);
       } else {

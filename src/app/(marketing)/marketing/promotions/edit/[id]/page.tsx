@@ -1,32 +1,35 @@
+// app/marketing/promotions/edit/[id]/page.tsx
 import { PromotionComposer } from "@/app/(marketing)/components/PromotionComposer";
 import {
   getPromotion,
   getPromotionOptions,
   updatePromotion,
 } from "@/app/actions/promotion";
-import { listProducts } from "@/app/actions/products";
 import { notFound } from "next/navigation";
 
 interface EditPageProps {
   params: Promise<{ id: string }>;
 }
 
+/** Coerce an array of ObjectIds OR populated docs → string IDs. */
+function toIdList(arr: any[] | undefined | null): string[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((x) =>
+    x && typeof x === "object" && "_id" in x ? String(x._id) : String(x),
+  );
+}
+
 export default async function EditPromotionPage(props: EditPageProps) {
   const { id } = await props.params;
 
-  const [promotion, options, productsResult] = await Promise.all([
+  const [promotion, options] = await Promise.all([
     getPromotion(id).catch(() => null),
     getPromotionOptions(),
-    listProducts({}, { limit: 500 }).catch(() => ({ data: [] })),
   ]);
 
   if (!promotion) notFound();
 
   const p: any = promotion;
-  const products = (productsResult?.data ?? []).map((prod: any) => ({
-    label: prod.name,
-    value: prod._id.toString(),
-  }));
 
   // Normalise Map → plain object; drop empty entries so the form
   // doesn't render stray blank inputs.
@@ -57,11 +60,16 @@ export default async function EditPromotionPage(props: EditPageProps) {
     calculationType:
       p.promotionType?.calculationType ?? ("percentage" as const),
     propertyValues,
+    scope: {
+      appliesTo: p.scope?.appliesTo ?? "all",
+      productIds: toIdList(p.scope?.productIds),
+      categoryIds: toIdList(p.scope?.categoryIds),
+      brandIds: toIdList(p.scope?.brandIds),
+      excludeProductIds: toIdList(p.scope?.excludeProductIds),
+    },
     customerEligibility: {
       allCustomers: p.customerEligibility?.allCustomers ?? true,
-      customerGroupIds: (p.customerEligibility?.customerGroupIds ?? []).map(
-        (g: any) => (typeof g === "object" ? g._id.toString() : String(g)),
-      ),
+      customerGroupIds: toIdList(p.customerEligibility?.customerGroupIds),
       minOrderAmount: p.customerEligibility?.minOrderAmount ?? 0,
     },
     usageLimits: {
@@ -70,9 +78,7 @@ export default async function EditPromotionPage(props: EditPageProps) {
       perOrder: p.usageLimits?.perOrder ?? 1,
     },
     stackable: p.stackable ?? false,
-    exclusiveWith: (p.exclusiveWith ?? []).map((x: any) =>
-      typeof x === "object" ? x._id.toString() : String(x),
-    ),
+    exclusiveWith: toIdList(p.exclusiveWith),
   };
 
   const otherPromotions = options.promotions.filter((x) => x.value !== id);
@@ -88,7 +94,9 @@ export default async function EditPromotionPage(props: EditPageProps) {
         initialValues={initialValues}
         customerGroups={options.customerGroups}
         otherPromotions={otherPromotions}
-        products={products}
+        products={options.products}
+        categories={options.categories}
+        brands={options.brands}
         onSubmit={handleUpdate}
       />
     </div>

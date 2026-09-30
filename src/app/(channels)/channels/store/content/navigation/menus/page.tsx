@@ -216,7 +216,7 @@ const MenuPage = () => {
       key: "edit",
       label: "Edit menu",
       icon: <Edit fontSize="small" />,
-      href: `/marketing/content/navigation/menus/edit?id=${menu._id}`,
+      href: `/channels/store/content/navigation/menus/edit?id=${menu._id}`,
     },
     {
       key: "delete",

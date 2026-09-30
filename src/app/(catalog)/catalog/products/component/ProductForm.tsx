@@ -33,6 +33,11 @@ import {
   getProductDraft,
   deleteProductDraft,
 } from "@/app/actions/drafts";
+import {
+  getSelectablePromotions,
+  getProductPromotions,
+  syncProductPromotions,
+} from "@/app/actions/promotion";
 
 import { AttributeField } from "@/app/(catalog)/catalog/products/component/AttributeFields";
 import ManageRelatedProduct from "./ManageRelatedProduct";
@@ -43,6 +48,10 @@ import {
   getOrCreateNewProductDraftKey,
   clearNewProductDraftKey,
 } from "@/app/lib/products/draftKeys";
+import {
+  EntityOption,
+  EntityPicker,
+} from "@/app/(marketing)/components/EntityPicker";
 
 // ------------------------------------------------------------------
 // Types
@@ -100,6 +109,10 @@ const VARIANT_GROUP_CODES = new Set([
   "variantFields",
   "variants",
 ]);
+
+// The set/attribute pair that maps to the promotion write-back UI.
+const MARKETING_SET_CODE = "marketing";
+const PROMOTIONS_ATTR_CODE = "promotions";
 
 // ------------------------------------------------------------------
 // Helpers
@@ -224,6 +237,22 @@ const findGroupInSteps = (
   return null;
 };
 
+/** Case-insensitive walk for an attribute by code. */
+function findAttributeByCode(
+  groups: GroupNode[],
+  code: string,
+): AttributeDetail | null {
+  const target = code.toLowerCase();
+  for (const g of groups) {
+    for (const a of g.attributes) {
+      if (a.code && a.code.toLowerCase() === target) return a;
+    }
+    const found = findAttributeByCode(g.children || [], code);
+    if (found) return found;
+  }
+  return null;
+}
+
 // ------------------------------------------------------------------
 // GroupRenderer
 // ------------------------------------------------------------------
@@ -234,6 +263,10 @@ interface GroupRendererProps {
   validationErrors: { [key: string]: string[] };
   handleChange: (field: string, value: any) => void;
   units: any[];
+  // Identifies the "promotions" attribute so its field can be replaced
+  // by the EntityPicker; null when the category has no marketing set.
+  promotionAttributeId: string | null;
+  promotionOptions: EntityOption[];
 }
 
 const GroupRenderer = memo(
@@ -244,6 +277,8 @@ const GroupRenderer = memo(
     validationErrors,
     handleChange,
     units,
+    promotionAttributeId,
+    promotionOptions,
   }: GroupRendererProps) => {
     const { id, code, name, attributes, children } = group;
     const groupErrors = validationErrors[id] || [];
@@ -269,6 +304,8 @@ const GroupRenderer = memo(
                 validationErrors={validationErrors}
                 handleChange={handleChange}
                 units={units}
+                promotionAttributeId={promotionAttributeId}
+                promotionOptions={promotionOptions}
               />
             ))}
         </section>
@@ -279,17 +316,44 @@ const GroupRenderer = memo(
       <section key={id} className="mb-4">
         <h2 className="mb-2 text-sm font-semibold text-foreground">{name}</h2>
         <div className="flex flex-col gap-2.5">
-          {attributes.map((a) => (
-            <div key={a.id}>
-              <AttributeField
-                productId={productId}
-                attribute={a}
-                field={productData[normalizeCode(a.code)]}
-                handleAttributeChange={handleChange}
-                units={units}
-              />
-            </div>
-          ))}
+          {attributes.map((a) => {
+            // Intercept the "promotions" attribute and render the
+            // promotion picker instead of a generic AttributeField.
+            if (promotionAttributeId && a.id === promotionAttributeId) {
+              const value = Array.isArray(productData.promotions)
+                ? productData.promotions
+                : [];
+              return (
+                <div key={a.id}>
+                  <label className="mb-1.5 block text-[13px] font-medium text-foreground">
+                    {a.name}
+                    {a.isRequired && (
+                      <span className="ml-1 text-destructive">*</span>
+                    )}
+                  </label>
+                  <EntityPicker
+                    value={value}
+                    onChange={(next) => handleChange("promotions", next)}
+                    options={promotionOptions}
+                    placeholder="Search promotions…"
+                    emptyMessage="No promotions match your search."
+                    hint="These product-scoped promotions will be updated to include this product. Promotions that apply to all products are applied automatically and aren't listed here."
+                  />
+                </div>
+              );
+            }
+            return (
+              <div key={a.id}>
+                <AttributeField
+                  productId={productId}
+                  attribute={a}
+                  field={productData[normalizeCode(a.code)]}
+                  handleAttributeChange={handleChange}
+                  units={units}
+                />
+              </div>
+            );
+          })}
           {groupErrors.length > 0 && (
             <Alert severity="error" className="mt-3">
               <ul className="list-disc pl-4">
@@ -309,6 +373,8 @@ const GroupRenderer = memo(
                 validationErrors={validationErrors}
                 handleChange={handleChange}
                 units={units}
+                promotionAttributeId={promotionAttributeId}
+                promotionOptions={promotionOptions}
               />
             ))}
         </div>
@@ -320,10 +386,18 @@ const GroupRenderer = memo(
     if (prev.units !== next.units) return false;
     if (prev.handleChange !== next.handleChange) return false;
     if (prev.group.id !== next.group.id) return false;
+    if (prev.promotionAttributeId !== next.promotionAttributeId) return false;
+    if (prev.promotionOptions !== next.promotionOptions) return false;
 
     const relevantKeys = getGroupRelevantKeys(prev.group);
     for (const key of relevantKeys) {
       if (prev.productData[key] !== next.productData[key]) return false;
+    }
+    // The promotion picker reads `productData.promotions` directly, and
+    // "promotions" isn't in getGroupRelevantKeys (it's driven by the
+    // intercepted attribute, not the group code), so compare it here.
+    if (prev.productData.promotions !== next.productData.promotions) {
+      return false;
     }
 
     const prevGroupErrors = prev.validationErrors[prev.group.id] || [];
@@ -390,6 +464,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [units, setUnits] = useState<any[]>([]);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+
+  // Promotion picker state
+  const [promotionOptions, setPromotionOptions] = useState<EntityOption[]>([]);
+  const promotionsInitializedRef = useRef(false);
 
   const currentStepRef = useRef(currentStep);
   const stepperViewportRef = useRef<HTMLDivElement | null>(null);
@@ -592,6 +670,69 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const variantThemes = variantThemesGroup?.attributes ?? [];
   const variantFields = variantFieldsGroup?.attributes ?? [];
   const hasVariantConfig = !!variantThemesGroup;
+
+  // ================================================================== //
+  // Promotions — detected inside the "marketing" set                   //
+  // ================================================================== //
+  const promotionAttributeId = useMemo(() => {
+    const marketingSet = steps.find(
+      (s) => normalizeCode(s.code) === MARKETING_SET_CODE,
+    );
+    if (!marketingSet) return null;
+    const attr = findAttributeByCode(marketingSet.groups, PROMOTIONS_ATTR_CODE);
+    return attr?.id ?? null;
+  }, [steps]);
+
+  // Load the selectable promotions once we know the picker is present.
+  useEffect(() => {
+    if (!promotionAttributeId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const options = await getSelectablePromotions();
+        if (!cancelled) setPromotionOptions(options);
+      } catch (err) {
+        console.error("Failed to load promotions", err);
+        if (!cancelled) setPromotionOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [promotionAttributeId]);
+
+  // For existing products, seed the picker from the promotion side.
+  // New products start empty; the draft mechanism preserves the choice.
+  useEffect(() => {
+    if (loading) return;
+    if (!initialProductId) return;
+    if (!promotionAttributeId) return;
+    if (promotionsInitializedRef.current) return;
+
+    // A draft may already carry a promotions array — respect it.
+    if (productData.promotions !== undefined) {
+      promotionsInitializedRef.current = true;
+      return;
+    }
+
+    promotionsInitializedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ids = await getProductPromotions(initialProductId);
+        if (!cancelled) {
+          setProductData((prev) =>
+            prev.promotions !== undefined ? prev : { ...prev, promotions: ids },
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load product promotions", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, initialProductId, promotionAttributeId, productData.promotions]);
 
   // ------------------------------------------------------------------ //
   // Build renderable steps                                             //
@@ -869,6 +1010,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
     try {
       const payload = { ...productData };
 
+      // Promotions are promotion-owned. Pull them out of the product
+      // payload and apply them to the promotion side after save.
+      const selectedPromotions = Array.isArray(payload.promotions)
+        ? (payload.promotions as string[])
+        : [];
+      const shouldSyncPromotions = promotionAttributeId !== null;
+      delete payload.promotions;
+
       delete payload.specifications;
       payload.status = "active";
 
@@ -925,6 +1074,26 @@ const ProductForm: React.FC<ProductFormProps> = ({
         : await createProduct(payload);
 
       if (res.success) {
+        // Reconcile promotion scope now that we have a real product ID.
+        if (shouldSyncPromotions) {
+          const savedId =
+            existingId ||
+            (res as any).data?._id?.toString?.() ||
+            (res as any).product?._id?.toString?.() ||
+            (res as any)._id?.toString?.();
+          if (savedId) {
+            try {
+              await syncProductPromotions(savedId, selectedPromotions);
+            } catch (syncErr) {
+              console.error("Promotion sync failed", syncErr);
+              toast.error(
+                "Product saved, but promotion updates failed. Please retry.",
+                { id: toastId, duration: 6000 },
+              );
+            }
+          }
+        }
+
         toast.success(
           isUpdate
             ? "Product updated successfully!"
@@ -1095,8 +1264,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 </Stepper>
               </div>
 
-              {/* No white wrapper — fields keep the gray form background,
-                  and each individual input is white from Fields.tsx. */}
               <div className="space-y-4">
                 {activeStep?.kind === "variants" ? (
                   <VariantsManager
@@ -1116,6 +1283,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
                       validationErrors={validationErrors}
                       handleChange={handleChange}
                       units={units}
+                      promotionAttributeId={promotionAttributeId}
+                      promotionOptions={promotionOptions}
                     />
                   ))
                 )}

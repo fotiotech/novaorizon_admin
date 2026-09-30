@@ -11,7 +11,8 @@ import {
   CALC_LABELS,
   type CalcFieldDef,
 } from "@/app/lib/validation/calc-fields";
-import { ProductPicker, type ProductOption } from "../components/ProductPicker";
+import { ProductPicker, type ProductOption } from "./ProductPicker";
+import { EntityPicker, type EntityOption } from "./EntityPicker";
 
 // ─────────────────────────────────────────────────────────────────────
 const schema = z.object({
@@ -30,6 +31,21 @@ const schema = z.object({
     "bundle_discount",
   ]),
   propertyValues: z.record(z.string(), z.any()).default({}),
+  scope: z
+    .object({
+      appliesTo: z.enum(["all", "products", "categories", "brands"]),
+      productIds: z.array(z.string()),
+      categoryIds: z.array(z.string()),
+      brandIds: z.array(z.string()),
+      excludeProductIds: z.array(z.string()),
+    })
+    .default({
+      appliesTo: "all",
+      productIds: [],
+      categoryIds: [],
+      brandIds: [],
+      excludeProductIds: [],
+    }),
   customerEligibility: z.object({
     allCustomers: z.boolean().default(true),
     customerGroupIds: z.array(z.string()).default([]),
@@ -51,6 +67,8 @@ interface Props {
   customerGroups?: { label: string; value: string }[];
   otherPromotions?: { label: string; value: string }[];
   products?: ProductOption[];
+  categories?: EntityOption[];
+  brands?: EntityOption[];
   onSubmit: (data: FormValues) => Promise<any>;
 }
 
@@ -63,11 +81,40 @@ const fieldsetCls = "rounded-xl border border-border bg-card p-5 space-y-4";
 const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
 const helperCls = "mt-1.5 text-[12px] text-muted-foreground";
 
+const SCOPE_OPTIONS: {
+  value: "all" | "products" | "categories" | "brands";
+  label: string;
+  hint: string;
+}[] = [
+  {
+    value: "all",
+    label: "All products",
+    hint: "Applies to every product in the catalog.",
+  },
+  {
+    value: "products",
+    label: "Specific products",
+    hint: "Pick individual products.",
+  },
+  {
+    value: "categories",
+    label: "Specific categories",
+    hint: "All products within the selected categories.",
+  },
+  {
+    value: "brands",
+    label: "Specific brands",
+    hint: "All products from the selected brands.",
+  },
+];
+
 export function PromotionComposer({
   initialValues,
   customerGroups = [],
   otherPromotions = [],
   products = [],
+  categories = [],
+  brands = [],
   onSubmit,
 }: Props) {
   const router = useRouter();
@@ -93,6 +140,13 @@ export function PromotionComposer({
       priority: 0,
       calculationType: "percentage",
       propertyValues: {},
+      scope: {
+        appliesTo: "all",
+        productIds: [],
+        categoryIds: [],
+        brandIds: [],
+        excludeProductIds: [],
+      },
       customerEligibility: {
         allCustomers: true,
         customerGroupIds: [],
@@ -107,6 +161,10 @@ export function PromotionComposer({
 
   const calcType = watch("calculationType");
   const allCustomers = watch("customerEligibility.allCustomers");
+  const scopeAppliesTo = watch("scope.appliesTo");
+
+  // Bundle promotions own their product list, so hide the scope picker.
+  const showScope = calcType !== "bundle_discount";
 
   const activeFields: CalcFieldDef[] = useMemo(() => {
     const defs = CALC_FIELDS[calcType] ?? [];
@@ -117,7 +175,6 @@ export function PromotionComposer({
 
   const handleCalcTypeChange = (next: string) => {
     if (next === calcType) return;
-    // Reset property values to defaults for the new type.
     const defaults: Record<string, any> = {};
     for (const f of CALC_FIELDS[next] ?? []) {
       if (f.defaultValue !== undefined) defaults[f.code] = f.defaultValue;
@@ -126,7 +183,26 @@ export function PromotionComposer({
     setValue("propertyValues", defaults, { shouldDirty: true });
   };
 
+  const handleScopeChange = (
+    next: "all" | "products" | "categories" | "brands",
+  ) => {
+    if (next === scopeAppliesTo) return;
+    setValue("scope.appliesTo", next, { shouldDirty: true });
+    // Clear the arrays that are no longer relevant so hidden selections
+    // don't leak into the submitted payload.
+    if (next !== "products") {
+      setValue("scope.productIds", [], { shouldDirty: true });
+    }
+    if (next !== "categories") {
+      setValue("scope.categoryIds", [], { shouldDirty: true });
+    }
+    if (next !== "brands") {
+      setValue("scope.brandIds", [], { shouldDirty: true });
+    }
+  };
+
   const handleSubmitForm = async (data: FormValues) => {
+    // Calc-field required checks
     const missing: string[] = [];
     for (const f of activeFields) {
       const v = data.propertyValues?.[f.code];
@@ -141,6 +217,24 @@ export function PromotionComposer({
       setSubmitError(`Missing required field(s): ${missing.join(", ")}`);
       return;
     }
+
+    // Scope required checks (skipped for bundles — they carry their own).
+    if (showScope) {
+      const s = data.scope;
+      if (s?.appliesTo === "products" && s.productIds.length === 0) {
+        setSubmitError("Select at least one product for this promotion.");
+        return;
+      }
+      if (s?.appliesTo === "categories" && s.categoryIds.length === 0) {
+        setSubmitError("Select at least one category for this promotion.");
+        return;
+      }
+      if (s?.appliesTo === "brands" && s.brandIds.length === 0) {
+        setSubmitError("Select at least one brand for this promotion.");
+        return;
+      }
+    }
+
     if (data.endDate <= data.startDate) {
       setSubmitError("End date must be after start date.");
       return;
@@ -415,6 +509,118 @@ export function PromotionComposer({
           </p>
         )}
       </fieldset>
+
+      {/* Scope — what the promotion applies to */}
+      {showScope && (
+        <fieldset className={fieldsetCls}>
+          <legend className={legendCls}>Applies to</legend>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            {SCOPE_OPTIONS.map((opt) => {
+              const selected = scopeAppliesTo === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleScopeChange(opt.value)}
+                  className={`flex items-start justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-left transition ${
+                    selected
+                      ? "border-primary/50 bg-primary/5"
+                      : "border-border bg-background hover:bg-muted/40"
+                  }`}
+                >
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-[14px] font-medium text-foreground">
+                      {opt.label}
+                    </span>
+                    <span className="text-[12px] text-muted-foreground">
+                      {opt.hint}
+                    </span>
+                  </span>
+                  {selected && (
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <input type="hidden" {...register("scope.appliesTo")} />
+
+          {scopeAppliesTo === "products" && (
+            <div>
+              <label className={labelCls}>
+                Products <span className="text-destructive">*</span>
+              </label>
+              <Controller
+                name="scope.productIds"
+                control={control}
+                render={({ field: f }) => (
+                  <ProductPicker
+                    value={Array.isArray(f.value) ? f.value : []}
+                    onChange={(next) => f.onChange(next)}
+                    options={products}
+                    placeholder="Search products…"
+                    emptyMessage="No products match your search."
+                  />
+                )}
+              />
+              <p className={helperCls}>
+                The promotion only applies to the selected products.
+              </p>
+            </div>
+          )}
+
+          {scopeAppliesTo === "categories" && (
+            <div>
+              <label className={labelCls}>
+                Categories <span className="text-destructive">*</span>
+              </label>
+              <Controller
+                name="scope.categoryIds"
+                control={control}
+                render={({ field: f }) => (
+                  <EntityPicker
+                    value={Array.isArray(f.value) ? f.value : []}
+                    onChange={(next) => f.onChange(next)}
+                    options={categories}
+                    placeholder="Search categories…"
+                    emptyMessage="No categories match your search."
+                  />
+                )}
+              />
+              <p className={helperCls}>
+                The promotion applies to every product in the selected
+                categories.
+              </p>
+            </div>
+          )}
+
+          {scopeAppliesTo === "brands" && (
+            <div>
+              <label className={labelCls}>
+                Brands <span className="text-destructive">*</span>
+              </label>
+              <Controller
+                name="scope.brandIds"
+                control={control}
+                render={({ field: f }) => (
+                  <EntityPicker
+                    value={Array.isArray(f.value) ? f.value : []}
+                    onChange={(next) => f.onChange(next)}
+                    options={brands}
+                    placeholder="Search brands…"
+                    emptyMessage="No brands match your search."
+                  />
+                )}
+              />
+              <p className={helperCls}>
+                The promotion applies to every product from the selected brands.
+              </p>
+            </div>
+          )}
+        </fieldset>
+      )}
 
       {/* Eligibility */}
       <fieldset className={fieldsetCls}>

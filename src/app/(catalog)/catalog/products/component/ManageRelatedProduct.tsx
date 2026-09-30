@@ -18,6 +18,11 @@ interface RelatedProduct {
   relationshipType: string;
 }
 
+interface RelationOption {
+  value: string;
+  label: string;
+}
+
 const normalizeCode = (code?: string): string =>
   !code ? "" : code.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
@@ -44,6 +49,35 @@ const extractRelatedProductId = (rp: any): string => {
     if (typeof product.id === "string" && product.id) return product.id;
   }
   return "";
+};
+
+/**
+ * Normalize an attribute's `options` (strings, {value,label}, {name,code}…)
+ * into a consistent `{ value, label }` list for react-select.
+ */
+const normalizeOptions = (attr?: any): RelationOption[] => {
+  const raw = attr?.options ?? attr?.values ?? attr?.choices;
+  if (!Array.isArray(raw)) return [];
+
+  const out: RelationOption[] = [];
+  for (const opt of raw) {
+    if (opt == null) continue;
+    if (typeof opt === "string" || typeof opt === "number") {
+      const v = String(opt);
+      if (v) out.push({ value: v, label: v });
+      continue;
+    }
+    if (typeof opt === "object") {
+      const value =
+        opt.value ?? opt.code ?? opt.name ?? opt.label ?? opt.slug ?? "";
+      const label =
+        opt.label ?? opt.name ?? opt.value ?? opt.code ?? opt.slug ?? value;
+      if (value !== "" && value != null) {
+        out.push({ value: String(value), label: String(label) });
+      }
+    }
+  }
+  return out;
 };
 
 // ------------------------------------------------------------------
@@ -147,8 +181,16 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
   const relatedAttr = attribute.find(
     (a) => normalizeCode(a.code) === "relatedProducts",
   );
-  const relationTypeAttr = attribute.find(
-    (a) => normalizeCode(a.code) === "relationType",
+
+  // Match both `relationType` and `relationshipType` codes.
+  const relationTypeAttr = attribute.find((a) => {
+    const code = normalizeCode(a.code);
+    return code === "relationType" || code === "relationshipType";
+  });
+
+  const relationOptions = useMemo<RelationOption[]>(
+    () => normalizeOptions(relationTypeAttr),
+    [relationTypeAttr],
   );
 
   useEffect(() => {
@@ -276,7 +318,8 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     if (idx >= 0) {
       updated = relatedProducts.filter((rp) => rp.id !== productId);
     } else {
-      const defaultType = relationTypeAttr?.options?.[0] || "";
+      // Default the relationship type to the first configured option.
+      const defaultType = relationOptions[0]?.value ?? "";
       updated = [
         ...relatedProducts,
         { id: productId, relationshipType: defaultType },
@@ -307,12 +350,6 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
         p.sku?.toLowerCase().includes(term),
     );
   }, [products, searchTerm]);
-
-  const relationOptions =
-    relationTypeAttr?.options?.map((opt: string) => ({
-      value: opt,
-      label: opt,
-    })) || [];
 
   if (!relatedAttr) return null;
 
@@ -367,6 +404,15 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
             const isSelected = !!selected;
             const relationshipType = selected?.relationshipType || "";
 
+            // Resolve the current value for the Select. Fall back to a
+            // synthetic option so a pre-existing / unknown value still shows.
+            const currentOption: RelationOption | null = relationshipType
+              ? (relationOptions.find((o) => o.value === relationshipType) ?? {
+                  value: relationshipType,
+                  label: relationshipType,
+                })
+              : null;
+
             return (
               <div
                 key={item._id}
@@ -383,7 +429,7 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                 >
                   <div className="relative h-11 w-11 flex-none overflow-hidden rounded-lg bg-muted">
                     <Image
-                      src={item.images[0] || "/placeholder.png"}
+                      src={item.images?.[0] || "/placeholder.png"}
                       alt={item.name || item.title || "Product"}
                       fill
                       className="object-cover"
@@ -410,18 +456,11 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
                 {isSelected && (
                   <div className="flex flex-none items-center gap-1.5">
                     {relationOptions.length > 0 ? (
-                      <Select
+                      <Select<RelationOption, false>
                         options={relationOptions}
-                        value={
-                          relationOptions.find(
-                            (opt: any) => opt.value === relationshipType,
-                          ) || null
-                        }
+                        value={currentOption}
                         onChange={(opt) =>
-                          handleRelationshipChange(
-                            item._id,
-                            opt ? opt.value : "",
-                          )
+                          handleRelationshipChange(item._id, opt?.value ?? "")
                         }
                         placeholder="Type"
                         className="w-36"
