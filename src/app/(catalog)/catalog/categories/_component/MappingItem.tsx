@@ -306,7 +306,6 @@ export default function MappingItem({
           activeGroupName ? `Attributes — ${activeGroupName}` : "Attributes"
         }
         size="lg"
-        fullScreenOnMobile
       >
         {activeGroup && (
           <AttributeSelector
