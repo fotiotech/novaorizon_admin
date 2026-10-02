@@ -308,26 +308,28 @@ export default function MappingItem({
         size="lg"
       >
         {activeGroup && (
-          <AttributeSelector
-            mappingId={id}
-            groupId={activeGroup.group}
-            groupName={activeGroupName}
-            selectedAttributes={activeGroup.attributes}
-            allAttributes={allAttributes}
-            filter={activeAttrFilter}
-            expanded={true}
-            hideHeader={true}
-            onToggleExpand={() => {}}
-            onFilterChange={(value) =>
-              onAttrFilterChange(activeGroup.group, value)
-            }
-            onToggleAttribute={(attrId) =>
-              onToggleAttribute(activeGroup.group, attrId)
-            }
-            onToggleFlag={(attrId, flag) =>
-              onToggleFlag(activeGroup.group, attrId, flag)
-            }
-          />
+          <div className="max-h-[60vh] overflow-y-auto overscroll-contain pr-1 -mr-1">
+            <AttributeSelector
+              mappingId={id}
+              groupId={activeGroup.group}
+              groupName={activeGroupName}
+              selectedAttributes={activeGroup.attributes}
+              allAttributes={allAttributes}
+              filter={activeAttrFilter}
+              expanded={true}
+              hideHeader={true}
+              onToggleExpand={() => {}}
+              onFilterChange={(value) =>
+                onAttrFilterChange(activeGroup.group, value)
+              }
+              onToggleAttribute={(attrId) =>
+                onToggleAttribute(activeGroup.group, attrId)
+              }
+              onToggleFlag={(attrId, flag) =>
+                onToggleFlag(activeGroup.group, attrId, flag)
+              }
+            />
+          </div>
         )}
 
         <div className="mt-5 flex items-center justify-between gap-3">
