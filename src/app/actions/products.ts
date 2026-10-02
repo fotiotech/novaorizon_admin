@@ -15,6 +15,8 @@ import { saveProductDraft } from "@/app/actions/drafts";
 import { ref, deleteObject } from "firebase/storage";
 import { storage } from "@/utils/firebaseConfig";
 import { NEW_PRODUCT_DRAFT_KEY } from "../lib/products/draftKeys";
+import { embedProduct } from "@/lib/embedProduct";
+import { buildEmbeddingText } from "@/lib/embedding";
 
 // ---------- Types ----------
 export interface ProductListParams {
@@ -590,6 +592,92 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
     payload,
     categoryInfo?.variantThemeCodes ?? new Set<string>(),
   );
+
+  // ------------------------------------------------------------------
+  // DENORMALIZATION + EMBEDDING
+  //
+  // Atlas Search can't join across collections, so any field we want
+  // the index to match against must live on the product itself. And
+  // because embedding is expensive (Voyage API call), we only want to
+  // re-embed when the content that feeds the embedding actually changes.
+  //
+  // For updates we fetch the existing doc once, up front, and use it to:
+  //   1. Keep categoryName/brandName intact when those refs weren't sent
+  //   2. Fill embedding inputs that weren't sent (partial update)
+  //   3. Skip the Voyage call entirely if the embedding text is unchanged
+  // ------------------------------------------------------------------
+
+  let existing: {
+    name?: string;
+    categoryName?: string;
+    brandName?: string;
+    shortDescription?: string;
+    description?: string;
+    tags?: string[];
+    embeddingText?: string;
+    embedding?: number[];
+  } | null = null;
+
+  if (providedId) {
+    existing = await Product.findById(providedId)
+      .select(
+        "name categoryName brandName shortDescription description tags embeddingText embedding",
+      )
+      .lean();
+  }
+
+  // ----- categoryName -----
+  let categoryName: string | undefined;
+  if (nextCategory) {
+    const cat = await Category.findById(nextCategory).select("name").lean();
+    categoryName = String((cat as any)?.name ?? "").trim();
+    payload.categoryName = categoryName;
+  } else if (existing) {
+    // Ref not sent this update → keep whatever's stored.
+    categoryName = existing.categoryName ?? "";
+  }
+
+  // ----- brandName -----
+  let brandName: string | undefined;
+  if (nextBrand) {
+    const Brand = mongoose.model("Brand");
+    const br = await Brand.findById(nextBrand).select("name").lean();
+    brandName = String((br as any)?.name ?? "").trim();
+    payload.brandName = brandName;
+  } else if (existing) {
+    brandName = existing.brandName ?? "";
+  }
+
+  // ----- embedding -----
+  // Merge request values over stored values so a partial update never
+  // produces a worse embedding than what's already on the document.
+  const embedSource = {
+    name: payload.name ?? existing?.name ?? "",
+    categoryName: categoryName ?? existing?.categoryName ?? "",
+    brandName: brandName ?? existing?.brandName ?? "",
+    shortDescription:
+      payload.shortDescription ?? existing?.shortDescription ?? "",
+    description: payload.description ?? existing?.description ?? "",
+    tags: payload.tags ?? existing?.tags ?? [],
+  };
+
+  if (embedSource.name) {
+    const nextEmbeddingText = buildEmbeddingText(embedSource);
+    const alreadyCurrent =
+      existing?.embeddingText === nextEmbeddingText &&
+      Array.isArray(existing?.embedding) &&
+      existing.embedding.length > 0;
+
+    if (!alreadyCurrent) {
+      const embedded = await embedProduct(embedSource);
+      if (embedded) {
+        payload.embedding = embedded.embedding;
+        payload.embeddingText = embedded.embeddingText;
+        payload.embeddingModel = embedded.embeddingModel;
+        payload.embeddedAt = embedded.embeddedAt;
+      }
+    }
+  }
 
   return { ok: true, payload, providedId };
 }

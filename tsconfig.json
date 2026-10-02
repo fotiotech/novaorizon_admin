@@ -23,7 +23,8 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    "../client/scripts/backfill-embeddings.ts"
   ],
   "exclude": ["node_modules"]
 }

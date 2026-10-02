@@ -31,6 +31,8 @@ export interface IProduct extends Document {
   slug: string;
   categoryId: mongoose.Types.ObjectId;
   brand: mongoose.Types.ObjectId;
+  categoryName: string;
+  brandName: string;
   hasVariants: boolean;
   variantThemes: string[];
   variantValues: Record<string, string[]>;
@@ -47,6 +49,10 @@ export interface IProduct extends Document {
   reviewsRatings: IReview[];
   tags: string[];
   status: "draft" | "active" | "inactive";
+  embedding: number[]; // 1024-dim vector from voyage-4-lite
+  embeddingText: string; // the exact text that was embedded
+  embeddingModel: string; // e.g. "voyage-4-lite"
+  embeddedAt: Date; // when the vector was last refreshed
   createdAt: Date;
   updatedAt: Date;
   // ✅ Flattened category attributes live here, one key per attribute code.
@@ -93,6 +99,8 @@ const ProductSchema = new Schema<IProduct>(
       required: true,
     },
     brand: { type: Schema.Types.ObjectId, ref: "Brand", required: true },
+    categoryName: { type: String, trim: true, default: "" },
+    brandName: { type: String, trim: true, default: "" },
     hasVariants: { type: Boolean, default: false },
     variantThemes: { type: [String], default: [] },
 
@@ -129,6 +137,10 @@ const ProductSchema = new Schema<IProduct>(
       default: "draft",
       index: true,
     },
+    embedding: { type: [Number], default: [] },
+    embeddingText: { type: String, default: "" },
+    embeddingModel: { type: String, default: "" },
+    embeddedAt: { type: Date },
   },
   {
     timestamps: true,
