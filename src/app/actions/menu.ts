@@ -1,252 +1,221 @@
+// app/actions/menu.ts
 "use server";
 
 import { connection } from "@/utils/connection";
-import { Menu } from "@/models/Menu";
+import {
+  Menu,
+  DEFAULT_DISPLAY_CONFIG,
+  MENU_THEMES,
+  MAX_FEATURED_SLOTS,
+  SURFACE_LOCATIONS,
+  type IMenuItem,
+} from "@/models/Menu";
+import {
+  MENU_LOCATIONS,
+  MENU_DISPLAY_TYPES,
+  SUBMENU_DISPLAY_TYPES,
+  ALIGNMENTS,
+  POSITIONS,
+  ANIMATIONS,
+  COLUMN_COUNTS,
+  LINK_TYPES,
+  REF_MODELS,
+  REF_TYPES,
+  MAX_DEPTH,
+  REF_MODEL_BY_TYPE,
+} from "@/lib/menu/constants";
+import { supportsMenuFeature } from "@/lib/menu/capabilities";
 import { Collection } from "@/models/Collection";
 import Product from "@/models/Product";
 import Category from "@/models/Category";
-import Brand from "@/models/Brand";
-import Promotion from "@/models/Promotion";
-import Page from "@/models/Page";
 import { revalidatePath, revalidateTag } from "next/cache";
 import mongoose from "mongoose";
 import { deleteS3Object } from "./s3";
-import {
-  getTrendingItems,
-  getRecommendations,
-  getRecentlyViewed,
-  getRelatedProducts,
-} from "./events";
 
-const MENUS_LIST_PATH = "/channels/store/content/navigation/menus";
+const MENUS_LIST_PATH = "/marketing/content/navigation/menus";
 
-// ---------- Helper: get model by target type ----------
-function getModelForTargetType(targetType: string) {
-  switch (targetType) {
-    case "Product":
-      return Product;
-    case "Category":
-      return Category;
-    case "Brand":
-      return Brand;
-    case "Promotion":
-      return Promotion;
-    case "Page":
-      return Page;
-    case "Collection":
-      return Collection;
-    default:
-      return null;
-  }
+/* -------------------------------------------------------------------------- */
+/*                                    Types                                   */
+/* -------------------------------------------------------------------------- */
+
+export type ActionResult<T = unknown> =
+  | { success: true; data: T; message?: string }
+  | { success: false; error: string };
+
+export interface RefOption {
+  id: string;
+  name: string;
 }
 
-// ---------- Parse rule value (same as collection.ts) ----------
-function parseRuleValue(value: any, operator: string) {
-  if (operator === "$in" || operator === "$nin") {
-    if (Array.isArray(value)) return value;
-    if (typeof value === "string") {
-      try {
-        const parsed = JSON.parse(value);
-        if (Array.isArray(parsed)) return parsed;
-        if (value.includes(",")) {
-          return value.split(",").map((item: string) => item.trim());
-        }
-        return [value];
-      } catch {
-        if (value.includes(",")) {
-          return value.split(",").map((item: string) => item.trim());
-        }
-        return [value];
-      }
-    }
-    return [value];
-  }
+export type MenuRefOptions = Record<
+  "Category" | "Product" | "Collection",
+  RefOption[]
+>;
 
-  if (["$lt", "$lte", "$gt", "$gte"].includes(operator)) {
-    const num = Number(value);
-    return isNaN(num) ? value : num;
-  }
+export type EnrichedMenuItem = IMenuItem & { slug: string | null };
 
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return value;
-}
+/* -------------------------------------------------------------------------- */
+/*                              Revalidation                                  */
+/* -------------------------------------------------------------------------- */
 
-// ---------- Build query from rules (only for Product & Collection) ----------
-function buildQueryFromRules(rules: any[], targetType: string) {
-  if (!["Product", "Collection"].includes(targetType)) return {};
-  if (!rules || rules.length === 0) return {};
-
-  const query: any = { $and: [] };
-
-  for (const rule of rules) {
-    if (!rule.attribute || !rule.operator) continue;
-    const value = parseRuleValue(rule.value, rule.operator);
-
-    // RuleEditor exposes the Product category field as `categoryId`.
-    if (targetType === "Product" && rule.attribute === "categoryId") {
-      if (Array.isArray(value)) {
-        const objectIds = value
-          .filter((v) => mongoose.Types.ObjectId.isValid(v))
-          .map((v) => new mongoose.Types.ObjectId(v));
-        if (objectIds.length) {
-          query.$and.push({
-            [rule.attribute]: { [rule.operator]: objectIds },
-          });
-        }
-      } else if (mongoose.Types.ObjectId.isValid(value)) {
-        query.$and.push({
-          [rule.attribute]: new mongoose.Types.ObjectId(value),
-        });
-      }
-    } else {
-      query.$and.push({
-        [rule.attribute]: { [rule.operator]: value },
-      });
-    }
-  }
-
-  return query.$and.length > 0 ? query : {};
-}
-
-// ---------- Normalize a raw Product doc to menu item shape ----------
-function normalizeProductItem(item: any) {
-  return {
-    _id: item._id.toString(),
-    name: item.name || item.title || "Unnamed",
-    image: Array.isArray(item.images)
-      ? item.images[0] || null
-      : item.mainImage || item.image || item.imageUrl || null,
-    price: item.price ?? item.salePrice ?? item.sale_price ?? null,
-    listPrice: item.listPrice ?? null,
-    contentType: "Product",
-  };
-}
-
-// ---------- Resolve items from a collection (returns normalized items) ----------
-async function resolveCollectionItems(
-  collectionId: string,
-  context?: { productId?: string },
-) {
-  const collection: any = await Collection.findById(collectionId).lean();
-  if (!collection) return [];
-
-  let rawItems: any[] = [];
-
-  // ---------- RECOMMENDATION ----------
-  if (collection.type === "recommendation") {
-    const limit = collection.recommendationLimit || 10;
-    switch (collection.recommendationType) {
-      case "trending":
-        rawItems = await getTrendingItems(limit);
-        break;
-      case "personalized":
-        rawItems = await getRecommendations(limit);
-        break;
-      case "recentlyViewed":
-        rawItems = await getRecentlyViewed(limit);
-        break;
-      default:
-        rawItems = [];
-    }
-    return rawItems.map(normalizeProductItem);
-  }
-
-  // ---------- RELATED ----------
-  if (collection.type === "related") {
-    if (!context?.productId) return [];
-    const limit = collection.recommendationLimit || 10;
-    rawItems = await getRelatedProducts(context.productId, limit);
-    return rawItems.map(normalizeProductItem);
-  }
-
-  // ---------- RULE & MANUAL ----------
-  const targetType = collection.targetType;
-  const Model = getModelForTargetType(targetType);
-  if (!Model) return [];
-
-  if (collection.type === "rule") {
-    const query = buildQueryFromRules(collection.rules, targetType);
-    if (Object.keys(query).length === 0) return [];
-    rawItems = await (Model as mongoose.Model<any>)
-      .find(query)
-      .limit(50)
-      .lean();
-  } else {
-    rawItems = await (Model as mongoose.Model<any>)
-      .find({ _id: { $in: collection.items } })
-      .lean();
-  }
-
-  return rawItems.map((item: any) => {
-    if (targetType === "Product") return normalizeProductItem(item);
-
-    const name = item.name || item.title || "Unnamed";
-    let image: string | null = null;
-
-    if (targetType === "Collection") {
-      image = item.imageUrl || item.image || null;
-    } else {
-      image = item.image || item.imageUrl || item.backgroundImage || null;
-    }
-
-    return {
-      _id: item._id.toString(),
-      name,
-      image,
-      price: null,
-      listPrice: null,
-      contentType: targetType,
-    };
-  });
-}
-
-// ---------- Revalidate the paths and caches that render menus ----------
 function revalidateMenuConsumers() {
-  // 1. Admin menus list page
   revalidatePath(MENUS_LIST_PATH);
-
-  // 2. Header nav data cache.
-  //    Header.tsx fetches NavBar + SideBar menus via unstable_cache with
-  //    the tag "header-nav". revalidatePath does NOT invalidate
-  //    unstable_cache entries — only revalidateTag does. Without this,
-  //    the navbar keeps serving the old menu after an admin edit.
   revalidateTag("header-nav", "max");
-
-  // 3. Every page that renders a <MenuRenderer> (Home, Section, etc.)
-  //    and any other surface that reads menus directly. This is a
-  //    sledgehammer, but menus change rarely and a stale menu across
-  //    the site is worse than a slightly slower rebuild.
   revalidatePath("/", "layout");
 }
 
-// ---------- Get menus by location (with items) ----------
-export async function getMenusByLocation(location: string, context?: any) {
+/* -------------------------------------------------------------------------- */
+/*                              Reference fetch map                           */
+/* -------------------------------------------------------------------------- */
+
+const REF_FETCHERS: Record<string, { find: Function }> = {
+  Category,
+  Product,
+  Collection,
+};
+
+/* -------------------------------------------------------------------------- */
+/*                              Reference options                             */
+/* -------------------------------------------------------------------------- */
+
+export async function getMenuRefOptions(): Promise<
+  ActionResult<MenuRefOptions>
+> {
   try {
     await connection();
-    const menus = await Menu.find({ location })
-      .sort({ order: 1, createdAt: -1 })
-      .lean();
-    const enriched = await Promise.all(
-      menus.map(async (menu) => {
-        let items: any[] = [];
-        if (menu.collectionId) {
-          items = await resolveCollectionItems(
-            menu.collectionId.toString(),
-            context,
-          );
-        }
-        return { ...menu, items };
+
+    const entries = await Promise.all(
+      (
+        Object.entries(REF_FETCHERS) as [
+          keyof MenuRefOptions,
+          { find: Function },
+        ][]
+      ).map(async ([key, model]) => {
+        const docs = await model
+          .find({}, { name: 1 })
+          .sort({ name: 1 })
+          .limit(500)
+          .lean();
+        const options: RefOption[] = docs.map((d: any) => ({
+          id: String(d._id),
+          name: d.name ?? "Untitled",
+        }));
+        return [key, options] as const;
       }),
     );
+
+    return {
+      success: true,
+      data: Object.fromEntries(entries) as MenuRefOptions,
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Slug enrichment                               */
+/* -------------------------------------------------------------------------- */
+
+function slugify(text: string): string {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function pickSlug(doc: any): string {
+  if (!doc) return "";
+  if (doc.slug) return String(doc.slug);
+  if (doc.url_slug) return String(doc.url_slug);
+  if (doc.handle) return String(doc.handle);
+  if (doc.name) return slugify(doc.name);
+  return "";
+}
+
+async function enrichItemsWithSlugs(
+  items: IMenuItem[],
+): Promise<EnrichedMenuItem[]> {
+  if (!items?.length) return [];
+
+  const idsByModel: Record<string, Set<string>> = {};
+  const collect = (list: IMenuItem[]) => {
+    for (const item of list) {
+      if (item.refModel && item.refId) {
+        const bucket = (idsByModel[item.refModel] ??= new Set());
+        bucket.add(String(item.refId));
+      }
+      if (item.children?.length) collect(item.children);
+    }
+  };
+  collect(items);
+
+  const slugById: Record<string, Record<string, string>> = {};
+
+  await Promise.all(
+    Object.entries(idsByModel).map(async ([modelName, ids]) => {
+      const fetcher = REF_FETCHERS[modelName];
+      if (!fetcher) return;
+
+      const docs = await fetcher
+        .find(
+          { _id: { $in: Array.from(ids) } },
+          { name: 1, slug: 1, url_slug: 1, handle: 1 },
+        )
+        .lean();
+
+      const map: Record<string, string> = {};
+      for (const doc of docs) {
+        map[String(doc._id)] = pickSlug(doc);
+      }
+      slugById[modelName] = map;
+    }),
+  );
+
+  const stamp = (list: IMenuItem[]): EnrichedMenuItem[] =>
+    list.map((item) => {
+      const slug =
+        item.refModel && item.refId
+          ? (slugById[item.refModel]?.[String(item.refId)] ?? null)
+          : null;
+
+      return {
+        ...item,
+        slug,
+        children: stamp(item.children ?? []) as any,
+      } as EnrichedMenuItem;
+    });
+
+  return stamp(items);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Read actions                                */
+/* -------------------------------------------------------------------------- */
+
+export async function getMenusByLocation(
+  location: string,
+): Promise<ActionResult<any[]>> {
+  try {
+    await connection();
+    const menus = await Menu.find({ location, visible: { $ne: false } })
+      .sort({ order: 1, createdAt: -1 })
+      .lean();
+
+    const enriched = await Promise.all(
+      menus.map(async (menu) => ({
+        ...menu,
+        items: await enrichItemsWithSlugs(menu.items ?? []),
+      })),
+    );
+
     return { success: true, data: JSON.parse(JSON.stringify(enriched)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-// ---------- Get single menu by ID (raw, for the admin edit form) ----------
-export async function getMenuById(id: string, context?: any) {
+export async function getMenuById(id: string): Promise<ActionResult<any>> {
   try {
     await connection();
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -254,134 +223,280 @@ export async function getMenuById(id: string, context?: any) {
     }
     const menu = await Menu.findById(id).lean();
     if (!menu) return { success: false, error: "Menu not found" };
-
-    // For the admin edit screen we return the raw menu (no resolved items).
-    // If a caller explicitly passes `context`, they want the resolved list too
-    // (used by any preview surface that reuses this action).
-    let items: any[] | undefined;
-    if (context && menu.collectionId) {
-      items = await resolveCollectionItems(
-        menu.collectionId.toString(),
-        context,
-      );
-    }
-
-    return {
-      success: true,
-      data: JSON.parse(JSON.stringify(items ? { ...menu, items } : menu)),
-    };
+    return { success: true, data: JSON.parse(JSON.stringify(menu)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-// ---------- Get all menus (without items, for listing) ----------
-export async function getAllMenus() {
+export async function getAllMenus(): Promise<ActionResult<any[]>> {
   try {
     await connection();
-    const menus = await Menu.find()
-      .populate({ path: "collectionId", select: "name" })
-      .sort({ createdAt: -1 })
-      .lean();
+    const menus = await Menu.find().sort({ createdAt: -1 }).lean();
     return { success: true, data: JSON.parse(JSON.stringify(menus)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-const DISPLAY_TYPES = ["List", "Grid", "Carousel", "Dropdown", "MegaMenu"];
-const POSITIONS = ["left", "center", "right", "full"];
-const LOCATIONS = [
-  "Banner",
-  "NavBar",
-  "SideBar",
-  "Home",
-  "Section",
-  "Footer",
-  "ProductRelated", // was "product_related" in the old form
-];
+/* -------------------------------------------------------------------------- */
+/*                                 Validation                                 */
+/* -------------------------------------------------------------------------- */
 
-function validateMenuData(menuData: any): string | null {
-  if (!menuData?.name?.trim()) return "Name is required";
-  if (!menuData?.location) return "Location is required";
-  if (!LOCATIONS.includes(menuData.location)) {
-    return `Invalid location: ${menuData.location}`;
+const BOOLEAN_FIELDS = ["showImages", "isSticky", "visible"] as const;
+const NUMBER_FIELDS = ["order", "columns", "maxDepth"] as const;
+
+function validateDisplayConfig(dc: any): string | null {
+  if (!dc) return null;
+  if (dc.alignment && !ALIGNMENTS.includes(dc.alignment)) {
+    return `Invalid alignment: ${dc.alignment}`;
   }
-  if (!DISPLAY_TYPES.includes(menuData.display)) {
-    return `Invalid display type: ${menuData.display}`;
+  if (dc.animation && !ANIMATIONS.includes(dc.animation)) {
+    return `Invalid animation: ${dc.animation}`;
   }
-  if (menuData.position && !POSITIONS.includes(menuData.position)) {
-    return `Invalid position: ${menuData.position}`;
+  if (dc.theme && !MENU_THEMES.includes(dc.theme)) {
+    return `Invalid theme: ${dc.theme}`;
   }
-  if (
-    menuData.collectionId &&
-    !mongoose.Types.ObjectId.isValid(menuData.collectionId)
-  ) {
-    return "Invalid collectionId";
+  if (dc.gap != null) {
+    const n = Number(dc.gap);
+    if (isNaN(n) || n < 0 || n > 64) return "gap must be 0–64";
   }
-  if (menuData.columns != null) {
-    const n = Number(menuData.columns);
-    if (!Number.isInteger(n) || n < 1 || n > 6) return "columns must be 1–6";
-  }
-  if (menuData.maxDepth != null) {
-    const n = Number(menuData.maxDepth);
-    if (!Number.isInteger(n) || n < 0 || n > 10) return "maxDepth must be 0–10";
+  if (dc.megaWidth != null && typeof dc.megaWidth === "string") {
+    const ok =
+      dc.megaWidth === "" ||
+      dc.megaWidth === "container" ||
+      /^\d+(\.\d+)?(px|rem|em|vw|%)$/.test(dc.megaWidth);
+    if (!ok) return "megaWidth must be a CSS length or 'container'";
   }
   return null;
 }
 
-// ---------- Build the updates object, omitting undefined values ----------
-// Prevents `$set: { field: undefined }` from silently unsetting fields the
-// admin UI didn't send.
-function buildMenuUpdates(menuData: any) {
-  const updates: Record<string, any> = {
-    name: menuData.name,
-    location: menuData.location,
-    display: menuData.display,
-  };
+function validateTree(items: any[], depth = 1, cap = MAX_DEPTH): string | null {
+  if (!Array.isArray(items)) return "items must be an array";
+  if (depth > cap) return `Menu items exceed max depth of ${cap}`;
 
-  const passthrough = [
-    "description",
-    "image",
-    "collectionId",
-    "link",
-    "ctaText",
-    "ctaLink",
-    "position",
-    "columns",
-    "maxDepth",
-    "showImages",
-    "backgroundColor",
-    "backgroundImage",
-    "isSticky",
-    "sectionTitle",
-  ];
+  for (const item of items) {
+    if (!item.label?.trim()) return "Every menu item needs a label";
+    if (!LINK_TYPES.includes(item.type))
+      return `Invalid link type: ${item.type}`;
 
-  for (const key of passthrough) {
-    if (menuData[key] !== undefined) {
-      updates[key] = menuData[key] === "" ? null : menuData[key];
+    const needsRef = (REF_TYPES as readonly string[]).includes(item.type);
+    if (needsRef) {
+      if (!item.refId) return `"${item.label}" needs a ${item.type} reference`;
+      if (!mongoose.Types.ObjectId.isValid(item.refId)) {
+        return `"${item.label}" has an invalid refId`;
+      }
+      if (item.refModel && !REF_MODELS.includes(item.refModel)) {
+        return `"${item.label}" has an invalid refModel`;
+      }
+    } else if (!item.url?.trim()) {
+      return `"${item.label}" needs a URL`;
+    }
+
+    if (
+      item.submenuDisplay &&
+      !SUBMENU_DISPLAY_TYPES.includes(item.submenuDisplay)
+    ) {
+      return `Invalid submenuDisplay on "${item.label}"`;
+    }
+    if (
+      item.columns != null &&
+      !COLUMN_COUNTS.includes(Number(item.columns) as any)
+    ) {
+      return `Invalid columns on "${item.label}"`;
+    }
+    if (item.submenuPosition && !POSITIONS.includes(item.submenuPosition)) {
+      return `Invalid submenuPosition on "${item.label}"`;
+    }
+    if (item.align && !ALIGNMENTS.includes(item.align)) {
+      return `Invalid align on "${item.label}"`;
+    }
+
+    if (Array.isArray(item.children) && item.children.length) {
+      const nested = validateTree(item.children, depth + 1, cap);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+function validateMenuData(menuData: any): string | null {
+  if (!menuData?.name?.trim()) return "Name is required";
+  if (!menuData?.location) return "Location is required";
+  if (!MENU_LOCATIONS.includes(menuData.location)) {
+    return `Invalid location: ${menuData.location}`;
+  }
+  if (!MENU_DISPLAY_TYPES.includes(menuData.display)) {
+    return `Invalid display: ${menuData.display}`;
+  }
+
+  if (
+    menuData.columns != null &&
+    !COLUMN_COUNTS.includes(Number(menuData.columns) as any)
+  ) {
+    return "Invalid columns";
+  }
+
+  const cap = Math.min(menuData.maxDepth ?? MAX_DEPTH, MAX_DEPTH);
+  if (menuData.maxDepth != null) {
+    const n = Number(menuData.maxDepth);
+    if (!Number.isInteger(n) || n < 1 || n > MAX_DEPTH) {
+      return `maxDepth must be 1–${MAX_DEPTH}`;
     }
   }
 
-  updates.order = menuData.order ?? 0;
+  const treeErr = validateTree(menuData.items ?? [], 1, cap);
+  if (treeErr) return treeErr;
+
+  const dcErr = validateDisplayConfig(menuData.displayConfig);
+  if (dcErr) return dcErr;
+
+  return null;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Update builder                                */
+/* -------------------------------------------------------------------------- */
+
+const PASSTHROUGH_FIELDS = [
+  "description",
+  "image",
+  "backgroundColor",
+  "backgroundImage",
+] as const;
+
+function sanitizeTree(items: any[]): any[] {
+  return items.map((raw) => {
+    const isRef = (REF_TYPES as readonly string[]).includes(raw.type);
+    return {
+      _id:
+        raw._id && mongoose.Types.ObjectId.isValid(raw._id)
+          ? raw._id
+          : undefined,
+      label: raw.label?.trim() ?? "",
+      type: raw.type,
+      refId: isRef ? raw.refId || null : null,
+      refModel: isRef ? (REF_MODEL_BY_TYPE[raw.type] ?? null) : null,
+      url: isRef ? "" : (raw.url ?? ""),
+      icon: raw.icon || null,
+      badge: raw.badge || null,
+      openInNewTab: !!raw.openInNewTab,
+      isVisible: raw.isVisible !== false,
+      submenuDisplay: raw.submenuDisplay || null,
+      columns: raw.columns ?? 3,
+      submenuPosition: raw.submenuPosition ?? "bottom-start",
+      align: raw.align ?? "start",
+      featured: raw.featured
+        ? {
+            image: raw.featured.image || "",
+            title: raw.featured.title || "",
+            href: raw.featured.href || "",
+            ctaText: raw.featured.ctaText || "",
+            badge: raw.featured.badge || "",
+          }
+        : null,
+      children: Array.isArray(raw.children) ? sanitizeTree(raw.children) : [],
+    };
+  });
+}
+
+function buildMenuUpdates(menuData: any) {
+  const location = menuData.location as string;
+
+  const updates: Record<string, any> = {
+    name: menuData.name,
+    location,
+    display: menuData.display,
+    items: sanitizeTree(menuData.items ?? []),
+  };
+
+  for (const key of PASSTHROUGH_FIELDS) {
+    if (menuData[key] === undefined) continue;
+
+    // Strip fields the location doesn't support so a menu moved between
+    // locations doesn't carry stale values the renderer will ignore.
+    if (
+      key === "backgroundColor" &&
+      !supportsMenuFeature(location, "background")
+    ) {
+      updates[key] = "#ffffff";
+      continue;
+    }
+    if (
+      key === "backgroundImage" &&
+      !supportsMenuFeature(location, "background")
+    ) {
+      updates[key] = null;
+      continue;
+    }
+    if (key === "image" && !supportsMenuFeature(location, "mainImage")) {
+      updates[key] = null;
+      continue;
+    }
+
+    updates[key] = menuData[key] === "" ? null : menuData[key];
+  }
+
+  for (const key of BOOLEAN_FIELDS) {
+    if (menuData[key] !== undefined) updates[key] = !!menuData[key];
+  }
+  for (const key of NUMBER_FIELDS) {
+    if (menuData[key] !== undefined && menuData[key] !== null) {
+      const n = Number(menuData[key]);
+      if (!isNaN(n)) updates[key] = n;
+    }
+  }
+
+  if (menuData.displayConfig !== undefined) {
+    updates.displayConfig = {
+      ...DEFAULT_DISPLAY_CONFIG,
+      ...(menuData.displayConfig ?? {}),
+    };
+  }
+
+  if (updates.order === undefined) updates.order = menuData.order ?? 0;
   return updates;
 }
 
-// ---------- Create a new menu (admin) ----------
-export async function createMenu(menuData: any) {
+/* -------------------------------------------------------------------------- */
+/*                              S3 asset helpers                              */
+/* -------------------------------------------------------------------------- */
+
+function collectTreeFeaturedImages(items?: IMenuItem[]): string[] {
+  if (!items?.length) return [];
+  return items.flatMap((item) => [
+    ...(item.featured?.image ? [item.featured.image] : []),
+    ...collectTreeFeaturedImages(item.children ?? []),
+  ]);
+}
+
+function diffRemoved(oldList: string[], nextList: string[]): string[] {
+  const next = new Set(nextList);
+  return oldList.filter((img) => !next.has(img));
+}
+
+async function safeDeleteS3(key: string, label = "menu asset") {
+  try {
+    await deleteS3Object(key);
+  } catch (err) {
+    console.error(`Failed to delete ${label}:`, key, err);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Mutations                                  */
+/* -------------------------------------------------------------------------- */
+
+export async function createMenu(menuData: any): Promise<ActionResult<any>> {
   try {
     await connection();
 
     const validationError = validateMenuData(menuData);
     if (validationError) return { success: false, error: validationError };
 
-    // Duplicate name check
     const existing = await Menu.findOne({ name: menuData.name.trim() });
     if (existing) {
-      return {
-        success: false,
-        error: "A menu with this name already exists",
-      };
+      return { success: false, error: "A menu with this name already exists" };
     }
 
     const newMenu = new Menu(buildMenuUpdates(menuData));
@@ -398,8 +513,10 @@ export async function createMenu(menuData: any) {
   }
 }
 
-// ---------- Update an existing menu (admin) ----------
-export async function updateMenu(id: string, menuData: any) {
+export async function updateMenu(
+  id: string,
+  menuData: any,
+): Promise<ActionResult<any>> {
   try {
     await connection();
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -412,7 +529,6 @@ export async function updateMenu(id: string, menuData: any) {
     const current = await Menu.findById(id);
     if (!current) return { success: false, error: "Menu not found" };
 
-    // Duplicate name check excluding self
     const dup = await Menu.findOne({
       _id: { $ne: current._id },
       name: menuData.name.trim(),
@@ -424,28 +540,42 @@ export async function updateMenu(id: string, menuData: any) {
       };
     }
 
-    // Detect replaced images so we can clean up S3 after a successful save.
-    const oldImage = current.image;
-    const oldBackground = current.backgroundImage;
+    const oldLocation = current.location ?? "";
+    const nextLocation = (menuData.location ?? "") as string;
+    const locationChanged = oldLocation !== nextLocation;
+
+    const oldAssets = {
+      image: current.image,
+      background: current.backgroundImage,
+      featured: collectTreeFeaturedImages(current.items),
+    };
 
     const updates = buildMenuUpdates(menuData);
     Object.assign(current, updates);
     await current.save();
 
-    if (oldImage && oldImage !== current.image) {
-      try {
-        await deleteS3Object(oldImage);
-      } catch (err) {
-        console.error("Failed to delete old menu image:", err);
-      }
+    if (oldAssets.image && oldAssets.image !== current.image) {
+      await safeDeleteS3(oldAssets.image, "menu image");
     }
-    if (oldBackground && oldBackground !== current.backgroundImage) {
-      try {
-        await deleteS3Object(oldBackground);
-      } catch (err) {
-        console.error("Failed to delete old menu background image:", err);
-      }
+
+    // Preserve background assets when the menu just moved locations. A
+    // NavBar menu can't carry a background image, but if the admin moves
+    // it back to Banner later they shouldn't have to re-upload.
+    if (
+      oldAssets.background &&
+      oldAssets.background !== current.backgroundImage &&
+      !locationChanged
+    ) {
+      await safeDeleteS3(oldAssets.background, "menu background");
     }
+
+    for (const key of diffRemoved(
+      oldAssets.featured,
+      collectTreeFeaturedImages(current.items),
+    )) {
+      await safeDeleteS3(key, "featured image");
+    }
+
     revalidateMenuConsumers();
     revalidatePath(`${MENUS_LIST_PATH}/edit/${id}`);
     return {
@@ -458,40 +588,39 @@ export async function updateMenu(id: string, menuData: any) {
   }
 }
 
-// ---------- Delete a menu (admin) ----------
-export async function deleteMenu(id: string) {
+export async function deleteMenu(id: string): Promise<ActionResult<null>> {
   try {
     await connection();
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return { success: false, error: "Invalid menu ID" };
     }
 
-    // Find first so we can clean up S3 assets.
     const menu = await Menu.findById(id);
     if (!menu) return { success: false, error: "Menu not found" };
 
-    // Delete S3 assets BEFORE deleting the document, so we don't orphan them.
-    for (const key of [menu.image, menu.backgroundImage]) {
-      if (key) {
-        try {
-          await deleteS3Object(key);
-        } catch (err) {
-          console.error("Failed to delete menu S3 asset:", key, err);
-        }
-      }
+    for (const key of [
+      menu.image,
+      menu.backgroundImage,
+      ...collectTreeFeaturedImages(menu.items),
+    ]) {
+      if (key) await safeDeleteS3(key, "menu asset");
     }
 
     await Menu.findByIdAndDelete(id);
-
     revalidateMenuConsumers();
-    return { success: true, message: "Menu deleted successfully" };
+    return { success: true, data: null, message: "Menu deleted successfully" };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-// ---------- Delete background image from a menu (admin) ----------
-export async function deleteMenuBackgroundImage(menuId: string) {
+/* -------------------------------------------------------------------------- */
+/*                              Media cleanups                                */
+/* -------------------------------------------------------------------------- */
+
+export async function deleteMenuBackgroundImage(
+  menuId: string,
+): Promise<ActionResult<null>> {
   try {
     await connection();
     if (!mongoose.Types.ObjectId.isValid(menuId)) {
@@ -502,19 +631,19 @@ export async function deleteMenuBackgroundImage(menuId: string) {
     if (!menu.backgroundImage) {
       return { success: false, error: "No background image to delete" };
     }
-    await deleteS3Object(menu.backgroundImage);
+    await safeDeleteS3(menu.backgroundImage, "menu background");
     menu.backgroundImage = "";
     await menu.save();
     revalidateMenuConsumers();
-    return { success: true, message: "Background image removed successfully" };
-  } catch (error) {
-    console.error("Error deleting menu background image:", error);
+    return { success: true, data: null, message: "Background image removed" };
+  } catch (error: any) {
     return { success: false, error: "Failed to delete image" };
   }
 }
 
-// ---------- Delete main image from a menu (admin) ----------
-export async function deleteMenuImage(menuId: string) {
+export async function deleteMenuImage(
+  menuId: string,
+): Promise<ActionResult<null>> {
   try {
     await connection();
     if (!mongoose.Types.ObjectId.isValid(menuId)) {
@@ -522,16 +651,13 @@ export async function deleteMenuImage(menuId: string) {
     }
     const menu = await Menu.findById(menuId);
     if (!menu) return { success: false, error: "Menu not found" };
-    if (!menu.image) {
-      return { success: false, error: "No image to delete" };
-    }
-    await deleteS3Object(menu.image);
+    if (!menu.image) return { success: false, error: "No image to delete" };
+    await safeDeleteS3(menu.image, "menu image");
     menu.image = "";
     await menu.save();
     revalidateMenuConsumers();
-    return { success: true, message: "Image removed successfully" };
-  } catch (error) {
-    console.error("Error deleting menu image:", error);
+    return { success: true, data: null, message: "Image removed" };
+  } catch (error: any) {
     return { success: false, error: "Failed to delete image" };
   }
 }

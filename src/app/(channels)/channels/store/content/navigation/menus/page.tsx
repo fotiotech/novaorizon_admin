@@ -19,26 +19,63 @@ import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 import { toast } from "react-hot-toast";
 
 // ------------------------------------------------------------------
-// Types
+// Base path — this page lives under /channels/store/content/navigation/menus. Keep edit/create
+// links derived from it so they can't drift apart.
 // ------------------------------------------------------------------
+const BASE_PATH = "/channels/store/content/navigation/menus";
+
+// ------------------------------------------------------------------
+// Types — mirror models/Menu.ts and lib/menu/constants.ts
+// ------------------------------------------------------------------
+type LinkType = "category" | "product" | "collection" | "page" | "custom";
+type MenuDisplayType = "horizontal" | "vertical" | "mega";
+type MenuTheme = "light" | "dark" | "inherit";
+type SubmenuDisplayType = "dropdown" | "flyout" | "mega" | "grid" | "accordion";
+
+interface MenuItemNode {
+  _id?: string;
+  label?: string;
+  type?: LinkType;
+  refId?: string | null;
+  refModel?: string | null;
+  url?: string;
+  icon?: string | null;
+  badge?: string | null;
+  isVisible?: boolean;
+  submenuDisplay?: SubmenuDisplayType | null;
+  children?: MenuItemNode[];
+}
+
+interface MenuDisplayConfig {
+  alignment?: string;
+  gap?: number;
+  animation?: string;
+  showCaret?: boolean;
+  megaWidth?: string;
+  theme?: MenuTheme;
+  borderless?: boolean;
+  rounded?: boolean;
+  shadow?: boolean;
+}
+
 interface Menu {
   _id: string;
   name: string;
   description?: string;
   image?: string;
-  collectionId?: string | { _id: string; name: string } | null;
-  link?: string;
+  items?: MenuItemNode[];
   location?: string;
-  display: string;
-  position?: string;
+  order: number;
+  isSticky?: boolean;
+  visible?: boolean;
+  display: MenuDisplayType;
   columns?: number;
   maxDepth?: number;
   showImages?: boolean;
+  displayConfig?: MenuDisplayConfig;
   backgroundColor?: string;
   backgroundImage?: string;
-  isSticky?: boolean;
   sectionTitle?: string;
-  order: number;
   createdAt?: string;
   updatedAt?: string;
   created_at?: string;
@@ -50,6 +87,18 @@ interface Menu {
 // ------------------------------------------------------------------
 const INPUT_CLASS =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
+
+const DISPLAY_LABEL: Record<MenuDisplayType, string> = {
+  horizontal: "Horizontal",
+  vertical: "Vertical",
+  mega: "Mega",
+};
+
+const THEME_SWATCH: Record<MenuTheme, string> = {
+  light: "bg-white border-neutral-300",
+  dark: "bg-neutral-900 border-neutral-700",
+  inherit: "bg-muted border-border",
+};
 
 // ------------------------------------------------------------------
 // Helpers
@@ -65,18 +114,48 @@ const formatDate = (dateString?: string) => {
   });
 };
 
-const getContentSource = (menu: Menu) => {
-  if (menu.collectionId) {
-    if (typeof menu.collectionId === "object" && menu.collectionId.name) {
-      return `Collection: ${menu.collectionId.name}`;
+function countTreeItems(items?: MenuItemNode[]): number {
+  if (!items?.length) return 0;
+  return items.reduce((sum, i) => sum + 1 + countTreeItems(i.children), 0);
+}
+
+function collectLinkTypes(items?: MenuItemNode[]): string[] {
+  const types = new Set<string>();
+  const walk = (list?: MenuItemNode[]) => {
+    for (const item of list ?? []) {
+      if (item.type) types.add(item.type);
+      if (item.children?.length) walk(item.children);
     }
-    return `Collection ID: ${menu.collectionId}`;
-  }
-  if (menu.link) {
-    return `Link: ${menu.link}`;
-  }
-  return "—";
-};
+  };
+  walk(items);
+  return Array.from(types);
+}
+
+function getItemsSummary(menu: Menu): string {
+  const count = countTreeItems(menu.items);
+  if (count === 0) return "No items";
+  const types = collectLinkTypes(menu.items);
+  const typeStr = types.length ? types.join(" · ") : "—";
+  return `${count} item${count === 1 ? "" : "s"} · ${typeStr}`;
+}
+
+function getTheme(menu: Menu): MenuTheme {
+  return menu.displayConfig?.theme ?? "light";
+}
+
+// ------------------------------------------------------------------
+// Status dot (visible / hidden)
+// ------------------------------------------------------------------
+function StatusDot({ visible }: { visible: boolean }) {
+  return (
+    <span
+      title={visible ? "Visible" : "Hidden"}
+      className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+        visible ? "bg-emerald-500" : "bg-muted-foreground/40"
+      }`}
+    />
+  );
+}
 
 // ------------------------------------------------------------------
 // Empty state
@@ -115,7 +194,7 @@ const EmptyState = memo(function EmptyState({
           </button>
         ) : (
           <Link
-            href="/marketing/content/navigation/menus/create"
+            href={`${BASE_PATH}/create`}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             <Add fontSize="small" />
@@ -126,6 +205,41 @@ const EmptyState = memo(function EmptyState({
     </div>
   );
 });
+
+// ------------------------------------------------------------------
+// Display summary cell (layout + theme + columns + sticky)
+// ------------------------------------------------------------------
+function DisplayCell({ menu }: { menu: Menu }) {
+  const theme = getTheme(menu);
+  const isGrid = menu.display === "mega" || menu.display === "vertical";
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="text-sm text-foreground">
+        {DISPLAY_LABEL[menu.display] ?? menu.display}
+      </span>
+
+      <span
+        title={`Theme: ${theme}`}
+        className={`inline-block h-3 w-3 rounded-full border ${
+          THEME_SWATCH[theme]
+        }`}
+      />
+
+      {menu.columns != null && isGrid && (
+        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+          {menu.columns} col
+        </span>
+      )}
+
+      {menu.isSticky && (
+        <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+          Sticky
+        </span>
+      )}
+    </div>
+  );
+}
 
 // ------------------------------------------------------------------
 // Main component
@@ -143,7 +257,7 @@ const MenuPage = () => {
       setLoading(true);
       const result = await getAllMenus();
       if (result.success) {
-        setMenus(result.data || []);
+        setMenus((result.data as Menu[]) || []);
         setError(null);
       } else {
         setError(result.error || "Failed to fetch menus");
@@ -177,7 +291,6 @@ const MenuPage = () => {
         toast.success(`"${removed.name}" deleted`);
         setDeleteTarget(null);
       } else {
-        // Restore at original position
         setMenus((prev) => {
           const copy = [...prev];
           copy.splice(index, 0, removed);
@@ -201,7 +314,13 @@ const MenuPage = () => {
     const q = query.trim().toLowerCase();
     if (!q) return menus;
     return menus.filter((m) => {
-      const haystack = [m.name, m.description, m.location, m.sectionTitle]
+      const haystack = [
+        m.name,
+        m.description,
+        m.location,
+        m.sectionTitle,
+        m.display,
+      ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -216,7 +335,7 @@ const MenuPage = () => {
       key: "edit",
       label: "Edit menu",
       icon: <Edit fontSize="small" />,
-      href: `/channels/store/content/navigation/menus/edit?id=${menu._id}`,
+      href: `${BASE_PATH}/edit?id=${menu._id}`,
     },
     {
       key: "delete",
@@ -227,7 +346,7 @@ const MenuPage = () => {
     },
   ];
 
-  // ---------------- Early exits ----------------
+  // ---------------- Loading skeleton ----------------
   if (loading && menus.length === 0) {
     return (
       <div className="mx-auto w-full max-w-7xl overflow-x-clip">
@@ -252,6 +371,7 @@ const MenuPage = () => {
     );
   }
 
+  // ---------------- Error state ----------------
   if (error && menus.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
@@ -272,7 +392,7 @@ const MenuPage = () => {
   return (
     <div className="mx-auto w-full max-w-7xl overflow-x-clip">
       {/* -------------------------------------------------------------- */}
-      {/* Controls — no title (top bar renders the page name)            */}
+      {/* Controls                                                        */}
       {/* -------------------------------------------------------------- */}
       <div className="mb-4 flex items-center gap-2">
         <div className="relative min-w-0 max-w-sm flex-1">
@@ -304,7 +424,7 @@ const MenuPage = () => {
         <div className="flex-1" />
 
         <Link
-          href="/marketing/content/navigation/menus/create"
+          href={`${BASE_PATH}/create`}
           className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
         >
           <Add fontSize="small" />
@@ -348,7 +468,7 @@ const MenuPage = () => {
                     Order
                   </th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Content source
+                    Items
                   </th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Location
@@ -375,99 +495,91 @@ const MenuPage = () => {
                     </td>
                   </tr>
                 ) : (
-                  visibleMenus.map((menu) => (
-                    <tr
-                      key={menu._id}
-                      className="group transition-colors hover:bg-muted/40"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded bg-muted">
-                            {menu.image ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={menu.image}
-                                alt={menu.name}
-                                loading="lazy"
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <MenuOpen
-                                fontSize="small"
-                                className="text-muted-foreground"
-                              />
-                            )}
+                  visibleMenus.map((menu) => {
+                    const isVisible = menu.visible !== false;
+                    return (
+                      <tr
+                        key={menu._id}
+                        className="group transition-colors hover:bg-muted/40"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded bg-muted">
+                              {menu.image ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={menu.image}
+                                  alt={menu.name}
+                                  loading="lazy"
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <MenuOpen
+                                  fontSize="small"
+                                  className="text-muted-foreground"
+                                />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <StatusDot visible={isVisible} />
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {menu.name}
+                                </p>
+                              </div>
+                              {menu.sectionTitle && (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  Section: {menu.sectionTitle}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-foreground">
-                              {menu.name}
-                            </p>
-                            {menu.sectionTitle && (
-                              <p className="truncate text-xs text-muted-foreground">
-                                Section: {menu.sectionTitle}
-                              </p>
-                            )}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="truncate text-sm text-foreground">
+                            {menu.order}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="truncate text-sm text-foreground">
-                          {menu.order}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="truncate text-sm text-foreground">
-                          {getContentSource(menu)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="truncate text-sm text-foreground">
-                          {menu.location || "—"}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                          <span className="capitalize">{menu.display}</span>
-                          {menu.position && (
-                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
-                              {menu.position}
-                            </span>
-                          )}
-                          {menu.columns && (
-                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
-                              {menu.columns} col
-                            </span>
-                          )}
-                          {menu.isSticky && (
-                            <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                              Sticky
-                            </span>
-                          )}
-                          {menu.backgroundColor && (
-                            <span
-                              className="inline-block h-3 w-3 rounded-full border border-border"
-                              style={{ backgroundColor: menu.backgroundColor }}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div
+                            className="truncate text-sm text-foreground"
+                            title={getItemsSummary(menu)}
+                          >
+                            {getItemsSummary(menu)}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="truncate text-sm text-foreground">
+                            {menu.location || "—"}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <DisplayCell menu={menu} />
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="truncate text-sm text-muted-foreground">
+                            {formatDate(menu.createdAt ?? menu.created_at)}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end">
+                            <PopoverMenu
+                              items={getMenuItems(menu)}
+                              ariaLabel={`Actions for ${menu.name}`}
+                              trigger={<MoreVert fontSize="small" />}
+                              align="right"
                             />
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="truncate text-sm text-muted-foreground">
-                          {formatDate(menu.createdAt ?? menu.created_at)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end">
-                          <PopoverMenu
-                            items={getMenuItems(menu)}
-                            ariaLabel={`Actions for ${menu.name}`}
-                            trigger={<MoreVert fontSize="small" />}
-                            align="right"
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -483,71 +595,88 @@ const MenuPage = () => {
             />
           ) : (
             <ul className="divide-y divide-border">
-              {visibleMenus.map((menu) => (
-                <li key={menu._id} className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded bg-muted">
-                      {menu.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={menu.image}
-                          alt={menu.name}
-                          loading="lazy"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <MenuOpen
-                          fontSize="small"
-                          className="text-muted-foreground"
-                        />
-                      )}
-                    </div>
+              {visibleMenus.map((menu) => {
+                const isVisible = menu.visible !== false;
+                const theme = getTheme(menu);
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {menu.name}
-                      </p>
-                      {menu.sectionTitle && (
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          Section: {menu.sectionTitle}
-                        </p>
-                      )}
-
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="capitalize">{menu.display}</span>
-                        {menu.location && (
-                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
-                            {menu.location}
-                          </span>
-                        )}
-                        {menu.isSticky && (
-                          <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                            Sticky
-                          </span>
+                return (
+                  <li key={menu._id} className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded bg-muted">
+                        {menu.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={menu.image}
+                            alt={menu.name}
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <MenuOpen
+                            fontSize="small"
+                            className="text-muted-foreground"
+                          />
                         )}
                       </div>
 
-                      <p className="mt-2 truncate text-xs text-muted-foreground">
-                        {getContentSource(menu)}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <StatusDot visible={isVisible} />
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {menu.name}
+                          </p>
+                        </div>
 
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Order {menu.order} ·{" "}
-                        {formatDate(menu.createdAt ?? menu.created_at)}
-                      </p>
-                    </div>
+                        {menu.sectionTitle && (
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            Section: {menu.sectionTitle}
+                          </p>
+                        )}
 
-                    <div className="flex-none">
-                      <PopoverMenu
-                        items={getMenuItems(menu)}
-                        ariaLabel={`Actions for ${menu.name}`}
-                        trigger={<MoreVert fontSize="small" />}
-                        align="right"
-                      />
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="capitalize">
+                            {DISPLAY_LABEL[menu.display] ?? menu.display}
+                          </span>
+                          <span
+                            title={`Theme: ${theme}`}
+                            className={`inline-block h-3 w-3 rounded-full border ${
+                              THEME_SWATCH[theme]
+                            }`}
+                          />
+                          {menu.location && (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+                              {menu.location}
+                            </span>
+                          )}
+                          {menu.isSticky && (
+                            <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                              Sticky
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="mt-2 truncate text-xs text-muted-foreground">
+                          {getItemsSummary(menu)}
+                        </p>
+
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Order {menu.order} ·{" "}
+                          {formatDate(menu.createdAt ?? menu.created_at)}
+                        </p>
+                      </div>
+
+                      <div className="flex-none">
+                        <PopoverMenu
+                          items={getMenuItems(menu)}
+                          ariaLabel={`Actions for ${menu.name}`}
+                          trigger={<MoreVert fontSize="small" />}
+                          align="right"
+                        />
+                      </div>
                     </div>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

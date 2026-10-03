@@ -1,134 +1,1006 @@
+// components/MenuForm.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getMenuById,
   createMenu,
   updateMenu,
+  getMenuRefOptions,
   deleteMenuBackgroundImage,
-  deleteMenuImage, // 👈 new
+  deleteMenuImage,
+  type MenuRefOptions,
 } from "@/app/actions/menu";
-import { getAllCollections } from "@/app/actions/collection";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import FilesUploader from "@/components/FilesUploader";
 import useFileUploader from "@/hooks/useFileUploader";
+import {
+  MENU_LOCATIONS,
+  SUBMENU_DISPLAY_TYPES,
+  ALIGNMENTS,
+  POSITIONS,
+  ANIMATIONS,
+  COLUMN_COUNTS,
+  LINK_TYPES,
+  REF_TYPES,
+  REF_MODEL_BY_TYPE,
+  MAX_DEPTH,
+  type LinkType,
+  type SubmenuDisplayType,
+  type Alignment,
+  type Position,
+  type MenuDisplayType,
+} from "@/lib/menu/constants";
+import {
+  getCapabilities,
+  supportsMenuFeature,
+  availableDisplays,
+  locationHint,
+  displayWarning,
+  snapDisplay,
+  defaultSubmenuDisplay,
+  type LocationCapabilities,
+  type MenuFeatureKey,
+} from "@/lib/menu/capabilities";
+import {
+  DEFAULT_DISPLAY_CONFIG,
+  MENU_THEMES,
+  type IMenuDisplayConfig,
+  type IMenuFeaturedSlot,
+} from "@/models/Menu";
 
-interface MenuFormProps {
-  id?: string;
+/* -------------------------------------------------------------------------- */
+/*                                    Types                                   */
+/* -------------------------------------------------------------------------- */
+
+type UiItem = {
+  _key: string;
+  _id?: string;
+  label: string;
+  type: LinkType;
+  refId: string | null;
+  refModel: string | null;
+  url: string;
+  icon: string | null;
+  badge: string | null;
+  openInNewTab: boolean;
+  isVisible: boolean;
+  submenuDisplay: SubmenuDisplayType | null;
+  columns: number;
+  submenuPosition: Position;
+  align: Alignment;
+  featured: IMenuFeaturedSlot | null;
+  children: UiItem[];
+};
+
+interface MenuFormState {
+  name: string;
+  description: string;
+  image: string;
+  items: UiItem[];
+  location: string;
+  order: number;
+  isSticky: boolean;
+  visible: boolean;
+  display: MenuDisplayType;
+  columns: number;
+  maxDepth: number;
+  showImages: boolean;
+  displayConfig: IMenuDisplayConfig;
+  backgroundColor: string;
+  backgroundImage: string;
 }
 
-const emptyMenu = {
+/* -------------------------------------------------------------------------- */
+/*                            Item constructors                               */
+/* -------------------------------------------------------------------------- */
+
+const baseItem = (): UiItem => ({
+  _key: crypto.randomUUID(),
+  label: "",
+  type: "custom",
+  refId: null,
+  refModel: null,
+  url: "",
+  icon: null,
+  badge: null,
+  openInNewTab: false,
+  isVisible: true,
+  submenuDisplay: null,
+  columns: 3,
+  submenuPosition: "bottom-start",
+  align: "start",
+  featured: null,
+  children: [],
+});
+
+const makeItemForLocation = (location: string): UiItem => ({
+  ...baseItem(),
+  submenuDisplay: defaultSubmenuDisplay(location),
+});
+
+const emptyMenu: MenuFormState = {
   name: "",
   description: "",
-  collectionId: "",
-  link: "",
-  ctaText: "",
-  ctaLink: "",
-  location: "Home" as const,
-  display: "List" as const,
-  position: "left" as const,
+  image: "",
+  items: [],
+  location: "NavBar",
+  order: 0,
+  isSticky: false,
+  visible: true,
+  display: "horizontal",
   columns: 4,
   maxDepth: 2,
   showImages: false,
+  displayConfig: { ...DEFAULT_DISPLAY_CONFIG },
   backgroundColor: "#ffffff",
   backgroundImage: "",
-  image: "", // 👈 main image
-  isSticky: false,
-  sectionTitle: "",
-  order: 0,
 };
 
 const NUMERIC_FIELDS = new Set(["order", "columns", "maxDepth"]);
 
-const MenuForm = ({ id }: MenuFormProps) => {
+/* -------------------------------------------------------------------------- */
+/*                              Tree utilities                                */
+/* -------------------------------------------------------------------------- */
+
+function getAtPath(items: UiItem[], path: number[]): UiItem | undefined {
+  let list = items;
+  let current: UiItem | undefined;
+  for (const i of path) {
+    current = list[i];
+    if (!current) return undefined;
+    list = current.children;
+  }
+  return current;
+}
+
+function updateChildrenAtPath(
+  items: UiItem[],
+  path: number[],
+  updater: (children: UiItem[]) => UiItem[],
+): UiItem[] {
+  if (!path.length) return updater(items);
+  const [head, ...rest] = path;
+  return items.map((item, i) =>
+    i === head
+      ? {
+          ...item,
+          children: updateChildrenAtPath(item.children, rest, updater),
+        }
+      : item,
+  );
+}
+
+function updateAtPath(
+  items: UiItem[],
+  path: number[],
+  updater: (n: UiItem) => UiItem,
+): UiItem[] {
+  if (!path.length) return items;
+  const [head, ...rest] = path;
+  return items.map((item, i) => {
+    if (i !== head) return item;
+    if (!rest.length) return updater(item);
+    return { ...item, children: updateAtPath(item.children, rest, updater) };
+  });
+}
+
+function insertAtPath(
+  items: UiItem[],
+  parentPath: number[],
+  node: UiItem,
+): UiItem[] {
+  return updateChildrenAtPath(items, parentPath, (list) => [...list, node]);
+}
+
+function removeAtPath(items: UiItem[], path: number[]): UiItem[] {
+  if (!path.length) return items;
+  const parentPath = path.slice(0, -1);
+  const index = path[path.length - 1];
+  return updateChildrenAtPath(items, parentPath, (list) =>
+    list.filter((_, i) => i !== index),
+  );
+}
+
+function moveAtPath(items: UiItem[], path: number[], dir: -1 | 1): UiItem[] {
+  if (!path.length) return items;
+  const parentPath = path.slice(0, -1);
+  const index = path[path.length - 1];
+  const siblings = parentPath.length
+    ? (getAtPath(items, parentPath)?.children ?? [])
+    : items;
+  const target = index + dir;
+  if (target < 0 || target >= siblings.length) return items;
+  return updateChildrenAtPath(items, parentPath, (list) => {
+    const next = [...list];
+    [next[index], next[target]] = [next[target], next[index]];
+    return next;
+  });
+}
+
+function countTree(items: UiItem[]): number {
+  return items.reduce((sum, i) => sum + 1 + countTree(i.children), 0);
+}
+
+function countHidden(items: UiItem[]): number {
+  return items.reduce(
+    (sum, i) => sum + (i.isVisible ? 0 : 1) + countHidden(i.children),
+    0,
+  );
+}
+
+function toPayloadItems(items: UiItem[]): unknown[] {
+  return items.map(({ _key, _id, children, ...rest }) => ({
+    ...(_id ? { _id } : {}),
+    ...rest,
+    children: toPayloadItems(children),
+  }));
+}
+
+function fromApiItems(raw: any[]): UiItem[] {
+  return (raw ?? []).map((item) => ({
+    _key: crypto.randomUUID(),
+    _id: item._id ? String(item._id) : undefined,
+    label: item.label ?? "",
+    type: item.type ?? "custom",
+    refId: item.refId ? String(item.refId) : null,
+    refModel: item.refModel ?? null,
+    url: item.url ?? "",
+    icon: item.icon ?? null,
+    badge: item.badge ?? null,
+    openInNewTab: !!item.openInNewTab,
+    isVisible: item.isVisible !== false,
+    submenuDisplay: item.submenuDisplay ?? null,
+    columns: item.columns ?? 3,
+    submenuPosition: item.submenuPosition ?? "bottom-start",
+    align: item.align ?? "start",
+    featured: item.featured ?? null,
+    children: fromApiItems(item.children ?? []),
+  }));
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Primitive atoms                               */
+/* -------------------------------------------------------------------------- */
+
+const inputCls =
+  "w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary";
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium text-foreground">
+        {label}
+      </span>
+      {children}
+      {hint ? (
+        <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>
+      ) : null}
+    </label>
+  );
+}
+
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <header className="mb-4">
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        {description ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+        ) : null}
+      </header>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function BooleanChoice({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        {hint ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+        ) : null}
+      </div>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        className="inline-flex shrink-0 overflow-hidden rounded-md border border-border bg-muted/40 p-0.5"
+      >
+        <button
+          type="button"
+          role="radio"
+          aria-checked={value}
+          onClick={() => onChange(true)}
+          className={`rounded px-3 py-1 text-xs font-semibold transition ${
+            value
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Yes
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={!value}
+          onClick={() => onChange(false)}
+          className={`rounded px-3 py-1 text-xs font-semibold transition ${
+            !value
+              ? "bg-foreground text-background shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          No
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MiniSwitch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      title={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${
+        checked ? "bg-primary" : "bg-muted-foreground/30"
+      }`}
+    >
+      <span
+        className={`inline-block size-3.5 transform rounded-full bg-white shadow transition-transform ${
+          checked ? "translate-x-[18px]" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Tree editor                                   */
+/* -------------------------------------------------------------------------- */
+
+type TreeCtx = {
+  patch: (path: number[], changes: Partial<UiItem>) => void;
+  remove: (path: number[]) => void;
+  move: (path: number[], dir: -1 | 1) => void;
+  addChild: (parentPath: number[]) => void;
+  refOptions: MenuRefOptions;
+  menuMaxDepth: number;
+  caps: LocationCapabilities;
+};
+
+function TreeEditor({
+  items,
+  parentPath,
+  depth,
+  ctx,
+}: {
+  items: UiItem[];
+  parentPath: number[];
+  depth: number;
+  ctx: TreeCtx;
+}) {
+  const canNest = depth < ctx.menuMaxDepth - 1;
+
+  return (
+    <ul
+      className={
+        depth ? "mt-2 space-y-2 border-l-2 border-border/60 pl-4" : "space-y-2"
+      }
+    >
+      {items.map((item, i) => (
+        <TreeRow
+          key={item._key}
+          item={item}
+          path={[...parentPath, i]}
+          depth={depth}
+          ctx={ctx}
+          canNest={canNest}
+        />
+      ))}
+      <li>
+        <button
+          type="button"
+          onClick={() => ctx.addChild(parentPath)}
+          className="rounded-md border border-dashed border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
+        >
+          + Add {depth === 0 ? "top-level" : "nested"} item
+        </button>
+      </li>
+    </ul>
+  );
+}
+
+function TreeRow({
+  item,
+  path,
+  depth,
+  ctx,
+  canNest,
+}: {
+  item: UiItem;
+  path: number[];
+  depth: number;
+  ctx: TreeCtx;
+  canNest: boolean;
+}) {
+  const [showDisplay, setShowDisplay] = useState(false);
+  const { caps } = ctx;
+
+  const needsRef = (REF_TYPES as readonly string[]).includes(item.type);
+  const options = item.refModel
+    ? (ctx.refOptions[item.refModel as keyof MenuRefOptions] ?? [])
+    : [];
+
+  const showColumns =
+    item.submenuDisplay === "mega" || item.submenuDisplay === "grid";
+
+  const canSubmenu = caps.itemFeatures.has("submenuDisplay");
+  const canPanelAlign = caps.itemFeatures.has("panelAlignment");
+  const canPanelPos = caps.itemFeatures.has("panelPosition");
+  const canItemColumns = caps.itemFeatures.has("columns");
+  const canFeatured = caps.itemFeatures.has("featured");
+  const canIcon = caps.itemFeatures.has("icon");
+  const canBadge = caps.itemFeatures.has("badge");
+
+  const hasDisplayPanel =
+    canSubmenu || canPanelAlign || canPanelPos || canItemColumns || canIcon;
+
+  const patchFeatured = (changes: Partial<IMenuFeaturedSlot>) => {
+    ctx.patch(path, {
+      featured: {
+        image: "",
+        title: "",
+        href: "",
+        ctaText: "",
+        badge: "",
+        ...(item.featured ?? {}),
+        ...changes,
+      },
+    });
+  };
+
+  return (
+    <li
+      className={`rounded-lg border border-border bg-background p-3 transition-opacity ${
+        item.isVisible ? "" : "opacity-70"
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col">
+          <button
+            type="button"
+            onClick={() => ctx.move(path, -1)}
+            className="text-xs text-muted-foreground hover:text-foreground"
+            aria-label="Move up"
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            onClick={() => ctx.move(path, 1)}
+            className="text-xs text-muted-foreground hover:text-foreground"
+            aria-label="Move down"
+          >
+            ▼
+          </button>
+        </div>
+
+        <input
+          value={item.label}
+          onChange={(e) => ctx.patch(path, { label: e.target.value })}
+          placeholder="Label"
+          className={`${inputCls} max-w-44`}
+        />
+
+        <select
+          value={item.type}
+          onChange={(e) => {
+            const type = e.target.value as LinkType;
+            const isRef = (REF_TYPES as readonly string[]).includes(type);
+            ctx.patch(path, {
+              type,
+              refId: isRef ? item.refId : null,
+              refModel: isRef ? (REF_MODEL_BY_TYPE[type] ?? null) : null,
+              url: isRef ? "" : item.url,
+            });
+          }}
+          className={`${inputCls} max-w-32`}
+        >
+          {LINK_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+
+        {needsRef ? (
+          <select
+            value={item.refId ?? ""}
+            onChange={(e) => ctx.patch(path, { refId: e.target.value || null })}
+            className={`${inputCls} min-w-48 flex-1`}
+          >
+            <option value="">Select {item.type}…</option>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            value={item.url}
+            onChange={(e) => ctx.patch(path, { url: e.target.value })}
+            placeholder="/pages/about"
+            className={`${inputCls} min-w-48 flex-1`}
+          />
+        )}
+
+        {canBadge ? (
+          <input
+            value={item.badge ?? ""}
+            onChange={(e) => ctx.patch(path, { badge: e.target.value || null })}
+            placeholder="Badge"
+            className={`${inputCls} max-w-24`}
+          />
+        ) : null}
+
+        <div className="flex items-center gap-1.5">
+          <MiniSwitch
+            checked={item.isVisible}
+            onChange={(v) => ctx.patch(path, { isVisible: v })}
+            label={item.isVisible ? "Visible" : "Hidden"}
+          />
+          <span
+            className={`text-xs font-medium ${
+              item.isVisible
+                ? "text-emerald-700 dark:text-emerald-400"
+                : "text-muted-foreground"
+            }`}
+          >
+            {item.isVisible ? "Visible" : "Hidden"}
+          </span>
+        </div>
+
+        {hasDisplayPanel ? (
+          <button
+            type="button"
+            onClick={() => setShowDisplay((s) => !s)}
+            className="rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+          >
+            {showDisplay ? "Hide display" : "Display"}
+          </button>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => ctx.remove(path)}
+          className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50"
+        >
+          Remove
+        </button>
+      </div>
+
+      {showDisplay && hasDisplayPanel ? (
+        <div className="mt-3 space-y-3">
+          <div className="grid gap-3 rounded-md border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-3">
+            {canSubmenu ? (
+              <Field label="Submenu reveal">
+                <select
+                  value={item.submenuDisplay ?? ""}
+                  onChange={(e) =>
+                    ctx.patch(path, {
+                      submenuDisplay: (e.target.value ||
+                        null) as SubmenuDisplayType | null,
+                    })
+                  }
+                  className={inputCls}
+                >
+                  <option value="">Default (dropdown)</option>
+                  {SUBMENU_DISPLAY_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+
+            {canPanelAlign ? (
+              <Field label="Panel alignment">
+                <select
+                  value={item.align}
+                  onChange={(e) =>
+                    ctx.patch(path, { align: e.target.value as Alignment })
+                  }
+                  className={inputCls}
+                >
+                  {ALIGNMENTS.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+
+            {canPanelPos ? (
+              <Field label="Panel position">
+                <select
+                  value={item.submenuPosition}
+                  onChange={(e) =>
+                    ctx.patch(path, {
+                      submenuPosition: e.target.value as Position,
+                    })
+                  }
+                  className={inputCls}
+                >
+                  {POSITIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+
+            {canItemColumns ? (
+              <Field label="Columns">
+                <select
+                  value={item.columns}
+                  disabled={!showColumns}
+                  onChange={(e) =>
+                    ctx.patch(path, { columns: Number(e.target.value) })
+                  }
+                  className={`${inputCls} disabled:opacity-40`}
+                >
+                  {COLUMN_COUNTS.map((c) => (
+                    <option key={c} value={c}>
+                      {c} columns
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+
+            {canIcon ? (
+              <Field label="Icon" hint="Emoji or icon name.">
+                <input
+                  value={item.icon ?? ""}
+                  onChange={(e) =>
+                    ctx.patch(path, { icon: e.target.value || null })
+                  }
+                  placeholder="🛍️"
+                  className={inputCls}
+                />
+              </Field>
+            ) : null}
+          </div>
+
+          {canFeatured && showColumns ? (
+            <div className="grid gap-3 rounded-md border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-3">
+              <p className="text-xs font-semibold text-muted-foreground sm:col-span-2 lg:col-span-3">
+                Featured slot (optional)
+              </p>
+              <Field label="Image URL">
+                <input
+                  value={item.featured?.image ?? ""}
+                  onChange={(e) => patchFeatured({ image: e.target.value })}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Title">
+                <input
+                  value={item.featured?.title ?? ""}
+                  onChange={(e) => patchFeatured({ title: e.target.value })}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Href">
+                <input
+                  value={item.featured?.href ?? ""}
+                  onChange={(e) => patchFeatured({ href: e.target.value })}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="CTA text">
+                <input
+                  value={item.featured?.ctaText ?? ""}
+                  onChange={(e) => patchFeatured({ ctaText: e.target.value })}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Badge">
+                <input
+                  value={item.featured?.badge ?? ""}
+                  onChange={(e) => patchFeatured({ badge: e.target.value })}
+                  className={inputCls}
+                />
+              </Field>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {canNest ? (
+        <TreeEditor
+          items={item.children}
+          parentPath={path}
+          depth={depth + 1}
+          ctx={ctx}
+        />
+      ) : null}
+    </li>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Live preview                                  */
+/* -------------------------------------------------------------------------- */
+
+function LivePreview({ menu }: { menu: MenuFormState }) {
+  const cfg = menu.displayConfig;
+  const isGrid = menu.display === "grid";
+
+  const alignCls = {
+    start: "justify-start",
+    center: "justify-center",
+    end: "justify-end",
+    stretch: "justify-between",
+  }[cfg.alignment];
+
+  const themePreview =
+    cfg.theme === "dark"
+      ? "bg-neutral-900 text-neutral-100"
+      : cfg.theme === "light"
+        ? "bg-white text-neutral-900"
+        : "bg-muted";
+
+  const panelCls = [
+    "rounded-md border p-3",
+    themePreview,
+    cfg.borderless ? "border-transparent" : "border-border",
+    cfg.rounded ? "rounded-xl" : "rounded-none",
+    cfg.shadow ? "shadow-md" : "",
+  ].join(" ");
+
+  const visibleItems = menu.items.filter((i) => i.isVisible);
+
+  return (
+    <div className="space-y-3">
+      {isGrid ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {visibleItems.slice(0, 6).map((item) => (
+            <div
+              key={item._key}
+              className="rounded-md border border-border bg-muted/40 p-3 text-center text-xs font-medium text-foreground"
+            >
+              {item.icon ? (
+                <div className="mb-1 text-lg">{item.icon}</div>
+              ) : null}
+              {item.label || "Untitled"}
+            </div>
+          ))}
+          {visibleItems.length === 0 ? (
+            <p className="col-span-full text-xs text-muted-foreground">
+              No items yet.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div
+          className={`flex items-center ${alignCls}`}
+          style={{ gap: `${cfg.gap}px` }}
+        >
+          {visibleItems.slice(0, 5).map((item, i) => (
+            <div
+              key={item._key}
+              className={`rounded-md px-2.5 py-1.5 text-xs font-medium ${
+                i === 0
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-foreground"
+              }`}
+            >
+              {item.label || "Untitled"}
+              {cfg.showCaret && item.children.length ? (
+                <span className="ml-1">▾</span>
+              ) : null}
+            </div>
+          ))}
+          {visibleItems.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No items yet.</p>
+          ) : null}
+        </div>
+      )}
+
+      {menu.items[0]?.children?.length && !isGrid ? (
+        <div
+          className={`${panelCls} mx-auto`}
+          style={{ maxWidth: cfg.megaWidth }}
+        >
+          <ul className="space-y-1.5 text-xs">
+            {menu.items[0].children
+              .filter((c) => c.isVisible)
+              .map((child) => (
+                <li key={child._key}>
+                  <span className="font-medium">
+                    {child.label || "Untitled"}
+                  </span>
+                  {child.children.length ? (
+                    <ul className="ml-3 mt-1 space-y-1 opacity-70">
+                      {child.children
+                        .filter((g) => g.isVisible)
+                        .slice(0, 3)
+                        .map((g) => (
+                          <li key={g._key}>· {g.label || "Untitled"}</li>
+                        ))}
+                    </ul>
+                  ) : null}
+                </li>
+              ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <dl className="mt-1 space-y-1 text-xs">
+        <PreviewRow label="Items" value={String(countTree(menu.items))} />
+        {countHidden(menu.items) > 0 ? (
+          <PreviewRow label="Hidden" value={String(countHidden(menu.items))} />
+        ) : null}
+        <PreviewRow label="Location" value={menu.location} />
+        <PreviewRow label="Display" value={menu.display} />
+        <PreviewRow label="Theme" value={cfg.theme} />
+        <PreviewRow label="Depth" value={String(menu.maxDepth)} />
+      </dl>
+    </div>
+  );
+}
+
+function PreviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="truncate text-right font-medium text-foreground">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  Main form                                 */
+/* -------------------------------------------------------------------------- */
+
+const emptyRefOptions: MenuRefOptions = {
+  Category: [],
+  Product: [],
+  Collection: [],
+};
+
+const MenuForm = ({ id }: { id?: string }) => {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [loadingCollections, setLoadingCollections] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [menu, setMenu] = useState({ ...emptyMenu });
-  const [collections, setCollections] = useState<any[]>([]);
+  const [menu, setMenu] = useState<MenuFormState>({ ...emptyMenu });
+  const [refOptions, setRefOptions] = useState<MenuRefOptions>(emptyRefOptions);
 
-  // ----- Main image uploader -----
+  const caps = useMemo(() => getCapabilities(menu.location), [menu.location]);
+
   const imgUpload = useFileUploader(
     id || "new-menu",
     menu.image ? [menu.image] : [],
     "menus/images",
   );
-  const imgUploadKey = useMemo(() => menu.image || "none", [menu.image]);
-
-  // ----- Background image uploader -----
   const bgUpload = useFileUploader(
     id || "new-menu",
     menu.backgroundImage ? [menu.backgroundImage] : [],
     "menus/backgrounds",
   );
+  const imgUploadKey = useMemo(() => menu.image || "none", [menu.image]);
   const bgUploadKey = useMemo(
     () => menu.backgroundImage || "none",
     [menu.backgroundImage],
   );
 
-  // Sync uploads → state
   useEffect(() => {
     const url = imgUpload.files[0] || "";
-    if (url !== menu.image) {
-      setMenu((prev) => ({ ...prev, image: url }));
-    }
+    if (url !== menu.image) setMenu((p) => ({ ...p, image: url }));
   }, [imgUpload.files, menu.image]);
 
   useEffect(() => {
     const url = bgUpload.files[0] || "";
     if (url !== menu.backgroundImage) {
-      setMenu((prev) => ({ ...prev, backgroundImage: url }));
+      setMenu((p) => ({ ...p, backgroundImage: url }));
     }
   }, [bgUpload.files, menu.backgroundImage]);
 
-  // ----- Fetch data -----
   useEffect(() => {
-    const fetchData = async () => {
+    const load = async () => {
       try {
         setLoading(true);
-        setLoadingCollections(true);
-        const collRes = await getAllCollections();
-        if (collRes.success) setCollections(collRes.data || []);
-        else setError(collRes.error || "Failed to load collections");
-        setLoadingCollections(false);
 
-        if (id) {
-          const menuRes = await getMenuById(id);
-          if (menuRes.success && menuRes.data) {
-            const data = menuRes.data;
-            setMenu({
-              ...emptyMenu,
-              name: data.name || "",
-              description: data.description || "",
-              collectionId: data.collectionId || "",
-              link: data.link || "",
-              ctaText: data.ctaText || "",
-              ctaLink: data.ctaLink || "",
-              location: data.location || "Home",
-              display: data.display || "List",
-              position: data.position || "left",
-              columns: data.columns ?? 4,
-              maxDepth: data.maxDepth ?? 2,
-              showImages: data.showImages ?? false,
-              backgroundColor: data.backgroundColor || "#ffffff",
-              backgroundImage: data.backgroundImage || "",
-              image: data.image || "",
-              isSticky: data.isSticky ?? false,
-              sectionTitle: data.sectionTitle || "",
-              order: data.order ?? 0,
-            });
-            if (data.image) imgUpload.setFiles([data.image]);
-            if (data.backgroundImage) bgUpload.setFiles([data.backgroundImage]);
-          } else {
-            setError(menuRes.error || "Failed to load menu");
-          }
+        const [refs, existing] = await Promise.all([
+          getMenuRefOptions(),
+          id ? getMenuById(id) : Promise.resolve(null),
+        ]);
+
+        if (refs.success) setRefOptions(refs.data);
+        else setError(refs.error);
+
+        if (existing && !existing.success) {
+          setError(existing.error);
+        } else if (existing && existing.success) {
+          const data = existing.data;
+          const location = data.location || "NavBar";
+          setMenu({
+            ...emptyMenu,
+            name: data.name || "",
+            description: data.description || "",
+            image: data.image || "",
+            items: fromApiItems(data.items ?? []),
+            location,
+            order: data.order ?? 0,
+            isSticky: data.isSticky ?? false,
+            visible: data.visible ?? true,
+            display: snapDisplay(location, data.display || "horizontal"),
+            columns: data.columns ?? 4,
+            maxDepth: data.maxDepth ?? 2,
+            showImages: data.showImages ?? false,
+            displayConfig: {
+              ...DEFAULT_DISPLAY_CONFIG,
+              ...(data.displayConfig ?? {}),
+            },
+            backgroundColor: data.backgroundColor || "#ffffff",
+            backgroundImage: data.backgroundImage || "",
+          });
+          if (data.image) imgUpload.setFiles([data.image]);
+          if (data.backgroundImage) bgUpload.setFiles([data.backgroundImage]);
         }
       } catch (err: any) {
         setError(err.message || "Unexpected error");
@@ -136,11 +1008,10 @@ const MenuForm = ({ id }: MenuFormProps) => {
         setLoading(false);
       }
     };
-    fetchData();
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // ----- Handlers -----
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -153,43 +1024,88 @@ const MenuForm = ({ id }: MenuFormProps) => {
         : NUMERIC_FIELDS.has(name)
           ? Number(value)
           : value;
-    setMenu((prev) => ({ ...prev, [name]: val }));
+    setMenu((p) => ({ ...p, [name]: val }));
   };
 
-  const handleRemoveImage = async (index: number, fileUrl: string) => {
+  const patchDisplayConfig = (changes: Partial<IMenuDisplayConfig>) => {
+    setMenu((p) => ({
+      ...p,
+      displayConfig: { ...p.displayConfig, ...changes },
+    }));
+  };
+
+  const handleLocationChange = (nextLocation: string) => {
+    setMenu((p) => ({
+      ...p,
+      location: nextLocation,
+      display: snapDisplay(nextLocation, p.display),
+    }));
+  };
+
+  const treeCtx: TreeCtx = useMemo(
+    () => ({
+      refOptions,
+      menuMaxDepth: menu.maxDepth,
+      caps,
+      patch: (path, changes) =>
+        setMenu((p) => ({
+          ...p,
+          items: updateAtPath(p.items, path, (n) => ({ ...n, ...changes })),
+        })),
+      remove: (path) =>
+        setMenu((p) => ({ ...p, items: removeAtPath(p.items, path) })),
+      move: (path, dir) =>
+        setMenu((p) => ({ ...p, items: moveAtPath(p.items, path, dir) })),
+      addChild: (parentPath) =>
+        setMenu((p) => ({
+          ...p,
+          items: insertAtPath(
+            p.items,
+            parentPath,
+            makeItemForLocation(p.location),
+          ),
+        })),
+    }),
+    [refOptions, menu.maxDepth, caps],
+  );
+
+  const handleRemoveImage = async () => {
     if (!id) {
       imgUpload.setFiles([]);
-      setMenu((prev) => ({ ...prev, image: "" }));
+      setMenu((p) => ({ ...p, image: "" }));
       return;
     }
     try {
       const result = await deleteMenuImage(id);
       if (!result.success) throw new Error(result.error || "Failed to remove");
       imgUpload.setFiles([]);
-      setMenu((prev) => ({ ...prev, image: "" }));
-      setSuccess("Image removed");
-      setTimeout(() => setSuccess(null), 3000);
+      setMenu((p) => ({ ...p, image: "" }));
+      flash("Image removed");
     } catch (err: any) {
       setError(err.message);
     }
   };
 
-  const handleRemoveBackground = async (index: number, fileUrl: string) => {
+  const handleRemoveBackground = async () => {
     if (!id) {
       bgUpload.setFiles([]);
-      setMenu((prev) => ({ ...prev, backgroundImage: "" }));
+      setMenu((p) => ({ ...p, backgroundImage: "" }));
       return;
     }
     try {
       const result = await deleteMenuBackgroundImage(id);
       if (!result.success) throw new Error(result.error || "Failed to remove");
       bgUpload.setFiles([]);
-      setMenu((prev) => ({ ...prev, backgroundImage: "" }));
-      setSuccess("Background image removed");
-      setTimeout(() => setSuccess(null), 3000);
+      setMenu((p) => ({ ...p, backgroundImage: "" }));
+      flash("Background image removed");
     } catch (err: any) {
       setError(err.message);
     }
+  };
+
+  const flash = (msg: string) => {
+    setSuccess(msg);
+    setTimeout(() => setSuccess(null), 3000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -199,13 +1115,16 @@ const MenuForm = ({ id }: MenuFormProps) => {
     setSuccess(null);
 
     try {
-      if (!menu.collectionId && !menu.link) {
-        setError("Please select a collection or provide a link.");
+      if (menu.items.length === 0) {
+        setError("Add at least one item.");
         setSubmitting(false);
         return;
       }
 
-      const result = id ? await updateMenu(id, menu) : await createMenu(menu);
+      const payload = { ...menu, items: toPayloadItems(menu.items) };
+      const result = id
+        ? await updateMenu(id, payload)
+        : await createMenu(payload);
 
       if (result.success) {
         setSuccess(result.message || (id ? "Menu updated" : "Menu created"));
@@ -215,7 +1134,7 @@ const MenuForm = ({ id }: MenuFormProps) => {
           bgUpload.setFiles([]);
         }
         setTimeout(() => {
-          router.push("/channels/store/content/navigation/menus");
+          router.push("/marketing/content/navigation/menus");
           router.refresh();
         }, 1500);
       } else {
@@ -230,14 +1149,30 @@ const MenuForm = ({ id }: MenuFormProps) => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex h-64 items-center justify-center">
         <Spinner />
       </div>
     );
   }
 
+  const displayOptions = availableDisplays(menu.location);
+  const warning = displayWarning(menu.location, menu.display);
+
+  const show = (key: MenuFeatureKey) => supportsMenuFeature(menu.location, key);
+
+  const hasPanelBehaviour =
+    show("theme") ||
+    show("alignment") ||
+    show("animation") ||
+    show("gap") ||
+    show("megaWidth") ||
+    show("showCaret") ||
+    show("borderless") ||
+    show("rounded") ||
+    show("shadow");
+
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-card rounded-lg shadow-md">
+    <div className="mx-auto max-w-6xl p-6">
       {error && (
         <Notification
           type="error"
@@ -253,439 +1188,439 @@ const MenuForm = ({ id }: MenuFormProps) => {
         />
       )}
 
-      <h2 className="text-2xl font-bold mb-6 text-foreground">
+      <h2 className="mb-6 text-2xl font-bold text-foreground">
         {id ? "Edit Menu" : "Create New Menu"}
       </h2>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Name */}
-        <div>
-          <label
-            htmlFor="name"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Name *
-          </label>
-          <input
-            type="text"
-            id="name"
-            name="name"
-            value={menu.name}
-            onChange={handleChange}
-            required
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="e.g., Summer Sale"
-          />
-        </div>
+      <form
+        onSubmit={handleSubmit}
+        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
+      >
+        <div className="space-y-6">
+          {/* -------------------- Identity -------------------- */}
+          <Section title="Identity">
+            <Field label="Name *">
+              <input
+                name="name"
+                value={menu.name}
+                onChange={handleChange}
+                required
+                className={inputCls}
+                placeholder="e.g., Main Header"
+              />
+            </Field>
 
-        {/* Description */}
-        <div>
-          <label
-            htmlFor="description"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Description
-          </label>
-          <textarea
-            id="description"
-            name="description"
-            value={menu.description}
-            onChange={handleChange}
-            rows={3}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="Brief description"
-          />
-        </div>
+            {show("description") ? (
+              <Field label="Description">
+                <textarea
+                  name="description"
+                  value={menu.description}
+                  onChange={handleChange}
+                  rows={3}
+                  className={inputCls}
+                />
+              </Field>
+            ) : null}
 
-        {/* Collection Selector */}
-        <div>
-          <label
-            htmlFor="collectionId"
-            className="block text-sm font-medium text-foreground mb-1"
+            {show("mainImage") ? (
+              <div>
+                <span className="mb-1 block text-sm font-medium text-foreground">
+                  Main image
+                </span>
+                <FilesUploader
+                  key={imgUploadKey}
+                  files={imgUpload.files}
+                  addFiles={imgUpload.addFiles}
+                  onRemove={handleRemoveImage}
+                  loading={imgUpload.loading}
+                  progressByName={imgUpload.progressByName}
+                />
+              </div>
+            ) : null}
+          </Section>
+
+          {/* -------------------- Items -------------------- */}
+          <Section
+            title="Menu items"
+            description="Build the tree. Every item links to a category, product, collection, page, or custom URL."
           >
-            Collection (content source)
-          </label>
-          <select
-            id="collectionId"
-            name="collectionId"
-            value={menu.collectionId}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            disabled={loadingCollections}
-          >
-            <option value="">-- None (use link) --</option>
-            {collections.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}{" "}
-                {c.type === "related"
-                  ? "(related: product page only)"
-                  : `(${c.targetType})`}
-              </option>
-            ))}
-          </select>
-          {loadingCollections && (
-            <div className="mt-1 text-xs text-muted-foreground">
-              Loading collections...
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span>{countTree(menu.items)} items</span>
+                {countHidden(menu.items) > 0 ? (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal">
+                    {countHidden(menu.items)} hidden
+                  </span>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setMenu((p) => ({
+                    ...p,
+                    items: insertAtPath(
+                      p.items,
+                      [],
+                      makeItemForLocation(p.location),
+                    ),
+                  }))
+                }
+                className="rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-muted"
+              >
+                + Add top-level
+              </button>
             </div>
-          )}
-          {!loadingCollections && collections.length === 0 && (
-            <p className="text-xs text-amber-600 mt-1">
-              No collections available. Please create a collection first.
-            </p>
-          )}
-          <p className="text-xs text-muted-foreground mt-1">
-            Select a collection to display its items. If none, the link below
-            will be used.
-          </p>
-          {collections.find((c) => c._id === menu.collectionId)?.type ===
-            "related" && (
-            <p className="mt-1 text-xs text-amber-600">
-              Related collections render only where a product ID is provided.
-            </p>
-          )}
-        </div>
-
-        {/* Link */}
-        <div>
-          <label
-            htmlFor="link"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Direct Link (URL)
-          </label>
-          <input
-            type="url"
-            id="link"
-            name="link"
-            value={menu.link}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="https://example.com/sale"
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            If no collection is selected, this link will be used (e.g., for
-            static pages).
-          </p>
-        </div>
-
-        {/* CTA Text */}
-        <div>
-          <label
-            htmlFor="ctaText"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            CTA Text (optional)
-          </label>
-          <input
-            type="text"
-            id="ctaText"
-            name="ctaText"
-            value={menu.ctaText}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="e.g., View All"
-          />
-        </div>
-
-        {/* CTA Link */}
-        <div>
-          <label
-            htmlFor="ctaLink"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            CTA Link (optional)
-          </label>
-          <input
-            type="url"
-            id="ctaLink"
-            name="ctaLink"
-            value={menu.ctaLink}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="https://example.com/all"
-          />
-        </div>
-
-        {/* Location */}
-        <div>
-          <label
-            htmlFor="location"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Location
-          </label>
-          <select
-            id="location"
-            name="location"
-            value={menu.location}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="Banner">Banner</option>
-            <option value="NavBar">NavBar</option>
-            <option value="SideBar">SideBar</option>
-            <option value="Home">Home</option>
-            <option value="Section">Section</option>
-            <option value="Footer">Footer</option>
-            <option value="ProductRelated">Product Related</option>
-          </select>
-        </div>
-
-        {/* Order */}
-        <div>
-          <label
-            htmlFor="order"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Order (lower = higher priority)
-          </label>
-          <input
-            type="number"
-            id="order"
-            name="order"
-            value={menu.order}
-            onChange={handleChange}
-            min={0}
-            step={1}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
-
-        {/* Display */}
-        <div>
-          <label
-            htmlFor="display"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Display Mode
-          </label>
-          <select
-            id="display"
-            name="display"
-            value={menu.display}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="List">List</option>
-            <option value="Grid">Grid</option>
-            <option value="Carousel">Carousel</option>
-            <option value="Dropdown">Dropdown</option>
-            <option value="MegaMenu">MegaMenu</option>
-          </select>
-        </div>
-
-        {/* Position */}
-        <div>
-          <label
-            htmlFor="position"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Position (alignment)
-          </label>
-          <select
-            id="position"
-            name="position"
-            value={menu.position}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-            <option value="full">Full</option>
-          </select>
-        </div>
-
-        {/* Columns */}
-        <div>
-          <label
-            htmlFor="columns"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Columns (for MegaMenu)
-          </label>
-          <input
-            type="number"
-            id="columns"
-            name="columns"
-            value={menu.columns}
-            onChange={handleChange}
-            min={1}
-            max={6}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
-
-        {/* Max Depth */}
-        <div>
-          <label
-            htmlFor="maxDepth"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Max Depth (nesting)
-          </label>
-          <input
-            type="number"
-            id="maxDepth"
-            name="maxDepth"
-            value={menu.maxDepth}
-            onChange={handleChange}
-            min={1}
-            max={5}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
-
-        {/* Show Images */}
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="showImages"
-            name="showImages"
-            checked={menu.showImages}
-            onChange={handleChange}
-            className="
-              appearance-none w-5 h-5 border-2 border-border rounded
-              bg-background checked:bg-primary checked:border-primary
-              relative after:content-['✓'] after:absolute after:inset-0
-              after:flex after:items-center after:justify-center
-              after:text-white after:text-sm after:opacity-0
-              checked:after:opacity-100 focus:ring-2 focus:ring-primary
-              transition-all
-            "
-          />
-          <label
-            htmlFor="showImages"
-            className="ml-2 block text-sm text-foreground cursor-pointer"
-          >
-            Show Images in menu
-          </label>
-        </div>
-
-        {/* Background Color */}
-        <div>
-          <label
-            htmlFor="backgroundColor"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Background Color
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              id="backgroundColor"
-              name="backgroundColor"
-              value={menu.backgroundColor}
-              onChange={handleChange}
-              className="h-10 w-10 rounded border border-border bg-background"
+            <TreeEditor
+              items={menu.items}
+              parentPath={[]}
+              depth={0}
+              ctx={treeCtx}
             />
-            <input
-              type="text"
-              name="backgroundColor"
-              value={menu.backgroundColor}
-              onChange={handleChange}
-              className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+          </Section>
+
+          {/* -------------------- Placement -------------------- */}
+          <Section title="Placement">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Field label="Location">
+                  <select
+                    value={menu.location}
+                    onChange={(e) => handleLocationChange(e.target.value)}
+                    className={inputCls}
+                  >
+                    {MENU_LOCATIONS.map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <p className="text-xs text-muted-foreground">
+                  {locationHint(menu.location)}
+                </p>
+              </div>
+
+              <Field label="Order (lower = higher priority)">
+                <input
+                  type="number"
+                  name="order"
+                  value={menu.order}
+                  onChange={handleChange}
+                  min={0}
+                  className={inputCls}
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <BooleanChoice
+                label="Visible on storefront"
+                hint="Hidden menus stay saved but don't render."
+                value={menu.visible}
+                onChange={(v) => setMenu((p) => ({ ...p, visible: v }))}
+              />
+              {show("sticky") ? (
+                <BooleanChoice
+                  label="Sticky on scroll"
+                  value={menu.isSticky}
+                  onChange={(v) => setMenu((p) => ({ ...p, isSticky: v }))}
+                />
+              ) : null}
+            </div>
+          </Section>
+
+          {/* -------------------- Display -------------------- */}
+          <Section title="Display & layout">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field
+                label="Menu layout"
+                hint="Options depend on the selected location."
+              >
+                <select
+                  value={menu.display}
+                  onChange={(e) =>
+                    setMenu((p) => ({
+                      ...p,
+                      display: e.target.value as MenuDisplayType,
+                    }))
+                  }
+                  className={inputCls}
+                >
+                  {displayOptions.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              {show("columns") ? (
+                <Field label="Columns">
+                  <select
+                    value={menu.columns}
+                    onChange={(e) =>
+                      setMenu((p) => ({
+                        ...p,
+                        columns: Number(e.target.value),
+                      }))
+                    }
+                    className={inputCls}
+                  >
+                    {COLUMN_COUNTS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              ) : null}
+
+              {show("maxDepth") ? (
+                <Field label={`Max depth (hard cap ${MAX_DEPTH})`}>
+                  <input
+                    type="number"
+                    name="maxDepth"
+                    value={menu.maxDepth}
+                    onChange={handleChange}
+                    min={1}
+                    max={MAX_DEPTH}
+                    className={inputCls}
+                  />
+                </Field>
+              ) : null}
+            </div>
+
+            {warning ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                {warning}
+              </div>
+            ) : null}
+
+            {show("showImages") ? (
+              <BooleanChoice
+                label="Show images in items"
+                value={menu.showImages}
+                onChange={(v) => setMenu((p) => ({ ...p, showImages: v }))}
+              />
+            ) : null}
+
+            {hasPanelBehaviour ? (
+              <div className="rounded-lg border border-border bg-muted/40 p-4">
+                <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Panel behaviour
+                </h4>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {show("theme") ? (
+                    <Field
+                      label="Theme"
+                      hint="Colors of the submenu panels (dropdowns, megas)."
+                    >
+                      <select
+                        value={menu.displayConfig.theme}
+                        onChange={(e) =>
+                          patchDisplayConfig({
+                            theme: e.target
+                              .value as IMenuDisplayConfig["theme"],
+                          })
+                        }
+                        className={inputCls}
+                      >
+                        {MENU_THEMES.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : null}
+
+                  {show("alignment") ? (
+                    <Field label="Alignment">
+                      <select
+                        value={menu.displayConfig.alignment}
+                        onChange={(e) =>
+                          patchDisplayConfig({
+                            alignment: e.target
+                              .value as IMenuDisplayConfig["alignment"],
+                          })
+                        }
+                        className={inputCls}
+                      >
+                        {ALIGNMENTS.map((a) => (
+                          <option key={a} value={a}>
+                            {a}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : null}
+
+                  {show("animation") ? (
+                    <Field label="Animation">
+                      <select
+                        value={menu.displayConfig.animation}
+                        onChange={(e) =>
+                          patchDisplayConfig({
+                            animation: e.target
+                              .value as IMenuDisplayConfig["animation"],
+                          })
+                        }
+                        className={inputCls}
+                      >
+                        {ANIMATIONS.map((a) => (
+                          <option key={a} value={a}>
+                            {a}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : null}
+
+                  {show("gap") ? (
+                    <Field label={`Item gap — ${menu.displayConfig.gap}px`}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={64}
+                        step={2}
+                        value={menu.displayConfig.gap}
+                        onChange={(e) =>
+                          patchDisplayConfig({ gap: Number(e.target.value) })
+                        }
+                        className="w-full"
+                      />
+                    </Field>
+                  ) : null}
+
+                  {show("megaWidth") ? (
+                    <Field label="Mega panel width">
+                      <input
+                        type="text"
+                        value={menu.displayConfig.megaWidth}
+                        onChange={(e) =>
+                          patchDisplayConfig({ megaWidth: e.target.value })
+                        }
+                        className={inputCls}
+                        placeholder="960px"
+                      />
+                    </Field>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {show("showCaret") ? (
+                    <BooleanChoice
+                      label="Show caret on parents"
+                      value={menu.displayConfig.showCaret}
+                      onChange={(v) => patchDisplayConfig({ showCaret: v })}
+                    />
+                  ) : null}
+                  {show("borderless") ? (
+                    <BooleanChoice
+                      label="Borderless panel"
+                      value={menu.displayConfig.borderless}
+                      onChange={(v) => patchDisplayConfig({ borderless: v })}
+                    />
+                  ) : null}
+                  {show("rounded") ? (
+                    <BooleanChoice
+                      label="Rounded corners"
+                      value={menu.displayConfig.rounded}
+                      onChange={(v) => patchDisplayConfig({ rounded: v })}
+                    />
+                  ) : null}
+                  {show("shadow") ? (
+                    <BooleanChoice
+                      label="Drop shadow"
+                      value={menu.displayConfig.shadow}
+                      onChange={(v) => patchDisplayConfig({ shadow: v })}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </Section>
+
+          {/* -------------------- Surface (conditional) -------------------- */}
+          {show("background") ? (
+            <Section
+              title="Surface"
+              description="Background applied to the rendered menu surface."
+            >
+              <Field label="Background color">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    name="backgroundColor"
+                    value={menu.backgroundColor}
+                    onChange={handleChange}
+                    className="h-10 w-10 rounded border border-border bg-background"
+                  />
+                  <input
+                    type="text"
+                    name="backgroundColor"
+                    value={menu.backgroundColor}
+                    onChange={handleChange}
+                    className={`${inputCls} flex-1`}
+                  />
+                </div>
+              </Field>
+              <div>
+                <span className="mb-1 block text-sm font-medium text-foreground">
+                  Background image
+                </span>
+                <FilesUploader
+                  key={bgUploadKey}
+                  files={bgUpload.files}
+                  addFiles={bgUpload.addFiles}
+                  onRemove={handleRemoveBackground}
+                  loading={bgUpload.loading}
+                  progressByName={bgUpload.progressByName}
+                />
+              </div>
+            </Section>
+          ) : null}
+
+          {/* -------------------- Actions -------------------- */}
+          <div className="flex gap-3">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {submitting ? (
+                <span className="flex items-center gap-2">
+                  <Spinner />
+                  {id ? "Updating…" : "Creating…"}
+                </span>
+              ) : id ? (
+                "Update Menu"
+              ) : (
+                "Create Menu"
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="rounded-md border border-border px-5 py-2.5 text-sm font-semibold hover:bg-muted"
+            >
+              Cancel
+            </button>
           </div>
         </div>
 
-        {/* Main Image (new) */}
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1">
-            Main Image
-          </label>
-          <FilesUploader
-            key={imgUploadKey}
-            files={imgUpload.files}
-            addFiles={imgUpload.addFiles}
-            onRemove={handleRemoveImage}
-            loading={imgUpload.loading}
-            progressByName={imgUpload.progressByName}
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Thumbnail shown next to the menu title in some layouts.
-          </p>
-        </div>
-
-        {/* Background Image */}
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1">
-            Background Image
-          </label>
-          <FilesUploader
-            key={bgUploadKey}
-            files={bgUpload.files}
-            addFiles={bgUpload.addFiles}
-            onRemove={handleRemoveBackground}
-            loading={bgUpload.loading}
-            progressByName={bgUpload.progressByName}
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Upload a background image. Only the first image will be used.
-          </p>
-        </div>
-
-        {/* Sticky */}
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="isSticky"
-            name="isSticky"
-            checked={menu.isSticky}
-            onChange={handleChange}
-            className="
-              appearance-none w-5 h-5 border-2 border-border rounded
-              bg-background checked:bg-primary checked:border-primary
-              relative after:content-['✓'] after:absolute after:inset-0
-              after:flex after:items-center after:justify-center
-              after:text-white after:text-sm after:opacity-0
-              checked:after:opacity-100 focus:ring-2 focus:ring-primary
-              transition-all
-            "
-          />
-          <label
-            htmlFor="isSticky"
-            className="ml-2 block text-sm text-foreground cursor-pointer"
-          >
-            Sticky
-          </label>
-        </div>
-
-        {/* Section Title */}
-        <div>
-          <label
-            htmlFor="sectionTitle"
-            className="block text-sm font-medium text-foreground mb-1"
-          >
-            Section Title
-          </label>
-          <input
-            type="text"
-            id="sectionTitle"
-            name="sectionTitle"
-            value={menu.sectionTitle}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="e.g., Featured Products"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-        >
-          {submitting ? (
-            <span className="flex items-center justify-center">
-              <Spinner />
-              {id ? "Updating..." : "Creating..."}
-            </span>
-          ) : id ? (
-            "Update Menu"
-          ) : (
-            "Create Menu"
-          )}
-        </button>
+        {/* -------------------- Preview -------------------- */}
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Live preview
+            </h3>
+            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4">
+              <LivePreview menu={menu} />
+            </div>
+          </div>
+        </aside>
       </form>
     </div>
   );
