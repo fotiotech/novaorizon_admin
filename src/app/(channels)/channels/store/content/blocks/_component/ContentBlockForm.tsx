@@ -279,9 +279,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-      <header className="mb-4">
-        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+    <section className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
+      <header className="mb-3 sm:mb-4">
+        <h3 className="text-sm font-semibold text-foreground sm:text-base">
+          {title}
+        </h3>
         {description ? (
           <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
         ) : null}
@@ -303,8 +305,8 @@ function BooleanChoice({
   hint?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2">
-      <div className="min-w-0">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2">
+      <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-foreground">{label}</p>
         {hint ? (
           <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
@@ -390,12 +392,14 @@ function RefsEditor({
             key={ref._key}
             className="rounded-lg border border-border bg-background p-3"
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex flex-col">
+            {/* Header: move controls + index + remove */}
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex gap-1">
                 <button
                   type="button"
                   onClick={() => move(i, -1)}
-                  className="text-xs text-muted-foreground hover:text-foreground"
+                  disabled={i === 0}
+                  className="rounded border border-border px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-30"
                   aria-label="Move up"
                 >
                   ▲
@@ -403,13 +407,27 @@ function RefsEditor({
                 <button
                   type="button"
                   onClick={() => move(i, 1)}
-                  className="text-xs text-muted-foreground hover:text-foreground"
+                  disabled={i === refs.length - 1}
+                  className="rounded border border-border px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-30"
                   aria-label="Move down"
                 >
                   ▼
                 </button>
               </div>
+              <span className="text-xs font-medium text-muted-foreground">
+                Item {i + 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50"
+              >
+                Remove
+              </button>
+            </div>
 
+            {/* Model + entity */}
+            <div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
               <select
                 value={ref.refModel}
                 onChange={(e) =>
@@ -418,7 +436,7 @@ function RefsEditor({
                     refId: "",
                   })
                 }
-                className={`${inputCls} max-w-32`}
+                className={inputCls}
               >
                 {BLOCK_REF_MODELS.map((m) => (
                   <option key={m} value={m}>
@@ -430,7 +448,7 @@ function RefsEditor({
               <select
                 value={ref.refId}
                 onChange={(e) => patch(i, { refId: e.target.value })}
-                className={`${inputCls} min-w-48 flex-1`}
+                className={inputCls}
               >
                 <option value="">Select {ref.refModel}…</option>
                 {options.map((o) => (
@@ -439,23 +457,17 @@ function RefsEditor({
                   </option>
                 ))}
               </select>
-
-              <input
-                value={ref.label}
-                onChange={(e) => patch(i, { label: e.target.value })}
-                placeholder={selected?.name ?? "Label (optional)"}
-                className={`${inputCls} max-w-48`}
-              />
-
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50"
-              >
-                Remove
-              </button>
             </div>
 
+            {/* Label */}
+            <input
+              value={ref.label}
+              onChange={(e) => patch(i, { label: e.target.value })}
+              placeholder={selected?.name ?? "Label (optional)"}
+              className={`${inputCls} mt-2`}
+            />
+
+            {/* Overrides */}
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <input
                 value={ref.image}
@@ -477,7 +489,7 @@ function RefsEditor({
       <button
         type="button"
         onClick={add}
-        className="w-full rounded-md border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
+        className="w-full rounded-md border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary"
       >
         + Add ref
       </button>
@@ -799,7 +811,7 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
+    <div className="mx-auto max-w-6xl p-2 sm:p-6">
       {error && (
         <Notification
           type="error"
@@ -815,15 +827,15 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
         />
       )}
 
-      <h2 className="mb-6 text-2xl font-bold text-foreground">
+      <h2 className="mb-4 text-xl font-bold text-foreground sm:mb-6 sm:text-2xl">
         {id ? "Edit Block" : "Create Block"}
       </h2>
 
       <form
         onSubmit={handleSubmit}
-        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
+        className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6"
       >
-        <div className="space-y-6">
+        <div className="space-y-5 sm:space-y-6">
           {/* ---------------- Identity ---------------- */}
           <Section title="Identity">
             <Field label="Name *">
@@ -899,7 +911,7 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
             title="Source"
             description="What entities this block renders. The resolver expands the source into a flat list of items at request time."
           >
-            <div className="flex flex-wrap gap-2">
+            <div className="-mx-1 flex flex-wrap gap-2 px-1">
               {BLOCK_SOURCE_TYPES.map((t) => (
                 <button
                   key={t}
@@ -1109,7 +1121,7 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
               onChange={(v) => patch({ showImages: v })}
             />
 
-            <div className="rounded-lg border border-border bg-muted/40 p-4">
+            <div className="rounded-lg border border-border bg-muted/40 p-3 sm:p-4">
               <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Panel behaviour
               </h4>
@@ -1148,19 +1160,21 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
                     ))}
                   </select>
                 </Field>
-                <Field label={`Item gap — ${form.displayConfig.gap}px`}>
-                  <input
-                    type="range"
-                    min={0}
-                    max={64}
-                    step={2}
-                    value={form.displayConfig.gap}
-                    onChange={(e) =>
-                      patchDisplayConfig({ gap: Number(e.target.value) })
-                    }
-                    className="w-full"
-                  />
-                </Field>
+                <div className="sm:col-span-2">
+                  <Field label={`Item gap — ${form.displayConfig.gap}px`}>
+                    <input
+                      type="range"
+                      min={0}
+                      max={64}
+                      step={2}
+                      value={form.displayConfig.gap}
+                      onChange={(e) =>
+                        patchDisplayConfig({ gap: Number(e.target.value) })
+                      }
+                      className="w-full"
+                    />
+                  </Field>
+                </div>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <BooleanChoice
@@ -1226,13 +1240,13 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
             description="Background for the block itself, if it should differ from the page."
           >
             <Field label="Background color">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
                   type="color"
                   name="backgroundColor"
                   value={form.backgroundColor || "#ffffff"}
                   onChange={handleChange}
-                  className="h-10 w-10 rounded border border-border bg-background"
+                  className="h-10 w-full rounded border border-border bg-background sm:w-10"
                 />
                 <input
                   type="text"
@@ -1260,14 +1274,14 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
           </Section>
 
           {/* ---------------- Actions ---------------- */}
-          <div className="flex gap-3">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row">
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="w-full rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 sm:w-auto"
             >
               {submitting ? (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center justify-center gap-2">
                   <Spinner />
                   {id ? "Updating…" : "Creating…"}
                 </span>
@@ -1280,7 +1294,7 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
             <button
               type="button"
               onClick={() => router.back()}
-              className="rounded-md border border-border px-5 py-2.5 text-sm font-semibold hover:bg-muted"
+              className="w-full rounded-md border border-border px-5 py-2.5 text-sm font-semibold hover:bg-muted sm:w-auto"
             >
               Cancel
             </button>
@@ -1289,11 +1303,11 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
 
         {/* ---------------- Preview ---------------- */}
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Live preview
             </h3>
-            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4">
+            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 sm:p-4">
               <LivePreview form={form} />
             </div>
           </div>
