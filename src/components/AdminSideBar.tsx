@@ -17,11 +17,11 @@ import {
   KeyboardReturn,
 } from "@mui/icons-material";
 import { useSession } from "next-auth/react";
-import { SignIn } from "../app/(auth)/components/SignInButton";
-import { useUnreadMessages } from "@/app/(customers)/customers/chat/_component/useUnreadMessages";
+import { SignIn } from "../app/(auth)/_component/SignInButton";
+import { useUnreadMessages } from "@/app/(root)/customers/chat/_component/useUnreadMessages";
 import { useNewContactCount } from "@/hooks/useNewContactCount";
 import LeftSheet from "@/components/ux/LeftSheet";
-import { useUnreadOrderNotifications } from "@/app/(settings)/settings/notifications/_component/hooks/useUnreadOrderNotifications";
+import { useUnreadOrderNotifications } from "@/app/(root)/settings/notifications/_component/hooks/useUnreadOrderNotifications";
 import {
   menuConfig,
   allLinks,

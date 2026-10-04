@@ -1,0 +1,31 @@
+import React from "react";
+import { AttributeDetail } from "@/app/(root)/catalog/products/component/ProductForm";
+import Fields from "./Fields";
+
+export const AttributeField: React.FC<{
+  productId: string;
+  attribute: AttributeDetail;
+  field: any;
+  handleAttributeChange: (field: string, value: any) => void;
+  units: any[];
+}> = React.memo(
+  ({ productId, attribute, field, handleAttributeChange, units }) => {
+    if (!attribute || !attribute.code) return null;
+    const { code, name, type, options, isRequired, unitFamily } = attribute;
+
+    return (
+      <Fields
+        isRequired={isRequired}
+        type={type}
+        code={code}
+        name={name}
+        field={field}
+        option={options}
+        handleAttributeChange={handleAttributeChange}
+        productId={productId}
+        unitFamily={unitFamily as any}
+        units={units}
+      />
+    );
+  },
+);

@@ -4,7 +4,7 @@
 import { useActionState } from "react";
 import { requestPasswordReset } from "@/app/actions/forgot-password";
 import Link from "next/link";
-import { SignIn } from "@/app/(auth)/components/SignInButton";
+import { SignIn } from "@/app/(auth)/_component/SignInButton";
 
 export default function ForgotPasswordPage() {
   const [state, formAction, isPending] = useActionState(

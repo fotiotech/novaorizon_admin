@@ -1,4 +1,4 @@
-import { SignOut } from "@/app/(auth)/components/SignInButton";
+import { SignOut } from "@/app/(auth)/_component/SignInButton";
 import React from "react";
 
 const page = () => {

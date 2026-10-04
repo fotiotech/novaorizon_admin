@@ -5,7 +5,7 @@ import { connection } from "@/utils/connection";
 import crypto from "crypto";
 
 import { Resend } from "resend";
-import { VerificationTemplate } from "../(auth)/components/VerificationTemplate";
+import { VerificationTemplate } from "../(auth)/_component/VerificationTemplate";
 import User from "@/models/User";
 
 const resend = new Resend(process.env.RESEND_API_KEY);

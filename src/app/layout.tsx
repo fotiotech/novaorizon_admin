@@ -12,7 +12,7 @@ import { MuiThemeBridge } from "@/components/MuiThemeBridge";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
-export default async function RootLayout({
+export default async function Layout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -39,26 +39,7 @@ export default async function RootLayout({
               enableSystem
               disableTransitionOnChange
             >
-              <AdminLayout>
-                {children}
-                <Toaster
-                  position="top-right"
-                  toastOptions={{
-                    duration: 3500,
-                    style: {
-                      background: "#1f2937",
-                      color: "#f9fafb",
-                      borderRadius: "0.5rem",
-                    },
-                    success: {
-                      iconTheme: { primary: "#6366f1", secondary: "#fff" },
-                    },
-                    error: {
-                      iconTheme: { primary: "#ef4444", secondary: "#fff" },
-                    },
-                  }}
-                />
-              </AdminLayout>
+              {children}
             </ThemeProvider>
           </Providers>
         </MuiThemeBridge>
