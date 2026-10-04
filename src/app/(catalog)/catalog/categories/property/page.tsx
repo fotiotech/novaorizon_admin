@@ -275,33 +275,44 @@ export default function CategoryPropertiesPage() {
     setSortOrder({ value: "name_asc", label: "Name A → Z" });
   };
 
+  // ------------------------------------------------------------------
+  // Menu items
+  //
+  // Inherited (readOnly) properties are now editable/deletable like any
+  // other. Editing them overrides the snapshot in place. Note that a
+  // subsequent "Re-run inheritance" from the category side WILL
+  // regenerate (and therefore overwrite) those manual edits — that's
+  // the admin's explicit signal they want the snapshot refreshed.
+  // ------------------------------------------------------------------
   const getMenuItems = (prop: Property): PopoverMenuItem[] => {
+    const items: PopoverMenuItem[] = [];
+
     if (prop.readOnly) {
-      return [
-        {
-          key: "managed",
-          label: "System-managed (read-only)",
-          icon: <Lock fontSize="small" />,
-          onClick: () => {},
-        },
-      ];
+      items.push({
+        key: "managed-info",
+        label: "System-managed snapshot",
+        icon: <Lock fontSize="small" />,
+        // No-op informational entry — clicking does nothing.
+        onClick: () => {},
+      });
     }
 
-    return [
-      {
-        key: "edit",
-        label: "Edit property",
-        icon: <Edit fontSize="small" />,
-        href: `/catalog/categories/property/${prop._id}/edit`,
-      },
-      {
-        key: "delete",
-        label: "Delete",
-        icon: <Delete fontSize="small" />,
-        danger: true,
-        onClick: () => handleDeleteClick(prop),
-      },
-    ];
+    items.push({
+      key: "edit",
+      label: prop.readOnly ? "Edit (override snapshot)" : "Edit property",
+      icon: <Edit fontSize="small" />,
+      href: `/catalog/categories/property/${prop._id}/edit`,
+    });
+
+    items.push({
+      key: "delete",
+      label: "Delete",
+      icon: <Delete fontSize="small" />,
+      danger: true,
+      onClick: () => handleDeleteClick(prop),
+    });
+
+    return items;
   };
 
   // ---------------- Early exits ----------------
@@ -531,7 +542,7 @@ export default function CategoryPropertiesPage() {
                         {prop.readOnly && (
                           <span
                             className="inline-flex items-center gap-1 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                            title="System-managed. Regenerated from parent categories via Re-run inheritance."
+                            title="Auto-generated snapshot from parent categories. Editable, but a Re-run inheritance on the category will overwrite manual edits."
                           >
                             <Lock style={{ fontSize: 10 }} />
                             Inherited
@@ -575,8 +586,16 @@ export default function CategoryPropertiesPage() {
           setDeleteTarget(null);
         }}
         onConfirm={handleConfirmDelete}
-        title="Delete category property"
-        message={`Are you sure you want to delete "${deleteTarget?.name || "this property"}"? This action cannot be undone.`}
+        title={
+          deleteTarget?.readOnly
+            ? "Delete inherited property"
+            : "Delete category property"
+        }
+        message={
+          deleteTarget?.readOnly
+            ? `"${deleteTarget.name}" is an auto-generated snapshot used by one or more categories. Deleting it will detach those categories' inherited properties. This action cannot be undone.`
+            : `Are you sure you want to delete "${deleteTarget?.name || "this property"}"? This action cannot be undone.`
+        }
         confirmLabel={isDeleting ? "Deleting…" : "Delete"}
         danger
       />

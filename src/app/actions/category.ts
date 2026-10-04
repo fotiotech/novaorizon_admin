@@ -16,42 +16,19 @@ import { deleteS3Object } from "./s3";
 import {
   applyInheritedPropertyToCategory,
   buildAttributeSetsFromMappings,
+  rerunInheritanceForCategoryAndDescendants,
   type AttributeSetResult,
 } from "./category_property";
 
 // ========================================================================
 //  Storefront revalidation
-//
-//  Any category mutation changes something the storefront renders:
-//   - /category              (category index)
-//   - /category/[slug]/[_id] (every individual category page)
-//   - /                      (homepage — menu may resolve to categories)
-//   - /sitemap.xml           (contains category URLs)
-//   - header-nav tag         (Header fetches NavBar / SideBar menus
-//                             which may resolve to a category collection)
-//
-//  `revalidatePath("/category", "layout")` invalidates the layout at
-//  that path AND every page beneath it, which covers every
-//  /category/[slug]/[_id] detail page in one call.
 // ========================================================================
 function revalidateCategoryConsumers() {
-  // Admin surfaces
   revalidatePath("/categories");
   revalidatePath("/catalog/categories/property");
-
-  // Storefront — index + every individual category page
   revalidatePath("/category", "layout");
-
-  // Homepage renders <MenuRenderer location="Home">, which may feature
-  // categories via a rule or manual collection.
   revalidatePath("/");
-
-  // Sitemap lists category URLs, so purge it now instead of waiting
-  // for the next hourly revalidate.
   revalidatePath("/sitemap.xml");
-
-  // Header nav data cache. revalidatePath does NOT clear unstable_cache
-  // entries — only revalidateTag does.
   revalidateTag("header-nav", "max");
 }
 
@@ -116,9 +93,6 @@ function toPlain<T>(value: T): T {
 
 // ========================================================================
 //  projectForList
-//
-//  Strips raw ObjectIds and replaces the inherited ref with a cheap
-//  boolean. Keeps the `property` populated object (form uses it).
 // ========================================================================
 function projectForList(category: any) {
   if (!category) return category;
@@ -209,9 +183,16 @@ export async function getCategory(
 //  createCategory
 //
 //  - `property` = admin's manual selection. Always written.
-//  - `inheritedProperty` = cleared when inheritance is off. Left as-is
-//    when on so the last snapshot survives edits; the next Re-run
-//    regenerates it (and cleans up any stale doc from a rename).
+//  - `inheritedProperty` = cleared when inheritance is off.
+//
+//  Cascade behaviour:
+//    * `property` change  → handled by the property-save side (prune).
+//      Here we also call the full re-merge cascade, because a category
+//      can switch from PropertyA to PropertyB, and descendants may
+//      gain attributes that only PropertyB contributes.
+//    * `parentId` change  → subtree moved; a rebuild is the correct
+//      semantics because the *ancestor chain itself* changed.
+//    * name/slug/description/imageUrl change → no cascade.
 // ========================================================================
 export async function createCategory(
   formData: {
@@ -293,10 +274,27 @@ export async function createCategory(
         updateData.inheritedProperty = null;
       }
 
+      const previousParentId = existingCategory.parentId?.toString() ?? null;
+      const previousPropertyId = existingCategory.property?.toString() ?? null;
+      const nextPropertyId = propertyId || null;
+
+      const cascadeNeeded =
+        previousParentId !== resolvedParentId ||
+        previousPropertyId !== nextPropertyId;
+
       await Category.findOneAndUpdate(
         { _id: existingCategory._id },
         { $set: updateData },
       );
+
+      if (cascadeNeeded) {
+        // Re-parent or own-property swap → rebuild descendants'
+        // snapshots. Pruning alone would miss attributes gained from
+        // the new ancestor chain / new property.
+        await rerunInheritanceForCategoryAndDescendants(
+          existingCategory._id.toString(),
+        );
+      }
     } else {
       const newCategory = new Category({
         slug: slugValue,
@@ -377,7 +375,6 @@ export async function deleteCategory(id: string) {
       .select("inheritedProperty")
       .lean();
 
-    // Delete the auto-gen snapshot doc so nothing dangles.
     if (category?.inheritedProperty) {
       await CategoryProperty.deleteOne({ _id: category.inheritedProperty });
     }
@@ -407,9 +404,6 @@ export async function deleteCategory(id: string) {
 
 // ========================================================================
 //  getCategoryAttributeSets
-//
-//  - inheritProperty on + inheritedProperty set → snapshot doc
-//  - otherwise                                 → own property doc
 // ========================================================================
 export async function getCategoryAttributeSets(
   categoryId: string,
@@ -498,10 +492,6 @@ export async function deleteCategoryImage(
 
 // ========================================================================
 //  getCategoriesForTree
-//
-//  Lean read for tree rendering and the sitemap. No property populate.
-//  Returns the fields the storefront tree and sitemap both need,
-//  including `updatedAt` so the sitemap can emit a real `lastModified`.
 // ========================================================================
 export async function getCategoriesForTree(): Promise<
   Array<{

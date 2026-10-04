@@ -330,10 +330,6 @@ function generateInheritedPropertyCode(
 
 // ========================================================================
 //  ensureCategoryPropertyFromMappings
-//
-//  Upserts the auto-generated CategoryProperty (readOnly: true) and
-//  repoints `category.inheritedProperty` at it. Cleans up any previous
-//  snapshot (e.g. stale doc from a rename) in the same call.
 // ========================================================================
 export async function ensureCategoryPropertyFromMappings(
   categoryId: string,
@@ -345,7 +341,6 @@ export async function ensureCategoryPropertyFromMappings(
   if (!category) return null;
 
   if (mappings.length === 0) {
-    // No snapshot needed — clean up any previous one.
     if (category.inheritedProperty) {
       await CategoryProperty.deleteOne({ _id: category.inheritedProperty });
     }
@@ -379,8 +374,6 @@ export async function ensureCategoryPropertyFromMappings(
     await property.save();
   }
 
-  // If the category previously pointed at a different snapshot (e.g.
-  // from a prior name), delete that stale doc.
   const previousId = category.inheritedProperty?.toString();
   if (previousId && previousId !== property._id.toString()) {
     await CategoryProperty.deleteOne({ _id: previousId });
@@ -396,9 +389,8 @@ export async function ensureCategoryPropertyFromMappings(
 // ========================================================================
 //  applyInheritedPropertyToCategory
 //
-//  Merges own `property` + ancestors (own wins), then writes the
-//  snapshot via ensureCategoryPropertyFromMappings. `property` is
-//  untouched.
+//  Full re-merge. Used by the manual "Re-run inheritance" button and by
+//  the re-parent cascade (see rerunInheritanceForCategoryAndDescendants).
 // ========================================================================
 export async function applyInheritedPropertyToCategory(
   categoryId: string,
@@ -441,6 +433,282 @@ export async function applyInheritedPropertyToCategory(
   );
 
   return { propertyId };
+}
+
+// ========================================================================
+//  rerunInheritanceForCategoryAndDescendants
+//
+//  Full re-merge cascade, but only over a bounded subtree with a simple
+//  recursive walk. Used for re-parenting, where the descendant's
+//  ancestor chain itself changed, so the snapshot must be *rebuilt*
+//  (adds + removes), not just pruned.
+//
+//  Not called on property updates — see pruneDescendantsAfterPropertyUpdate.
+// ========================================================================
+export async function rerunInheritanceForCategoryAndDescendants(
+  categoryId: string,
+): Promise<void> {
+  await connection();
+
+  if (!mongoose.Types.ObjectId.isValid(categoryId)) return;
+
+  const visited = new Set<string>();
+
+  async function walk(nodeId: string): Promise<void> {
+    if (visited.has(nodeId)) return;
+    visited.add(nodeId);
+
+    const node: any = await Category.findById(nodeId)
+      .select("inheritProperty parentId")
+      .lean();
+    if (!node) return;
+
+    if (node.inheritProperty === true && node.parentId) {
+      try {
+        await applyInheritedPropertyToCategory(nodeId);
+      } catch (err) {
+        console.error(
+          `[inheritance] Failed to re-run for category ${nodeId}:`,
+          err,
+        );
+      }
+    }
+
+    const children: any[] = await Category.find({ parentId: nodeId })
+      .select("_id")
+      .lean();
+
+    for (const child of children) {
+      await walk(child._id.toString());
+    }
+  }
+
+  await walk(categoryId);
+}
+
+// ========================================================================
+//  Prune helpers
+//
+//  The "prune" path is the counterpart to re-merge: when a property's
+//  *own* mappings lose attributes, every inheriting descendant's
+//  snapshot may still hold those attributes even though neither the
+//  descendant's own property nor any ancestor contributes them anymore.
+//  We don't rebuild — we just walk the subtree, compute the set of
+//  attribute IDs that are actually reachable from (ancestor-chain own
+//  properties) ∪ (this node's own property), and drop everything else
+//  from the existing snapshot.
+// ========================================================================
+
+function collectAttrIdsFromMappings(mappings: any[]): Set<string> {
+  const out = new Set<string>();
+  for (const m of mappings ?? []) {
+    for (const g of m.groups ?? []) {
+      for (const a of g.attributes ?? []) {
+        const id = a?.attribute?.toString?.();
+        if (id) out.add(id);
+      }
+    }
+  }
+  return out;
+}
+
+async function collectAttrIdsFromPropertyId(
+  propertyId: string | null,
+): Promise<Set<string>> {
+  if (!propertyId) return new Set();
+  const prop: any = await CategoryProperty.findById(propertyId)
+    .select("mappings")
+    .lean();
+  return collectAttrIdsFromMappings(prop?.mappings ?? []);
+}
+
+async function collectAncestorAttrIds(
+  categoryId: string,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  const visited = new Set<string>();
+
+  const self: any = await Category.findById(categoryId)
+    .select("parentId")
+    .lean();
+  if (!self?.parentId) return out;
+
+  let currentId: string | null = self.parentId.toString();
+  let depth = 0;
+
+  while (currentId && depth < 30 && !visited.has(currentId)) {
+    visited.add(currentId);
+    depth += 1;
+
+    const node: any = await Category.findById(currentId)
+      .select("property parentId")
+      .lean();
+    if (!node) break;
+
+    const own = await collectAttrIdsFromPropertyId(
+      node.property?.toString() ?? null,
+    );
+    for (const a of own) out.add(a);
+
+    currentId = node.parentId?.toString() ?? null;
+  }
+
+  return out;
+}
+
+/**
+ * Recursively walks the subtree under `categoryId` and prunes each
+ * inheriting node's snapshot to only attributes reachable from:
+ *   parentEffective (computed top-down) ∪ this node's own property.
+ *
+ * `parentEffective` is the accumulated "allowed" set passed down from
+ * the parent. The returned number is how many snapshots were changed.
+ */
+async function pruneSubtree(
+  categoryId: string,
+  parentEffective: Set<string>,
+  visited: Set<string>,
+): Promise<number> {
+  if (visited.has(categoryId)) return 0;
+  visited.add(categoryId);
+
+  const category: any = await Category.findById(categoryId)
+    .select("property inheritedProperty inheritProperty parentId")
+    .lean();
+  if (!category) return 0;
+
+  const ownAttrs = await collectAttrIdsFromPropertyId(
+    category.property?.toString() ?? null,
+  );
+
+  const allowed = new Set<string>(parentEffective);
+  for (const a of ownAttrs) allowed.add(a);
+
+  let updated = 0;
+
+  // ---- Prune this node's snapshot if it inherits. ----
+  if (
+    category.inheritProperty === true &&
+    category.inheritedProperty &&
+    category.parentId
+  ) {
+    const snapshotId = category.inheritedProperty.toString();
+    const snapshot: any = await CategoryProperty.findById(snapshotId)
+      .select("mappings")
+      .lean();
+
+    if (snapshot?.mappings) {
+      let removedAny = false;
+      const newMappings: any[] = [];
+
+      for (const m of snapshot.mappings ?? []) {
+        const newGroups: any[] = [];
+
+        for (const g of m.groups ?? []) {
+          const originalAttrs = g.attributes ?? [];
+          const keptAttrs = originalAttrs.filter((a: any) => {
+            const id = a?.attribute?.toString?.();
+            return id && allowed.has(id);
+          });
+
+          if (keptAttrs.length !== originalAttrs.length) removedAny = true;
+          if (keptAttrs.length > 0) {
+            newGroups.push({ group: g.group, attributes: keptAttrs });
+          }
+        }
+
+        if (newGroups.length !== (m.groups ?? []).length) removedAny = true;
+        if (newGroups.length > 0) {
+          newMappings.push({ set: m.set, groups: newGroups });
+        }
+      }
+
+      if (removedAny) {
+        if (newMappings.length === 0) {
+          // Snapshot is now empty — remove it and clear the ref.
+          await CategoryProperty.deleteOne({ _id: snapshotId });
+          await Category.findByIdAndUpdate(categoryId, {
+            $set: { inheritedProperty: null },
+          });
+        } else {
+          await CategoryProperty.findByIdAndUpdate(snapshotId, {
+            $set: { mappings: newMappings },
+          });
+        }
+        updated += 1;
+      }
+    }
+  }
+
+  // ---- Recurse into children with the accumulated allowed set. ----
+  const children: any[] = await Category.find({ parentId: categoryId })
+    .select("_id")
+    .lean();
+
+  for (const child of children) {
+    updated += await pruneSubtree(child._id.toString(), allowed, visited);
+  }
+
+  return updated;
+}
+
+/**
+ * Prune the subtree rooted at `categoryId` (inclusive). `categoryId`
+ * itself is treated as the cascade entry point: its ancestor chain is
+ * walked once so that the root's own snapshot is pruned with the
+ * correct "parent effective" set, then the recursive walk proceeds.
+ *
+ * Returns the number of snapshot docs that were modified.
+ */
+export async function pruneDescendantSnapshots(
+  categoryId: string,
+): Promise<number> {
+  await connection();
+  if (!mongoose.Types.ObjectId.isValid(categoryId)) return 0;
+
+  const ancestorAttrs = await collectAncestorAttrIds(categoryId);
+  return pruneSubtree(categoryId, ancestorAttrs, new Set());
+}
+
+/**
+ * Entry point used by property mutations. Finds every category that
+ * currently uses `propertyId` as its own property, and prunes the
+ * subtree under each of them.
+ *
+ * The subtrees may overlap (a parent and its child can both use the
+ * same property); the shared `visited` set prevents double work and
+ * double writes.
+ */
+export async function pruneDescendantsAfterPropertyUpdate(
+  propertyId: string,
+): Promise<{ categoriesProcessed: number; snapshotsUpdated: number }> {
+  await connection();
+
+  if (!mongoose.Types.ObjectId.isValid(propertyId)) {
+    return { categoriesProcessed: 0, snapshotsUpdated: 0 };
+  }
+
+  const categories = await Category.find({
+    property: new mongoose.Types.ObjectId(propertyId),
+  })
+    .select("_id")
+    .lean();
+
+  const visited = new Set<string>();
+  let snapshotsUpdated = 0;
+
+  for (const c of categories) {
+    const categoryId = (c._id as string).toString();
+    if (visited.has(categoryId)) continue;
+
+    const ancestorAttrs = await collectAncestorAttrIds(categoryId);
+    snapshotsUpdated += await pruneSubtree(categoryId, ancestorAttrs, visited);
+  }
+
+  return {
+    categoriesProcessed: categories.length,
+    snapshotsUpdated,
+  };
 }
 
 // ========================================================================
@@ -607,7 +875,6 @@ export async function buildAttributeSetsFromMappings(
 //  Category Property CRUD
 // ========================================================================
 
-// By default hides readOnly (auto-generated) docs from the admin list.
 export async function getCategoryProperty(
   id?: string,
   options?: { includeReadOnly?: boolean },
@@ -724,6 +991,23 @@ export async function updateCategoryPropertyWithMappings(
   await property.save();
   revalidatePath("/catalog/categories/property");
 
+  // ---- Prune stale attributes from inheriting descendants' snapshots.
+  // We do NOT rebuild the snapshots: attributes are only *removed* when
+  // they no longer exist in any ancestor's own property nor the
+  // descendant's own property. This keeps the operation cheap and
+  // avoids the cascade cost of a full re-merge.
+  try {
+    const { snapshotsUpdated } = await pruneDescendantsAfterPropertyUpdate(id);
+    if (snapshotsUpdated > 0) {
+      console.log(
+        `[inheritance] Pruned ${snapshotsUpdated} descendant snapshots after property update.`,
+      );
+    }
+  } catch (err) {
+    // Never let the prune failure block the save.
+    console.error("[inheritance] Prune after property update failed:", err);
+  }
+
   const plain = toPlain(property.toObject());
   return { success: true, property: plain };
 }
@@ -741,16 +1025,42 @@ export async function deleteCategoryProperty(id: string) {
       };
     }
 
-    await CategoryProperty.findByIdAndDelete(id);
+    // Snapshot which categories used this property BEFORE we unset it,
+    // so we know whose subtrees to prune afterwards.
+    const affected = await Category.find({ property: id }).select("_id").lean();
 
-    // Only the manual ref needs clearing. Inherited refs point at
-    // auto-gen docs that are cleaned up when their category changes
-    // or is deleted.
+    await CategoryProperty.findByIdAndDelete(id);
     await Category.updateMany({ property: id }, { $unset: { property: "" } });
+
+    // Prune each affected subtree. Their own property is now empty,
+    // so any snapshot attribute that was only coming from this
+    // property will be dropped.
+    const visited = new Set<string>();
+    let snapshotsUpdated = 0;
+    for (const c of affected) {
+      const categoryId = (c._id as string).toString();
+      if (visited.has(categoryId)) continue;
+      try {
+        const ancestorAttrs = await collectAncestorAttrIds(categoryId);
+        snapshotsUpdated += await pruneSubtree(
+          categoryId,
+          ancestorAttrs,
+          visited,
+        );
+      } catch (err) {
+        console.error(
+          `[inheritance] Prune failed for category ${categoryId}:`,
+          err,
+        );
+      }
+    }
 
     revalidatePath("/catalog/categories/property");
     revalidatePath("/categories");
-    return { success: true, message: "Category property deleted." };
+    return {
+      success: true,
+      message: `Category property deleted. ${snapshotsUpdated} descendant snapshot(s) pruned.`,
+    };
   } catch (error: any) {
     console.error("Error deleting category property:", error);
     return { error: error.message || "Failed to delete category property." };
