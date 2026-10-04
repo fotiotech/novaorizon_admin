@@ -12,7 +12,7 @@ import { MuiThemeBridge } from "@/components/MuiThemeBridge";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
