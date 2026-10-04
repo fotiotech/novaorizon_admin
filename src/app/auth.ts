@@ -90,6 +90,7 @@ export const providerMap = providers
 export const { auth, handlers, signIn, signOut } = NextAuth({
   adapter: MongoDBAdapter(client),
   providers,
+
   pages: {
     signIn: "/auth/login",
     error: "/auth/error",
