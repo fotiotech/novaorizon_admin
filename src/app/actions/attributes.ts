@@ -4,6 +4,7 @@ import { connection } from "@/utils/connection";
 import Attribute from "@/models/Attribute";
 import AttributeGroup from "@/models/AttributeGroup";
 import CategoryProperty from "@/models/CategoryProperty";
+import Category from "@/models/Category";
 import mongoose, { Types } from "mongoose";
 import { revalidatePath } from "next/cache";
 import "@/models/UnitFamily";
@@ -268,4 +269,133 @@ export async function deleteAttribute(id: string) {
   } finally {
     await session.endSession();
   }
+}
+
+// ========================================================================
+//  getAttributesUsageMap
+//
+//  Walks CategoryProperty.mappings[].groups[].attributes[].attribute
+//  and resolves:
+//    - the groups those attributes belong to (by group id)
+//    - the categories that use each property (own OR inherited snapshot)
+//
+//  Returns: { [attributeId]: { categories: [{_id,name}], groups: [{_id,name,code}] } }
+// ========================================================================
+export async function getAttributesUsageMap(): Promise<
+  Record<
+    string,
+    {
+      categories: Array<{ _id: string; name: string }>;
+      groups: Array<{ _id: string; name: string; code?: string }>;
+    }
+  >
+> {
+  await connection();
+
+  const [properties, categories, groups] = await Promise.all([
+    CategoryProperty.find({}).select("_id mappings").lean(),
+    Category.find({}).select("_id name property inheritedProperty").lean(),
+    AttributeGroup.find({}).select("_id name code").lean(),
+  ]);
+
+  // ---- groupId -> { _id, name, code } ------------------------------
+  const groupMeta = new Map<
+    string,
+    { _id: string; name: string; code?: string }
+  >();
+  for (const g of groups as any[]) {
+    const gid = g._id.toString();
+    groupMeta.set(gid, { _id: gid, name: g.name, code: g.code });
+  }
+
+  // ---- attributeId -> { groupIds, propertyIds } --------------------
+  const attrInfo = new Map<
+    string,
+    { groupIds: Set<string>; propertyIds: Set<string> }
+  >();
+  const ensure = (aid: string) => {
+    let v = attrInfo.get(aid);
+    if (!v) {
+      v = { groupIds: new Set(), propertyIds: new Set() };
+      attrInfo.set(aid, v);
+    }
+    return v;
+  };
+
+  for (const p of properties as any[]) {
+    const pid = p._id.toString();
+    const mappings: any[] = Array.isArray(p.mappings) ? p.mappings : [];
+
+    for (const m of mappings) {
+      const groupEntries: any[] = Array.isArray(m?.groups) ? m.groups : [];
+      for (const g of groupEntries) {
+        const gid =
+          g?.group?.toString?.() ??
+          (typeof g?.group === "string" ? g.group : undefined);
+        if (!gid) continue;
+
+        const attrEntries: any[] = Array.isArray(g?.attributes)
+          ? g.attributes
+          : [];
+        for (const a of attrEntries) {
+          const aid =
+            a?.attribute?.toString?.() ??
+            (typeof a?.attribute === "string" ? a.attribute : undefined) ??
+            a?.toString?.();
+          if (!aid) continue;
+
+          const info = ensure(aid);
+          info.groupIds.add(gid);
+          info.propertyIds.add(pid);
+        }
+      }
+    }
+  }
+
+  // ---- propertyId -> categories that use it (own OR inherited) -----
+  const catsByProp = new Map<string, Array<{ _id: string; name: string }>>();
+  for (const c of categories as any[]) {
+    const cid = c._id.toString();
+    const entry = { _id: cid, name: String(c.name ?? "") };
+    const add = (pid: any) => {
+      if (!pid) return;
+      const key = pid.toString();
+      if (!catsByProp.has(key)) catsByProp.set(key, []);
+      const arr = catsByProp.get(key)!;
+      if (!arr.some((x) => x._id === cid)) arr.push(entry);
+    };
+    add(c.property);
+    add(c.inheritedProperty);
+  }
+
+  // ---- assemble final map ------------------------------------------
+  const result: Record<
+    string,
+    {
+      categories: Array<{ _id: string; name: string }>;
+      groups: Array<{ _id: string; name: string; code?: string }>;
+    }
+  > = {};
+
+  for (const [aid, info] of attrInfo) {
+    const groupList: Array<{ _id: string; name: string; code?: string }> = [];
+    for (const gid of info.groupIds) {
+      const meta = groupMeta.get(gid);
+      if (meta) groupList.push(meta);
+    }
+
+    const catMap = new Map<string, { _id: string; name: string }>();
+    for (const pid of info.propertyIds) {
+      for (const cat of catsByProp.get(pid) ?? []) {
+        if (!catMap.has(cat._id)) catMap.set(cat._id, cat);
+      }
+    }
+
+    result[aid] = {
+      categories: Array.from(catMap.values()),
+      groups: groupList,
+    };
+  }
+
+  return result;
 }

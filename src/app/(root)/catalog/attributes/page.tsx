@@ -17,6 +17,7 @@ import {
 import {
   deleteAttribute,
   findAttributesAndValues,
+  getAttributesUsageMap,
 } from "@/app/actions/attributes";
 import { AttributeFormModal } from "./_component/AttributeFormModal";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
@@ -38,6 +39,11 @@ interface Option {
   label: string;
 }
 
+type Usage = {
+  categories: Array<{ _id: string; name: string }>;
+  groups: Array<{ _id: string; name: string; code?: string }>;
+};
+
 // ------------------------------------------------------------------
 // Shared class tokens
 // ------------------------------------------------------------------
@@ -45,7 +51,7 @@ const INPUT_CLASS =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40";
 
 // ------------------------------------------------------------------
-// Theme-aware react-select styles (matches the rest of the app)
+// Theme-aware react-select styles
 // ------------------------------------------------------------------
 const SELECT_STYLES = {
   control: (provided: any, state: any) => ({
@@ -136,7 +142,7 @@ function formatOptions(option: any): string {
 }
 
 // ------------------------------------------------------------------
-// Shared empty state — used by both the desktop table and mobile list
+// Shared empty state
 // ------------------------------------------------------------------
 const EmptyState = React.memo(function EmptyState({
   isFiltering,
@@ -164,8 +170,163 @@ const EmptyState = React.memo(function EmptyState({
   );
 });
 
+// ------------------------------------------------------------------
+// Centered usage modal
+// ------------------------------------------------------------------
+function UsageModal({
+  isOpen,
+  attributeName,
+  usage,
+  onClose,
+}: {
+  isOpen: boolean;
+  attributeName?: string;
+  usage?: Usage;
+  onClose: () => void;
+}) {
+  // ESC to close + body scroll lock
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const catCount = usage?.categories.length ?? 0;
+  const grpCount = usage?.groups.length ?? 0;
+  const isEmpty = catCount === 0 && grpCount === 0;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Attribute usage"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Panel */}
+      <div className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-card text-card-foreground shadow-xl ring-1 ring-border/60">
+        {/* Header */}
+        <header className="flex flex-none items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-foreground">
+              {attributeName
+                ? `Where "${attributeName}" is used`
+                : "Attribute usage"}
+            </h2>
+            {!isEmpty && (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {catCount} {catCount === 1 ? "category" : "categories"} ·{" "}
+                {grpCount} {grpCount === 1 ? "group" : "groups"}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          >
+            <Close fontSize="small" />
+          </button>
+        </header>
+
+        {/* Scrollable body */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          {isEmpty ? (
+            <div className="rounded-lg bg-muted/50 px-4 py-8 text-center text-sm text-muted-foreground">
+              This attribute isn&apos;t assigned to any category or group yet.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-5">
+              {/* Categories */}
+              <section>
+                <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Categories
+                  <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-muted px-1.5 text-[11px] font-medium text-muted-foreground">
+                    {catCount}
+                  </span>
+                </h3>
+                {catCount === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Not assigned to any category.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border/60 overflow-hidden rounded-lg bg-muted/30">
+                    {usage!.categories.map((c) => (
+                      <li
+                        key={c._id}
+                        className="truncate px-3 py-2 text-sm text-foreground"
+                      >
+                        {c.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              {/* Groups */}
+              <section>
+                <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Attribute groups
+                  <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-muted px-1.5 text-[11px] font-medium text-muted-foreground">
+                    {grpCount}
+                  </span>
+                </h3>
+                {grpCount === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Not assigned to any group.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border/60 overflow-hidden rounded-lg bg-muted/30">
+                    {usage!.groups.map((g) => (
+                      <li
+                        key={g._id}
+                        className="truncate px-3 py-2 text-sm text-foreground"
+                      >
+                        {g.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <footer className="flex flex-none justify-end border-t border-border/60 px-4 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
+          >
+            Close
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 const Attributes = () => {
   const [attributes, setAttributes] = useState<AttributeType[]>([]);
+  const [usageMap, setUsageMap] = useState<Record<string, Usage>>({});
   const [editingAttributeId, setEditingAttributeId] = useState<string | null>(
     null,
   );
@@ -184,6 +345,11 @@ const Attributes = () => {
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
+  // Usage modal
+  const [usageDetailsAttr, setUsageDetailsAttr] =
+    useState<AttributeType | null>(null);
+  const [isUsageModalOpen, setIsUsageModalOpen] = useState(false);
+
   useEffect(() => {
     fetchAttributes();
   }, []);
@@ -191,13 +357,21 @@ const Attributes = () => {
   const fetchAttributes = async () => {
     setLoading(true);
     try {
-      const response = await findAttributesAndValues();
+      const [response, usage] = await Promise.all([
+        findAttributesAndValues(),
+        getAttributesUsageMap().catch((e) => {
+          console.error("[Attributes] usage map failed:", e);
+          return {} as Record<string, Usage>;
+        }),
+      ]);
+
       if (response?.length > 0) {
         setAttributes(response as unknown as AttributeType[]);
         setError(null);
       } else {
         setAttributes([]);
       }
+      setUsageMap(usage || {});
     } catch (err) {
       console.error("[Attributes] Error fetching data:", err);
       setError(
@@ -249,6 +423,16 @@ const Attributes = () => {
     }
   };
 
+  const openUsageDetails = (attr: AttributeType) => {
+    setUsageDetailsAttr(attr);
+    setIsUsageModalOpen(true);
+  };
+
+  const closeUsageDetails = () => {
+    setIsUsageModalOpen(false);
+    setUsageDetailsAttr(null);
+  };
+
   const sortOptions: Option[] = [
     { value: "asc", label: "A → Z" },
     { value: "desc", label: "Z → A" },
@@ -279,6 +463,12 @@ const Attributes = () => {
   };
 
   const getMenuItems = (attr: AttributeType): PopoverMenuItem[] => [
+    {
+      key: "usage",
+      label: "View usage",
+      icon: <Tune fontSize="small" />,
+      onClick: () => openUsageDetails(attr),
+    },
     {
       key: "edit",
       label: "Edit attribute",
@@ -318,7 +508,6 @@ const Attributes = () => {
     );
   }
 
-  // Shared filter controls — reused in desktop bar and mobile sheet
   const filterInputEl = (
     <div className="relative w-full">
       <Search
@@ -350,11 +539,13 @@ const Attributes = () => {
 
   const isFiltering = filterText.trim() !== "";
 
+  const currentUsage = usageDetailsAttr?._id
+    ? usageMap[usageDetailsAttr._id]
+    : undefined;
+
   return (
     <div className="mx-auto w-full max-w-6xl overflow-x-clip">
-      {/* -------------------------------------------------------------- */}
-      {/* Controls — no title (top bar renders the page name)            */}
-      {/* -------------------------------------------------------------- */}
+      {/* Controls */}
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-2">
         {/* Mobile: Filters + New attribute */}
         <div className="flex items-center gap-2 md:hidden">
@@ -684,6 +875,14 @@ const Attributes = () => {
         message={`Are you sure you want to delete the attribute "${deleteTargetName}"? This action cannot be undone.`}
         confirmLabel="Delete"
         danger={true}
+      />
+
+      {/* Usage Modal (centered) */}
+      <UsageModal
+        isOpen={isUsageModalOpen}
+        attributeName={usageDetailsAttr?.name}
+        usage={currentUsage}
+        onClose={closeUsageDetails}
       />
     </div>
   );
