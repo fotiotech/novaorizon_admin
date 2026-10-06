@@ -3,6 +3,7 @@
 import { connection } from "@/utils/connection";
 import AttributeGroup from "@/models/AttributeGroup";
 import CategoryProperty from "@/models/CategoryProperty";
+import Category from "@/models/Category";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 
@@ -239,4 +240,76 @@ export async function deleteAttributeGroup(id: string) {
     console.error("[AttributeGroup] Error deleting group:", error);
     throw error;
   }
+}
+
+// ========================================================================
+//  getAttributeGroupsUsageMap
+//
+//  For each AttributeGroup, returns the categories that use it, i.e.
+//  every category whose (own OR inherited) CategoryProperty has a
+//  mapping that references the group.
+//
+//  Returns: { [groupId]: { categories: [{_id, name}] } }
+// ========================================================================
+export async function getAttributeGroupsUsageMap(): Promise<
+  Record<string, { categories: Array<{ _id: string; name: string }> }>
+> {
+  await connection();
+
+  const [properties, categories] = await Promise.all([
+    CategoryProperty.find({}).select("_id mappings").lean(),
+    Category.find({}).select("_id name property inheritedProperty").lean(),
+  ]);
+
+  // ---- groupId -> Set(propertyId) ----------------------------------
+  const groupToProps = new Map<string, Set<string>>();
+  for (const p of properties as any[]) {
+    const pid = p._id.toString();
+    const mappings: any[] = Array.isArray(p.mappings) ? p.mappings : [];
+    for (const m of mappings) {
+      const groupEntries: any[] = Array.isArray(m?.groups) ? m.groups : [];
+      for (const g of groupEntries) {
+        const gid =
+          g?.group?.toString?.() ??
+          (typeof g?.group === "string" ? g.group : undefined);
+        if (!gid) continue;
+        if (!groupToProps.has(gid)) groupToProps.set(gid, new Set());
+        groupToProps.get(gid)!.add(pid);
+      }
+    }
+  }
+
+  // ---- propertyId -> categories using it (own OR inherited) --------
+  const catsByProp = new Map<string, Array<{ _id: string; name: string }>>();
+  for (const c of categories as any[]) {
+    const cid = c._id.toString();
+    const entry = { _id: cid, name: String(c.name ?? "") };
+    const add = (pid: any) => {
+      if (!pid) return;
+      const key = pid.toString();
+      if (!catsByProp.has(key)) catsByProp.set(key, []);
+      const arr = catsByProp.get(key)!;
+      if (!arr.some((x) => x._id === cid)) arr.push(entry);
+    };
+    add(c.property);
+    add(c.inheritedProperty);
+  }
+
+  // ---- assemble ----------------------------------------------------
+  const result: Record<
+    string,
+    { categories: Array<{ _id: string; name: string }> }
+  > = {};
+
+  for (const [gid, pids] of groupToProps) {
+    const catMap = new Map<string, { _id: string; name: string }>();
+    for (const pid of pids) {
+      for (const cat of catsByProp.get(pid) ?? []) {
+        if (!catMap.has(cat._id)) catMap.set(cat._id, cat);
+      }
+    }
+    result[gid] = { categories: Array.from(catMap.values()) };
+  }
+
+  return result;
 }

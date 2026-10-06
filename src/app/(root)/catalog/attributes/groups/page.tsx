@@ -4,6 +4,7 @@
 import {
   deleteAttributeGroup,
   findAllAttributeGroups,
+  getAttributeGroupsUsageMap,
 } from "@/app/actions/attributegroup";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Select from "react-select";
@@ -24,6 +25,7 @@ import {
   KeyboardArrowRight,
   ListAlt,
   FolderOpen,
+  Tune,
 } from "@mui/icons-material";
 
 // Types
@@ -53,6 +55,10 @@ type FlatRow = {
   hasChildren: boolean;
   childrenCount: number;
   isExpanded: boolean;
+};
+
+type GroupUsage = {
+  categories: Array<{ _id: string; name: string }>;
 };
 
 // ------------------------------------------------------------------
@@ -130,8 +136,121 @@ const getParentId = (g: any): string | null => {
   return s === "" ? null : s;
 };
 
+// ------------------------------------------------------------------
+// Centered usage modal (categories only)
+// ------------------------------------------------------------------
+function GroupUsageModal({
+  isOpen,
+  groupName,
+  usage,
+  onClose,
+}: {
+  isOpen: boolean;
+  groupName?: string;
+  usage?: GroupUsage;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const catCount = usage?.categories.length ?? 0;
+  const isEmpty = catCount === 0;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Group usage"
+    >
+      <div
+        className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      <div className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-card text-card-foreground shadow-xl ring-1 ring-border/60">
+        {/* Header */}
+        <header className="flex flex-none items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-foreground">
+              {groupName ? `Where "${groupName}" is used` : "Group usage"}
+            </h2>
+            {!isEmpty && (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {catCount} {catCount === 1 ? "category" : "categories"}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          >
+            <Close fontSize="small" />
+          </button>
+        </header>
+
+        {/* Scrollable body */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          {isEmpty ? (
+            <div className="rounded-lg bg-muted/50 px-4 py-8 text-center text-sm text-muted-foreground">
+              This group isn&apos;t assigned to any category yet.
+            </div>
+          ) : (
+            <section>
+              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Categories
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-muted px-1.5 text-[11px] font-medium text-muted-foreground">
+                  {catCount}
+                </span>
+              </h3>
+              <ul className="divide-y divide-border/60 overflow-hidden rounded-lg bg-muted/30">
+                {usage!.categories.map((c) => (
+                  <li
+                    key={c._id}
+                    className="truncate px-3 py-2 text-sm text-foreground"
+                  >
+                    {c.name}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+
+        {/* Footer */}
+        <footer className="flex flex-none justify-end border-t border-border/60 px-4 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
+          >
+            Close
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 const Group = () => {
   const [groups, setGroups] = useState<AttributesGroup[]>([]);
+  const [usageMap, setUsageMap] = useState<Record<string, GroupUsage>>({});
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editGroupId, setEditGroupId] = useState<string>("");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -150,20 +269,38 @@ const Group = () => {
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
+  // Usage modal
+  const [usageTargetGroup, setUsageTargetGroup] = useState<{
+    _id: string;
+    name: string;
+  } | null>(null);
+  const [isUsageModalOpen, setIsUsageModalOpen] = useState(false);
+
   // ---------- View mode: true = browse (drill-down), false = list (tree) ----------
   const [browseMode, setBrowseMode] = useState(true);
   const [browsePath, setBrowsePath] = useState<string[]>([]);
 
   const isSearching = filterText.trim() !== "";
 
+  const fetchGroups = async () => {
+    const [groupsResponse, usage] = await Promise.all([
+      findAllAttributeGroups(),
+      getAttributeGroupsUsageMap().catch((e) => {
+        console.error("[Groups] usage map failed:", e);
+        return {} as Record<string, GroupUsage>;
+      }),
+    ]);
+    if (groupsResponse) {
+      setGroups(groupsResponse as unknown as AttributesGroup[]);
+    }
+    setUsageMap(usage || {});
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const groupsResponse = await findAllAttributeGroups();
-        if (groupsResponse) {
-          setGroups(groupsResponse as unknown as AttributesGroup[]);
-        }
+        await fetchGroups();
         setError(null);
       } catch (err) {
         console.error("Error fetching data:", err);
@@ -235,8 +372,7 @@ const Group = () => {
   // ------------------------------------------------------------------
   const handleFormSuccess = async () => {
     try {
-      const res = await findAllAttributeGroups();
-      setGroups(res as unknown as AttributesGroup[]);
+      await fetchGroups();
       setSuccess(
         editGroupId
           ? "Group updated successfully!"
@@ -270,8 +406,7 @@ const Group = () => {
     setIsLoading(true);
     try {
       await deleteAttributeGroup(deleteTargetId);
-      const res = await findAllAttributeGroups();
-      setGroups(res as unknown as AttributesGroup[]);
+      await fetchGroups();
       setBrowsePath((prev) => (prev.includes(deleteTargetId) ? [] : prev));
       setSuccess("Group deleted successfully!");
       setIsDeleteModalOpen(false);
@@ -283,6 +418,16 @@ const Group = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const openUsageDetails = (group: { _id: string; name: string }) => {
+    setUsageTargetGroup(group);
+    setIsUsageModalOpen(true);
+  };
+
+  const closeUsageDetails = () => {
+    setIsUsageModalOpen(false);
+    setUsageTargetGroup(null);
   };
 
   const toggleGroupExpansion = (id: string) => {
@@ -533,6 +678,12 @@ const Group = () => {
 
   const getMenuItems = (group: any): PopoverMenuItem[] => [
     {
+      key: "usage",
+      label: "View usage",
+      icon: <Tune fontSize="small" />,
+      onClick: () => openUsageDetails({ _id: group._id, name: group.name }),
+    },
+    {
       key: "edit",
       label: "Edit group",
       icon: <Edit fontSize="small" />,
@@ -582,6 +733,10 @@ const Group = () => {
       : browseChildren.length
     : flattenedGroups.length;
 
+  const currentUsage = usageTargetGroup?._id
+    ? usageMap[usageTargetGroup._id]
+    : undefined;
+
   return (
     <div className="mx-auto w-full max-w-7xl overflow-x-clip">
       {/* Animation keyframes */}
@@ -616,9 +771,7 @@ const Group = () => {
         }
       `}</style>
 
-      {/* -------------------------------------------------------------- */}
-      {/* Controls — no title (top bar renders the page name)            */}
-      {/* -------------------------------------------------------------- */}
+      {/* Controls */}
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-2">
         {/* Mobile: Filters + List/Browse + New group */}
         <div className="grid grid-cols-2 gap-2 md:hidden">
@@ -1054,6 +1207,14 @@ const Group = () => {
         message={`Are you sure you want to delete the group "${deleteTargetName}"? This action cannot be undone.`}
         confirmLabel="Delete"
         danger={true}
+      />
+
+      {/* Usage Modal (centered) */}
+      <GroupUsageModal
+        isOpen={isUsageModalOpen}
+        groupName={usageTargetGroup?.name}
+        usage={currentUsage}
+        onClose={closeUsageDetails}
       />
     </div>
   );
