@@ -365,6 +365,62 @@ export async function runCategoryInheritance(
 }
 
 // ========================================================================
+//  assignCategoryProperty
+//
+//  Assign or clear the category's *own* property. Triggers the full
+//  inheritance cascade because every descendant's merged snapshot
+//  depends on this ancestor's contribution — assigning, changing, or
+//  clearing it can add AND remove attributes downstream.
+// ========================================================================
+export async function assignCategoryProperty(
+  categoryId: string,
+  propertyId: string | null,
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    await connection();
+
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      return { error: "Invalid category ID." };
+    }
+    if (propertyId && !mongoose.Types.ObjectId.isValid(propertyId)) {
+      return { error: "Invalid property ID." };
+    }
+
+    const category: any =
+      await Category.findById(categoryId).select("property");
+    if (!category) return { error: "Category not found." };
+
+    if (propertyId) {
+      const prop: any =
+        await CategoryProperty.findById(propertyId).select("readOnly");
+      if (!prop) return { error: "Property not found." };
+      if (prop.readOnly) {
+        return {
+          error:
+            "System-managed (inherited) properties cannot be assigned manually.",
+        };
+      }
+    }
+
+    const previous = category.property?.toString() ?? null;
+    const next = propertyId || null;
+    if (previous === next) return { success: true };
+
+    category.property = next ? new mongoose.Types.ObjectId(next) : null;
+    await category.save();
+
+    // Own property changed → descendants must re-merge.
+    await rerunInheritanceForCategoryAndDescendants(categoryId);
+
+    revalidateCategoryConsumers();
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error assigning category property:", error);
+    return { error: error.message || "Failed to assign property." };
+  }
+}
+
+// ========================================================================
 //  deleteCategory
 // ========================================================================
 export async function deleteCategory(id: string) {

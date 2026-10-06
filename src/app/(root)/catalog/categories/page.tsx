@@ -1,14 +1,18 @@
 // app/catalog/categories/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  assignCategoryProperty,
   deleteCategory,
   getCategory,
   getCategoryAttributeSets,
   runCategoryInheritance,
 } from "@/app/actions/category";
-import type { AttributeSetResult } from "@/app/actions/category_property";
+import {
+  getCategoryProperty,
+  type AttributeSetResult,
+} from "@/app/actions/category_property";
 import { getCategoryProductCounts } from "@/app/actions/products";
 import { Category as Cat } from "@/constant/types";
 import CategoryForm from "./_component/CategoryForm";
@@ -25,6 +29,7 @@ import {
   Close,
   ListAlt,
   FolderOpen,
+  Check,
 } from "@mui/icons-material";
 import PropertyViewerModal from "@/components/ux/PropertyViewerModal";
 
@@ -54,6 +59,15 @@ const Categories = () => {
   const [viewTarget, setViewTarget] = useState<Cat | null>(null);
   const [viewSets, setViewSets] = useState<AttributeSetResult[] | null>(null);
   const [viewLoading, setViewLoading] = useState(false);
+
+  // ---------- Assign-property modal state ----------
+  const [assignTarget, setAssignTarget] = useState<Cat | null>(null);
+  const [assignPropertyId, setAssignPropertyId] = useState<string>("");
+  const [assignProps, setAssignProps] = useState<any[] | null>(null);
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignSaving, setAssignSaving] = useState(false);
+  const [assignSearch, setAssignSearch] = useState("");
+  const assignSearchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchCategories();
@@ -233,6 +247,84 @@ const Categories = () => {
     setViewSets(null);
     setViewLoading(false);
   };
+
+  // ---------- Assign / change property ----------
+  const handleAssignProperty = async (category: Cat) => {
+    const prop = (category as any).property;
+    const currentId =
+      typeof prop === "string"
+        ? prop
+        : prop && typeof prop === "object" && "_id" in prop
+          ? (prop as any)._id
+          : "";
+
+    setAssignTarget(category);
+    setAssignPropertyId(currentId || "");
+    setAssignProps(null);
+    setAssignLoading(true);
+    setAssignSearch("");
+
+    try {
+      const props = await getCategoryProperty(); // readOnly ones are filtered out
+      setAssignProps(props || []);
+      // Focus the search box on next tick once the modal is rendered.
+      setTimeout(() => assignSearchRef.current?.focus(), 50);
+    } catch (err) {
+      console.error("Failed to load properties:", err);
+      toast.error("Failed to load properties");
+      setAssignProps([]);
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const closeAssignProperty = () => {
+    setAssignTarget(null);
+    setAssignPropertyId("");
+    setAssignProps(null);
+    setAssignSearch("");
+    setAssignSaving(false);
+  };
+
+  const confirmAssignProperty = async () => {
+    if (!assignTarget) return;
+    setAssignSaving(true);
+    try {
+      const result = await assignCategoryProperty(
+        assignTarget._id as string,
+        assignPropertyId || null,
+      );
+
+      if (result.success) {
+        await fetchCategories();
+        toast.success("Property updated");
+        closeAssignProperty();
+      } else {
+        toast.error(result.error || "Failed to assign property");
+      }
+    } catch (err) {
+      console.error("Error assigning property:", err);
+      toast.error("Failed to assign property");
+    } finally {
+      setAssignSaving(false);
+    }
+  };
+
+  // Filtered + sorted property list for the picker.
+  const filteredAssignProps = useMemo(() => {
+    if (!assignProps) return [];
+    const q = assignSearch.trim().toLowerCase();
+    const list = q
+      ? assignProps.filter((p: any) => {
+          const name = (p.name || "").toLowerCase();
+          const code = (p.code || "").toLowerCase();
+          return name.includes(q) || code.includes(q);
+        })
+      : assignProps;
+    return [...list].sort((a: any, b: any) =>
+      (a.name || "").localeCompare(b.name || ""),
+    );
+  }, [assignProps, assignSearch]);
 
   // ---------- Browse handlers ----------
   const handleOpenCategory = (category: Cat) => {
@@ -467,6 +559,7 @@ const Categories = () => {
           onRunInheritance={handleRunInheritance as any}
           onViewProperty={handleViewProperty as any}
           onAddChild={handleAddChild as any}
+          onAssignProperty={handleAssignProperty as any}
           showFilter={true}
           hideFilter={true}
           filterValue={filterText}
@@ -487,6 +580,166 @@ const Categories = () => {
         sets={viewSets}
         loading={viewLoading}
       />
+
+      {/* Assign-property modal */}
+      <Modal
+        isOpen={!!assignTarget}
+        onClose={closeAssignProperty}
+        title={
+          assignTarget
+            ? `Property for "${assignTarget.name}"`
+            : "Assign property"
+        }
+        size="md"
+      >
+        {assignTarget && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Choose the property this category defines directly. Inheriting
+              descendants will re-merge automatically.
+            </p>
+
+            {/* Search input */}
+            <div className="relative">
+              <Search
+                fontSize="small"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                ref={assignSearchRef}
+                type="text"
+                placeholder="Search properties…"
+                value={assignSearch}
+                onChange={(e) => setAssignSearch(e.target.value)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 pl-9 pr-9 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+              />
+              {assignSearch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssignSearch("");
+                    assignSearchRef.current?.focus();
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <Close style={{ fontSize: 16 }} />
+                </button>
+              )}
+            </div>
+
+            {/* List */}
+            {assignLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-foreground" />
+              </div>
+            ) : !assignProps || assignProps.length === 0 ? (
+              <div className="rounded-lg bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
+                No assignable properties found. Create one first.
+              </div>
+            ) : (
+              <div className="flex max-h-80 flex-col gap-1 overflow-y-auto rounded-lg border border-border p-1">
+                {/* None option — always present, always at top */}
+                {!assignSearch.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setAssignPropertyId("")}
+                    className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition ${
+                      assignPropertyId === ""
+                        ? "bg-primary/10 text-foreground"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <span className="flex flex-col">
+                      <span className="font-medium">None</span>
+                      <span className="text-xs text-muted-foreground">
+                        Clear the category&rsquo;s own property
+                      </span>
+                    </span>
+                    {assignPropertyId === "" && (
+                      <Check
+                        fontSize="small"
+                        className="flex-none text-primary"
+                      />
+                    )}
+                  </button>
+                )}
+
+                {filteredAssignProps.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                    No properties match &ldquo;{assignSearch}&rdquo;
+                  </div>
+                ) : (
+                  filteredAssignProps.map((p: any) => {
+                    const selected = assignPropertyId === p._id;
+                    return (
+                      <button
+                        key={p._id}
+                        type="button"
+                        onClick={() => setAssignPropertyId(p._id)}
+                        className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition ${
+                          selected
+                            ? "bg-primary/10 text-foreground"
+                            : "text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate font-medium">{p.name}</span>
+                          {p.code && (
+                            <span className="truncate font-mono text-xs text-muted-foreground">
+                              {p.code}
+                            </span>
+                          )}
+                          {p.description && (
+                            <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                              {p.description}
+                            </span>
+                          )}
+                        </span>
+                        {selected && (
+                          <Check
+                            fontSize="small"
+                            className="flex-none text-primary"
+                          />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <span className="text-xs text-muted-foreground">
+                {assignPropertyId
+                  ? `Selected: ${
+                      assignProps?.find((p: any) => p._id === assignPropertyId)
+                        ?.name ?? "—"
+                    }`
+                  : "No property selected"}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={closeAssignProperty}
+                  className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmAssignProperty}
+                  disabled={assignSaving || assignLoading}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {assignSaving ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Delete confirmation */}
       <ConfirmDialog

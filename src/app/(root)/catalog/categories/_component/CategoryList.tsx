@@ -15,6 +15,7 @@ import {
   Visibility,
   Add,
   Inventory2,
+  Category as CategoryIcon,
 } from "@mui/icons-material";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 
@@ -48,6 +49,7 @@ interface CategoryListProps {
   onRunInheritance: (category: CategoryNode) => void;
   onViewProperty: (category: CategoryNode) => void;
   onAddChild?: (category: CategoryNode) => void;
+  onAssignProperty?: (category: CategoryNode) => void;
   showFilter?: boolean;
   filterPlaceholder?: string;
   filterValue?: string;
@@ -97,6 +99,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
   onRunInheritance,
   onViewProperty,
   onAddChild,
+  onAssignProperty,
   showFilter = true,
   filterPlaceholder = "Search categories…",
   filterValue,
@@ -328,6 +331,16 @@ const CategoryList: React.FC<CategoryListProps> = ({
         label: "Add child category",
         icon: <Add fontSize="small" />,
         onClick: () => onAddChild(row),
+      });
+    }
+
+    if (onAssignProperty) {
+      const hasOwn = !!row.property;
+      items.push({
+        key: "assign-property",
+        label: hasOwn ? "Change property" : "Assign property",
+        icon: <CategoryIcon fontSize="small" />,
+        onClick: () => onAssignProperty(row),
       });
     }
 

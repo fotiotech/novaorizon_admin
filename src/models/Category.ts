@@ -61,7 +61,7 @@ const CategorySchema = new Schema<ICategory>({
 
   inheritProperty: {
     type: Boolean,
-    default: false,
+    default: true,
   },
 
   inheritedProperty: {
