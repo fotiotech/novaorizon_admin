@@ -87,7 +87,8 @@ export default function MappingItem({
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
 
   // If the open group is removed from the mapping (deselected in
-  // GroupSelector), drop the stale pointer so the modal closes cleanly.
+  // GroupSelector, or removed via the × on the card), drop the stale
+  // pointer so the modal closes cleanly.
   useEffect(() => {
     if (activeGroupId && !groups.some((g) => g.group === activeGroupId)) {
       setActiveGroupId(null);
@@ -244,50 +245,77 @@ export default function MappingItem({
                       const hasAttrs = attrCount > 0;
 
                       return (
-                        <button
+                        <div
                           key={groupId}
-                          type="button"
-                          onClick={() => setActiveGroupId(groupId)}
-                          className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition hover:border-primary/60 hover:bg-muted/30 sm:gap-3"
+                          className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5 transition hover:border-primary/60 hover:bg-muted/30 sm:gap-2 sm:px-2.5"
                         >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate text-sm font-medium text-foreground">
-                                {groupName}
-                              </span>
-                              <span
-                                className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                  hasAttrs
-                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                                }`}
-                              >
-                                {attrCount} selected
-                              </span>
-                            </div>
-                            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-                              {requiredCount > 0 && (
-                                <span>{requiredCount} required</span>
-                              )}
-                              {requiredCount > 0 && highlightCount > 0 && (
-                                <span className="text-border">•</span>
-                              )}
-                              {highlightCount > 0 && (
-                                <span>{highlightCount} highlighted</span>
-                              )}
-                              {requiredCount === 0 && highlightCount === 0 && (
-                                <span>
-                                  {hasAttrs
-                                    ? "No flags set"
-                                    : "Select at least one"}
+                          <button
+                            type="button"
+                            onClick={() => setActiveGroupId(groupId)}
+                            className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md px-1 py-1 text-left sm:gap-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="truncate text-sm font-medium text-foreground">
+                                  {groupName}
                                 </span>
-                              )}
+                                <span
+                                  className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                    hasAttrs
+                                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                      : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                  }`}
+                                >
+                                  {attrCount} selected
+                                </span>
+                              </div>
+                              <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                                {requiredCount > 0 && (
+                                  <span>{requiredCount} required</span>
+                                )}
+                                {requiredCount > 0 && highlightCount > 0 && (
+                                  <span className="text-border">•</span>
+                                )}
+                                {highlightCount > 0 && (
+                                  <span>{highlightCount} highlighted</span>
+                                )}
+                                {requiredCount === 0 &&
+                                  highlightCount === 0 && (
+                                    <span>
+                                      {hasAttrs
+                                        ? "No flags set"
+                                        : "Select at least one"}
+                                    </span>
+                                  )}
+                              </div>
                             </div>
-                          </div>
-                          <span className="shrink-0 text-xs font-medium text-primary">
-                            {hasAttrs ? "Edit" : "Select"}
-                          </span>
-                        </button>
+                            <span className="shrink-0 text-xs font-medium text-primary">
+                              {hasAttrs ? "Edit" : "Select"}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onToggleGroup(groupId)}
+                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                            aria-label={`Remove ${groupName}`}
+                            title={`Remove ${groupName}`}
+                          >
+                            <svg
+                              className="h-3.5 w-3.5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M6 18L18 6M6 6l12 12"
+                              />
+                            </svg>
+                          </button>
+                        </div>
                       );
                     })}
                   </div>

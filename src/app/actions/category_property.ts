@@ -9,7 +9,7 @@ import CategoryProperty from "@/models/CategoryProperty";
 import AttributeSet from "@/models/AttributeSet";
 import Attribute from "@/models/Attribute";
 import AttributeGroup from "@/models/AttributeGroup";
-import "@/models/UnitFamily";
+import UnitFamily from "@/models/UnitFamily";
 import { revalidatePath } from "next/cache";
 
 // ========================================================================
@@ -162,6 +162,39 @@ function safeIdString(
     }
     visited.delete(value);
   }
+  return null;
+}
+
+// ========================================================================
+//  coerceToObjectId
+//
+//  Some Attribute docs have a corrupted `unitFamily` ref — the raw 12
+//  bytes of an ObjectId serialized as `{0:..,1:..}`. Mongoose's
+//  `populate` throws on it and kills the whole query. We detect and
+//  reject that here so a single bad row can't take down the page.
+// ========================================================================
+function coerceToObjectId(value: any): mongoose.Types.ObjectId | null {
+  if (!value) return null;
+
+  if (value instanceof mongoose.Types.ObjectId) return value;
+
+  if (value._bsontype === "ObjectId" && typeof value.toString === "function") {
+    try {
+      const str = value.toString();
+      return mongoose.Types.ObjectId.isValid(str)
+        ? new mongoose.Types.ObjectId(str)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof value === "string") {
+    return mongoose.Types.ObjectId.isValid(value)
+      ? new mongoose.Types.ObjectId(value)
+      : null;
+  }
+
   return null;
 }
 
@@ -763,45 +796,132 @@ export async function buildAttributeSetsFromMappings(
     }[];
   }[],
 ): Promise<AttributeSetResult[]> {
+  if (!Array.isArray(mappings) || mappings.length === 0) return [];
+
+  // ---- 1. Collect every ID up front so we can batch-fetch. ---------
+  const setIds = new Set<string>();
+  const groupIds = new Set<string>();
+  const attrIds = new Set<string>();
+
+  for (const m of mappings) {
+    const setId = coerceToObjectId(m?.set);
+    if (setId) setIds.add(setId.toString());
+
+    for (const g of m?.groups ?? []) {
+      const groupId = coerceToObjectId(g?.group);
+      if (groupId) groupIds.add(groupId.toString());
+
+      for (const a of g?.attributes ?? []) {
+        const attrId = coerceToObjectId(a?.attribute);
+        if (attrId) attrIds.add(attrId.toString());
+      }
+    }
+  }
+
+  // ---- 2. Batch fetch everything in parallel. ----------------------
+  const [sets, groups, attributes] = await Promise.all([
+    setIds.size
+      ? AttributeSet.find({
+          _id: {
+            $in: [...setIds].map((s) => new mongoose.Types.ObjectId(s)),
+          },
+        }).lean()
+      : Promise.resolve([] as any[]),
+    groupIds.size
+      ? AttributeGroup.find({
+          _id: {
+            $in: [...groupIds].map((s) => new mongoose.Types.ObjectId(s)),
+          },
+        }).lean()
+      : Promise.resolve([] as any[]),
+    attrIds.size
+      ? Attribute.find({
+          _id: {
+            $in: [...attrIds].map((s) => new mongoose.Types.ObjectId(s)),
+          },
+        }).lean()
+      : Promise.resolve([] as any[]),
+  ]);
+
+  // ---- 3. Hydrate unit families manually. --------------------------
+  //   (`.populate("unitFamily")` throws on corrupted refs, so we do
+  //   it by hand and skip bad values with a warning.)
+  const unitFamilyIdSet = new Set<string>();
+  for (const a of attributes) {
+    const ufId = coerceToObjectId((a as any).unitFamily);
+    if (ufId) {
+      unitFamilyIdSet.add(ufId.toString());
+    } else if ((a as any).unitFamily) {
+      console.warn(
+        "[category_property] Ignoring corrupted unitFamily on attribute",
+        (a as any)._id?.toString?.(),
+        (a as any).unitFamily,
+      );
+    }
+  }
+
+  const unitFamilies = unitFamilyIdSet.size
+    ? await UnitFamily.find({
+        _id: {
+          $in: [...unitFamilyIdSet].map((s) => new mongoose.Types.ObjectId(s)),
+        },
+      }).lean()
+    : [];
+
+  // ---- 4. Build lookup maps. ---------------------------------------
+  const setMap = new Map<string, any>();
+  for (const s of sets) setMap.set((s as any)._id.toString(), s);
+
+  const groupMap = new Map<string, any>();
+  for (const g of groups) groupMap.set((g as any)._id.toString(), g);
+
+  const attrMap = new Map<string, any>();
+  for (const a of attributes) attrMap.set((a as any)._id.toString(), a);
+
+  const unitFamilyMap = new Map<string, any>();
+  for (const u of unitFamilies) {
+    unitFamilyMap.set((u as any)._id.toString(), u);
+  }
+
+  // ---- 5. Assemble. ------------------------------------------------
   const result: AttributeSetResult[] = [];
 
   for (const mapping of mappings) {
-    const set = await AttributeSet.findById(mapping.set).lean();
+    const setId = coerceToObjectId(mapping?.set);
+    const set = setId ? setMap.get(setId.toString()) : null;
     if (!set) continue;
 
-    const groupIds = mapping.groups.map((g) => g.group);
-    if (groupIds.length === 0) continue;
+    const mappingGroupIds = (mapping.groups ?? [])
+      .map((g) => coerceToObjectId(g?.group))
+      .filter((id): id is mongoose.Types.ObjectId => id !== null)
+      .map((id) => id.toString());
 
-    const groups = await AttributeGroup.find({
-      _id: { $in: groupIds },
-    }).lean();
+    if (mappingGroupIds.length === 0) continue;
 
-    const attrIds: string[] = [];
-    for (const gm of mapping.groups) {
-      for (const am of gm.attributes) {
-        attrIds.push(am.attribute);
-      }
-    }
+    const mappingGroups = mappingGroupIds
+      .map((id) => groupMap.get(id))
+      .filter(Boolean);
 
-    const attributes = await Attribute.find({
-      _id: { $in: attrIds },
-    })
-      .populate("unitFamily")
-      .lean();
-
-    const attrMap: Record<string, any> = {};
-    for (const a of attributes) {
-      attrMap[(a._id ?? "").toString()] = a;
-    }
-
+    // group id → mapped attributes
     const groupAttrMap: Record<string, MappedAttribute[]> = {};
-    for (const gm of mapping.groups) {
-      const groupId = gm.group;
+
+    for (const gm of mapping.groups ?? []) {
+      const groupId = coerceToObjectId(gm?.group)?.toString();
+      if (!groupId) continue;
+
       const selectedAttrs: MappedAttribute[] = [];
-      for (const am of gm.attributes) {
-        const attrDoc = attrMap[am.attribute];
+
+      for (const am of gm.attributes ?? []) {
+        const attrId = coerceToObjectId(am?.attribute)?.toString();
+        if (!attrId) continue;
+        const attrDoc: any = attrMap.get(attrId);
         if (!attrDoc) continue;
+
         const flags = toFlags(am as any);
+
+        const ufId = coerceToObjectId(attrDoc.unitFamily);
+        const uf = ufId ? unitFamilyMap.get(ufId.toString()) : null;
+
         selectedAttrs.push({
           id: attrDoc._id.toString(),
           code: attrDoc.code,
@@ -810,16 +930,17 @@ export async function buildAttributeSetsFromMappings(
           options: attrDoc.option || [],
           isRequired: flags.isRequired,
           isHighlight: flags.isHighlight,
-          unitFamily: attrDoc.unitFamily
+          unitFamily: uf
             ? {
-                id: attrDoc.unitFamily._id.toString(),
-                name: attrDoc.unitFamily.name,
-                baseUnit: attrDoc.unitFamily.baseUnit,
+                id: uf._id.toString(),
+                name: uf.name,
+                baseUnit: uf.baseUnit,
               }
             : null,
           sortOrder: attrDoc.sort_order ?? 0,
         });
       }
+
       groupAttrMap[groupId] = selectedAttrs;
     }
 
@@ -831,43 +952,37 @@ export async function buildAttributeSetsFromMappings(
       if (visited.has(parentKey)) return [];
       visited.add(parentKey);
 
-      const children = groups
-        .filter((g) => {
+      return mappingGroups
+        .filter((g: any) => {
           const gParent = g.parent_id?.toString() || null;
           if (parentId === null) return gParent === null;
           return gParent === parentId;
         })
-        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-        .map((g) => {
+        .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        .map((g: any) => {
           const gId = g._id?.toString();
-          const attrs = groupAttrMap[gId ?? ""] || [];
           return {
             id: gId,
             code: g.code,
             name: g.name,
             parentId: g.parent_id?.toString() || null,
             sortOrder: g.sort_order ?? 0,
-            attributes: attrs,
+            attributes: groupAttrMap[gId ?? ""] || [],
             children: buildTree(gId, new Set(visited)),
           };
-        });
-
-      return children as any;
+        }) as any;
     };
 
-    const tree = buildTree(null);
-
     result.push({
-      id: set._id.toString(),
-      title: set.title,
-      code: set.code,
+      id: (set as any)._id.toString(),
+      title: (set as any).title,
+      code: (set as any).code,
       sortOrder: (set as any).sortOrder ?? 0,
-      groups: tree,
+      groups: buildTree(null),
     });
   }
 
   result.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-
   return result;
 }
 

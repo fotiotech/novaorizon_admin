@@ -10,6 +10,7 @@ import {
 } from "@/app/actions/category";
 import MappingItem from "./MappingItem";
 import PropertyPreview from "./PropertyPreview";
+import { useFormDraft } from "./hooks/useFormDraft";
 import {
   getCategoryProperty,
   updateCategoryPropertyWithMappings,
@@ -56,6 +57,18 @@ export interface AttributeOption {
 interface Props {
   propertyId?: string;
   onSuccess?: () => void;
+  /** Optional: scope drafts per-user. Pass the current session user id. */
+  userId?: string | null;
+}
+
+// ------------------------------------------------------------------
+// Draft shape + helpers
+// ------------------------------------------------------------------
+interface DraftShape {
+  code: string;
+  name: string;
+  description: string;
+  mappings: Mapping[];
 }
 
 const generateId = () => {
@@ -68,7 +81,19 @@ const generateId = () => {
   );
 };
 
-export default function PropertyForm({ propertyId, onSuccess }: Props) {
+function formatRelative(ts: number): string {
+  const diff = Date.now() - ts;
+  const sec = Math.floor(diff / 1000);
+  if (sec < 45) return "just now";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} hr ago`;
+  const day = Math.floor(hr / 24);
+  return `${day} d ago`;
+}
+
+export default function PropertyForm({ propertyId, onSuccess, userId }: Props) {
   const router = useRouter();
 
   const [code, setCode] = useState("");
@@ -92,6 +117,60 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
   const [attrFilter, setAttrFilter] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+
+  // ------------------------------------------------------------------
+  // Draft plumbing
+  // ------------------------------------------------------------------
+  const [dirty, setDirty] = useState(false);
+  const markDirty = useCallback(() => setDirty(true), []);
+
+  const draftKey = propertyId
+    ? `category-property:edit:${propertyId}`
+    : "category-property:new";
+
+  const draftData = useMemo<DraftShape>(
+    () => ({ code, name, description, mappings }),
+    [code, name, description, mappings],
+  );
+
+  const isEmptyDraft = useCallback(
+    (d: DraftShape) =>
+      !d.code.trim() &&
+      !d.name.trim() &&
+      !d.description.trim() &&
+      d.mappings.length === 0,
+    [],
+  );
+
+  const {
+    pendingDraft,
+    savedAt: draftSavedAt,
+    consumePendingDraft,
+    dismissPendingDraft,
+    clearDraft,
+  } = useFormDraft<DraftShape>({
+    key: draftKey,
+    userId: userId ?? null,
+    data: draftData,
+    enabled: !loadingData && !saving && dirty,
+    isEmpty: isEmptyDraft,
+  });
+
+  const handleRestoreDraft = useCallback(() => {
+    const draft = consumePendingDraft();
+    if (!draft) return;
+    setCode(draft.code);
+    setName(draft.name);
+    setDescription(draft.description);
+    setMappings(draft.mappings);
+    setDirty(true);
+    toast.success("Draft restored");
+  }, [consumePendingDraft]);
+
+  const handleDiscardDraft = useCallback(async () => {
+    await dismissPendingDraft();
+    toast.success("Draft discarded");
+  }, [dismissPendingDraft]);
 
   // ---------------- Fetch reference data ---------------- //
   useEffect(() => {
@@ -208,36 +287,48 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
     const newId = generateId();
     setMappings((prev) => [...prev, { id: newId, set: "", groups: [] }]);
     setExpandedId(newId);
-  }, []);
+    markDirty();
+  }, [markDirty]);
 
   const removeMapping = useCallback(
     (id: string) => {
       setMappings((prev) => prev.filter((m) => m.id !== id));
       if (expandedId === id) setExpandedId(null);
+      markDirty();
     },
-    [expandedId],
+    [expandedId, markDirty],
   );
 
-  const updateMappingSet = useCallback((id: string, setValue: string) => {
-    setMappings((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, set: setValue, groups: [] } : m)),
-    );
-  }, []);
+  const updateMappingSet = useCallback(
+    (id: string, setValue: string) => {
+      setMappings((prev) =>
+        prev.map((m) =>
+          m.id === id ? { ...m, set: setValue, groups: [] } : m,
+        ),
+      );
+      markDirty();
+    },
+    [markDirty],
+  );
 
-  const toggleGroup = useCallback((mappingId: string, groupId: string) => {
-    setMappings((prev) =>
-      prev.map((m) => {
-        if (m.id !== mappingId) return m;
-        const exists = m.groups.some((g) => g.group === groupId);
-        return {
-          ...m,
-          groups: exists
-            ? m.groups.filter((g) => g.group !== groupId)
-            : [...m.groups, { group: groupId, attributes: [] }],
-        };
-      }),
-    );
-  }, []);
+  const toggleGroup = useCallback(
+    (mappingId: string, groupId: string) => {
+      setMappings((prev) =>
+        prev.map((m) => {
+          if (m.id !== mappingId) return m;
+          const exists = m.groups.some((g) => g.group === groupId);
+          return {
+            ...m,
+            groups: exists
+              ? m.groups.filter((g) => g.group !== groupId)
+              : [...m.groups, { group: groupId, attributes: [] }],
+          };
+        }),
+      );
+      markDirty();
+    },
+    [markDirty],
+  );
 
   const toggleAttribute = useCallback(
     (mappingId: string, groupId: string, attrId: string) => {
@@ -263,8 +354,9 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
           return { ...m, groups: newGroups };
         }),
       );
+      markDirty();
     },
-    [],
+    [markDirty],
   );
 
   const toggleFlag = useCallback(
@@ -294,8 +386,9 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
           return { ...m, groups: newGroups };
         }),
       );
+      markDirty();
     },
-    [],
+    [markDirty],
   );
 
   const toggleExpand = useCallback((id: string) => {
@@ -332,6 +425,10 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
         result = await createCategoryPropertyWithMappings(data);
       }
       if (result.success) {
+        // ✅ Saved — drop the DB-backed draft row.
+        await clearDraft();
+        setDirty(false);
+
         const action = propertyId ? "updated" : "created";
         toast.success(`Category property ${action} successfully!`);
         onSuccess?.();
@@ -378,14 +475,63 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
           noValidate
         >
           {/* Header */}
-          <header>
-            <h1 className="text-xl font-semibold text-foreground sm:text-2xl">
-              {propertyId ? "Edit Category Property" : "New Category Property"}
-            </h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Define reusable attribute mappings for categories.
-            </p>
+          <header className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold text-foreground sm:text-2xl">
+                {propertyId
+                  ? "Edit Category Property"
+                  : "New Category Property"}
+              </h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Define reusable attribute mappings for categories.
+              </p>
+            </div>
+
+            {/* Draft status pill */}
+            {dirty && draftSavedAt && !pendingDraft && (
+              <span
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] text-muted-foreground"
+                title={`Last autosaved at ${new Date(
+                  draftSavedAt,
+                ).toLocaleTimeString()}`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Draft saved {formatRelative(draftSavedAt)}
+              </span>
+            )}
           </header>
+
+          {/* Draft restore banner */}
+          {pendingDraft && (
+            <div
+              role="status"
+              className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 sm:px-4 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-200"
+            >
+              <div className="min-w-0">
+                <p className="font-medium">Unsaved draft found</p>
+                <p className="mt-0.5 text-xs opacity-80">
+                  Saved {formatRelative(pendingDraft.savedAt)}. Restore it, or
+                  discard to continue from the last saved version.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDiscardDraft}
+                  className="rounded-md border border-amber-300 bg-background px-2.5 py-1 text-xs font-medium text-amber-900 transition hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRestoreDraft}
+                  className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-amber-700"
+                >
+                  Restore
+                </button>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div
@@ -417,7 +563,10 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
                     id="property-code"
                     type="text"
                     value={code}
-                    onChange={(e) => setCode(e.target.value)}
+                    onChange={(e) => {
+                      setCode(e.target.value);
+                      markDirty();
+                    }}
                     placeholder="e.g. electronics_attrs"
                     className={
                       fieldErrors.code
@@ -451,7 +600,10 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
                     id="property-name"
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      markDirty();
+                    }}
                     placeholder="e.g. Electronics Attributes"
                     className={
                       fieldErrors.name
@@ -485,7 +637,10 @@ export default function PropertyForm({ propertyId, onSuccess }: Props) {
                 <textarea
                   id="property-description"
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    markDirty();
+                  }}
                   rows={3}
                   placeholder="Optional description…"
                   className="mt-1 resize-none"
