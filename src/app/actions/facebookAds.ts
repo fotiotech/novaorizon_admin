@@ -1,14 +1,23 @@
 "use server";
 
 import { connection } from "@/utils/connection";
-import FacebookAdsSettings from "@/models/FacebookAdsSettings";
 import Product from "@/models/Product";
 import {
   FacebookAdsConnectionInput,
   FacebookAdsConnectionSchema,
+  SECRET_MASK,
+  SENSITIVE_FIELDS,
+  maskSecrets,
 } from "@/lib/facebookAds";
+import {
+  getSecret,
+  putSecret,
+  invalidateSecretCache,
+} from "@/lib/aws/awsSecrets";
 
 export type { FacebookAdsConnectionInput } from "@/lib/facebookAds";
+
+/* ============================ validation ============================ */
 
 export async function validateFacebookAdsConnection(
   input: Partial<FacebookAdsConnectionInput>,
@@ -26,23 +35,55 @@ export async function validateFacebookAdsConnection(
   return {
     ok: true,
     message:
-      "Connection settings look valid. Add them to your environment variables or backend config before syncing campaigns.",
+      "Connection settings look valid. They will be stored securely in AWS Secrets Manager.",
   };
 }
 
-export async function getFacebookAdsSettings() {
-  await connection();
-  const settings = (await FacebookAdsSettings.findOne()
-    .sort({ updatedAt: -1 })
-    .lean()) as any;
+/* ========================== read / write ============================ */
 
+/**
+ * INTERNAL: returns the raw secret (used by sync / create helpers).
+ * Never expose this to the browser directly — use loadFacebookAdsSettings().
+ */
+export async function getFacebookAdsSettings() {
+  const settings = await getSecret();
   return settings ?? null;
 }
 
+/** UI-facing: returns the settings with sensitive values masked. */
+export async function loadFacebookAdsSettings() {
+  const settings = await getSecret();
+  if (!settings) return null;
+  return maskSecrets(settings);
+}
+
 export async function saveFacebookAdsSettings(
-  input: FacebookAdsConnectionInput,
+  input: Partial<FacebookAdsConnectionInput>,
 ) {
-  const validated = FacebookAdsConnectionSchema.safeParse(input);
+  const existing = (await getSecret()) ?? {};
+
+  // Strip masked sentinels + empty sensitive values so we don't
+  // overwrite already-stored secrets with blanks.
+  const cleaned: Record<string, any> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value === SECRET_MASK) continue;
+    if (
+      (SENSITIVE_FIELDS as readonly string[]).includes(key) &&
+      (value === "" || value === undefined) &&
+      existing[key]
+    ) {
+      continue;
+    }
+    cleaned[key] = value;
+  }
+
+  const merged = {
+    ...existing,
+    ...cleaned,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const validated = FacebookAdsConnectionSchema.safeParse(merged);
 
   if (!validated.success) {
     return {
@@ -52,20 +93,17 @@ export async function saveFacebookAdsSettings(
     };
   }
 
-  await connection();
-
-  const saved = (await FacebookAdsSettings.findOneAndUpdate(
-    {},
-    { $set: validated.data },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  )) as any;
+  await putSecret(validated.data as Record<string, unknown>);
+  invalidateSecretCache();
 
   return {
     ok: true,
-    data: saved,
-    message: "Facebook Ads settings saved successfully.",
+    data: maskSecrets(validated.data),
+    message: "Facebook Ads settings saved to AWS Secrets Manager.",
   };
 }
+
+/* ============================ sync (Meta) =========================== */
 
 export async function syncFacebookCampaigns() {
   const settings = await getFacebookAdsSettings();
@@ -79,7 +117,7 @@ export async function syncFacebookCampaigns() {
   }
 
   const response = await fetch(
-    `https://graph.facebook.com/${settings.apiVersion || "v20.0"}/${settings.adAccountId}/campaigns?fields=id,name,status,objective,configured_status,created_time&access_token=${encodeURIComponent(settings.accessToken)}`,
+    `https://graph.facebook.com/${settings.apiVersion || "v20.0"}/${settings.adAccountId}/campaigns?fields=id,name,status,objective,configured_status,created_time&access_token=${encodeURIComponent(settings.accessToken as string)}`,
     { method: "GET" },
   );
 
@@ -114,7 +152,7 @@ export async function syncFacebookAdSets() {
   }
 
   const response = await fetch(
-    `https://graph.facebook.com/${settings.apiVersion || "v20.0"}/${settings.adAccountId}/adsets?fields=id,name,campaign_id,status,created_time&access_token=${encodeURIComponent(settings.accessToken)}`,
+    `https://graph.facebook.com/${settings.apiVersion || "v20.0"}/${settings.adAccountId}/adsets?fields=id,name,campaign_id,status,created_time&access_token=${encodeURIComponent(settings.accessToken as string)}`,
     { method: "GET" },
   );
 
@@ -206,7 +244,7 @@ export async function syncFacebookCatalogProducts(limit = 25) {
 
   for (const item of catalogItems) {
     const params = new URLSearchParams({
-      access_token: settings.accessToken,
+      access_token: settings.accessToken as string,
       retailer_id: String(item.retailer_id),
       name: item.name,
       description: item.description,
@@ -250,6 +288,8 @@ export async function syncFacebookCatalogProducts(limit = 25) {
   };
 }
 
+/* ============================ create (Meta) ========================= */
+
 export async function createFacebookCampaign(input: {
   name: string;
   objective?: FacebookAdsConnectionInput["defaultObjective"];
@@ -292,11 +332,11 @@ export async function createFacebookCampaign(input: {
   } as const;
 
   const selectedObjective = (input.objective ||
-    settings.defaultObjective ||
+    (settings.defaultObjective as FacebookAdsConnectionInput["defaultObjective"]) ||
     "sales") as FacebookAdsConnectionInput["defaultObjective"];
 
   const body = new URLSearchParams({
-    access_token: settings.accessToken,
+    access_token: settings.accessToken as string,
     name: sanitizedName,
     objective: objectiveMap[selectedObjective],
     status: String(statusMap[input.status || "PAUSED"]),
@@ -392,7 +432,7 @@ export async function createFacebookAdSet(input: {
   } as const;
 
   const body = new URLSearchParams({
-    access_token: settings.accessToken,
+    access_token: settings.accessToken as string,
     name: sanitizedName,
     campaign_id: input.campaignId,
     optimization_goal:
@@ -462,7 +502,7 @@ export async function createFacebookAdCreative(input: {
     };
   }
 
-  const pageId = input.pageId || settings.pageId;
+  const pageId = input.pageId || (settings.pageId as string);
   if (!pageId) {
     return {
       ok: false,
@@ -479,7 +519,7 @@ export async function createFacebookAdCreative(input: {
   } as const;
 
   const payload = {
-    access_token: settings.accessToken,
+    access_token: settings.accessToken as string,
     name: sanitizedName,
     objective: settings.defaultObjective || "sales",
     image_url: input.imageUrl || "",
@@ -598,6 +638,8 @@ export async function createFacebookAd(input: {
   };
 }
 
+/* ============================== insights ============================ */
+
 export async function getCampaignInsights(campaignId: string) {
   const settings = await getFacebookAdsSettings();
 
@@ -622,7 +664,7 @@ export async function getCampaignInsights(campaignId: string) {
   );
 
   const response = await fetch(
-    `https://graph.facebook.com/${settings.apiVersion || "v20.0"}/${campaignId}/insights?fields=${fieldsParam}&access_token=${encodeURIComponent(settings.accessToken)}`,
+    `https://graph.facebook.com/${settings.apiVersion || "v20.0"}/${campaignId}/insights?fields=${fieldsParam}&access_token=${encodeURIComponent(settings.accessToken as string)}`,
     { method: "GET" },
   );
 
@@ -693,7 +735,7 @@ export async function getAdSetInsights(adSetId: string) {
   );
 
   const response = await fetch(
-    `https://graph.facebook.com/${settings.apiVersion || "v20.0"}/${adSetId}/insights?fields=${fieldsParam}&access_token=${encodeURIComponent(settings.accessToken)}`,
+    `https://graph.facebook.com/${settings.apiVersion || "v20.0"}/${adSetId}/insights?fields=${fieldsParam}&access_token=${encodeURIComponent(settings.accessToken as string)}`,
     { method: "GET" },
   );
 

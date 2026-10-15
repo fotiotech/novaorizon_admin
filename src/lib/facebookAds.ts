@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const SECRET_MASK = "••••••••";
+
 export const FacebookAdsConnectionSchema = z.object({
   accountName: z.string().min(1, "Account name is required."),
   appId: z.string().min(1, "Meta app ID is required."),
@@ -30,3 +32,13 @@ export const FacebookAdsConnectionSchema = z.object({
 export type FacebookAdsConnectionInput = z.infer<
   typeof FacebookAdsConnectionSchema
 >;
+
+export const SENSITIVE_FIELDS = ["appSecret", "accessToken"] as const;
+
+export function maskSecrets<T extends Record<string, any>>(input: T): T {
+  const clone: Record<string, any> = { ...input };
+  for (const key of SENSITIVE_FIELDS) {
+    if (clone[key]) clone[key] = SECRET_MASK;
+  }
+  return clone as T;
+}

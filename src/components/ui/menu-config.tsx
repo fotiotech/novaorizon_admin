@@ -301,7 +301,19 @@ export const rawMenuConfig = [
   {
     title: "Marketing",
     links: [
-      { name: "Advertising", href: "/marketing/ads", icon: <Discount /> },
+      {
+        name: "Advertising",
+        href: "/marketing/ads",
+        icon: <Discount />,
+        children: [
+          { name: "Advertising", href: "/marketing/ads", icon: <Discount /> },
+          {
+            name: "Settings",
+            href: "/marketing/ads/settings",
+            icon: <Discount />,
+          },
+        ],
+      },
       {
         name: "Promotions",
         href: "/marketing/promotions",
