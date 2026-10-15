@@ -1,7 +1,7 @@
 // app/catalog/products/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -147,10 +147,44 @@ const StatusBadge = memo(function StatusBadge({
   );
 });
 
+const StatItem = memo(function StatItem({
+  label,
+  value,
+  dotClass,
+}: {
+  label: string;
+  value: number;
+  dotClass?: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {dotClass && <span className={`h-2 w-2 rounded-full ${dotClass}`} />}
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold tabular-nums text-foreground">
+        {value}
+      </span>
+    </div>
+  );
+});
+
 function getCategoryName(cat: Product["categoryId"]): string {
   if (!cat) return "Uncategorized";
   if (typeof cat === "string") return cat;
   return cat.name || "Uncategorized";
+}
+
+function getStatusKey(status: Product["status"]): string {
+  const raw =
+    typeof status === "string"
+      ? status
+      : status == null
+        ? ""
+        : typeof status === "object" && "value" in (status as any)
+          ? String((status as any).value ?? "")
+          : Array.isArray(status)
+            ? String(status[0] ?? "")
+            : String(status);
+  return (raw || "draft").trim().toLowerCase();
 }
 
 const EmptyState = memo(function EmptyState({
@@ -244,6 +278,8 @@ export default function ProductsPage() {
   const [isSavingQuantity, setIsSavingQuantity] = useState(false);
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  /* Mobile search input — visible above Filters / New product row */
+  const [mobileSearch, setMobileSearch] = useState("");
 
   const requestIdRef = useRef(0);
 
@@ -553,6 +589,23 @@ export default function ProductsPage() {
     debouncedSearch(e.target.value);
   };
 
+  /* Debounce the mobile search input into the same filter pipeline */
+  const debouncedMobileSearch = useDebouncedCallback((value: string) => {
+    applyFilters({ search: value });
+  }, 400);
+
+  const handleMobileSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMobileSearch(e.target.value);
+    debouncedMobileSearch(e.target.value);
+  };
+
+  /* Keep the two search inputs in sync when filters change externally
+     (e.g. clear filters, sheet edits) */
+  useEffect(() => {
+    setSearchInput(filters.search);
+    setMobileSearch(filters.search);
+  }, [filters.search]);
+
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     applyFilters({ [name]: value } as Partial<FilterOptions>);
@@ -560,7 +613,9 @@ export default function ProductsPage() {
 
   const handleClearFilters = () => {
     setSearchInput("");
+    setMobileSearch("");
     debouncedSearch.cancel();
+    debouncedMobileSearch.cancel();
     setPage(1);
     setFilters({ search: "", categoryId: "", status: "" });
   };
@@ -576,6 +631,16 @@ export default function ProductsPage() {
     (filters.search ? 1 : 0) +
     (filters.categoryId ? 1 : 0) +
     (filters.status ? 1 : 0);
+
+  /* Derived statistics from the currently loaded page */
+  const stats = useMemo(() => {
+    const counts = { active: 0, inactive: 0, draft: 0 };
+    for (const p of products) {
+      const key = getStatusKey(p.status) as keyof typeof counts;
+      if (key in counts) counts[key]++;
+    }
+    return counts;
+  }, [products]);
 
   const buildActionItems = (product: Product) => [
     {
@@ -719,30 +784,47 @@ export default function ProductsPage() {
       {/* Header — inline on desktop: title · search · filters · action  */}
       {/* -------------------------------------------------------------- */}
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-2">
-        {/* Mobile: Filters + New product on the same row */}
-        <div className="flex items-center gap-2 md:hidden">
-          <button
-            type="button"
-            onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
-            aria-label="Open filters"
-          >
-            <FilterList fontSize="small" />
-            <span>Filters</span>
-            {activeFilterCount > 0 && (
-              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+        {/* Mobile: search on top, then Filters + New product row */}
+        <div className="flex flex-col gap-2 md:hidden">
+          <div className="relative w-full">
+            <Search
+              fontSize="small"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              type="search"
+              value={mobileSearch}
+              onChange={handleMobileSearchChange}
+              placeholder="Search products…"
+              aria-label="Search products"
+              className={`${inputClass} pl-9`}
+            />
+          </div>
 
-          <Link
-            href="/catalog/products/new"
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-          >
-            <Add fontSize="small" />
-            New product
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsMobileFiltersOpen(true)}
+              className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
+              aria-label="Open filters"
+            >
+              <FilterList fontSize="small" />
+              <span>Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            <Link
+              href="/catalog/products/new"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+            >
+              <Add fontSize="small" />
+              New product
+            </Link>
+          </div>
         </div>
 
         {/* Desktop: inline search + category + status + clear */}
@@ -881,6 +963,23 @@ export default function ProductsPage() {
               Loading…
             </span>
           )}
+        </div>
+
+        {/* Statistics line */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-border/60 bg-muted/20 px-4 py-2.5 text-xs">
+          <StatItem label="Total" value={total} />
+          <span className="hidden h-3 w-px bg-border sm:block" />
+          <StatItem
+            label="Active"
+            value={stats.active}
+            dotClass="bg-emerald-500"
+          />
+          <StatItem
+            label="Inactive"
+            value={stats.inactive}
+            dotClass="bg-slate-400"
+          />
+          <StatItem label="Draft" value={stats.draft} dotClass="bg-amber-500" />
         </div>
 
         {/* ----------------------- DESKTOP TABLE ----------------------- */}

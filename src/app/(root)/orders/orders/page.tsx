@@ -12,6 +12,7 @@ import {
   Visibility,
   Edit,
   MoreVert,
+  Search,
   SearchOff,
   OpenInNew,
 } from "@mui/icons-material";
@@ -138,6 +139,26 @@ const EmptyState = memo(function EmptyState({
   );
 });
 
+const StatItem = memo(function StatItem({
+  label,
+  value,
+  dotClass,
+}: {
+  label: string;
+  value: number;
+  dotClass?: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {dotClass && <span className={`h-2 w-2 rounded-full ${dotClass}`} />}
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold tabular-nums text-foreground">
+        {value}
+      </span>
+    </div>
+  );
+});
+
 function initials(order: any): string {
   const a = order?.firstName?.[0] ?? "";
   const b = order?.lastName?.[0] ?? "";
@@ -204,6 +225,7 @@ const AllOrderPage = () => {
   });
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  const [mobileSearch, setMobileSearch] = useState("");
 
   const limit = 10;
 
@@ -251,6 +273,24 @@ const AllOrderPage = () => {
   useEffect(() => {
     fetchOrders(page, filters);
   }, [page, filters, fetchOrders]);
+
+  /* Keep the mobile search input in sync with external filter changes
+     (e.g. when the user clears filters or edits search inside the sheet). */
+  useEffect(() => {
+    setMobileSearch(filters.search);
+  }, [filters.search]);
+
+  /* Debounce the mobile search input back into the filter state. */
+  useEffect(() => {
+    if (mobileSearch === filters.search) return;
+    const t = setTimeout(() => {
+      setFilters((prev) =>
+        prev.search === mobileSearch ? prev : { ...prev, search: mobileSearch },
+      );
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [mobileSearch, filters.search]);
 
   const handleFilterChange = (newFilters: FilterOptions) => {
     setFilters(newFilters);
@@ -343,6 +383,21 @@ const AllOrderPage = () => {
     return n;
   }, [filters]);
 
+  const stats = useMemo(() => {
+    const counts = {
+      pending: 0,
+      processing: 0,
+      shipped: 0,
+      completed: 0,
+      cancelled: 0,
+    };
+    for (const o of orders) {
+      const key = (o.orderStatus ?? "").toLowerCase() as keyof typeof counts;
+      if (key in counts) counts[key]++;
+    }
+    return counts;
+  }, [orders]);
+
   const handleClearFilters = () => {
     setFilters({
       search: "",
@@ -407,12 +462,26 @@ const AllOrderPage = () => {
 
   return (
     <div className="mx-auto w-full max-w-6xl overflow-x-clip">
-      {/* Mobile filters trigger — only visible below md */}
-      <div className="mb-4 flex md:hidden">
+      {/* Mobile search + filters trigger — only visible below md */}
+      <div className="mb-4 flex items-center gap-2 md:hidden">
+        <div className="relative flex-1">
+          <Search
+            fontSize="small"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="search"
+            value={mobileSearch}
+            onChange={(e) => setMobileSearch(e.target.value)}
+            placeholder="Search orders…"
+            aria-label="Search orders"
+            className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+          />
+        </div>
         <button
           type="button"
           onClick={() => setIsMobileFiltersOpen(true)}
-          className="relative inline-flex items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
+          className="relative inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
           aria-label="Open filters"
         >
           <FilterList fontSize="small" />
@@ -485,6 +554,37 @@ const AllOrderPage = () => {
               Loading…
             </span>
           )}
+        </div>
+
+        {/* Statistics line */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-border/60 bg-muted/20 px-4 py-2.5 text-xs">
+          <StatItem label="Total" value={totalOrders} />
+          <span className="hidden h-3 w-px bg-border sm:block" />
+          <StatItem
+            label="Pending"
+            value={stats.pending}
+            dotClass="bg-amber-500"
+          />
+          <StatItem
+            label="Processing"
+            value={stats.processing}
+            dotClass="bg-blue-500"
+          />
+          <StatItem
+            label="Shipped"
+            value={stats.shipped}
+            dotClass="bg-indigo-500"
+          />
+          <StatItem
+            label="Completed"
+            value={stats.completed}
+            dotClass="bg-emerald-500"
+          />
+          <StatItem
+            label="Cancelled"
+            value={stats.cancelled}
+            dotClass="bg-rose-500"
+          />
         </div>
 
         {/* ----------------------- DESKTOP TABLE ----------------------- */}
