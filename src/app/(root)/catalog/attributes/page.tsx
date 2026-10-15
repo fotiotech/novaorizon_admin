@@ -6,13 +6,13 @@ import Select from "react-select";
 import {
   Delete,
   Edit,
-  FilterList,
   Search,
   SearchOff,
   Tune,
   MoreVert,
   Add,
   Close,
+  Sort,
 } from "@mui/icons-material";
 import {
   deleteAttribute,
@@ -343,7 +343,7 @@ const Attributes = () => {
   const [deleteTargetName, setDeleteTargetName] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
-  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  const [isMobileSortOpen, setIsMobileSortOpen] = useState(false);
 
   // Usage modal
   const [usageDetailsAttr, setUsageDetailsAttr] =
@@ -453,9 +453,7 @@ const Attributes = () => {
   const hasActiveFilters =
     filterText.trim() !== "" || sortAttrOrder.value !== "asc";
 
-  const activeFilterCount =
-    (filterText.trim() !== "" ? 1 : 0) +
-    (sortAttrOrder.value !== "asc" ? 1 : 0);
+  const activeSortCount = sortAttrOrder.value !== "asc" ? 1 : 0;
 
   const handleClearFilters = () => {
     setFilterText("");
@@ -521,6 +519,17 @@ const Attributes = () => {
         onChange={(e) => setFilterText(e.target.value)}
         className={`${INPUT_CLASS} pl-9`}
       />
+      {filterText && (
+        <button
+          type="button"
+          onClick={() => setFilterText("")}
+          aria-label="Clear search"
+          title="Clear search"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <Close style={{ fontSize: 16 }} />
+        </button>
+      )}
     </div>
   );
 
@@ -547,30 +556,34 @@ const Attributes = () => {
     <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       {/* Controls */}
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-2">
-        {/* Mobile: Filters + New attribute */}
-        <div className="flex items-center gap-2 md:hidden">
-          <button
-            type="button"
-            onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
-            aria-label="Open filters"
-          >
-            <FilterList fontSize="small" />
-            <span>Filters</span>
-            {activeFilterCount > 0 && (
-              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+        {/* Mobile: search on top, then Sort + New attribute row */}
+        <div className="flex flex-col gap-2 md:hidden">
+          {filterInputEl}
 
-          <button
-            onClick={handleNewAttribute}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-          >
-            <Add fontSize="small" />
-            New attribute
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsMobileSortOpen(true)}
+              className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
+              aria-label="Open sort options"
+            >
+              <Sort fontSize="small" />
+              <span>Sort</span>
+              {activeSortCount > 0 && (
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+                  {activeSortCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={handleNewAttribute}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+            >
+              <Add fontSize="small" />
+              New attribute
+            </button>
+          </div>
         </div>
 
         {/* Desktop: search · sort · clear · New attribute */}
@@ -630,20 +643,13 @@ const Attributes = () => {
         </div>
       )}
 
-      {/* Mobile filter sheet */}
+      {/* Mobile sort sheet */}
       <BottomSheet
-        isOpen={isMobileFiltersOpen}
-        onClose={() => setIsMobileFiltersOpen(false)}
-        title="Filter & Sort"
+        isOpen={isMobileSortOpen}
+        onClose={() => setIsMobileSortOpen(false)}
+        title="Sort"
       >
         <div className="flex flex-col gap-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Filter
-            </label>
-            {filterInputEl}
-          </div>
-
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               Sort by name
@@ -654,15 +660,15 @@ const Attributes = () => {
           <div className="flex items-center gap-2 pt-2">
             <button
               type="button"
-              onClick={handleClearFilters}
-              disabled={!hasActiveFilters}
+              onClick={() => setSortAttrOrder({ value: "asc", label: "A → Z" })}
+              disabled={activeSortCount === 0}
               className="flex-1 rounded-xl bg-muted px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Clear all
+              Reset
             </button>
             <button
               type="button"
-              onClick={() => setIsMobileFiltersOpen(false)}
+              onClick={() => setIsMobileSortOpen(false)}
               className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
               Done

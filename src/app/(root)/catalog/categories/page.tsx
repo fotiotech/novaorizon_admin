@@ -20,10 +20,8 @@ import CategoryList from "./_component/CategoryList";
 import Link from "next/link";
 import { Modal } from "@/components/ux/Modal";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
-import { BottomSheet } from "@/components/ux/BottomSheet";
 import { Toaster, toast } from "sonner";
 import {
-  FilterList,
   Search,
   Add,
   Close,
@@ -49,7 +47,6 @@ const Categories = () => {
   const [parentIdForNew, setParentIdForNew] = useState<string | null>(null);
 
   const [filterText, setFilterText] = useState("");
-  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
   // ---------- View mode: false = list, true = browse (drill-down) ----------
   const [browseMode, setBrowseMode] = useState(true);
@@ -341,7 +338,6 @@ const Categories = () => {
   };
 
   const hasActiveFilters = filterText.trim() !== "";
-  const activeFilterCount = hasActiveFilters ? 1 : 0;
 
   const filterInputEl = (
     <div className="relative w-full">
@@ -356,6 +352,17 @@ const Categories = () => {
         onChange={(e) => setFilterText(e.target.value)}
         className="w-full rounded-lg border border-input bg-background px-3 py-2 pl-9 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
       />
+      {hasActiveFilters && (
+        <button
+          type="button"
+          onClick={() => setFilterText("")}
+          aria-label="Clear search"
+          title="Clear search"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <Close style={{ fontSize: 16 }} />
+        </button>
+      )}
     </div>
   );
 
@@ -365,56 +372,45 @@ const Categories = () => {
 
       {/* Controls */}
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-2">
-        {/* Mobile: 2×2 grid of controls */}
-        <div className="grid grid-cols-2 gap-2 lg:hidden">
-          <button
-            type="button"
-            onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex items-center justify-center gap-2 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
-            aria-label="Open filters"
-          >
-            <FilterList fontSize="small" />
-            <span>Search</span>
-            {activeFilterCount > 0 && (
-              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+        {/* Mobile: search on top, then 3-button row */}
+        <div className="flex flex-col gap-2 lg:hidden">
+          {filterInputEl}
 
-          <button
-            type="button"
-            onClick={handleToggleMode}
-            aria-pressed={!browseMode}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
-          >
-            {browseMode ? (
-              <>
-                <ListAlt fontSize="small" />
-                List
-              </>
-            ) : (
-              <>
-                <FolderOpen fontSize="small" />
-                Browse
-              </>
-            )}
-          </button>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={handleToggleMode}
+              aria-pressed={!browseMode}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
+            >
+              {browseMode ? (
+                <>
+                  <ListAlt fontSize="small" />
+                  List
+                </>
+              ) : (
+                <>
+                  <FolderOpen fontSize="small" />
+                  Browse
+                </>
+              )}
+            </button>
 
-          <Link
-            href="/catalog/categories/property"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
-          >
-            Properties
-          </Link>
+            <Link
+              href="/catalog/categories/property"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/80"
+            >
+              Properties
+            </Link>
 
-          <button
-            onClick={handleNewCategory}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-          >
-            <Add fontSize="small" />
-            New category
-          </button>
+            <button
+              onClick={handleNewCategory}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+            >
+              <Add fontSize="small" />
+              New
+            </button>
+          </div>
         </div>
 
         {/* Desktop */}
@@ -473,40 +469,6 @@ const Categories = () => {
           </button>
         </div>
       )}
-
-      {/* Mobile filter sheet */}
-      <BottomSheet
-        isOpen={isMobileFiltersOpen}
-        onClose={() => setIsMobileFiltersOpen(false)}
-        title="Search categories"
-      >
-        <div className="flex flex-col gap-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Search
-            </label>
-            {filterInputEl}
-          </div>
-
-          <div className="flex items-center gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setFilterText("")}
-              disabled={!hasActiveFilters}
-              className="flex-1 rounded-xl bg-muted px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsMobileFiltersOpen(false)}
-              className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      </BottomSheet>
 
       {/* Loading skeleton */}
       {loading && (
