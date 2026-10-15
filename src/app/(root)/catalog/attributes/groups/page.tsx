@@ -15,7 +15,6 @@ import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 import {
   Edit,
   Delete,
-  FilterList,
   Search,
   SearchOff,
   AccountTree,
@@ -26,6 +25,7 @@ import {
   ListAlt,
   FolderOpen,
   Tune,
+  Sort,
 } from "@mui/icons-material";
 
 // Types
@@ -267,7 +267,7 @@ const Group = () => {
     label: "Name A → Z",
   });
 
-  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  const [isMobileSortOpen, setIsMobileSortOpen] = useState(false);
 
   // Usage modal
   const [usageTargetGroup, setUsageTargetGroup] = useState<{
@@ -667,9 +667,7 @@ const Group = () => {
   // ------------------------------------------------------------------
   const hasActiveFilters =
     filterText.trim() !== "" || sortOrder.value !== "name_asc";
-  const activeFilterCount =
-    (filterText.trim() !== "" ? 1 : 0) +
-    (sortOrder.value !== "name_asc" ? 1 : 0);
+  const activeSortCount = sortOrder.value !== "name_asc" ? 1 : 0;
 
   const handleClearFilters = () => {
     setFilterText("");
@@ -711,6 +709,17 @@ const Group = () => {
         onChange={(e) => setFilterText(e.target.value)}
         className={`${INPUT_CLASS} pl-9`}
       />
+      {filterText && (
+        <button
+          type="button"
+          onClick={() => setFilterText("")}
+          aria-label="Clear search"
+          title="Clear search"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <Close style={{ fontSize: 16 }} />
+        </button>
+      )}
     </div>
   );
 
@@ -773,45 +782,49 @@ const Group = () => {
 
       {/* Controls */}
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-2">
-        {/* Mobile: Filters + List/Browse + New group */}
-        <div className="grid grid-cols-2 gap-2 md:hidden">
-          <button
-            type="button"
-            onClick={() => setIsMobileFiltersOpen(true)}
-            className="relative inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
-            aria-label="Open filters"
-          >
-            <FilterList fontSize="small" />
-            <span>Filters</span>
-            {activeFilterCount > 0 && (
-              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+        {/* Mobile: search on top, then Sort + List/Browse row, then New group */}
+        <div className="flex flex-col gap-2 md:hidden">
+          {filterInputEl}
 
-          <button
-            type="button"
-            onClick={handleToggleMode}
-            aria-pressed={!browseMode}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
-          >
-            {browseMode ? (
-              <>
-                <ListAlt fontSize="small" />
-                List
-              </>
-            ) : (
-              <>
-                <FolderOpen fontSize="small" />
-                Browse
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsMobileSortOpen(true)}
+              className="relative inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+              aria-label="Open sort options"
+            >
+              <Sort fontSize="small" />
+              <span>Sort</span>
+              {activeSortCount > 0 && (
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+                  {activeSortCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleMode}
+              aria-pressed={!browseMode}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+            >
+              {browseMode ? (
+                <>
+                  <ListAlt fontSize="small" />
+                  List
+                </>
+              ) : (
+                <>
+                  <FolderOpen fontSize="small" />
+                  Browse
+                </>
+              )}
+            </button>
+          </div>
 
           <button
             onClick={handleOpenCreateModal}
-            className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             <Add fontSize="small" />
             New group
@@ -896,20 +909,13 @@ const Group = () => {
         </div>
       )}
 
-      {/* Mobile filter sheet */}
+      {/* Mobile sort sheet */}
       <BottomSheet
-        isOpen={isMobileFiltersOpen}
-        onClose={() => setIsMobileFiltersOpen(false)}
-        title="Search & Sort"
+        isOpen={isMobileSortOpen}
+        onClose={() => setIsMobileSortOpen(false)}
+        title="Sort"
       >
         <div className="flex flex-col gap-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Search
-            </label>
-            {filterInputEl}
-          </div>
-
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               Sort by
@@ -920,15 +926,17 @@ const Group = () => {
           <div className="flex items-center gap-2 border-t border-border pt-2">
             <button
               type="button"
-              onClick={handleClearFilters}
-              disabled={!hasActiveFilters}
+              onClick={() =>
+                setSortOrder({ value: "name_asc", label: "Name A → Z" })
+              }
+              disabled={activeSortCount === 0}
               className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Clear all
+              Reset
             </button>
             <button
               type="button"
-              onClick={() => setIsMobileFiltersOpen(false)}
+              onClick={() => setIsMobileSortOpen(false)}
               className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
               Done
