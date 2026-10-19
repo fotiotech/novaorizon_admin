@@ -18,6 +18,10 @@ import {
 
 const COLLECTION_LIST_PATH = "/catalog/collections";
 
+// Maximum number of manually-selected items allowed in a collection.
+// Must match the client-side constant in components/.../CollectionForm.tsx.
+const MANUAL_ITEM_LIMIT = 50;
+
 // ---------- Get all collections ----------
 export async function getAllCollections() {
   try {
@@ -210,6 +214,14 @@ export async function createCollection(formData: FormData) {
         if (!Array.isArray(items)) {
           return { success: false, error: "Items must be an array" };
         }
+        // Deduplicate to avoid double-counting against the limit.
+        items = Array.from(new Set(items.map((i: any) => String(i))));
+        if (items.length > MANUAL_ITEM_LIMIT) {
+          return {
+            success: false,
+            error: `A manual collection can contain at most ${MANUAL_ITEM_LIMIT} items. Received ${items.length}.`,
+          };
+        }
         for (const id of items) {
           if (!mongoose.Types.ObjectId.isValid(id)) {
             return { success: false, error: `Invalid item ID: ${id}` };
@@ -371,6 +383,14 @@ export async function updateCollection(id: string, formData: FormData) {
         if (!Array.isArray(items)) {
           return { success: false, error: "Items must be an array" };
         }
+        // Deduplicate to avoid double-counting against the limit.
+        items = Array.from(new Set(items.map((i: any) => String(i))));
+        if (items.length > MANUAL_ITEM_LIMIT) {
+          return {
+            success: false,
+            error: `A manual collection can contain at most ${MANUAL_ITEM_LIMIT} items. Received ${items.length}.`,
+          };
+        }
         for (const id of items) {
           if (!mongoose.Types.ObjectId.isValid(id)) {
             return { success: false, error: `Invalid item ID: ${id}` };
@@ -498,7 +518,11 @@ export async function deleteCollectionImage(collectionId: string) {
 }
 
 // ---------- Fetch available items for manual selection ----------
-export async function fetchAvailableItems(targetType: string, search?: string) {
+export async function fetchAvailableItems(
+  targetType: string,
+  search?: string,
+  sortOrder: "asc" | "desc" = "asc",
+) {
   try {
     await connection();
     const Model = getModelForTargetType(targetType);
@@ -520,7 +544,8 @@ export async function fetchAvailableItems(targetType: string, search?: string) {
     const items = await (Model as any)
       .find(filter)
       .select(isProduct ? "_id name images" : "_id name imageUrl")
-      .limit(50)
+      .sort({ name: sortOrder === "asc" ? 1 : -1 }) // asc / desc by name
+      .limit(MANUAL_ITEM_LIMIT)
       .lean();
 
     const normalized = items.map((item: any) => ({

@@ -154,14 +154,14 @@ export default function PermissionRolePage() {
 
   // Filter out pure customers — this page manages staff accounts.
   const staffUsers = useMemo(
-    () => users.filter((u) => (u.role ?? "customer") !== "customer"),
+    () => users.filter((u: any) => (u.role ?? "customer") !== "customer"),
     [users],
   );
 
   const visibleUsers = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return staffUsers;
-    return staffUsers.filter((u) => {
+    return staffUsers.filter((u: any) => {
       const haystack =
         `${displayName(u)} ${u.email ?? ""} ${u.role ?? ""}`.toLowerCase();
       return haystack.includes(q);
@@ -293,7 +293,7 @@ export default function PermissionRolePage() {
                     </td>
                   </tr>
                 ) : (
-                  visibleUsers.map((user) => {
+                  visibleUsers.map((user: any) => {
                     const roleKey = String(
                       user.role ?? "customer",
                     ).toLowerCase();
@@ -332,7 +332,7 @@ export default function PermissionRolePage() {
                         <td className="px-4 py-3">
                           {perms.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
-                              {perms.slice(0, 3).map((p) => (
+                              {perms.slice(0, 3).map((p: any) => (
                                 <span
                                   key={p}
                                   className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
@@ -380,7 +380,7 @@ export default function PermissionRolePage() {
             />
           ) : (
             <ul className="divide-y divide-border">
-              {visibleUsers.map((user) => {
+              {visibleUsers.map((user: any) => {
                 const roleKey = String(user.role ?? "customer").toLowerCase();
                 const perms = user.permissions ?? [];
                 return (

@@ -46,7 +46,7 @@ export async function signup(state: FormState, formData: FormData) {
       verificationToken: token,
       tokenExpiry: expires,
 
-      role: "customer",
+      role: "seller",
       profileCompleted: false,
     });
 

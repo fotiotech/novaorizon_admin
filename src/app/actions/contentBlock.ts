@@ -11,6 +11,7 @@ import { deleteS3Object } from "./s3";
 import { getModelForTargetType } from "@/lib/content/query";
 import {
   resolveSource,
+  applySourceStyles,
   type NormalizedContentItem,
   type ResolveContext,
 } from "@/lib/content/resolve";
@@ -26,16 +27,14 @@ import {
   BLOCK_ANIMATIONS,
   BLOCK_ALIGNMENTS,
   CTA_STYLES,
+  CARD_SHAPES,
   DEFAULT_BLOCK_DISPLAY_CONFIG,
+  DEFAULT_BLOCK_SOURCE_STYLES,
   DEFAULT_BLOCK_LIMIT,
   MAX_BLOCK_LIMIT,
 } from "@/lib/content/constants";
 
-const BLOCKS_LIST_PATH = "/marketing/content/blocks";
-
-/* -------------------------------------------------------------------------- */
-/*                                    Types                                   */
-/* -------------------------------------------------------------------------- */
+const BLOCKS_LIST_PATH = "/marketing/content/navigation/blocks";
 
 export type ActionResult<T = unknown> =
   | { success: true; data: T; message?: string }
@@ -52,6 +51,8 @@ export interface ResolvedBlock {
   columns: number;
   showImages: boolean;
   displayConfig: any;
+  sourceType: string;
+  sourceStyles: any;
   ctaText?: string;
   ctaLink?: string;
   ctaStyle?: string;
@@ -69,7 +70,6 @@ export interface BlockRefOption {
 export interface BlockOptions {
   collections: BlockRefOption[];
   promotions: BlockRefOption[];
-  /** Per-model options for the manual refs editor. */
   refOptions: Record<string, BlockRefOption[]>;
 }
 
@@ -87,10 +87,6 @@ function revalidateBlockConsumers() {
 /*                             Reference options                              */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Models the manual refs picker can point at. Kept in sync with
- * BLOCK_REF_MODELS from lib/content/constants.
- */
 const REF_MODELS_FOR_BLOCKS = [
   "Category",
   "Product",
@@ -182,7 +178,12 @@ export async function getBlocksByLocation(
 
     const enriched = await Promise.all(
       blocks.map(async (block) => {
-        const items = await resolveSource(block.source as any, ctx);
+        const rawItems = await resolveSource(block.source as any, ctx);
+        const items = applySourceStyles(
+          rawItems,
+          block.source.type,
+          (block as any).sourceStyles ?? DEFAULT_BLOCK_SOURCE_STYLES,
+        );
         return {
           _id: String(block._id),
           name: block.name,
@@ -194,6 +195,8 @@ export async function getBlocksByLocation(
           columns: block.columns,
           showImages: block.showImages,
           displayConfig: block.displayConfig,
+          sourceType: block.source.type,
+          sourceStyles: (block as any).sourceStyles,
           ctaText: block.ctaText ?? undefined,
           ctaLink: block.ctaLink ?? undefined,
           ctaStyle: block.ctaStyle ?? undefined,
@@ -243,9 +246,8 @@ function validateBlockData(data: any): string | null {
   if (!BLOCK_LOCATIONS.includes(data.location)) return "Invalid location";
   if (!BLOCK_DISPLAYS.includes(data.display)) return "Invalid display";
   if (!data.source?.type) return "Source type is required";
-  if (!BLOCK_SOURCE_TYPES.includes(data.source.type)) {
+  if (!BLOCK_SOURCE_TYPES.includes(data.source.type))
     return "Invalid source type";
-  }
 
   const s = data.source;
   switch (s.type) {
@@ -280,6 +282,9 @@ function validateBlockData(data: any): string | null {
       if (!Array.isArray(s.refs) || s.refs.length === 0) {
         return "At least one ref is required for manual sources";
       }
+      if (s.refs.length > MAX_BLOCK_LIMIT) {
+        return `Manual sources can contain at most ${MAX_BLOCK_LIMIT} refs`;
+      }
       for (const r of s.refs) {
         if (!BLOCK_REF_MODELS.includes(r.refModel)) {
           return `Invalid ref model: ${r.refModel}`;
@@ -288,6 +293,9 @@ function validateBlockData(data: any): string | null {
           return `Invalid ref id: ${r.refId}`;
         }
       }
+      break;
+    case "category":
+      // No extra validation needed.
       break;
   }
 
@@ -313,6 +321,9 @@ function validateBlockData(data: any): string | null {
     }
     if (dc.alignment && !BLOCK_ALIGNMENTS.includes(dc.alignment)) {
       return "Invalid alignment";
+    }
+    if (dc.cardShape && !CARD_SHAPES.includes(dc.cardShape)) {
+      return "Invalid card shape";
     }
     if (dc.gap != null) {
       const n = Number(dc.gap);
@@ -340,6 +351,9 @@ function sanitizeSource(source: any) {
   switch (source.type) {
     case "collection":
       out.collectionId = source.collectionId || null;
+      break;
+    case "category":
+      // No extra fields.
       break;
     case "promotion":
       out.promotionId = source.promotionId || null;
@@ -384,6 +398,10 @@ function buildBlockUpdates(data: any) {
     displayConfig: {
       ...DEFAULT_BLOCK_DISPLAY_CONFIG,
       ...(data.displayConfig ?? {}),
+    },
+    sourceStyles: {
+      ...DEFAULT_BLOCK_SOURCE_STYLES,
+      ...(data.sourceStyles ?? {}),
     },
     ctaText: data.ctaText?.trim() || null,
     ctaLink: data.ctaLink?.trim() || null,
@@ -493,11 +511,7 @@ export async function deleteBlock(id: string): Promise<ActionResult<null>> {
 
     await ContentBlock.findByIdAndDelete(id);
     revalidateBlockConsumers();
-    return {
-      success: true,
-      data: null,
-      message: "Block deleted successfully",
-    };
+    return { success: true, data: null, message: "Block deleted successfully" };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

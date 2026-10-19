@@ -12,7 +12,15 @@ import {
   BLOCK_ANIMATIONS,
   BLOCK_ALIGNMENTS,
   CTA_STYLES,
+  CARD_SHAPES,
+  PROMOTION_BADGE_STYLES,
+  COLLECTION_COUNT_POSITIONS,
+  RECOMMENDATION_BADGE_STYLES,
+  RELATED_VARIANTS,
+  CARD_SIZES,
+  CARD_VARIANTS,
   DEFAULT_BLOCK_DISPLAY_CONFIG,
+  DEFAULT_BLOCK_SOURCE_STYLES,
   DEFAULT_BLOCK_LIMIT,
   MAX_BLOCK_LIMIT,
   type BlockLocation,
@@ -22,10 +30,12 @@ import {
   type PromotionMode,
   type BlockRefModel,
   type BlockDisplayConfig,
+  type BlockSourceStyles,
   type BlockTheme,
   type BlockAnimation,
   type BlockAlignment,
   type CtaStyle,
+  type CardShape,
 } from "@/lib/content/constants";
 
 /* -------------------------------------------------------------------------- */
@@ -36,7 +46,6 @@ export interface IBlockRef {
   _id?: Types.ObjectId;
   refId: Types.ObjectId;
   refModel: BlockRefModel;
-  /** Optional display override — falls back to the ref doc's `name`. */
   label?: string | null;
   image?: string | null;
   description?: string | null;
@@ -45,25 +54,13 @@ export interface IBlockRef {
 
 export interface IBlockSource {
   type: BlockSourceType;
-
-  /* collection */
   collectionId?: Types.ObjectId | null;
-
-  /* promotion */
   promotionId?: Types.ObjectId | null;
   promotionMode?: PromotionMode;
-
-  /* recommendation */
   recommendationKind?: RecommendationKind | null;
-
-  /* related */
   relatedStrategy?: "auto" | "collection";
   relatedCollectionId?: Types.ObjectId | null;
-
-  /* manual */
   refs?: IBlockRef[];
-
-  /* shared */
   limit?: number;
 }
 
@@ -82,6 +79,7 @@ export interface IContentBlock {
   columns: number;
   showImages: boolean;
   displayConfig: BlockDisplayConfig;
+  sourceStyles: BlockSourceStyles;
 
   ctaText?: string;
   ctaLink?: string;
@@ -113,7 +111,6 @@ const blockRefSchema = new Schema<IBlockRef>(
 const sourceSchema = new Schema<IBlockSource>(
   {
     type: { type: String, enum: BLOCK_SOURCE_TYPES, required: true },
-
     collectionId: {
       type: Schema.Types.ObjectId,
       ref: "Collection",
@@ -125,13 +122,11 @@ const sourceSchema = new Schema<IBlockSource>(
       default: null,
     },
     promotionMode: { type: String, enum: PROMOTION_MODES, default: "products" },
-
     recommendationKind: {
       type: String,
       enum: [...RECOMMENDATION_KINDS, null],
       default: null,
     },
-
     relatedStrategy: {
       type: String,
       enum: ["auto", "collection"],
@@ -142,9 +137,7 @@ const sourceSchema = new Schema<IBlockSource>(
       ref: "Collection",
       default: null,
     },
-
     refs: { type: [blockRefSchema], default: [] },
-
     limit: {
       type: Number,
       min: 1,
@@ -182,6 +175,7 @@ sourceSchema.pre("validate", function (next) {
       if (!s.refs?.length)
         return next(new Error("At least one ref is required"));
       break;
+    // "category" needs no extra fields — just `limit`.
   }
   next();
 });
@@ -214,6 +208,67 @@ const displayConfigSchema = new Schema<BlockDisplayConfig>(
       type: String,
       enum: BLOCK_ANIMATIONS,
       default: DEFAULT_BLOCK_DISPLAY_CONFIG.animation,
+    },
+    cardShape: {
+      type: String,
+      enum: CARD_SHAPES,
+      default: DEFAULT_BLOCK_DISPLAY_CONFIG.cardShape,
+    },
+  },
+  { _id: false },
+);
+
+const sourceStylesSchema = new Schema<BlockSourceStyles>(
+  {
+    promotionBadgeStyle: {
+      type: String,
+      enum: PROMOTION_BADGE_STYLES,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.promotionBadgeStyle,
+    },
+    promotionShowCode: {
+      type: Boolean,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.promotionShowCode,
+    },
+    collectionShowItemCount: {
+      type: Boolean,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.collectionShowItemCount,
+    },
+    collectionCountPosition: {
+      type: String,
+      enum: COLLECTION_COUNT_POSITIONS,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.collectionCountPosition,
+    },
+    recommendationBadgeStyle: {
+      type: String,
+      enum: RECOMMENDATION_BADGE_STYLES,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.recommendationBadgeStyle,
+    },
+    recommendationShowReason: {
+      type: Boolean,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.recommendationShowReason,
+    },
+    relatedVariant: {
+      type: String,
+      enum: RELATED_VARIANTS,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.relatedVariant,
+    },
+    relatedShowScore: {
+      type: Boolean,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.relatedShowScore,
+    },
+    manualCardSize: {
+      type: String,
+      enum: CARD_SIZES,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.manualCardSize,
+    },
+    manualCardVariant: {
+      type: String,
+      enum: CARD_VARIANTS,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.manualCardVariant,
+    },
+    manualShowDescription: {
+      type: Boolean,
+      default: DEFAULT_BLOCK_SOURCE_STYLES.manualShowDescription,
     },
   },
   { _id: false },
@@ -256,6 +311,10 @@ const ContentBlockSchema = new Schema<IContentBlock>(
       type: displayConfigSchema,
       default: () => ({ ...DEFAULT_BLOCK_DISPLAY_CONFIG }),
     },
+    sourceStyles: {
+      type: sourceStylesSchema,
+      default: () => ({ ...DEFAULT_BLOCK_SOURCE_STYLES }),
+    },
 
     ctaText: { type: String, trim: true, maxlength: 50 },
     ctaLink: { type: String, trim: true },
@@ -268,6 +327,21 @@ const ContentBlockSchema = new Schema<IContentBlock>(
 );
 
 ContentBlockSchema.index({ location: 1, visible: 1, order: 1 });
+
+/* -------------------------------------------------------------------------- */
+/*                          Safe model registration                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * In dev, Next.js HMR re-evaluates modules but keeps `mongoose.models`
+ * alive across reloads. Editing constants (adding "circle" to CARD_SHAPES,
+ * etc.) would otherwise not rebuild the compiled enum validators. Force a
+ * re-register in dev so schema edits take effect without a full restart.
+ */
+if (process.env.NODE_ENV !== "production") {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  delete (mongoose.models as any).ContentBlock;
+}
 
 export const ContentBlock: Model<IContentBlock> =
   mongoose.models.ContentBlock ||

@@ -25,10 +25,17 @@ import {
   BLOCK_REF_MODELS,
   BLOCK_COLUMN_COUNTS,
   BLOCK_THEMES,
-  BLOCK_ANIMATIONS,
   BLOCK_ALIGNMENTS,
   CTA_STYLES,
+  CARD_SHAPES,
+  PROMOTION_BADGE_STYLES,
+  COLLECTION_COUNT_POSITIONS,
+  RECOMMENDATION_BADGE_STYLES,
+  RELATED_VARIANTS,
+  CARD_SIZES,
+  CARD_VARIANTS,
   DEFAULT_BLOCK_DISPLAY_CONFIG,
+  DEFAULT_BLOCK_SOURCE_STYLES,
   DEFAULT_BLOCK_LIMIT,
   MAX_BLOCK_LIMIT,
   type BlockLocation,
@@ -38,10 +45,17 @@ import {
   type PromotionMode,
   type BlockRefModel,
   type BlockDisplayConfig,
+  type BlockSourceStyles,
   type BlockTheme,
-  type BlockAnimation,
   type BlockAlignment,
   type CtaStyle,
+  type CardShape,
+  type PromotionBadgeStyle,
+  type CollectionCountPosition,
+  type RecommendationBadgeStyle,
+  type RelatedVariant,
+  type CardSize,
+  type CardVariant,
 } from "@/lib/content/constants";
 
 /* -------------------------------------------------------------------------- */
@@ -81,6 +95,7 @@ interface BlockFormState {
   columns: number;
   showImages: boolean;
   displayConfig: BlockDisplayConfig;
+  sourceStyles: BlockSourceStyles;
 
   ctaText: string;
   ctaLink: string;
@@ -112,6 +127,7 @@ const emptyForm: BlockFormState = {
   columns: 4,
   showImages: true,
   displayConfig: { ...DEFAULT_BLOCK_DISPLAY_CONFIG },
+  sourceStyles: { ...DEFAULT_BLOCK_SOURCE_STYLES },
 
   ctaText: "",
   ctaLink: "",
@@ -173,6 +189,10 @@ function fromApi(data: any): BlockFormState {
       ...DEFAULT_BLOCK_DISPLAY_CONFIG,
       ...(data.displayConfig ?? {}),
     },
+    sourceStyles: {
+      ...DEFAULT_BLOCK_SOURCE_STYLES,
+      ...(data.sourceStyles ?? {}),
+    },
 
     ctaText: data.ctaText ?? "",
     ctaLink: data.ctaLink ?? "",
@@ -192,6 +212,9 @@ function toPayload(form: BlockFormState) {
   switch (form.sourceType) {
     case "collection":
       source.collectionId = form.collectionId || null;
+      break;
+    case "category":
+      // No extra fields — uses `limit` only.
       break;
     case "promotion":
       source.promotionId = form.promotionId || null;
@@ -232,6 +255,7 @@ function toPayload(form: BlockFormState) {
     columns: form.columns,
     showImages: form.showImages,
     displayConfig: form.displayConfig,
+    sourceStyles: form.sourceStyles,
     ctaText: form.ctaText,
     ctaLink: form.ctaLink,
     ctaStyle: form.ctaStyle,
@@ -349,6 +373,207 @@ function BooleanChoice({
 }
 
 /* -------------------------------------------------------------------------- */
+/*                            Bulk add picker                                 */
+/* -------------------------------------------------------------------------- */
+
+function BulkAddPicker({
+  refOptions,
+  existingRefs,
+  limit,
+  onAdd,
+}: {
+  refOptions: Record<string, BlockRefOption[]>;
+  existingRefs: UiRef[];
+  limit: number;
+  onAdd: (refs: UiRef[]) => void;
+}) {
+  const [model, setModel] = useState<BlockRefModel>("Product");
+  const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const options = refOptions[model] ?? [];
+
+  const existingIds = useMemo(
+    () =>
+      new Set(
+        existingRefs
+          .filter((r) => r.refModel === model && r.refId)
+          .map((r) => r.refId),
+      ),
+    [existingRefs, model],
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = q
+      ? options.filter((o) => o.name.toLowerCase().includes(q))
+      : [...options];
+    return list.sort((a, b) =>
+      sortOrder === "asc"
+        ? a.name.localeCompare(b.name)
+        : b.name.localeCompare(a.name),
+    );
+  }, [options, search, sortOrder]);
+
+  const remaining = Math.max(0, limit - existingRefs.length);
+  const atLimit = remaining <= 0;
+  const availableFiltered = filtered.filter((o) => !existingIds.has(o.id));
+  const allVisibleSelected =
+    availableFiltered.length > 0 &&
+    availableFiltered.every((o) => selectedIds.includes(o.id));
+
+  const toggle = (id: string) => {
+    if (existingIds.has(id)) return;
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const selectAll = () => {
+    if (atLimit) return;
+    const allowed = availableFiltered.slice(0, remaining).map((o) => o.id);
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...allowed])));
+  };
+
+  const clear = () => setSelectedIds([]);
+
+  const addSelected = () => {
+    if (atLimit) return;
+    const ids = selectedIds
+      .filter((id) => !existingIds.has(id))
+      .slice(0, remaining);
+    const refs: UiRef[] = ids
+      .map((id) => {
+        const opt = options.find((o) => o.id === id);
+        if (!opt) return null;
+        return {
+          ...newRef(),
+          refModel: model,
+          refId: id,
+          label: opt.name,
+        };
+      })
+      .filter(Boolean) as UiRef[];
+    onAdd(refs);
+    setSelectedIds([]);
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 p-3 sm:p-4">
+      <div className="mb-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Bulk add {model}s
+        </h4>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Pick a model, sort by name, then select items to append to the list
+          below.
+        </p>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)_9rem]">
+        <select
+          value={model}
+          onChange={(e) => {
+            setModel(e.target.value as BlockRefModel);
+            setSelectedIds([]);
+          }}
+          className={inputCls}
+        >
+          {BLOCK_REF_MODELS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={`Search ${model.toLowerCase()}s…`}
+          className={inputCls}
+        />
+        <select
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
+          className={inputCls}
+        >
+          <option value="asc">Name (A → Z)</option>
+          <option value="desc">Name (Z → A)</option>
+        </select>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={selectAll}
+            disabled={
+              atLimit || allVisibleSelected || availableFiltered.length === 0
+            }
+            className="rounded border border-blue-500 px-2.5 py-1 font-semibold text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Select All (max {remaining})
+          </button>
+          <button
+            type="button"
+            onClick={clear}
+            disabled={selectedIds.length === 0}
+            className="rounded border border-border px-2.5 py-1 text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={addSelected}
+            disabled={atLimit || selectedIds.length === 0}
+            className="rounded bg-primary px-2.5 py-1 font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Add {selectedIds.length} selected
+          </button>
+        </div>
+        <span className="text-muted-foreground">
+          {existingRefs.length}/{limit} total
+        </span>
+      </div>
+
+      <div className="mt-2 max-h-56 overflow-y-auto rounded border border-border bg-background">
+        {availableFiltered.length === 0 ? (
+          <p className="p-3 text-xs text-muted-foreground">
+            {atLimit ? `Limit of ${limit} reached.` : "No matching items."}
+          </p>
+        ) : (
+          availableFiltered.map((o) => {
+            const isSelected = selectedIds.includes(o.id);
+            const disabled = !isSelected && selectedIds.length >= remaining;
+            return (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => !disabled && toggle(o.id)}
+                className={`flex w-full items-center gap-2 border-b border-border px-3 py-1.5 text-left text-xs last:border-b-0 ${
+                  disabled ? "opacity-40" : "hover:bg-muted/40"
+                }`}
+              >
+                <span
+                  className={`flex size-4 items-center justify-center rounded border-2 ${
+                    isSelected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border"
+                  }`}
+                >
+                  {isSelected ? "✓" : ""}
+                </span>
+                <span className="truncate">{o.name}</span>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*                              Manual refs editor                            */
 /* -------------------------------------------------------------------------- */
 
@@ -392,7 +617,6 @@ function RefsEditor({
             key={ref._key}
             className="rounded-lg border border-border bg-background p-3"
           >
-            {/* Header: move controls + index + remove */}
             <div className="mb-3 flex items-center gap-2">
               <div className="flex gap-1">
                 <button
@@ -426,7 +650,6 @@ function RefsEditor({
               </button>
             </div>
 
-            {/* Model + entity */}
             <div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
               <select
                 value={ref.refModel}
@@ -459,7 +682,6 @@ function RefsEditor({
               </select>
             </div>
 
-            {/* Label */}
             <input
               value={ref.label}
               onChange={(e) => patch(i, { label: e.target.value })}
@@ -467,7 +689,6 @@ function RefsEditor({
               className={`${inputCls} mt-2`}
             />
 
-            {/* Overrides */}
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <input
                 value={ref.image}
@@ -491,7 +712,7 @@ function RefsEditor({
         onClick={add}
         className="w-full rounded-md border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary"
       >
-        + Add ref
+        + Add empty ref
       </button>
     </div>
   );
@@ -503,6 +724,7 @@ function RefsEditor({
 
 function LivePreview({ form }: { form: BlockFormState }) {
   const cfg = form.displayConfig;
+  const isCircle = cfg.cardShape === "circle";
 
   const themeCls =
     cfg.theme === "dark"
@@ -531,6 +753,13 @@ function LivePreview({ form }: { form: BlockFormState }) {
     (_, i) => i,
   );
 
+  const imageCls = isCircle
+    ? "mx-auto aspect-square w-full max-w-[64px] rounded-full bg-current/10"
+    : "aspect-square w-full rounded-md bg-current/10";
+  const cellCls = isCircle
+    ? "flex flex-col items-center gap-1.5"
+    : "space-y-1.5";
+
   return (
     <div className="space-y-3">
       {form.sectionTitle ? (
@@ -540,30 +769,41 @@ function LivePreview({ form }: { form: BlockFormState }) {
       ) : null}
 
       {form.display === "grid" && (
-        <div
-          className={`${previewCls} grid gap-2`}
-          style={{
-            gridTemplateColumns: `repeat(${form.columns}, minmax(0, 1fr))`,
-          }}
-        >
-          {cells.map((i) => (
-            <div key={i} className="space-y-1.5">
-              {form.showImages ? (
-                <div className="aspect-square w-full rounded-md bg-current/10" />
-              ) : null}
-              <div className="h-1.5 w-16 rounded bg-current/40" />
-              <div className="h-1.5 w-10 rounded bg-current/20" />
-            </div>
-          ))}
+        <div className={previewCls}>
+          <div
+            className="grid gap-2"
+            style={{
+              gridTemplateColumns: `repeat(${form.columns}, minmax(0, 1fr))`,
+            }}
+          >
+            {cells.map((i) => (
+              <div key={i} className={cellCls}>
+                {form.showImages ? <div className={imageCls} /> : null}
+                <div className="h-1.5 w-10 rounded bg-current/40" />
+                {!isCircle ? (
+                  <div className="h-1.5 w-16 rounded bg-current/20" />
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {form.display === "carousel" && (
         <div className={`${previewCls} flex gap-3 overflow-hidden`}>
           {cells.slice(0, 4).map((i) => (
-            <div key={i} className="min-w-20 flex-1 space-y-1.5">
+            <div
+              key={i}
+              className={`min-w-20 flex-1 ${isCircle ? "flex flex-col items-center gap-1.5" : "space-y-1.5"}`}
+            >
               {form.showImages ? (
-                <div className="aspect-square w-full rounded-md bg-current/10" />
+                <div
+                  className={
+                    isCircle
+                      ? "aspect-square w-full max-w-[72px] rounded-full bg-current/10"
+                      : "aspect-square w-full rounded-md bg-current/10"
+                  }
+                />
               ) : null}
               <div className="h-1.5 w-12 rounded bg-current/40" />
             </div>
@@ -576,7 +816,9 @@ function LivePreview({ form }: { form: BlockFormState }) {
           {cells.slice(0, 4).map((i) => (
             <div key={i} className="flex items-center gap-2">
               {form.showImages ? (
-                <div className="size-6 rounded bg-current/10" />
+                <div
+                  className={`size-6 bg-current/10 ${isCircle ? "rounded-full" : "rounded"}`}
+                />
               ) : null}
               <div className="h-1.5 w-24 rounded bg-current/40" />
             </div>
@@ -609,6 +851,7 @@ function LivePreview({ form }: { form: BlockFormState }) {
         <Row label="Location" value={form.location} />
         <Row label="Source" value={form.sourceType} />
         <Row label="Display" value={form.display} />
+        <Row label="Shape" value={cfg.cardShape} />
         <Row label="Theme" value={cfg.theme} />
       </dl>
     </div>
@@ -704,6 +947,12 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
       displayConfig: { ...p.displayConfig, ...changes },
     }));
 
+  const patchSourceStyles = (changes: Partial<BlockSourceStyles>) =>
+    setForm((p) => ({
+      ...p,
+      sourceStyles: { ...p.sourceStyles, ...changes },
+    }));
+
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -780,6 +1029,11 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
         setSubmitting(false);
         return;
       }
+      if (form.sourceType === "manual" && form.refs.length > MAX_BLOCK_LIMIT) {
+        setError(`Manual sources can contain at most ${MAX_BLOCK_LIMIT} refs.`);
+        setSubmitting(false);
+        return;
+      }
 
       const payload = toPayload(form);
       const result = id
@@ -845,7 +1099,7 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
                 onChange={handleChange}
                 required
                 className={inputCls}
-                placeholder="e.g., Home — Featured collections"
+                placeholder="e.g., Home — Shop by category"
               />
             </Field>
             <Field label="Description" hint="Admin-only note. Not rendered.">
@@ -947,6 +1201,14 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
                   ))}
                 </select>
               </Field>
+            )}
+
+            {form.sourceType === "category" && (
+              <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                Lists all categories directly. Tip: set{" "}
+                <strong>Card shape → circle</strong> below for the classic
+                shop-by-category look — it works with grid, carousel, and list.
+              </p>
             )}
 
             {form.sourceType === "promotion" && (
@@ -1055,11 +1317,28 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
             )}
 
             {form.sourceType === "manual" && (
-              <RefsEditor
-                refs={form.refs}
-                refOptions={options.refOptions}
-                onChange={(refs) => patch({ refs })}
-              />
+              <>
+                <BulkAddPicker
+                  refOptions={options.refOptions}
+                  existingRefs={form.refs}
+                  limit={MAX_BLOCK_LIMIT}
+                  onAdd={(newRefs) =>
+                    patch({ refs: [...form.refs, ...newRefs] })
+                  }
+                />
+                <div className="mt-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Added refs ({form.refs.length} / {MAX_BLOCK_LIMIT})
+                    </h4>
+                  </div>
+                  <RefsEditor
+                    refs={form.refs}
+                    refOptions={options.refOptions}
+                    onChange={(refs) => patch({ refs })}
+                  />
+                </div>
+              </>
             )}
 
             {form.sourceType !== "manual" && (
@@ -1098,7 +1377,7 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
                   ))}
                 </select>
               </Field>
-              {form.display === "grid" && (
+              {(form.display === "grid" || form.display === "carousel") && (
                 <Field label="Columns">
                   <select
                     value={form.columns}
@@ -1113,6 +1392,30 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
                   </select>
                 </Field>
               )}
+              <Field
+                label="Card shape"
+                hint={
+                  form.displayConfig.cardShape === "circle"
+                    ? "Circle overrides the Rounded corners toggle."
+                    : "Rectangle card. Toggle Rounded corners below for softer edges."
+                }
+              >
+                <select
+                  value={form.displayConfig.cardShape}
+                  onChange={(e) =>
+                    patchDisplayConfig({
+                      cardShape: e.target.value as CardShape,
+                    })
+                  }
+                  className={inputCls}
+                >
+                  {CARD_SHAPES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
 
             <BooleanChoice
@@ -1186,6 +1489,11 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
                   label="Rounded corners"
                   value={form.displayConfig.rounded}
                   onChange={(v) => patchDisplayConfig({ rounded: v })}
+                  hint={
+                    form.displayConfig.cardShape === "circle"
+                      ? "Ignored when card shape is circle."
+                      : undefined
+                  }
                 />
                 <BooleanChoice
                   label="Drop shadow"
@@ -1194,6 +1502,183 @@ const ContentBlockForm = ({ id }: { id?: string }) => {
                 />
               </div>
             </div>
+          </Section>
+
+          {/* ---------------- Source-specific styles ---------------- */}
+          <Section
+            title="Source-specific styles"
+            description="Appearance hints applied only to items resolved from this source type."
+          >
+            {form.sourceType === "promotion" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Badge style">
+                  <select
+                    value={form.sourceStyles.promotionBadgeStyle}
+                    onChange={(e) =>
+                      patchSourceStyles({
+                        promotionBadgeStyle: e.target
+                          .value as PromotionBadgeStyle,
+                      })
+                    }
+                    className={inputCls}
+                  >
+                    {PROMOTION_BADGE_STYLES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <BooleanChoice
+                  label="Show promotion code"
+                  value={form.sourceStyles.promotionShowCode}
+                  onChange={(v) => patchSourceStyles({ promotionShowCode: v })}
+                />
+              </div>
+            )}
+
+            {form.sourceType === "collection" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <BooleanChoice
+                  label="Show item count"
+                  value={form.sourceStyles.collectionShowItemCount}
+                  onChange={(v) =>
+                    patchSourceStyles({ collectionShowItemCount: v })
+                  }
+                />
+                {form.sourceStyles.collectionShowItemCount && (
+                  <Field label="Count position">
+                    <select
+                      value={form.sourceStyles.collectionCountPosition}
+                      onChange={(e) =>
+                        patchSourceStyles({
+                          collectionCountPosition: e.target
+                            .value as CollectionCountPosition,
+                        })
+                      }
+                      className={inputCls}
+                    >
+                      {COLLECTION_COUNT_POSITIONS.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </div>
+            )}
+
+            {form.sourceType === "recommendation" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Badge style">
+                  <select
+                    value={form.sourceStyles.recommendationBadgeStyle}
+                    onChange={(e) =>
+                      patchSourceStyles({
+                        recommendationBadgeStyle: e.target
+                          .value as RecommendationBadgeStyle,
+                      })
+                    }
+                    className={inputCls}
+                  >
+                    {RECOMMENDATION_BADGE_STYLES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <BooleanChoice
+                  label="Show recommendation reason"
+                  value={form.sourceStyles.recommendationShowReason}
+                  onChange={(v) =>
+                    patchSourceStyles({ recommendationShowReason: v })
+                  }
+                />
+              </div>
+            )}
+
+            {form.sourceType === "related" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Variant">
+                  <select
+                    value={form.sourceStyles.relatedVariant}
+                    onChange={(e) =>
+                      patchSourceStyles({
+                        relatedVariant: e.target.value as RelatedVariant,
+                      })
+                    }
+                    className={inputCls}
+                  >
+                    {RELATED_VARIANTS.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <BooleanChoice
+                  label="Show match score"
+                  value={form.sourceStyles.relatedShowScore}
+                  onChange={(v) => patchSourceStyles({ relatedShowScore: v })}
+                />
+              </div>
+            )}
+
+            {form.sourceType === "manual" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Card size">
+                  <select
+                    value={form.sourceStyles.manualCardSize}
+                    onChange={(e) =>
+                      patchSourceStyles({
+                        manualCardSize: e.target.value as CardSize,
+                      })
+                    }
+                    className={inputCls}
+                  >
+                    {CARD_SIZES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Card variant">
+                  <select
+                    value={form.sourceStyles.manualCardVariant}
+                    onChange={(e) =>
+                      patchSourceStyles({
+                        manualCardVariant: e.target.value as CardVariant,
+                      })
+                    }
+                    className={inputCls}
+                  >
+                    {CARD_VARIANTS.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <BooleanChoice
+                  label="Show description"
+                  value={form.sourceStyles.manualShowDescription}
+                  onChange={(v) =>
+                    patchSourceStyles({ manualShowDescription: v })
+                  }
+                />
+              </div>
+            )}
+
+            {form.sourceType === "category" && (
+              <p className="text-xs text-muted-foreground">
+                Category sources don't have extra style options. Pair with{" "}
+                <strong>Card shape → circle</strong> in the Display section for
+                the round category tile look.
+              </p>
+            )}
           </Section>
 
           {/* ---------------- CTA ---------------- */}

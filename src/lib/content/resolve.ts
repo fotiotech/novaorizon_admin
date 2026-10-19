@@ -20,17 +20,23 @@ import {
   getRelatedProducts,
 } from "@/app/actions/events";
 import type { IBlockSource, IBlockRef } from "@/models/ContentBlock";
-import type { BlockRefModel } from "./constants";
+import type { BlockRefModel, BlockSourceStyles } from "./constants";
 
 /* -------------------------------------------------------------------------- */
 /*                                    Types                                   */
 /* -------------------------------------------------------------------------- */
 
 export interface ResolveContext {
-  /** For personalized / recentlyViewed recommendations. */
   userId?: string;
-  /** For related blocks on product pages. */
   productId?: string;
+}
+
+export interface SourceMeta {
+  code?: string;
+  itemCount?: number;
+  collectionType?: string;
+  reason?: string;
+  score?: number;
 }
 
 export interface NormalizedContentItem {
@@ -43,8 +49,8 @@ export interface NormalizedContentItem {
   price?: number | null;
   listPrice?: number | null;
   badge?: string | null;
-  /** Optional secondary line (e.g. brand name, collection count). */
   subline?: string | null;
+  meta?: SourceMeta;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -133,6 +139,7 @@ function normalizePromotion(doc: any): NormalizedContentItem {
     href: buildHref("Promotion", String(doc._id), null),
     contentType: "Promotion",
     badge: doc.code ?? null,
+    meta: { code: doc.code ?? undefined },
   };
 }
 
@@ -169,6 +176,26 @@ export function normalizeContentItem(
 }
 
 /* -------------------------------------------------------------------------- */
+/*                            Category resolver                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Direct category source. Lists categories (sorted by `order` if present,
+ * then by name). This is the shortcut used by "Shop by category" blocks that
+ * pair with `display = "circles"`.
+ */
+async function resolveCategories(
+  limit: number,
+): Promise<NormalizedContentItem[]> {
+  const docs = await (Category as mongoose.Model<any>)
+    .find({})
+    .sort({ order: 1, name: 1 })
+    .limit(limit)
+    .lean();
+  return docs.map((d: any) => normalizeCategory(d));
+}
+
+/* -------------------------------------------------------------------------- */
 /*                            Collection resolver                             */
 /* -------------------------------------------------------------------------- */
 
@@ -182,7 +209,6 @@ export async function resolveCollection(
 
   const limit = limitOverride ?? collection.recommendationLimit ?? 20;
 
-  /* ---- recommendation ---- */
   if (collection.type === "recommendation") {
     const kind = collection.recommendationType;
     let raw: any[] = [];
@@ -200,7 +226,6 @@ export async function resolveCollection(
     return raw.map((d) => normalizeProduct(d));
   }
 
-  /* ---- related ---- */
   if (collection.type === "related") {
     if (!ctx.productId) return [];
     const raw = await getRelatedProducts(ctx.productId, limit);
@@ -210,10 +235,8 @@ export async function resolveCollection(
   const targetType = collection.targetType as BlockRefModel;
   const Model = getModelForTargetType(targetType);
   if (!Model) return [];
-
   const m = Model as mongoose.Model<any>;
 
-  /* ---- rule ---- */
   if (collection.type === "rule") {
     const query = buildQueryFromRules(collection.rules, targetType);
     if (Object.keys(query).length === 0) return [];
@@ -221,11 +244,9 @@ export async function resolveCollection(
     return docs.map((d) => normalizeContentItem(d, targetType));
   }
 
-  /* ---- manual ---- */
   if (collection.type === "manual") {
     const ids = (collection.items ?? []).slice(0, limit);
     const docs = await m.find({ _id: { $in: ids } }).lean();
-    // Preserve admin-defined order
     const byId = new Map(docs.map((d: any) => [String(d._id), d]));
     return ids
       .map((id: any) => byId.get(String(id)))
@@ -255,7 +276,6 @@ async function resolvePromotionProducts(
   const promo: any = await Promotion.findById(promotionId).lean();
   if (!promo) return [];
 
-  // Only surface products when the promotion is live right now.
   const now = new Date();
   const live =
     promo.isActive &&
@@ -265,7 +285,10 @@ async function resolvePromotionProducts(
 
   const query = buildProductQueryFromScope(promo.scope);
   const docs = await Product.find(query).limit(limit).lean();
-  return docs.map((d) => normalizeProduct(d));
+  return docs.map((d) => {
+    const item = normalizeProduct(d);
+    return { ...item, meta: { code: promo.code ?? undefined } };
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -277,20 +300,23 @@ async function resolveRecommendation(
   limit: number,
   ctx: ResolveContext,
 ): Promise<NormalizedContentItem[]> {
+  const withReason = (items: NormalizedContentItem[]) =>
+    items.map((item) => ({ ...item, meta: { ...item.meta, reason: kind } }));
+
   switch (kind) {
     case "trending": {
       const raw = await getTrendingItems(limit);
-      return raw.map((d) => normalizeProduct(d));
+      return withReason(raw.map((d) => normalizeProduct(d)));
     }
     case "personalized": {
       if (!ctx.userId) return [];
       const raw = await getRecommendations(limit);
-      return raw.map((d) => normalizeProduct(d));
+      return withReason(raw.map((d) => normalizeProduct(d)));
     }
     case "recentlyViewed": {
       if (!ctx.userId) return [];
       const raw = await getRecentlyViewed(limit);
-      return raw.map((d) => normalizeProduct(d));
+      return withReason(raw.map((d) => normalizeProduct(d)));
     }
   }
 }
@@ -304,7 +330,6 @@ async function resolveManualRefs(
 ): Promise<NormalizedContentItem[]> {
   if (!refs?.length) return [];
 
-  // Group by refModel so we run one query per model instead of N.
   const byModel: Record<string, IBlockRef[]> = {};
   for (const r of refs) {
     (byModel[r.refModel] ??= []).push(r);
@@ -321,16 +346,12 @@ async function resolveManualRefs(
       const docs = await (Model as mongoose.Model<any>)
         .find({ _id: { $in: ids } })
         .lean();
-
       const byId = new Map(docs.map((d: any) => [String(d._id), d]));
 
       for (const ref of items) {
         const doc = byId.get(String(ref.refId));
         if (!doc) continue;
-
         const normalized = normalizeContentItem(doc, ref.refModel);
-
-        // Apply overrides from the ref definition
         out.push({
           ...normalized,
           name: ref.label?.trim() || normalized.name,
@@ -341,7 +362,6 @@ async function resolveManualRefs(
     }),
   );
 
-  // Restore the admin's ordering
   const orderMap = new Map(
     refs.map((r, i) => [`${r.refModel}:${String(r.refId)}`, r.order ?? i]),
   );
@@ -369,7 +389,9 @@ export async function resolveSource(
       if (!source.collectionId) return [];
       return resolveCollection(source.collectionId, ctx, limit);
     }
-
+    case "category": {
+      return resolveCategories(limit);
+    }
     case "promotion": {
       if (!source.promotionId) return [];
       if (source.promotionMode === "self") {
@@ -377,12 +399,10 @@ export async function resolveSource(
       }
       return resolvePromotionProducts(source.promotionId, limit);
     }
-
     case "recommendation": {
       if (!source.recommendationKind) return [];
       return resolveRecommendation(source.recommendationKind, limit, ctx);
     }
-
     case "related": {
       if (!ctx.productId) return [];
       if (
@@ -392,14 +412,66 @@ export async function resolveSource(
         return resolveCollection(source.relatedCollectionId, ctx, limit);
       }
       const raw = await getRelatedProducts(ctx.productId, limit);
-      return raw.map((d) => normalizeProduct(d));
+      return raw.map((d) => {
+        const item = normalizeProduct(d);
+        const score = typeof d.score === "number" ? d.score : undefined;
+        return score != null ? { ...item, meta: { score } } : item;
+      });
     }
-
-    case "manual": {
+    case "manual":
       return resolveManualRefs(source.refs ?? []);
-    }
-
     default:
       return [];
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                     Source-specific display directives                     */
+/* -------------------------------------------------------------------------- */
+
+export function applySourceStyles(
+  items: NormalizedContentItem[],
+  sourceType: string,
+  styles?: BlockSourceStyles | null,
+): NormalizedContentItem[] {
+  if (!styles) return items;
+
+  return items.map((item) => {
+    let subline = item.subline ?? null;
+    let badge = item.badge ?? null;
+
+    if (sourceType === "promotion") {
+      if (!styles.promotionShowCode || styles.promotionBadgeStyle === "none") {
+        badge = null;
+      } else if (item.meta?.code) {
+        badge = item.meta.code;
+      }
+    } else if (sourceType === "collection") {
+      if (styles.collectionShowItemCount) {
+        const count = items.length;
+        const text = `${count} item${count === 1 ? "" : "s"}`;
+        if (styles.collectionCountPosition === "badge") badge = text;
+        else if (styles.collectionCountPosition === "subline") subline = text;
+      }
+    } else if (sourceType === "recommendation") {
+      if (styles.recommendationBadgeStyle === "none") {
+        badge = null;
+      } else if (styles.recommendationBadgeStyle !== "default") {
+        badge = styles.recommendationBadgeStyle;
+      }
+      if (styles.recommendationShowReason && item.meta?.reason) {
+        subline = item.meta.reason;
+      }
+    } else if (sourceType === "related") {
+      if (styles.relatedShowScore && item.meta?.score != null) {
+        subline = `Match ${Math.round(item.meta.score * 100)}%`;
+      }
+    } else if (sourceType === "manual") {
+      if (!styles.manualShowDescription) {
+        return { ...item, subline, badge, description: null };
+      }
+    }
+
+    return { ...item, subline, badge };
+  });
 }

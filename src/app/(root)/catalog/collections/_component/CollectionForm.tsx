@@ -15,6 +15,10 @@ import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import CollectionRuleForm from "./RuleEditor";
 
+// Maximum number of manually-selected items allowed in a collection.
+// Must match the server-side constant in app/actions/collection.ts.
+const MANUAL_ITEM_LIMIT = 50;
+
 const CollectionForm = ({ id }: { id?: string }) => {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -28,6 +32,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
   const [items, setItems] = useState<string[]>([]);
   const [availableItems, setAvailableItems] = useState<any[]>([]);
   const [itemSearch, setItemSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -175,7 +180,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
   // Fetch available items for manual selection
   useEffect(() => {
     if (formData.type === "manual" && formData.targetType) {
-      fetchAvailableItems(formData.targetType, itemSearch)
+      fetchAvailableItems(formData.targetType, itemSearch, sortOrder)
         .then((res) => {
           if (res.success) {
             setAvailableItems(res.data || []);
@@ -183,7 +188,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
         })
         .catch(console.error);
     }
-  }, [formData.targetType, formData.type, itemSearch]);
+  }, [formData.targetType, formData.type, itemSearch, sortOrder]);
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -200,12 +205,57 @@ const CollectionForm = ({ id }: { id?: string }) => {
   };
 
   const toggleItem = (itemId: string) => {
-    setItems((prev) =>
-      prev.includes(itemId)
-        ? prev.filter((id) => id !== itemId)
-        : [...prev, itemId],
-    );
+    if (items.includes(itemId)) {
+      setItems(items.filter((i) => i !== itemId));
+      return;
+    }
+    if (items.length >= MANUAL_ITEM_LIMIT) {
+      setError(
+        `You can select at most ${MANUAL_ITEM_LIMIT} items. Remove some before adding more.`,
+      );
+      setTimeout(() => setError(null), 4000);
+      return;
+    }
+    setItems([...items, itemId]);
   };
+
+  // Select all currently visible (filtered) items, capped by MANUAL_ITEM_LIMIT.
+  const selectAllVisible = () => {
+    const remaining = MANUAL_ITEM_LIMIT - items.length;
+    if (remaining <= 0) {
+      setError(
+        `Selection limit of ${MANUAL_ITEM_LIMIT} reached. Remove some items first.`,
+      );
+      setTimeout(() => setError(null), 4000);
+      return;
+    }
+
+    const visibleIds = availableItems.map((item) => item._id);
+    const unselectedVisible = visibleIds.filter((id) => !items.includes(id));
+    const toAdd = unselectedVisible.slice(0, remaining);
+
+    if (toAdd.length > 0) {
+      setItems((prev) => Array.from(new Set([...prev, ...toAdd])));
+    }
+
+    if (unselectedVisible.length > remaining) {
+      setError(
+        `Selection limit of ${MANUAL_ITEM_LIMIT} items. Added ${toAdd.length} of ${unselectedVisible.length} visible items.`,
+      );
+      setTimeout(() => setError(null), 4000);
+    }
+  };
+
+  const clearAllVisible = () => {
+    const visibleSet = new Set(availableItems.map((item) => item._id));
+    setItems((prev) => prev.filter((id) => !visibleSet.has(id)));
+  };
+
+  const allVisibleSelected =
+    availableItems.length > 0 &&
+    availableItems.every((item) => items.includes(item._id));
+  const atLimit = items.length >= MANUAL_ITEM_LIMIT;
+  const overLimit = items.length > MANUAL_ITEM_LIMIT;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,6 +290,13 @@ const CollectionForm = ({ id }: { id?: string }) => {
           setError("Please complete all rule fields");
           return;
         }
+      }
+
+      if (type === "manual" && items.length > MANUAL_ITEM_LIMIT) {
+        setError(
+          `A manual collection can contain at most ${MANUAL_ITEM_LIMIT} items. Currently selected: ${items.length}.`,
+        );
+        return;
       }
 
       // Validate recommendation and related types
@@ -583,58 +640,129 @@ const CollectionForm = ({ id }: { id?: string }) => {
               <h3 className="text-lg font-semibold mb-3">
                 Select {formData.targetType}s
               </h3>
-              <div className="mb-3">
+
+              {/* Search + Sort row */}
+              <div className="flex flex-col sm:flex-row gap-2 mb-3">
                 <input
                   type="text"
                   placeholder={`Search ${formData.targetType.toLowerCase()}s...`}
                   value={itemSearch}
                   onChange={(e) => setItemSearch(e.target.value)}
-                  className="w-full p-2 border rounded"
+                  className="flex-1 p-2 border rounded"
                 />
+                <select
+                  value={sortOrder}
+                  onChange={(e) =>
+                    setSortOrder(e.target.value as "asc" | "desc")
+                  }
+                  className="p-2 border rounded sm:w-44"
+                  title="Sort items by name"
+                  disabled={isSubmitting}
+                >
+                  <option value="asc">Name (A → Z)</option>
+                  <option value="desc">Name (Z → A)</option>
+                </select>
               </div>
+
+              {/* Select All / Clear All */}
+              <div className="flex items-center justify-between mb-2 text-sm">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllVisible}
+                    disabled={
+                      isSubmitting ||
+                      availableItems.length === 0 ||
+                      allVisibleSelected ||
+                      atLimit
+                    }
+                    title={
+                      atLimit
+                        ? `Selection limit of ${MANUAL_ITEM_LIMIT} reached`
+                        : `Add all visible items (max ${MANUAL_ITEM_LIMIT} total)`
+                    }
+                    className="px-3 py-1 border border-blue-500 text-blue-600 rounded hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Select All (max {MANUAL_ITEM_LIMIT})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearAllVisible}
+                    disabled={
+                      isSubmitting ||
+                      !availableItems.some((i) => items.includes(i._id))
+                    }
+                    className="px-3 py-1 border border-gray-400 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Clear All
+                  </button>
+                </div>
+                <span className="text-gray-500">
+                  {availableItems.length} visible
+                </span>
+              </div>
+
               <div className="max-h-60 overflow-y-auto border rounded">
                 {availableItems.length === 0 ? (
                   <p className="p-4 text-gray-500">No items found.</p>
                 ) : (
-                  availableItems.map((item) => (
-                    <div
-                      key={item._id}
-                      className="flex items-center p-2 hover:bg-gray-50 border-b"
-                    >
+                  availableItems.map((item) => {
+                    const selected = items.includes(item._id);
+                    const disabled = !selected && atLimit;
+                    return (
                       <div
-                        className="w-5 h-5 border-2 border-gray-300 rounded bg-white flex items-center justify-center cursor-pointer hover:border-blue-500 transition-colors mr-3 flex-shrink-0"
-                        onClick={() => toggleItem(item._id)}
+                        key={item._id}
+                        className={`flex items-center p-2 border-b ${
+                          disabled
+                            ? "opacity-50"
+                            : "hover:bg-gray-50 cursor-pointer"
+                        }`}
+                        onClick={() => !disabled && toggleItem(item._id)}
                       >
-                        {items.includes(item._id) && (
-                          <svg
-                            className="w-3.5 h-3.5 text-blue-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={3}
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
+                        <div
+                          className={`w-5 h-5 border-2 rounded bg-white flex items-center justify-center mr-3 flex-shrink-0 transition-colors ${
+                            disabled
+                              ? "border-gray-200 cursor-not-allowed"
+                              : "border-gray-300 hover:border-blue-500 cursor-pointer"
+                          }`}
+                        >
+                          {selected && (
+                            <svg
+                              className="w-3.5 h-3.5 text-blue-600"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={3}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          )}
+                        </div>
+                        <span>{item.name || "Unnamed"}</span>
+                        {item.imageUrl && (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            className="ml-auto h-8 w-8 object-cover rounded"
+                          />
                         )}
                       </div>
-                      <span>{item.name || "Unnamed"}</span>
-                      {item.imageUrl && (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.name}
-                          className="ml-auto h-8 w-8 object-cover rounded"
-                        />
-                      )}
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
-              <div className="mt-2 text-sm text-gray-600">
-                {items.length} selected
+              <div
+                className={`mt-2 text-sm ${
+                  overLimit ? "text-red-600 font-medium" : "text-gray-600"
+                }`}
+              >
+                {items.length} / {MANUAL_ITEM_LIMIT} selected
+                {overLimit &&
+                  " — over the limit, please remove some items before saving"}
               </div>
             </div>
           ) : null}
@@ -707,7 +835,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
             <button
               type="submit"
               className="bg-primary px-5 py-2.5 rounded-lg text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-              disabled={isSubmitting}
+              disabled={isSubmitting || overLimit}
             >
               {isSubmitting ? (
                 <span className="flex items-center justify-center">
