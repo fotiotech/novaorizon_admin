@@ -181,7 +181,7 @@ const HeroContentPage = () => {
       key: "edit",
       label: "Edit hero",
       icon: <Edit fontSize="small" />,
-      href: `/marketing/content/hero_content/edit?id=${hero._id}`,
+      href: `/channels/store/content/hero/edit?id=${hero._id}`,
     },
     {
       key: "delete",

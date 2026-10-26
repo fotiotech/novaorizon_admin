@@ -1,9 +1,40 @@
 "use server";
 import { connection } from "@/utils/connection";
-import HeroContent from "@/models/HeroContent";
+import HeroContent, { ITrustBadge } from "@/models/HeroContent";
 import { revalidatePath } from "next/cache";
 import { deleteS3Object } from "./s3";
 import mongoose from "mongoose";
+
+/**
+ * Parses trust badges from FormData.
+ * - Missing field -> empty array (valid).
+ * - Invalid JSON -> error.
+ * - Malformed entries (missing icon/title) are silently dropped.
+ */
+function parseTrustBadges(
+  raw: FormDataEntryValue | null,
+): { ok: true; badges: ITrustBadge[] } | { ok: false; message: string } {
+  if (!raw) return { ok: true, badges: [] };
+
+  try {
+    const parsed = JSON.parse(String(raw));
+    if (!Array.isArray(parsed)) {
+      return { ok: false, message: "Invalid trust badges data" };
+    }
+    const badges: ITrustBadge[] = parsed
+      .filter((b: any) => b && b.icon && b.title)
+      .map((b: any) => ({
+        icon: String(b.icon).trim(),
+        title: String(b.title).trim(),
+        description: b.description ? String(b.description).trim() : "",
+        popupText: b.popupText ? String(b.popupText).trim() : "",
+        link: b.link ? String(b.link).trim() : "",
+      }));
+    return { ok: true, badges };
+  } catch {
+    return { ok: false, message: "Invalid trust badges data" };
+  }
+}
 
 export async function findHeroContent() {
   try {
@@ -59,16 +90,23 @@ export async function createHeroContent(prevState: any, formData: FormData) {
       };
     }
 
+    const parsedBadges = parseTrustBadges(formData.get("trustBadges"));
+    if (!parsedBadges.ok) {
+      return { success: false, message: parsedBadges.message };
+    }
+
     const newHeroContent = new HeroContent({
       title,
       description,
       imageUrl,
       cta_text,
       cta_link,
+      trustBadges: parsedBadges.badges,
     });
 
     await newHeroContent.save();
     revalidatePath("/");
+    revalidatePath("/content-management/app/hero_content");
 
     return {
       success: true,
@@ -112,6 +150,11 @@ export async function updateHeroContent(
       };
     }
 
+    const parsedBadges = parseTrustBadges(formData.get("trustBadges"));
+    if (!parsedBadges.ok) {
+      return { success: false, message: parsedBadges.message };
+    }
+
     const updatedContent = await HeroContent.findByIdAndUpdate(
       id,
       {
@@ -120,6 +163,7 @@ export async function updateHeroContent(
         imageUrl,
         cta_text,
         cta_link,
+        trustBadges: parsedBadges.badges,
         updated_at: Date.now(),
       },
       { new: true, runValidators: true },
@@ -132,6 +176,7 @@ export async function updateHeroContent(
       };
     }
 
+    revalidatePath("/");
     revalidatePath("/content-management/app/hero_content");
     return {
       success: true,
@@ -145,8 +190,6 @@ export async function updateHeroContent(
     };
   }
 }
-
-// app/actions/content_management.ts
 
 export async function deleteHeroContent(id: string) {
   try {

@@ -1,5 +1,14 @@
 import mongoose, { Schema, model, models, Document } from "mongoose";
 
+// Nested trust-badge shape
+export interface ITrustBadge {
+  icon: string;
+  title: string;
+  description?: string;
+  popupText?: string;
+  link?: string;
+}
+
 // Define the interface for the HeroContent document
 export interface IHeroContent extends Document {
   title: string;
@@ -7,9 +16,51 @@ export interface IHeroContent extends Document {
   imageUrl: string;
   cta_text: string;
   cta_link: string;
+  trustBadges: ITrustBadge[];
   created_at: Date;
   updated_at: Date;
 }
+
+const TrustBadgeSchema = new Schema<ITrustBadge>(
+  {
+    icon: {
+      type: String,
+      required: [true, "Badge icon is required"],
+      trim: true,
+    },
+    title: {
+      type: String,
+      required: [true, "Badge title is required"],
+      trim: true,
+    },
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    popupText: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    link: {
+      type: String,
+      default: "",
+      trim: true,
+      validate: {
+        validator: function (v: string) {
+          if (!v) return true; // optional
+          // Allow absolute URLs (http/https/ftp) and internal paths (/...)
+          return (
+            /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/.test(v) || v.startsWith("/")
+          );
+        },
+        message: "Link must be a valid URL or start with /",
+      },
+    },
+  },
+  { _id: false }, // embedded — no separate _id needed
+);
 
 const HeroContentSchema = new Schema<IHeroContent>({
   title: {
@@ -37,6 +88,10 @@ const HeroContentSchema = new Schema<IHeroContent>({
       },
       message: "Invalid URL format",
     },
+  },
+  trustBadges: {
+    type: [TrustBadgeSchema],
+    default: [],
   },
   created_at: {
     type: Date,
