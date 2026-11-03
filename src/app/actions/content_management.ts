@@ -1,19 +1,35 @@
+// app/actions/content_management.ts
 "use server";
+
 import { connection } from "@/utils/connection";
 import HeroContent, { ITrustBadge } from "@/models/HeroContent";
+import TrustBadge from "@/models/TrustBadge";
 import { revalidatePath } from "next/cache";
 import { deleteS3Object } from "./s3";
 import mongoose from "mongoose";
 
+/* ------------------------------------------------------------------ */
+/*  Parsing — resolves library refs to fresh snapshots                 */
+/* ------------------------------------------------------------------ */
 /**
  * Parses trust badges from FormData.
- * - Missing field -> empty array (valid).
- * - Invalid JSON -> error.
- * - Malformed entries (missing icon/title) are silently dropped.
+ *
+ * - Missing field        → empty array (valid).
+ * - Invalid JSON         → error.
+ * - Library references   → replaced with a fresh snapshot pulled from the
+ *                          `TrustBadge` collection (batch query, no N+1).
+ * - Inactive/missing ref → gracefully degrades to an ad-hoc snapshot using
+ *                          whatever fields the client sent. This keeps the
+ *                          hero rendering identically even after a library
+ *                          badge is archived or force-deleted.
+ * - Ad-hoc badges        → kept as-is.
+ * - Entries lacking `icon` or `title` are silently dropped.
  */
-function parseTrustBadges(
+async function parseTrustBadges(
   raw: FormDataEntryValue | null,
-): { ok: true; badges: ITrustBadge[] } | { ok: false; message: string } {
+): Promise<
+  { ok: true; badges: ITrustBadge[] } | { ok: false; message: string }
+> {
   if (!raw) return { ok: true, badges: [] };
 
   try {
@@ -21,31 +37,111 @@ function parseTrustBadges(
     if (!Array.isArray(parsed)) {
       return { ok: false, message: "Invalid trust badges data" };
     }
-    const badges: ITrustBadge[] = parsed
-      .filter((b: any) => b && b.icon && b.title)
-      .map((b: any) => ({
+
+    // Collect library ids for a single batched fetch.
+    const ids = parsed
+      .map((b: any) => b?.badgeId)
+      .filter((id: any) => id && mongoose.Types.ObjectId.isValid(String(id)));
+
+    const library = ids.length
+      ? await TrustBadge.find({ _id: { $in: ids } }).lean()
+      : [];
+    const libMap = new Map(library.map((b: any) => [String(b._id), b]));
+
+    const badges: ITrustBadge[] = [];
+
+    for (const b of parsed) {
+      if (!b || !b.icon || !b.title) continue;
+
+      if (b.badgeId) {
+        const lib = libMap.get(String(b.badgeId));
+
+        if (lib && lib.isActive) {
+          // Fresh snapshot from the library — this is the source of truth
+          // whenever the client says "this is badge X".
+          badges.push({
+            badgeId: lib._id as mongoose.Types.ObjectId,
+            icon: lib.icon,
+            title: lib.title,
+            description: lib.description ?? "",
+            popupText: lib.popupText ?? "",
+            link: lib.link ?? "",
+          });
+          continue;
+        }
+
+        // Referenced badge is gone or archived → keep the client's snapshot,
+        // drop the ref so this badge simply becomes ad-hoc.
+        badges.push({
+          badgeId: null,
+          icon: String(b.icon).trim(),
+          title: String(b.title).trim(),
+          description: b.description ? String(b.description).trim() : "",
+          popupText: b.popupText ? String(b.popupText).trim() : "",
+          link: b.link ? String(b.link).trim() : "",
+        });
+        continue;
+      }
+
+      // Ad-hoc badge — no library involvement.
+      badges.push({
+        badgeId: null,
         icon: String(b.icon).trim(),
         title: String(b.title).trim(),
         description: b.description ? String(b.description).trim() : "",
         popupText: b.popupText ? String(b.popupText).trim() : "",
         link: b.link ? String(b.link).trim() : "",
-      }));
+      });
+    }
+
     return { ok: true, badges };
   } catch {
     return { ok: false, message: "Invalid trust badges data" };
   }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Serialization — safe across the RSC boundary                       */
+/* ------------------------------------------------------------------ */
+/**
+ * Mongoose returns ObjectIds and Dates that can't cross the RSC boundary.
+ * This flattens them into plain strings, and normalizes `trustBadges` so
+ * the client always receives the same shape regardless of whether the
+ * document uses the old (inline-only) or new (badgeId-aware) schema.
+ */
+function serializeHero(res: any) {
+  return {
+    ...res,
+    _id: res._id?.toString(),
+    created_at:
+      res.created_at instanceof Date
+        ? res.created_at.toISOString()
+        : (res.created_at ?? null),
+    updated_at:
+      res.updated_at instanceof Date
+        ? res.updated_at.toISOString()
+        : (res.updated_at ?? null),
+    trustBadges: (res.trustBadges ?? []).map((b: any) => ({
+      badgeId: b.badgeId ? String(b.badgeId) : null,
+      icon: b.icon ?? "",
+      title: b.title ?? "",
+      description: b.description ?? "",
+      popupText: b.popupText ?? "",
+      link: b.link ?? "",
+    })),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Reads                                                              */
+/* ------------------------------------------------------------------ */
 export async function findHeroContent() {
   try {
     await connection();
-    const heroContent = await HeroContent.find().sort({ created_at: -1 });
-    return heroContent.map((res) => ({
-      ...res.toObject(),
-      _id: res._id?.toString(),
-      created_at: res.created_at?.toISOString(),
-      updated_at: res.updated_at?.toISOString(),
-    }));
+    const heroContent = await HeroContent.find()
+      .sort({ created_at: -1 })
+      .lean();
+    return heroContent.map(serializeHero);
   } catch (error) {
     console.error("Error fetching hero content:", error);
     throw new Error("Failed to fetch hero content");
@@ -57,21 +153,19 @@ export async function findHeroContentById(id: string) {
     await connection();
     if (!id) throw new Error("ID is required");
 
-    const res = await HeroContent.findById(id);
+    const res = await HeroContent.findById(id).lean();
     if (!res) throw new Error("Hero content not found");
 
-    return {
-      ...res.toObject(),
-      _id: res._id?.toString(),
-      created_at: res.created_at?.toISOString(),
-      updated_at: res.updated_at?.toISOString(),
-    };
+    return serializeHero(res);
   } catch (error) {
     console.error("Error fetching hero content by ID:", error);
     throw new Error("Failed to fetch hero content");
   }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Create                                                             */
+/* ------------------------------------------------------------------ */
 export async function createHeroContent(prevState: any, formData: FormData) {
   try {
     await connection();
@@ -90,7 +184,7 @@ export async function createHeroContent(prevState: any, formData: FormData) {
       };
     }
 
-    const parsedBadges = parseTrustBadges(formData.get("trustBadges"));
+    const parsedBadges = await parseTrustBadges(formData.get("trustBadges"));
     if (!parsedBadges.ok) {
       return { success: false, message: parsedBadges.message };
     }
@@ -107,6 +201,8 @@ export async function createHeroContent(prevState: any, formData: FormData) {
     await newHeroContent.save();
     revalidatePath("/");
     revalidatePath("/content-management/app/hero_content");
+    // Library usage counts change → refresh the badges admin page too.
+    revalidatePath("/content-management/trust-badges");
 
     return {
       success: true,
@@ -121,6 +217,9 @@ export async function createHeroContent(prevState: any, formData: FormData) {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Update                                                             */
+/* ------------------------------------------------------------------ */
 export async function updateHeroContent(
   id: string,
   prevState: any,
@@ -150,7 +249,7 @@ export async function updateHeroContent(
       };
     }
 
-    const parsedBadges = parseTrustBadges(formData.get("trustBadges"));
+    const parsedBadges = await parseTrustBadges(formData.get("trustBadges"));
     if (!parsedBadges.ok) {
       return { success: false, message: parsedBadges.message };
     }
@@ -178,6 +277,8 @@ export async function updateHeroContent(
 
     revalidatePath("/");
     revalidatePath("/content-management/app/hero_content");
+    revalidatePath("/content-management/trust-badges");
+
     return {
       success: true,
       message: "Hero content updated successfully",
@@ -191,6 +292,9 @@ export async function updateHeroContent(
   }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Delete                                                             */
+/* ------------------------------------------------------------------ */
 export async function deleteHeroContent(id: string) {
   try {
     await connection();
@@ -212,7 +316,9 @@ export async function deleteHeroContent(id: string) {
     // Delete the document
     await hero.deleteOne();
 
+    revalidatePath("/");
     revalidatePath("/content-management/app/hero_content");
+    revalidatePath("/content-management/trust-badges");
     return { success: true, message: "Hero content deleted successfully" };
   } catch (error) {
     console.error("Error deleting hero content:", error);
@@ -220,6 +326,9 @@ export async function deleteHeroContent(id: string) {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Image deletion (unchanged behaviour)                               */
+/* ------------------------------------------------------------------ */
 export async function deleteHeroImage(heroId: string, fileUrl: string) {
   try {
     await connection();

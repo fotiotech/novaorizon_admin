@@ -5,21 +5,11 @@ import { revalidatePath } from "next/cache";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import Product from "@/models/Product";
-import Category from "@/models/Category";
-import Brand from "@/models/Brand";
-import Promotion from "@/models/Promotion";
-import Page from "@/models/Page";
 import { Collection } from "@/models/Collection";
 import { deleteS3Object } from "./s3";
-import {
-  getModelForTargetType,
-  buildQueryFromRules,
-} from "@/lib/content/query";
+import { buildQueryFromRules } from "@/lib/content/query";
 
 const COLLECTION_LIST_PATH = "/catalog/collections";
-
-// Maximum number of manually-selected items allowed in a collection.
-// Must match the client-side constant in components/.../CollectionForm.tsx.
 const MANUAL_ITEM_LIMIT = 50;
 
 // ---------- Get all collections ----------
@@ -51,22 +41,18 @@ export async function getCollectionsWithProducts() {
       let matchingItems: any[] = [];
 
       if (collection.type === "rule") {
-        const Model = getModelForTargetType(collection.targetType);
-        if (!Model) continue;
-        const query = buildQueryFromRules(
-          collection.rules,
-          collection.targetType,
-        );
+        const query = buildQueryFromRules(collection.rules, "Product");
         if (Object.keys(query).length > 0) {
-          matchingItems = await (Model as any).find(query).limit(50).lean();
+          matchingItems = await (Product as any).find(query).limit(50).lean();
         }
       } else if (collection.type === "manual") {
         matchingItems = collection.items || [];
       } else if (collection.type === "recommendation") {
-        // Recommendation collections are dynamic; we don't pre-fetch items for admin preview.
+        // Recommendation collections are dynamic; nothing to pre-fetch here.
         matchingItems = [];
       } else if (collection.type === "related") {
-        // Related collections require a product context, which the admin list does not have.
+        // Related collections require a product context, which the admin
+        // list does not have.
         matchingItems = [];
       }
 
@@ -77,7 +63,7 @@ export async function getCollectionsWithProducts() {
           description: collection.description,
           imageUrl: collection.imageUrl,
           type: collection.type,
-          targetType: collection.targetType,
+          targetType: "Product",
           rules: collection.rules,
           items: collection.items,
           status: collection.status,
@@ -101,6 +87,25 @@ export async function getCollectionsWithProducts() {
   }
 }
 
+// ---------- Shared validation helpers ----------
+function rejectNonProductTarget(formData: FormData) {
+  const requested = formData.get("targetType");
+  if (requested && requested !== "Product") {
+    return {
+      success: false as const,
+      error: "Only Product collections are supported.",
+    };
+  }
+  return null;
+}
+
+function validateType(type: string) {
+  if (!["rule", "manual", "recommendation", "related"].includes(type)) {
+    return { success: false as const, error: "Invalid collection type" };
+  }
+  return null;
+}
+
 // ---------- Create collection ----------
 export async function createCollection(formData: FormData) {
   try {
@@ -111,13 +116,11 @@ export async function createCollection(formData: FormData) {
     const imageUrl = formData.get("imageUrl") as string;
     const status = formData.get("status") as string;
     const type = (formData.get("type") as string) || "rule";
-    let targetType = (formData.get("targetType") as string) || "Product";
     const rulesJson = formData.get("rules") as string;
     const itemsJson = formData.get("items") as string;
     const order = parseInt(formData.get("order") as string) || 0;
     const showName = formData.get("showName") === "true";
 
-    // --- Recommendation fields ---
     const recommendationType =
       (formData.get("recommendationType") as string) || "";
     const recommendationLimit =
@@ -128,34 +131,12 @@ export async function createCollection(formData: FormData) {
       return { success: false, error: "Name is required" };
     }
 
-    if (!["rule", "manual", "recommendation", "related"].includes(type)) {
-      return { success: false, error: "Invalid collection type" };
-    }
-    if (["recommendation", "related"].includes(type)) {
-      targetType = "Product";
-    }
-    const validTargets = [
-      "Category",
-      "Product",
-      "Brand",
-      "Collection",
-      "Promotion",
-      "Page",
-    ];
-    if (!validTargets.includes(targetType)) {
-      return { success: false, error: "Invalid target type" };
-    }
+    const invalidTarget = rejectNonProductTarget(formData);
+    if (invalidTarget) return invalidTarget;
 
-    // Server-side enforcement: rule-based collections only for Product/Collection.
-    if (type === "rule" && !["Product", "Collection"].includes(targetType)) {
-      return {
-        success: false,
-        error:
-          "Rule-based collections are only allowed for Products and Collections.",
-      };
-    }
+    const invalidType = validateType(type);
+    if (invalidType) return invalidType;
 
-    // Validate dynamic product collection configuration
     if (type === "recommendation") {
       if (
         !["trending", "personalized", "recentlyViewed"].includes(
@@ -214,7 +195,6 @@ export async function createCollection(formData: FormData) {
         if (!Array.isArray(items)) {
           return { success: false, error: "Items must be an array" };
         }
-        // Deduplicate to avoid double-counting against the limit.
         items = Array.from(new Set(items.map((i: any) => String(i))));
         if (items.length > MANUAL_ITEM_LIMIT) {
           return {
@@ -232,7 +212,6 @@ export async function createCollection(formData: FormData) {
       }
     }
 
-    // Check duplicate name
     const existing = await Collection.findOne({ name: name.trim() });
     if (existing) {
       return {
@@ -247,7 +226,7 @@ export async function createCollection(formData: FormData) {
       imageUrl,
       status: status || "active",
       type,
-      targetType,
+      targetType: "Product",
       rules: type === "rule" ? rules : [],
       items: type === "manual" ? items : [],
       order,
@@ -286,7 +265,6 @@ export async function updateCollection(id: string, formData: FormData) {
     const imageUrl = formData.get("imageUrl") as string;
     const status = formData.get("status") as string;
     const type = formData.get("type") as string;
-    let targetType = formData.get("targetType") as string;
     const rulesJson = formData.get("rules") as string;
     const itemsJson = formData.get("items") as string;
     const order = parseInt(formData.get("order") as string) || 0;
@@ -298,32 +276,12 @@ export async function updateCollection(id: string, formData: FormData) {
       parseInt(formData.get("recommendationLimit") as string) || 10;
 
     if (!name?.trim()) return { success: false, error: "Name is required" };
-    if (!["rule", "manual", "recommendation", "related"].includes(type)) {
-      return { success: false, error: "Invalid collection type" };
-    }
-    if (["recommendation", "related"].includes(type)) {
-      targetType = "Product";
-    }
-    const validTargets = [
-      "Category",
-      "Product",
-      "Brand",
-      "Collection",
-      "Promotion",
-      "Page",
-    ];
-    if (!validTargets.includes(targetType)) {
-      return { success: false, error: "Invalid target type" };
-    }
 
-    // Server-side enforcement: rule-based collections only for Product/Collection.
-    if (type === "rule" && !["Product", "Collection"].includes(targetType)) {
-      return {
-        success: false,
-        error:
-          "Rule-based collections are only allowed for Products and Collections.",
-      };
-    }
+    const invalidTarget = rejectNonProductTarget(formData);
+    if (invalidTarget) return invalidTarget;
+
+    const invalidType = validateType(type);
+    if (invalidType) return invalidType;
 
     if (type === "recommendation") {
       if (
@@ -383,7 +341,6 @@ export async function updateCollection(id: string, formData: FormData) {
         if (!Array.isArray(items)) {
           return { success: false, error: "Items must be an array" };
         }
-        // Deduplicate to avoid double-counting against the limit.
         items = Array.from(new Set(items.map((i: any) => String(i))));
         if (items.length > MANUAL_ITEM_LIMIT) {
           return {
@@ -418,7 +375,7 @@ export async function updateCollection(id: string, formData: FormData) {
       imageUrl,
       status: status || "active",
       type,
-      targetType,
+      targetType: "Product",
       rules: type === "rule" ? rules : [],
       items: type === "manual" ? items : [],
       order,
@@ -508,7 +465,6 @@ export async function deleteCollectionImage(collectionId: string) {
     await deleteS3Object(collection.imageUrl);
     collection.imageUrl = "";
     await collection.save();
-    // Consistent with the rest of the actions (singular path).
     revalidatePath(COLLECTION_LIST_PATH);
     return { success: true };
   } catch (error) {
@@ -517,46 +473,32 @@ export async function deleteCollectionImage(collectionId: string) {
   }
 }
 
-// ---------- Fetch available items for manual selection ----------
+// ---------- Fetch available products for manual selection ----------
 export async function fetchAvailableItems(
-  targetType: string,
   search?: string,
   sortOrder: "asc" | "desc" = "asc",
 ) {
   try {
     await connection();
-    const Model = getModelForTargetType(targetType);
-    if (!Model) {
-      return {
-        success: false,
-        error: `Unsupported target type: ${targetType}`,
-      };
-    }
 
     const filter: any = {};
-    const isProduct = targetType === "Product";
-
     if (search) {
-      // Product uses `name`; everything else also uses `name` in this codebase.
       filter.name = { $regex: search, $options: "i" };
     }
 
-    const items = await (Model as any)
-      .find(filter)
-      .select(isProduct ? "_id name images" : "_id name imageUrl")
-      .sort({ name: sortOrder === "asc" ? 1 : -1 }) // asc / desc by name
+    const items = await Product.find(filter)
+      .select("_id name images")
+      .sort({ name: sortOrder === "asc" ? 1 : -1 })
       .limit(MANUAL_ITEM_LIMIT)
       .lean();
 
     const normalized = items.map((item: any) => ({
       _id: item._id.toString(),
       name: item.name,
-      // Product stores multiple images as `images[]`; other models use `imageUrl`.
-      imageUrl: isProduct
-        ? Array.isArray(item.images) && item.images.length > 0
+      imageUrl:
+        Array.isArray(item.images) && item.images.length > 0
           ? item.images[0]
-          : null
-        : item.imageUrl || null,
+          : null,
     }));
 
     return { success: true, data: normalized };

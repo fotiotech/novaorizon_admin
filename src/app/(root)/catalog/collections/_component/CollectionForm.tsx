@@ -15,8 +15,6 @@ import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import CollectionRuleForm from "./RuleEditor";
 
-// Maximum number of manually-selected items allowed in a collection.
-// Must match the server-side constant in app/actions/collection.ts.
 const MANUAL_ITEM_LIMIT = 50;
 
 const CollectionForm = ({ id }: { id?: string }) => {
@@ -40,33 +38,11 @@ const CollectionForm = ({ id }: { id?: string }) => {
     imageUrl: "",
     status: "active",
     type: "rule",
-    targetType: "Product",
     order: 0,
     showName: true,
     recommendationType: "",
     recommendationLimit: 10,
   });
-
-  // Determine if rule mode is allowed based on targetType
-  const isRuleAllowed = ["Product", "Collection"].includes(formData.targetType);
-
-  // When targetType changes, reset type to manual if rule not allowed
-  useEffect(() => {
-    if (
-      ["recommendation", "related"].includes(formData.type) &&
-      formData.targetType !== "Product"
-    ) {
-      setFormData((prev) => ({ ...prev, targetType: "Product" }));
-      setRules([]);
-      setItems([]);
-      return;
-    }
-
-    if (!isRuleAllowed && formData.type === "rule") {
-      setFormData((prev) => ({ ...prev, type: "manual" }));
-      setRules([]);
-    }
-  }, [formData.targetType, formData.type, isRuleAllowed]);
 
   const buildFormData = (
     data: typeof formData,
@@ -79,7 +55,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
     fd.append("imageUrl", data.imageUrl || "");
     fd.append("status", data.status);
     fd.append("type", data.type);
-    fd.append("targetType", data.targetType);
+    fd.append("targetType", "Product");
     fd.append("rules", JSON.stringify(rulesData));
     fd.append("items", JSON.stringify(itemsData));
     fd.append("order", data.order.toString());
@@ -89,7 +65,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
     return fd;
   };
 
-  // Use "collections" as subfolder
   const {
     files,
     loading: fileLoading,
@@ -140,7 +115,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
               imageUrl: data.imageUrl || "",
               status: data.status || "active",
               type: data.type || "rule",
-              targetType: data.targetType || "Product",
               order: data.order || 0,
               showName: data.showName !== undefined ? data.showName : true,
               recommendationType: data.recommendationType || "",
@@ -177,10 +151,10 @@ const CollectionForm = ({ id }: { id?: string }) => {
     fetchData();
   }, [id, setFiles]);
 
-  // Fetch available items for manual selection
+  // Fetch available products for manual selection
   useEffect(() => {
-    if (formData.type === "manual" && formData.targetType) {
-      fetchAvailableItems(formData.targetType, itemSearch, sortOrder)
+    if (formData.type === "manual") {
+      fetchAvailableItems(itemSearch, sortOrder)
         .then((res) => {
           if (res.success) {
             setAvailableItems(res.data || []);
@@ -188,7 +162,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
         })
         .catch(console.error);
     }
-  }, [formData.targetType, formData.type, itemSearch, sortOrder]);
+  }, [formData.type, itemSearch, sortOrder]);
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -219,7 +193,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
     setItems([...items, itemId]);
   };
 
-  // Select all currently visible (filtered) items, capped by MANUAL_ITEM_LIMIT.
   const selectAllVisible = () => {
     const remaining = MANUAL_ITEM_LIMIT - items.length;
     if (remaining <= 0) {
@@ -263,13 +236,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
     setError(null);
 
     try {
-      const {
-        name,
-        type,
-        targetType,
-        recommendationType,
-        recommendationLimit,
-      } = formData;
+      const { name, type, recommendationType, recommendationLimit } = formData;
 
       if (!name.trim()) {
         setError("Name is required");
@@ -277,12 +244,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
       }
 
       if (type === "rule") {
-        if (!isRuleAllowed) {
-          setError(
-            "Rule-based collections are only allowed for Products and Collections.",
-          );
-          return;
-        }
         const invalidRules = rules.some(
           (rule) => !rule.attribute || !rule.operator || !rule.value,
         );
@@ -299,7 +260,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
         return;
       }
 
-      // Validate recommendation and related types
       if (type === "recommendation" || type === "related") {
         if (type === "recommendation" && !recommendationType) {
           setError("Please select a recommendation type");
@@ -367,11 +327,11 @@ const CollectionForm = ({ id }: { id?: string }) => {
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800">
-          {id ? "Edit" : "Create"} Collection
+          {id ? "Edit" : "Create"} Product Collection
         </h1>
         <p className="text-gray-600 mt-1">
-          {id ? "Update" : "Create a new"} collection – rule‑based, manual,
-          recommendation, or related
+          {id ? "Update" : "Create a new"} product collection – rule‑based,
+          manual, recommendation, or related
         </p>
       </div>
 
@@ -405,19 +365,11 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 onChange={handleInputChange}
                 disabled={isSubmitting}
               >
-                <option value="rule" disabled={!isRuleAllowed}>
-                  Rule‑based {!isRuleAllowed && "(not allowed for this target)"}
-                </option>
+                <option value="rule">Rule‑based</option>
                 <option value="manual">Manual selection</option>
                 <option value="recommendation">Recommendation</option>
                 <option value="related">Related (product context)</option>
               </select>
-              {!isRuleAllowed && (
-                <p className="text-sm text-amber-600 mt-1">
-                  Rule‑based collections are only available for Products and
-                  Collections.
-                </p>
-              )}
             </div>
           </div>
 
@@ -495,59 +447,23 @@ const CollectionForm = ({ id }: { id?: string }) => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block mb-2 font-medium text-gray-700">
-                Target *
-              </label>
-              <select
-                name="targetType"
-                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
-                value={formData.targetType}
-                onChange={handleInputChange}
-                disabled={
-                  isSubmitting ||
-                  formData.type === "recommendation" ||
-                  formData.type === "related"
-                }
-              >
-                <option value="Category">Category</option>
-                <option value="Product">Product</option>
-                <option value="Brand">Brand</option>
-                <option value="Collection">Collection</option>
-                <option value="Promotion">Promotion</option>
-                <option value="Page">Page</option>
-              </select>
-              <p className="text-sm text-gray-500 mt-1">
-                {formData.type === "recommendation" ||
-                formData.type === "related"
-                  ? "This type always targets Products."
-                  : formData.targetType === "Product" ||
-                      formData.targetType === "Collection"
-                    ? "Rules/items will apply to this target type."
-                    : "Only manual selection is available for this target type."}
-              </p>
-            </div>
-
-            <div>
-              <label className="block mb-2 font-medium text-gray-700">
-                Order (lower = higher priority)
-              </label>
-              <input
-                type="number"
-                name="order"
-                min={0}
-                step={1}
-                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
-                value={formData.order}
-                onChange={handleInputChange}
-                disabled={isSubmitting}
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Collections are sorted by this number (ascending) when
-                displayed.
-              </p>
-            </div>
+          <div>
+            <label className="block mb-2 font-medium text-gray-700">
+              Order (lower = higher priority)
+            </label>
+            <input
+              type="number"
+              name="order"
+              min={0}
+              step={1}
+              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+              value={formData.order}
+              onChange={handleInputChange}
+              disabled={isSubmitting}
+            />
+            <p className="text-sm text-gray-500 mt-1">
+              Collections are sorted by this number (ascending) when displayed.
+            </p>
           </div>
 
           {/* Show Name Checkbox */}
@@ -629,23 +545,16 @@ const CollectionForm = ({ id }: { id?: string }) => {
 
           {formData.type === "rule" ? (
             <div className="py-6">
-              <CollectionRuleForm
-                rules={rules}
-                onAddRule={setRules}
-                targetType={formData.targetType as "Product" | "Collection"}
-              />
+              <CollectionRuleForm rules={rules} onAddRule={setRules} />
             </div>
           ) : formData.type === "manual" ? (
             <div className="py-4 border rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-3">
-                Select {formData.targetType}s
-              </h3>
+              <h3 className="text-lg font-semibold mb-3">Select Products</h3>
 
-              {/* Search + Sort row */}
               <div className="flex flex-col sm:flex-row gap-2 mb-3">
                 <input
                   type="text"
-                  placeholder={`Search ${formData.targetType.toLowerCase()}s...`}
+                  placeholder="Search products..."
                   value={itemSearch}
                   onChange={(e) => setItemSearch(e.target.value)}
                   className="flex-1 p-2 border rounded"
@@ -664,7 +573,6 @@ const CollectionForm = ({ id }: { id?: string }) => {
                 </select>
               </div>
 
-              {/* Select All / Clear All */}
               <div className="flex items-center justify-between mb-2 text-sm">
                 <div className="flex gap-2">
                   <button
@@ -704,7 +612,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
 
               <div className="max-h-60 overflow-y-auto border rounded">
                 {availableItems.length === 0 ? (
-                  <p className="p-4 text-gray-500">No items found.</p>
+                  <p className="p-4 text-gray-500">No products found.</p>
                 ) : (
                   availableItems.map((item) => {
                     const selected = items.includes(item._id);
@@ -799,7 +707,7 @@ const CollectionForm = ({ id }: { id?: string }) => {
                       name: formData.name,
                       description: formData.description,
                       type: formData.type,
-                      targetType: formData.targetType,
+                      targetType: "Product",
                       status: formData.status,
                       order: formData.order,
                       showName: formData.showName,

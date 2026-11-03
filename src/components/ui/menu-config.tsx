@@ -137,6 +137,22 @@ export const attributeLinks: MenuLink[] = [
   { name: "Units", href: "/catalog/attributes/units", icon: <Straighten /> },
 ];
 
+export const categoryLinks: MenuLink[] = [
+  { name: "Categories", href: "/catalog/categories", icon: <Category /> },
+  {
+    name: "Property",
+    href: "/catalog/categories/property",
+    icon: <Widgets />,
+  },
+  {
+    name: "Collections",
+
+    href: "/catalog/categories/collections",
+
+    icon: <Widgets />,
+  },
+];
+
 // ─────────────────────────────────────────────────────────────────────
 // Full menu — one section per module.
 // ─────────────────────────────────────────────────────────────────────
@@ -208,7 +224,12 @@ export const rawMenuConfig = [
     title: "Catalog",
     links: [
       { name: "Products", href: "/catalog/products", icon: <Inventory2 /> },
-      { name: "Categories", href: "/catalog/categories", icon: <Category /> },
+      {
+        name: "Categories",
+        href: "/catalog/categories",
+        icon: <Category />,
+        children: categoryLinks,
+      },
       { name: "Brands", href: "/catalog/brands", icon: <Tag /> },
       {
         name: "Attributes",
@@ -359,6 +380,11 @@ export const rawMenuConfig = [
               {
                 name: "Hero Content",
                 href: "/channels/store/content/hero",
+                icon: <ImageIcon />,
+              },
+              {
+                name: "Trust Badges",
+                href: "/channels/store/content/trust_badge",
                 icon: <ImageIcon />,
               },
               {

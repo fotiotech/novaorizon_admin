@@ -3,7 +3,7 @@
 import { getCategory } from "@/app/actions/category";
 import React, { useEffect, useState } from "react";
 
-// ---------- Operator definitions (unchanged) ----------
+// ---------- Operator definitions ----------
 const OPERATORS = [
   { label: "In", value: "$in" },
   { label: "Not In", value: "$nin" },
@@ -17,8 +17,6 @@ const OPERATORS = [
 
 // ---------- Product attributes ----------
 // NOTE: values must match actual Product schema fields where possible.
-// Product uses `images: string[]` (no `mainImage`), and `categoryId` (not
-// `category_id`). Duplicate weight entry removed.
 const PRODUCT_ATTRIBUTES = [
   { label: "Category", value: "categoryId" },
   { label: "Name", value: "name" },
@@ -43,18 +41,6 @@ const PRODUCT_ATTRIBUTES = [
   { label: "Safety Certifications", value: "safetyCertifications" },
 ];
 
-// ---------- Collection attributes ----------
-const COLLECTION_ATTRIBUTES = [
-  { label: "Name", value: "name" },
-  { label: "Description", value: "description" },
-  { label: "Image URL", value: "imageUrl" },
-  { label: "Status", value: "status" },
-  { label: "Type", value: "type" },
-  { label: "Target Type", value: "targetType" },
-  { label: "Created At", value: "createdAt" },
-  { label: "Updated At", value: "updatedAt" },
-];
-
 // ---------- Interface ----------
 interface Rule {
   attribute: string;
@@ -66,17 +52,14 @@ interface Rule {
 interface CollectionRuleFormProps {
   rules: Rule[];
   onAddRule: (rules: Rule[]) => void;
-  targetType?: "Product" | "Collection";
 }
 
 // ---------- Main Component ----------
 export default function CollectionRuleForm({
   rules,
   onAddRule,
-  targetType = "Product",
 }: CollectionRuleFormProps) {
-  const attributeOptions =
-    targetType === "Collection" ? COLLECTION_ATTRIBUTES : PRODUCT_ATTRIBUTES;
+  const attributeOptions = PRODUCT_ATTRIBUTES;
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -117,7 +100,7 @@ export default function CollectionRuleForm({
     <div className="p-4 border rounded-lg space-y-6 bg-white shadow-sm">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-800">
-          Collection Rules
+          Product Collection Rules
         </h3>
         <button
           type="button"
@@ -222,8 +205,7 @@ export default function CollectionRuleForm({
                 </div>
 
                 <div className="md:col-span-4">
-                  {rule.attribute === "categoryId" &&
-                  targetType === "Product" ? (
+                  {rule.attribute === "categoryId" ? (
                     <>
                       <label className="block mb-1 font-medium text-sm text-gray-700">
                         Category
@@ -289,8 +271,6 @@ function AttributeInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [inputValue, setInputValue] = useState("");
 
-  // Sync display text from the parent value. If the value matches a known
-  // option, show its label; otherwise show the raw typed value.
   useEffect(() => {
     const currentAttribute = options.find((opt) => opt.value === value);
     setInputValue(currentAttribute ? currentAttribute.label : value);
@@ -300,13 +280,8 @@ function AttributeInput({
     const val = e.target.value;
     setInputValue(val);
 
-    // Propagate the raw value to the parent so the rule.attribute is updated
-    // even when the user types a custom attribute not present in `options`.
     const syntheticEvent = {
-      target: {
-        name: "attribute",
-        value: val,
-      },
+      target: { name: "attribute", value: val },
     } as unknown as React.ChangeEvent<HTMLInputElement>;
     onChange(syntheticEvent);
 
@@ -329,10 +304,7 @@ function AttributeInput({
     value: string;
   }) => {
     const syntheticEvent = {
-      target: {
-        name: "attribute",
-        value: suggestion.value,
-      },
+      target: { name: "attribute", value: suggestion.value },
     } as unknown as React.ChangeEvent<HTMLInputElement>;
 
     onChange(syntheticEvent);
@@ -375,7 +347,7 @@ function AttributeInput({
   );
 }
 
-// ---------- Category Select Component (unchanged) ----------
+// ---------- Category Select Component ----------
 function CategorySelect({
   value,
   onChange,

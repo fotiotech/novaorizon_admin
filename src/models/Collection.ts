@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
 const ruleSchema = new Schema({
   attribute: { type: String, required: true },
@@ -29,15 +29,16 @@ const CollectionSchema = new Schema(
       type: Number,
       default: 10,
     },
+    // Collections only target Products. Retained for clarity / query filtering.
     targetType: {
       type: String,
-      enum: ["Category", "Product", "Brand", "Collection", "Promotion", "Page"],
+      enum: ["Product"],
       default: "Product",
     },
     items: [
       {
         type: Schema.Types.ObjectId,
-        refPath: "targetType",
+        ref: "Product",
       },
     ],
     rules: [ruleSchema],
@@ -64,7 +65,6 @@ CollectionSchema.pre("save", function (next) {
 CollectionSchema.index({ name: 1 }, { unique: true });
 CollectionSchema.index({ status: 1 });
 CollectionSchema.index({ "rules.attribute": 1 });
-CollectionSchema.index({ targetType: 1 });
 CollectionSchema.index({ order: 1 });
 
 export const Collection =

@@ -1,3 +1,4 @@
+// components/HeroForm.tsx
 "use client";
 
 import {
@@ -8,16 +9,10 @@ import {
 import { deleteS3Object } from "@/app/actions/s3";
 import FilesUploader from "@/components/FilesUploader";
 import Spinner from "@/components/Spinner";
+import BadgePicker, { type BadgeSelection } from "@/components/BadgePicker";
+import { isValidBadgeLink } from "@/lib/trust/badgeIcons";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import React, { useState, useEffect } from "react";
-
-interface TrustBadge {
-  icon: string;
-  title: string;
-  description?: string;
-  popupText?: string;
-  link?: string;
-}
 
 interface HeroData {
   _id?: string;
@@ -26,7 +21,7 @@ interface HeroData {
   imageUrl: string;
   cta_text: string;
   cta_link: string;
-  trustBadges?: TrustBadge[];
+  trustBadges?: BadgeSelection[];
 }
 
 interface HeroFormProps {
@@ -35,26 +30,6 @@ interface HeroFormProps {
   onSuccess?: () => void;
   onCancel?: () => void;
 }
-
-// Preset icon options — these map cleanly to lucide-react / heroicons names.
-const ICON_OPTIONS = [
-  { value: "shield-check", label: "Shield — Secure Payment" },
-  { value: "truck", label: "Truck — Fast Shipping" },
-  { value: "headset", label: "Headset — Support" },
-  { value: "lock", label: "Lock — Secure" },
-  { value: "refresh-cw", label: "Refresh — Returns" },
-  { value: "credit-card", label: "Card — Payment" },
-  { value: "clock", label: "Clock — Fast Delivery" },
-  { value: "award", label: "Award — Quality" },
-  { value: "star", label: "Star — Rating" },
-  { value: "phone", label: "Phone — Contact" },
-  { value: "package", label: "Package — Free Shipping" },
-  { value: "badge-check", label: "Badge — Verified" },
-];
-
-// Accepts an absolute URL (http/https/ftp) or an internal path (/...).
-const isValidLink = (v: string) =>
-  /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/.test(v) || v.startsWith("/");
 
 const HeroForm: React.FC<HeroFormProps> = ({
   mode,
@@ -67,7 +42,7 @@ const HeroForm: React.FC<HeroFormProps> = ({
     description: initialData?.description || "",
     cta_text: initialData?.cta_text || "",
     cta_link: initialData?.cta_link || "",
-    trustBadges: (initialData?.trustBadges ?? []) as TrustBadge[],
+    trustBadges: (initialData?.trustBadges ?? []) as BadgeSelection[],
   });
 
   const { files, loading, progressByName, addFiles, setFiles } =
@@ -89,7 +64,7 @@ const HeroForm: React.FC<HeroFormProps> = ({
       description: initialData?.description ?? "",
       cta_text: initialData?.cta_text ?? "",
       cta_link: initialData?.cta_link ?? "",
-      trustBadges: initialData?.trustBadges ?? [],
+      trustBadges: (initialData?.trustBadges ?? []) as BadgeSelection[],
     });
   }, [initialData?._id]);
 
@@ -108,43 +83,6 @@ const HeroForm: React.FC<HeroFormProps> = ({
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  // ---------- Trust badge handlers ----------
-  const addBadge = () => {
-    setFormData((prev) => ({
-      ...prev,
-      trustBadges: [
-        ...prev.trustBadges,
-        {
-          icon: "shield-check",
-          title: "",
-          description: "",
-          popupText: "",
-          link: "",
-        },
-      ],
-    }));
-  };
-
-  const updateBadge = (
-    index: number,
-    field: keyof TrustBadge,
-    value: string,
-  ) => {
-    setFormData((prev) => ({
-      ...prev,
-      trustBadges: prev.trustBadges.map((badge, i) =>
-        i === index ? { ...badge, [field]: value } : badge,
-      ),
-    }));
-  };
-
-  const removeBadge = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      trustBadges: prev.trustBadges.filter((_, i) => i !== index),
-    }));
   };
 
   // Handle image removal – deletes the exact file the user clicked
@@ -219,9 +157,10 @@ const HeroForm: React.FC<HeroFormProps> = ({
       return;
     }
 
-    // Validate optional badge links
+    // Validate optional badge links (shared validator — same one the
+    // schema uses, so client & server agree)
     const invalidLinkBadge = formData.trustBadges.find(
-      (b) => b.link && b.link.trim() && !isValidLink(b.link.trim()),
+      (b) => b.link && b.link.trim() && !isValidBadgeLink(b.link.trim()),
     );
     if (invalidLinkBadge) {
       setSubmitStatus({
@@ -415,9 +354,8 @@ const HeroForm: React.FC<HeroFormProps> = ({
               Trust Badges
             </h3>
             <p className="text-sm text-gray-500">
-              Optional badges displayed in the hero section (e.g. Secure
-              Payment, Fast Shipping, 24/7 Support). Icon names map to
-              lucide-react / heroicons identifiers.
+              Select reusable badges from the library, reorder them, or add
+              ad-hoc badges just for this hero. Up to 5 badges.
             </p>
             <p className="text-sm text-gray-500 mt-1">
               <strong>Popup Text</strong> makes the badge open a dialog. If{" "}
@@ -426,130 +364,14 @@ const HeroForm: React.FC<HeroFormProps> = ({
             </p>
           </div>
 
-          {formData.trustBadges.length === 0 ? (
-            <p className="text-sm text-gray-400 italic mb-3">
-              No trust badges added yet.
-            </p>
-          ) : (
-            <div className="space-y-4 mb-3">
-              {formData.trustBadges.map((badge, index) => (
-                <div
-                  key={index}
-                  className="p-4 bg-gray-50 rounded-md border border-gray-200"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Badge {index + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeBadge(index)}
-                      className="text-sm text-red-600 hover:text-red-700 hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </div>
-
-                  {/* Row 1 — primary fields */}
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                    <div className="md:col-span-3">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Icon *
-                      </label>
-                      <select
-                        value={badge.icon}
-                        onChange={(e) =>
-                          updateBadge(index, "icon", e.target.value)
-                        }
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        {ICON_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="md:col-span-4">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Title *
-                      </label>
-                      <input
-                        type="text"
-                        value={badge.title}
-                        onChange={(e) =>
-                          updateBadge(index, "title", e.target.value)
-                        }
-                        placeholder="Secure Payment"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div className="md:col-span-5">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Description
-                      </label>
-                      <input
-                        type="text"
-                        value={badge.description ?? ""}
-                        onChange={(e) =>
-                          updateBadge(index, "description", e.target.value)
-                        }
-                        placeholder="SSL encrypted checkout"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Row 2 — interaction fields */}
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-3">
-                    <div className="md:col-span-7">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Popup Text
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={badge.popupText ?? ""}
-                        onChange={(e) =>
-                          updateBadge(index, "popupText", e.target.value)
-                        }
-                        placeholder="We accept all major credit cards. Payments are encrypted with 256-bit SSL."
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div className="md:col-span-5">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Link
-                      </label>
-                      <input
-                        type="text"
-                        value={badge.link ?? ""}
-                        onChange={(e) =>
-                          updateBadge(index, "link", e.target.value)
-                        }
-                        placeholder="https://example.com or /return-policy"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="text-[11px] text-gray-500 mt-1">
-                        Absolute URL or internal path. Opens in new tab if
-                        external.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={addBadge}
-            className="px-4 py-2 text-sm border border-dashed border-gray-400 text-gray-700 rounded-md hover:bg-gray-50"
-          >
-            + Add Trust Badge
-          </button>
+          <BadgePicker
+            value={formData.trustBadges}
+            onChange={(next) =>
+              setFormData((prev) => ({ ...prev, trustBadges: next }))
+            }
+            max={5}
+            disabled={submitStatus.loading}
+          />
         </div>
 
         <div className="flex justify-end space-x-4 pt-4">
