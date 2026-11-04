@@ -1,9 +1,14 @@
 "use client";
 
-import { getCategory } from "@/app/actions/category";
 import React, { useEffect, useState } from "react";
+import { fetchReferenceOptions } from "@/app/actions/collection";
+import { ENTITY_METADATA } from "@/lib/content/entityMetadata";
+import type {
+  AttributeConfig,
+  RegistryKey,
+} from "@/lib/content/entityMetadata";
+import type { TargetType } from "@/lib/content/collectionTypes";
 
-// ---------- Operator definitions ----------
 const OPERATORS = [
   { label: "In", value: "$in" },
   { label: "Not In", value: "$nin" },
@@ -15,410 +20,231 @@ const OPERATORS = [
   { label: "Greater Than or Equal", value: "$gte" },
 ];
 
-// ---------- Product attributes ----------
-// NOTE: values must match actual Product schema fields where possible.
-const PRODUCT_ATTRIBUTES = [
-  { label: "Category", value: "categoryId" },
-  { label: "Name", value: "name" },
-  { label: "Brand", value: "brand" },
-  { label: "Weight", value: "weight" },
-  { label: "Length", value: "length" },
-  { label: "Width", value: "width" },
-  { label: "Height", value: "height" },
-  { label: "Color", value: "color" },
-  { label: "Images", value: "images" },
-  { label: "List Price", value: "listPrice" },
-  { label: "Price", value: "price" },
-  { label: "Currency", value: "currency" },
-  { label: "Stock Status", value: "stockStatus" },
-  { label: "Quantity", value: "quantity" },
-  { label: "Short Description", value: "shortDescription" },
-  { label: "Description", value: "description" },
-  { label: "Primary Material", value: "primaryMaterial" },
-  { label: "Origin Country", value: "originCountry" },
-  { label: "Warranty Period", value: "warrantyPeriod" },
-  { label: "Meta Title", value: "metaTitle" },
-  { label: "Safety Certifications", value: "safetyCertifications" },
-];
+const BOOLEAN_OPS = new Set(["$eq", "$ne"]);
 
-// ---------- Interface ----------
-interface Rule {
+export interface Rule {
   attribute: string;
   operator: string;
   value: string;
   position: number;
 }
 
-interface CollectionRuleFormProps {
+interface Props {
   rules: Rule[];
-  onAddRule: (rules: Rule[]) => void;
+  onRulesChange: (rules: Rule[]) => void;
+  targetType: TargetType;
 }
 
-// ---------- Main Component ----------
-export default function CollectionRuleForm({
+export default function RuleEditor({
   rules,
-  onAddRule,
-}: CollectionRuleFormProps) {
-  const attributeOptions = PRODUCT_ATTRIBUTES;
+  onRulesChange,
+  targetType,
+}: Props) {
+  const attributes = ENTITY_METADATA[targetType]?.attributes ?? [];
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-    index: number,
-  ) => {
-    const { name, value } = e.target;
-    const updatedRules: any = [...rules];
-
-    if (name === "position") {
-      updatedRules[index][name] = Number(value);
-    } else {
-      updatedRules[index][name] = value;
-    }
-
-    onAddRule(updatedRules);
+  const update = (i: number, patch: Partial<Rule>) => {
+    onRulesChange(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   };
 
-  const handleCategorySelect = (categoryId: string, index: number) => {
-    const updatedRules = [...rules];
-    updatedRules[index].value = categoryId;
-    onAddRule(updatedRules);
-  };
-
-  const handleAddNewRule = () => {
-    onAddRule([
+  const addRule = () => {
+    onRulesChange([
       ...rules,
       { attribute: "", operator: "$eq", value: "", position: rules.length },
     ]);
   };
 
-  const handleRemoveRule = (index: number) => {
-    const updatedRules = rules.filter((_, i) => i !== index);
-    updatedRules.forEach((rule, i) => (rule.position = i));
-    onAddRule(updatedRules);
+  const removeRule = (i: number) => {
+    const next = rules
+      .filter((_, idx) => idx !== i)
+      .map((r, idx) => ({ ...r, position: idx }));
+    onRulesChange(next);
   };
 
   return (
-    <div className="p-4 border rounded-lg space-y-6 bg-white shadow-sm">
+    <div className="p-4 border rounded-lg bg-white space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-800">
-          Product Collection Rules
+          {ENTITY_METADATA[targetType].singular} Rules
         </h3>
         <button
           type="button"
-          onClick={handleAddNewRule}
-          className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 flex items-center text-sm"
+          onClick={addRule}
+          className="bg-blue-600 text-white py-2 px-4 rounded text-sm hover:bg-blue-700"
         >
-          <svg
-            className="w-4 h-4 mr-1"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-            />
-          </svg>
-          Add Rule
+          + Add Rule
         </button>
       </div>
 
       {rules.length === 0 ? (
-        <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-          <svg
-            className="w-12 h-12 mx-auto mb-4 text-gray-300"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-          </svg>
-          <p>No rules added yet. Click "Add Rule" to create your first rule.</p>
-        </div>
+        <p className="text-center py-6 text-gray-500">
+          No rules yet. Add one to start.
+        </p>
       ) : (
-        <div className="space-y-4">
-          {rules.map((rule, index) => (
-            <div
-              key={index}
-              className="p-4 border rounded-md bg-gray-50 relative group"
-            >
-              <button
-                type="button"
-                onClick={() => handleRemoveRule(index)}
-                className="absolute top-2 right-2 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Remove rule"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
+        <div className="space-y-3">
+          {rules.map((rule, i) => {
+            const attrCfg = attributes.find((a) => a.value === rule.attribute);
+            const isBoolean = attrCfg?.valueType === "boolean";
+            const operators = isBoolean
+              ? OPERATORS.filter((o) => BOOLEAN_OPS.has(o.value))
+              : OPERATORS;
 
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+            return (
+              <div
+                key={i}
+                className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3 border rounded bg-gray-50"
+              >
                 <div className="md:col-span-4">
-                  <label className="block mb-1 font-medium text-sm text-gray-700">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
                     Attribute
                   </label>
-                  <AttributeInput
+                  <select
+                    className="w-full p-2 border rounded text-sm"
                     value={rule.attribute}
-                    onChange={(e) => handleInputChange(e, index)}
-                    options={attributeOptions}
-                  />
+                    onChange={(e) =>
+                      update(i, {
+                        attribute: e.target.value,
+                        value: "",
+                        operator: "$eq",
+                      })
+                    }
+                  >
+                    <option value="">Select attribute…</option>
+                    {attributes.map((a) => (
+                      <option key={a.value} value={a.value}>
+                        {a.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="md:col-span-3">
-                  <label className="block mb-1 font-medium text-sm text-gray-700">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
                     Operator
                   </label>
                   <select
-                    title="Operator"
-                    name="operator"
+                    className="w-full p-2 border rounded text-sm"
                     value={rule.operator}
-                    onChange={(e) => handleInputChange(e, index)}
-                    className="w-full p-2 border rounded text-sm focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(e) => update(i, { operator: e.target.value })}
                   >
-                    {OPERATORS.map((op) => (
-                      <option
-                        key={op.value}
-                        value={op.value}
-                        className="capitalize"
-                      >
-                        {op.label}
+                    {operators.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="md:col-span-4">
-                  {rule.attribute === "categoryId" ? (
-                    <>
-                      <label className="block mb-1 font-medium text-sm text-gray-700">
-                        Category
-                      </label>
-                      <CategorySelect
-                        value={rule.value}
-                        onChange={(value) => handleCategorySelect(value, index)}
-                      />
-                    </>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Value
+                  </label>
+                  {attrCfg?.ref ? (
+                    <RefSelect
+                      refType={attrCfg.ref}
+                      value={rule.value}
+                      onChange={(v) => update(i, { value: v })}
+                    />
+                  ) : isBoolean ? (
+                    <select
+                      className="w-full p-2 border rounded text-sm"
+                      value={rule.value}
+                      onChange={(e) => update(i, { value: e.target.value })}
+                    >
+                      <option value="">Select…</option>
+                      <option value="true">True</option>
+                      <option value="false">False</option>
+                    </select>
+                  ) : attrCfg?.valueType === "number" ? (
+                    <input
+                      type="number"
+                      className="w-full p-2 border rounded text-sm"
+                      value={rule.value}
+                      onChange={(e) => update(i, { value: e.target.value })}
+                    />
+                  ) : attrCfg?.valueType === "date" ? (
+                    <input
+                      type="date"
+                      className="w-full p-2 border rounded text-sm"
+                      value={rule.value}
+                      onChange={(e) => update(i, { value: e.target.value })}
+                    />
                   ) : (
-                    <>
-                      <label className="block mb-1 font-medium text-sm text-gray-700">
-                        Value
-                      </label>
-                      <input
-                        type="text"
-                        name="value"
-                        value={rule.value}
-                        onChange={(e) => handleInputChange(e, index)}
-                        className="w-full p-2 border rounded text-sm focus:ring-blue-500 focus:border-blue-500"
-                        placeholder='e.g. "red" or ["red", "blue"]'
-                      />
-                    </>
+                    <input
+                      type="text"
+                      className="w-full p-2 border rounded text-sm"
+                      value={rule.value}
+                      onChange={(e) => update(i, { value: e.target.value })}
+                      placeholder='e.g. "red" or ["red","blue"]'
+                    />
                   )}
                 </div>
 
-                <div className="md:col-span-1">
-                  <label className="block mb-1 font-medium text-sm text-gray-700">
-                    Position
-                  </label>
-                  <input
-                    title="Position"
-                    type="number"
-                    name="position"
-                    value={rule.position}
-                    onChange={(e) => handleInputChange(e, index)}
-                    className="w-full p-2 border rounded text-sm focus:ring-blue-500 focus:border-blue-500"
-                    min={0}
-                  />
+                <div className="md:col-span-1 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => removeRule(i)}
+                    className="text-red-500 hover:text-red-700 text-xl leading-none"
+                    aria-label="Remove rule"
+                  >
+                    ×
+                  </button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-// ---------- Attribute Input with suggestions ----------
-function AttributeInput({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  options: { label: string; value: string }[];
-}) {
-  const [suggestions, setSuggestions] = useState<
-    { label: string; value: string }[]
-  >([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [inputValue, setInputValue] = useState("");
-
-  useEffect(() => {
-    const currentAttribute = options.find((opt) => opt.value === value);
-    setInputValue(currentAttribute ? currentAttribute.label : value);
-  }, [value, options]);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setInputValue(val);
-
-    const syntheticEvent = {
-      target: { name: "attribute", value: val },
-    } as unknown as React.ChangeEvent<HTMLInputElement>;
-    onChange(syntheticEvent);
-
-    if (val.length > 0) {
-      const filtered = options.filter(
-        (opt) =>
-          opt.label.toLowerCase().includes(val.toLowerCase()) ||
-          opt.value.toLowerCase().includes(val.toLowerCase()),
-      );
-      setSuggestions(filtered);
-      setShowSuggestions(true);
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
-
-  const handleSuggestionClick = (suggestion: {
-    label: string;
-    value: string;
-  }) => {
-    const syntheticEvent = {
-      target: { name: "attribute", value: suggestion.value },
-    } as unknown as React.ChangeEvent<HTMLInputElement>;
-
-    onChange(syntheticEvent);
-    setInputValue(suggestion.label);
-    setShowSuggestions(false);
-  };
-
-  const handleBlur = () => {
-    setTimeout(() => setShowSuggestions(false), 200);
-  };
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        name="attribute"
-        value={inputValue}
-        onChange={handleInputChange}
-        onFocus={() => setShowSuggestions(true)}
-        onBlur={handleBlur}
-        className="w-full p-2 border rounded text-sm focus:ring-blue-500 focus:border-blue-500"
-        placeholder="Search or type attribute..."
-      />
-
-      {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-          {suggestions.map((suggestion) => (
-            <div
-              key={suggestion.value}
-              className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm"
-              onClick={() => handleSuggestionClick(suggestion)}
-            >
-              <div className="font-medium">{suggestion.label}</div>
-              <div className="text-xs text-gray-500">{suggestion.value}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------- Category Select Component ----------
-function CategorySelect({
+function RefSelect({
+  refType,
   value,
   onChange,
 }: {
+  refType: RegistryKey;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (v: string) => void;
 }) {
-  const [categories, setCategories] = useState<any[]>([]);
+  const [options, setOptions] = useState<{ _id: string; name: string }[]>([]);
   const [search, setSearch] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    async function fetchCategories() {
-      try {
-        const res = await getCategory();
-        setCategories(res);
-      } catch (error) {
-        console.error("Failed to fetch categories:", error);
-      }
-    }
-    fetchCategories();
-  }, []);
+    fetchReferenceOptions(refType, search)
+      .then((r) => r.success && setOptions(r.data || []))
+      .catch(console.error);
+  }, [refType, search]);
 
-  const filtered = categories.filter((cat: any) =>
-    cat.name.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  const selectedCategory = categories.find((c) => c._id === value);
-
-  useEffect(() => {
-    if (selectedCategory) {
-      setSearch(selectedCategory.name);
-    }
-  }, [selectedCategory]);
-
-  const handleSelect = (id: string) => {
-    onChange(id);
-    setShowDropdown(false);
-  };
+  const selected = options.find((o) => o._id === value);
 
   return (
     <div className="relative">
       <input
         type="text"
-        placeholder="Search categories..."
-        value={search}
-        onFocus={() => setShowDropdown(true)}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          setShowDropdown(true);
-        }}
-        className="w-full p-2 border rounded text-sm focus:ring-blue-500 focus:border-blue-500"
+        className="w-full p-2 border rounded text-sm"
+        placeholder={`Search ${refType.toLowerCase()}…`}
+        value={open ? search : (selected?.name ?? value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onChange={(e) => setSearch(e.target.value)}
       />
-
-      {showDropdown && (
-        <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-          {filtered.length > 0 ? (
-            filtered.map((cat: any) => (
-              <div
-                key={cat._id}
-                className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm"
-                onClick={() => handleSelect(cat._id)}
-              >
-                {cat.name}
-              </div>
-            ))
-          ) : (
-            <div className="px-4 py-2 text-gray-500 text-sm">
-              No categories found
+      {open && options.length > 0 && (
+        <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow max-h-48 overflow-auto">
+          {options.map((o) => (
+            <div
+              key={o._id}
+              className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer"
+              onClick={() => {
+                onChange(o._id);
+                setSearch("");
+                setOpen(false);
+              }}
+            >
+              {o.name}
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>

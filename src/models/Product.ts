@@ -1,3 +1,4 @@
+// models/Product.ts
 import mongoose, { Schema, Document } from "mongoose";
 
 interface IProductCode {
@@ -11,12 +12,17 @@ interface IVariant {
   quantity?: number;
   mainImage?: string;
   images?: string[];
-  [key: string]: any; // dynamic theme keys (color, size, …)
+  [key: string]: any;
 }
 interface IReview {
-  user: mongoose.Types.ObjectId;
+  _id?: mongoose.Types.ObjectId;
+  user:
+    | mongoose.Types.ObjectId
+    | { _id: mongoose.Types.ObjectId; name: string };
   rating: number;
   comment?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 interface IRelatedProduct {
   product: mongoose.Types.ObjectId;
@@ -49,13 +55,22 @@ export interface IProduct extends Document {
   reviewsRatings: IReview[];
   tags: string[];
   status: "draft" | "active" | "inactive";
-  embedding: number[]; // 1024-dim vector from voyage-4-lite
-  embeddingText: string; // the exact text that was embedded
-  embeddingModel: string; // e.g. "voyage-4-lite"
-  embeddedAt: Date; // when the vector was last refreshed
+
+  // ── Materialized recommendation signals ──────────────────────────
+  isFeatured: boolean; // admin-set
+  isBestseller: boolean; // cron-set (30d purchase count)
+  bestsellerRank: number; // 1..N, 0 = unranked
+  isTrending: boolean; // cron-set (7d weighted events)
+  trendingRank: number; // 1..N, 0 = unranked
+  isNew: boolean; // cron-set (createdAt within window)
+  metricsUpdatedAt?: Date; // when cron last touched this doc
+
+  embedding: number[];
+  embeddingText: string;
+  embeddingModel: string;
+  embeddedAt: Date;
   createdAt: Date;
   updatedAt: Date;
-  // ✅ Flattened category attributes live here, one key per attribute code.
   [key: string]: any;
 }
 
@@ -71,13 +86,17 @@ const ProductCodeSchema = new Schema<IProductCode>(
   { _id: false },
 );
 
+// models/Product.ts (excerpt)
+
 const ReviewSchema = new Schema<IReview>(
   {
     user: { type: Schema.Types.ObjectId, ref: "User", required: true },
     rating: { type: Number, min: 1, max: 5, required: true },
-    comment: { type: String, maxlength: 200 },
+    comment: { type: String, maxlength: 1000 },
   },
-  { _id: false },
+  // _id defaults to true, which gives us a stable React key.
+  // timestamps give us createdAt/updatedAt for display + sorting.
+  { _id: true, timestamps: true },
 );
 
 const ProductSchema = new Schema<IProduct>(
@@ -103,10 +122,7 @@ const ProductSchema = new Schema<IProduct>(
     brandName: { type: String, trim: true, default: "" },
     hasVariants: { type: Boolean, default: false },
     variantThemes: { type: [String], default: [] },
-
-    // Map of { [themeCode]: string[] }, e.g. { color: ["Green","Black"] }
     variantValues: { type: Schema.Types.Mixed, default: {} },
-
     quantity: { type: Number, default: 0, min: 0 },
     lowStockThreshold: { type: Number, default: 5, min: 0 },
     listPrice: { type: Number, default: 0, min: 0 },
@@ -114,10 +130,7 @@ const ProductSchema = new Schema<IProduct>(
     images: { type: [String], default: [] },
     description: { type: String, default: "" },
     shortDescription: { type: String, default: "" },
-
-    // Mixed — no subdoc casting so dynamic theme keys persist verbatim.
     variants: { type: [Schema.Types.Mixed], default: [] },
-
     carrier: { type: Schema.Types.ObjectId, ref: "Carrier" },
     relatedProducts: {
       type: [
@@ -137,6 +150,16 @@ const ProductSchema = new Schema<IProduct>(
       default: "draft",
       index: true,
     },
+
+    // ── Materialized recommendation signals ────────────────────────
+    isFeatured: { type: Boolean, default: false, index: true },
+    isBestseller: { type: Boolean, default: false, index: true },
+    bestsellerRank: { type: Number, default: 0 },
+    isTrending: { type: Boolean, default: false, index: true },
+    trendingRank: { type: Number, default: 0 },
+    isNew: { type: Boolean, default: false, index: true },
+    metricsUpdatedAt: { type: Date },
+
     embedding: { type: [Number], default: [] },
     embeddingText: { type: String, default: "" },
     embeddingModel: { type: String, default: "" },
@@ -144,7 +167,6 @@ const ProductSchema = new Schema<IProduct>(
   },
   {
     timestamps: true,
-    // ⭐ The whole point of Model B: everything else lives flat at the root.
     strict: false,
   },
 );
@@ -156,7 +178,6 @@ ProductSchema.pre("save", function (next) {
   next();
 });
 
-// Also cover findOneAndUpdate / updateOne paths
 ProductSchema.pre("findOneAndUpdate", function (next) {
   const update = this.getUpdate() as any;
   const newName = update?.name ?? update?.$set?.name;
@@ -167,13 +188,20 @@ ProductSchema.pre("findOneAndUpdate", function (next) {
   next();
 });
 
-ProductSchema.index({ slug: 1 }, { unique: true }); // in schema definition
+ProductSchema.index({ slug: 1 }, { unique: true });
 ProductSchema.index({ sku: 1 });
 ProductSchema.index({ status: 1, createdAt: -1 });
 ProductSchema.index({ status: 1, categoryId: 1, createdAt: -1 });
 ProductSchema.index({ status: 1, categoryId: 1, price: 1 });
 ProductSchema.index({ status: 1, categoryId: 1, color: 1, price: 1 });
 ProductSchema.index({ createdAt: -1 });
+
+// Compound indexes so rule-based collections on the materialized flags
+// can sort by rank in the same index scan.
+ProductSchema.index({ isTrending: 1, trendingRank: 1 });
+ProductSchema.index({ isBestseller: 1, bestsellerRank: 1 });
+ProductSchema.index({ isFeatured: 1, createdAt: -1 });
+ProductSchema.index({ isNew: 1, createdAt: -1 });
 
 const Product =
   (mongoose.models.Product as mongoose.Model<IProduct>) ||

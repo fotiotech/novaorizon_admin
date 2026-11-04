@@ -1,141 +1,128 @@
 // lib/content/query.ts
 import mongoose from "mongoose";
-import Product from "@/models/Product";
-import Category from "@/models/Category";
-import Brand from "@/models/Brand";
-import Promotion from "@/models/Promotion";
-import Page from "@/models/Page";
-import { Collection } from "@/models/Collection";
+import type { TargetType, ValueType } from "./collectionTypes";
+import { getEntityConfig } from "./entityRegistry";
 
-/** Mongoose model for a ref target type. */
-export function getModelForTargetType(targetType: string) {
-  switch (targetType) {
-    case "Product":
-      return Product;
-    case "Category":
-      return Category;
-    case "Brand":
-      return Brand;
-    case "Promotion":
-      return Promotion;
-    case "Page":
-      return Page;
-    case "Collection":
-      return Collection;
-    default:
-      return null;
-  }
+export interface Rule {
+  attribute: string;
+  operator: string;
+  value: any;
+  position: number;
 }
 
-/** Parse a rule value according to its operator. */
-export function parseRuleValue(value: any, operator: string) {
-  if (operator === "$in" || operator === "$nin") {
-    if (Array.isArray(value)) return value;
-    if (typeof value === "string") {
-      try {
-        const parsed = JSON.parse(value);
-        if (Array.isArray(parsed)) return parsed;
-        if (value.includes(",")) {
-          return value.split(",").map((item: string) => item.trim());
-        }
-        return [value];
-      } catch {
-        if (value.includes(",")) {
-          return value.split(",").map((item: string) => item.trim());
-        }
-        return [value];
-      }
-    }
-    return [value];
+function coerceScalar(value: any, valueType: ValueType | undefined): any {
+  if (valueType === "boolean") {
+    if (value === true || value === "true") return true;
+    if (value === false || value === "false") return false;
+    return value;
   }
-
-  if (["$lt", "$lte", "$gt", "$gte"].includes(operator)) {
-    const num = Number(value);
-    return isNaN(num) ? value : num;
+  if (valueType === "number") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : value;
   }
-
-  if (value === "true") return true;
-  if (value === "false") return false;
+  if (valueType === "date") {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? value : d;
+  }
   return value;
 }
 
-/** Build a Mongo query from collection rules. Only Product & Collection. */
-export function buildQueryFromRules(rules: any[], targetType: string) {
-  if (!["Product", "Collection"].includes(targetType)) return {};
-  if (!rules || rules.length === 0) return {};
+function coerceByType(value: any, valueType: ValueType | undefined) {
+  if (Array.isArray(value)) return value.map((v) => coerceScalar(v, valueType));
+  return coerceScalar(value, valueType);
+}
 
-  const query: any = { $and: [] };
+export function buildQueryFromRules(
+  rules: Rule[] | undefined,
+  targetType: TargetType,
+): Record<string, any> {
+  const cfg = getEntityConfig(targetType);
+  if (!cfg || !rules?.length) return {};
+
+  const attrs = new Map(cfg.attributes.map((a) => [a.value, a]));
+  const query: Record<string, any> = {};
 
   for (const rule of rules) {
     if (!rule.attribute || !rule.operator) continue;
-    const value = parseRuleValue(rule.value, rule.operator);
+    const attrCfg = attrs.get(rule.attribute);
+    let value = rule.value;
 
-    if (targetType === "Product" && rule.attribute === "categoryId") {
+    if (attrCfg?.ref) {
       if (Array.isArray(value)) {
-        const objectIds = value
-          .filter((v) => mongoose.Types.ObjectId.isValid(v))
-          .map((v) => new mongoose.Types.ObjectId(v));
-        if (objectIds.length) {
-          query.$and.push({ [rule.attribute]: { [rule.operator]: objectIds } });
-        }
-      } else if (mongoose.Types.ObjectId.isValid(value)) {
-        query.$and.push({
-          [rule.attribute]: new mongoose.Types.ObjectId(value),
-        });
+        value = value
+          .map((v) =>
+            mongoose.Types.ObjectId.isValid(v)
+              ? new mongoose.Types.ObjectId(v)
+              : null,
+          )
+          .filter(Boolean);
+      } else if (
+        typeof value === "string" &&
+        mongoose.Types.ObjectId.isValid(value)
+      ) {
+        value = new mongoose.Types.ObjectId(value);
       }
     } else {
-      query.$and.push({
-        [rule.attribute]: { [rule.operator]: value },
-      });
+      value = coerceByType(value, attrCfg?.valueType);
+    }
+
+    if (rule.operator === "$in" || rule.operator === "$nin") {
+      const arr = Array.isArray(value) ? value : [value];
+      query[rule.attribute] = {
+        ...(query[rule.attribute] ?? {}),
+        [rule.operator]: arr,
+      };
+    } else {
+      query[rule.attribute] = {
+        ...(query[rule.attribute] ?? {}),
+        [rule.operator]: value,
+      };
     }
   }
 
-  return query.$and.length > 0 ? query : {};
+  return query;
 }
 
-/** Turn a promotion scope into a Product query. */
-export function buildProductQueryFromScope(scope: any) {
-  const appliesTo = scope?.appliesTo ?? "all";
-  const exclude = scope?.excludeProductIds ?? [];
+export function pickSlug(doc: any): string | null {
+  if (!doc) return null;
+  const candidate =
+    doc.slug ??
+    doc.url_slug ??
+    doc.urlSlug ??
+    (typeof doc.url === "string" && !/^https?:\/\//.test(doc.url)
+      ? doc.url
+      : null);
+  return typeof candidate === "string" && candidate.length > 0
+    ? candidate
+    : null;
+}
+
+export function buildProductQueryFromScope(scope: any): Record<string, any> {
+  const query: Record<string, any> = {};
+  const appliesTo: string = scope?.appliesTo ?? "all";
+  const toIds = (arr: any[] | undefined) =>
+    (arr ?? []).map((id) => new mongoose.Types.ObjectId(String(id)));
 
   switch (appliesTo) {
     case "products":
-      return {
-        _id: {
-          $in: scope?.productIds ?? [],
-          ...(exclude.length ? { $nin: exclude } : {}),
-        },
-      };
+      query._id = { $in: toIds(scope?.productIds) };
+      break;
     case "categories":
-      return {
-        categoryId: { $in: scope?.categoryIds ?? [] },
-        ...(exclude.length ? { _id: { $nin: exclude } } : {}),
-      };
+      query.categoryId = { $in: toIds(scope?.categoryIds) };
+      break;
     case "brands":
-      return {
-        brand: { $in: scope?.brandIds ?? [] },
-        ...(exclude.length ? { _id: { $nin: exclude } } : {}),
-      };
-    case "all":
+      query.brand = { $in: toIds(scope?.brandIds) };
+      break;
     default:
-      return exclude.length ? { _id: { $nin: exclude } } : {};
+      break;
   }
-}
 
-/** Slugify helper used for building hrefs on normalized items. */
-export function slugify(text: string): string {
-  return String(text || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+  const excludes = toIds(scope?.excludeProductIds);
+  if (excludes.length > 0) {
+    query._id = query._id
+      ? { ...query._id, $nin: excludes }
+      : { $nin: excludes };
+  }
 
-/** Pick the best slug from a ref document. */
-export function pickSlug(doc: any): string {
-  if (!doc) return "";
-  if (doc.slug) return String(doc.slug);
-  if (doc.url_slug) return String(doc.url_slug);
-  if (doc.handle) return String(doc.handle);
-  if (doc.name) return slugify(doc.name);
-  return "";
+  return query;
 }

@@ -119,14 +119,6 @@ export const navigationLinks: MenuLink[] = [
   },
 ];
 
-export const contentBlockLinks: MenuLink[] = [
-  {
-    name: "Blocks",
-    href: "/channels/store/content/blocks",
-    icon: <MenuIcon />,
-  },
-];
-
 // ─────────────────────────────────────────────────────────────────────
 // Attributes sub-tree — Catalog → Attributes.
 // ─────────────────────────────────────────────────────────────────────
@@ -142,13 +134,6 @@ export const categoryLinks: MenuLink[] = [
   {
     name: "Property",
     href: "/catalog/categories/property",
-    icon: <Widgets />,
-  },
-  {
-    name: "Collections",
-
-    href: "/catalog/categories/collections",
-
     icon: <Widgets />,
   },
 ];
@@ -371,12 +356,7 @@ export const rawMenuConfig = [
                 icon: <MenuIcon />,
                 children: navigationLinks,
               },
-              {
-                name: "Blocks",
-                href: "/channels/store/content/blocks",
-                icon: <Code />,
-                children: contentBlockLinks,
-              },
+
               {
                 name: "Hero Content",
                 href: "/channels/store/content/hero",

@@ -1,26 +1,10 @@
 // lib/content/resolve.ts
 import mongoose from "mongoose";
-import Product from "@/models/Product";
-import Brand from "@/models/Brand";
-import Category from "@/models/Category";
-import Promotion from "@/models/Promotion";
-import Page from "@/models/Page";
 import { Collection } from "@/models/Collection";
-import {
-  getModelForTargetType,
-  buildQueryFromRules,
-  buildProductQueryFromScope,
-  pickSlug,
-  slugify,
-} from "./query";
-import {
-  getTrendingItems,
-  getRecommendations,
-  getRecentlyViewed,
-  getRelatedProducts,
-} from "@/app/actions/events";
-import type { IBlockSource, IBlockRef } from "@/models/ContentBlock";
-import type { BlockRefModel, BlockSourceStyles } from "./constants";
+import { buildQueryFromRules, pickSlug } from "./query";
+import { getEntityConfig } from "./entityRegistry";
+import { getRecommendationResolver } from "./recommendationResolvers";
+import type { BlockRefModel } from "./constants";
 
 /* -------------------------------------------------------------------------- */
 /*                                    Types                                   */
@@ -28,15 +12,6 @@ import type { BlockRefModel, BlockSourceStyles } from "./constants";
 
 export interface ResolveContext {
   userId?: string;
-  productId?: string;
-}
-
-export interface SourceMeta {
-  code?: string;
-  itemCount?: number;
-  collectionType?: string;
-  reason?: string;
-  score?: number;
 }
 
 export interface NormalizedContentItem {
@@ -50,7 +25,7 @@ export interface NormalizedContentItem {
   listPrice?: number | null;
   badge?: string | null;
   subline?: string | null;
-  meta?: SourceMeta;
+  meta?: { code?: string };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -77,55 +52,60 @@ function buildHref(
 }
 
 /* -------------------------------------------------------------------------- */
-/*                            Normalizers                                     */
+/*                                Normalizers                                 */
 /* -------------------------------------------------------------------------- */
 
+function firstImage(doc: any): string | null {
+  if (Array.isArray(doc.images) && doc.images.length > 0) return doc.images[0];
+  if (Array.isArray(doc.imageUrl) && doc.imageUrl.length > 0)
+    return doc.imageUrl[0];
+  return doc.image ?? doc.mainImage ?? doc.logoUrl ?? null;
+}
+
 function normalizeProduct(doc: any): NormalizedContentItem {
-  const slug = pickSlug(doc);
   return {
     _id: String(doc._id),
-    name: doc.name || doc.title || "Untitled",
-    image: Array.isArray(doc.images)
-      ? (doc.images[0] ?? null)
-      : doc.mainImage || doc.image || doc.imageUrl || null,
-    href: buildHref("Product", String(doc._id), slug || null),
+    name: doc.name || "Untitled",
+    image: firstImage(doc),
+    href: buildHref("Product", String(doc._id), pickSlug(doc) || null),
     contentType: "Product",
-    price: doc.price ?? doc.salePrice ?? null,
-    listPrice: doc.listPrice ?? null,
+    price: typeof doc.price === "number" ? doc.price : null,
+    listPrice: typeof doc.listPrice === "number" ? doc.listPrice : null,
   };
 }
 
 function normalizeCategory(doc: any): NormalizedContentItem {
-  const slug = pickSlug(doc);
   return {
     _id: String(doc._id),
     name: doc.name || "Untitled",
-    image: doc.imageUrl || doc.image || null,
+    image: firstImage(doc),
     description: doc.description ?? null,
-    href: buildHref("Category", String(doc._id), slug || null),
+    href: buildHref("Category", String(doc._id), pickSlug(doc) || null),
     contentType: "Category",
   };
 }
 
 function normalizeCollection(doc: any): NormalizedContentItem {
-  const slug = pickSlug(doc);
   return {
     _id: String(doc._id),
     name: doc.name || "Untitled",
-    image: doc.imageUrl || doc.image || null,
+    image: firstImage(doc),
     description: doc.description ?? null,
-    href: buildHref("Collection", String(doc._id), slug || null),
+    href: buildHref("Collection", String(doc._id), pickSlug(doc) || null),
     contentType: "Collection",
   };
 }
 
 function normalizeBrand(doc: any): NormalizedContentItem {
-  const slug = pickSlug(doc);
   return {
     _id: String(doc._id),
     name: doc.name || "Untitled",
-    image: doc.image || doc.imageUrl || doc.logo || null,
-    href: buildHref("Brand", String(doc._id), slug || null),
+    image: firstImage(doc),
+    href: buildHref(
+      "Brand",
+      String(doc._id),
+      doc.url_slug ?? pickSlug(doc) ?? null,
+    ),
     contentType: "Brand",
   };
 }
@@ -144,12 +124,11 @@ function normalizePromotion(doc: any): NormalizedContentItem {
 }
 
 function normalizePage(doc: any): NormalizedContentItem {
-  const slug = pickSlug(doc);
   return {
     _id: String(doc._id),
     name: doc.name || doc.title || "Untitled",
-    image: doc.image || null,
-    href: buildHref("Page", String(doc._id), slug || null, doc.url),
+    image: firstImage(doc),
+    href: buildHref("Page", String(doc._id), pickSlug(doc) || null, doc.url),
     contentType: "Page",
   };
 }
@@ -176,29 +155,19 @@ export function normalizeContentItem(
 }
 
 /* -------------------------------------------------------------------------- */
-/*                            Category resolver                               */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Direct category source. Lists categories (sorted by `order` if present,
- * then by name). This is the shortcut used by "Shop by category" blocks that
- * pair with `display = "circles"`.
- */
-async function resolveCategories(
-  limit: number,
-): Promise<NormalizedContentItem[]> {
-  const docs = await (Category as mongoose.Model<any>)
-    .find({})
-    .sort({ order: 1, name: 1 })
-    .limit(limit)
-    .lean();
-  return docs.map((d: any) => normalizeCategory(d));
-}
-
-/* -------------------------------------------------------------------------- */
 /*                            Collection resolver                             */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Resolves a single Collection into display-ready items. Handles all three
+ * types the unified model supports:
+ *
+ *   rule           → compiled from `collection.rules` via the entity registry
+ *   manual         → hydrated from `collection.items` in the order stored
+ *   recommendation → delegated to `RECOMMENDATION_RESOLVERS[targetType]`
+ *
+ * Inactive collections always return `[]`.
+ */
 export async function resolveCollection(
   collectionId: string | mongoose.Types.ObjectId,
   ctx: ResolveContext = {},
@@ -207,47 +176,48 @@ export async function resolveCollection(
   const collection: any = await Collection.findById(collectionId).lean();
   if (!collection || collection.status === "inactive") return [];
 
-  const limit = limitOverride ?? collection.recommendationLimit ?? 20;
-
-  if (collection.type === "recommendation") {
-    const kind = collection.recommendationType;
-    let raw: any[] = [];
-    switch (kind) {
-      case "trending":
-        raw = await getTrendingItems(limit);
-        break;
-      case "personalized":
-        raw = ctx.userId ? await getRecommendations(limit) : [];
-        break;
-      case "recentlyViewed":
-        raw = ctx.userId ? await getRecentlyViewed(limit) : [];
-        break;
-    }
-    return raw.map((d) => normalizeProduct(d));
-  }
-
-  if (collection.type === "related") {
-    if (!ctx.productId) return [];
-    const raw = await getRelatedProducts(ctx.productId, limit);
-    return raw.map((d) => normalizeProduct(d));
-  }
+  const limit =
+    limitOverride ??
+    (collection.type === "recommendation"
+      ? (collection.recommendationLimit ?? 10)
+      : 20);
 
   const targetType = collection.targetType as BlockRefModel;
-  const Model = getModelForTargetType(targetType);
-  if (!Model) return [];
-  const m = Model as mongoose.Model<any>;
+  const cfg = getEntityConfig(targetType);
+  if (!cfg) return [];
+
+  if (collection.type === "recommendation") {
+    const resolver = getRecommendationResolver(targetType);
+    if (!resolver) return [];
+    const raw = await resolver(collection.recommendationType ?? "", limit, {
+      userId: ctx.userId,
+    });
+    return raw.map((d) => normalizeContentItem(d, targetType));
+  }
 
   if (collection.type === "rule") {
-    const query = buildQueryFromRules(collection.rules, targetType);
+    const query = buildQueryFromRules(
+      collection.rules ?? [],
+      targetType as any,
+    );
     if (Object.keys(query).length === 0) return [];
-    const docs = await m.find(query).limit(limit).lean();
-    return docs.map((d) => normalizeContentItem(d, targetType));
+    let q = (cfg.model as mongoose.Model<any>).find(query).limit(limit);
+    if (collection.sort?.field) {
+      q = q.sort({
+        [collection.sort.field]: collection.sort.direction === "asc" ? 1 : -1,
+      });
+    }
+    const docs = await q.lean();
+    return (docs as any[]).map((d) => normalizeContentItem(d, targetType));
   }
 
   if (collection.type === "manual") {
     const ids = (collection.items ?? []).slice(0, limit);
-    const docs = await m.find({ _id: { $in: ids } }).lean();
-    const byId = new Map(docs.map((d: any) => [String(d._id), d]));
+    if (!ids.length) return [];
+    const docs = await (cfg.model as mongoose.Model<any>)
+      .find({ _id: { $in: ids } })
+      .lean();
+    const byId = new Map((docs as any[]).map((d) => [String(d._id), d]));
     return ids
       .map((id: any) => byId.get(String(id)))
       .filter(Boolean)
@@ -255,223 +225,4 @@ export async function resolveCollection(
   }
 
   return [];
-}
-
-/* -------------------------------------------------------------------------- */
-/*                            Promotion resolvers                             */
-/* -------------------------------------------------------------------------- */
-
-async function resolvePromotionSelf(
-  promotionId: string | mongoose.Types.ObjectId,
-): Promise<NormalizedContentItem[]> {
-  const promo = await Promotion.findById(promotionId).lean();
-  if (!promo) return [];
-  return [normalizePromotion(promo)];
-}
-
-async function resolvePromotionProducts(
-  promotionId: string | mongoose.Types.ObjectId,
-  limit: number,
-): Promise<NormalizedContentItem[]> {
-  const promo: any = await Promotion.findById(promotionId).lean();
-  if (!promo) return [];
-
-  const now = new Date();
-  const live =
-    promo.isActive &&
-    now >= new Date(promo.startDate) &&
-    now <= new Date(promo.endDate);
-  if (!live) return [];
-
-  const query = buildProductQueryFromScope(promo.scope);
-  const docs = await Product.find(query).limit(limit).lean();
-  return docs.map((d) => {
-    const item = normalizeProduct(d);
-    return { ...item, meta: { code: promo.code ?? undefined } };
-  });
-}
-
-/* -------------------------------------------------------------------------- */
-/*                            Recommendation resolver                         */
-/* -------------------------------------------------------------------------- */
-
-async function resolveRecommendation(
-  kind: "trending" | "personalized" | "recentlyViewed",
-  limit: number,
-  ctx: ResolveContext,
-): Promise<NormalizedContentItem[]> {
-  const withReason = (items: NormalizedContentItem[]) =>
-    items.map((item) => ({ ...item, meta: { ...item.meta, reason: kind } }));
-
-  switch (kind) {
-    case "trending": {
-      const raw = await getTrendingItems(limit);
-      return withReason(raw.map((d) => normalizeProduct(d)));
-    }
-    case "personalized": {
-      if (!ctx.userId) return [];
-      const raw = await getRecommendations(limit);
-      return withReason(raw.map((d) => normalizeProduct(d)));
-    }
-    case "recentlyViewed": {
-      if (!ctx.userId) return [];
-      const raw = await getRecentlyViewed(limit);
-      return withReason(raw.map((d) => normalizeProduct(d)));
-    }
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/*                              Manual refs resolver                          */
-/* -------------------------------------------------------------------------- */
-
-async function resolveManualRefs(
-  refs: IBlockRef[],
-): Promise<NormalizedContentItem[]> {
-  if (!refs?.length) return [];
-
-  const byModel: Record<string, IBlockRef[]> = {};
-  for (const r of refs) {
-    (byModel[r.refModel] ??= []).push(r);
-  }
-
-  const out: NormalizedContentItem[] = [];
-
-  await Promise.all(
-    Object.entries(byModel).map(async ([modelName, items]) => {
-      const Model = getModelForTargetType(modelName);
-      if (!Model) return;
-
-      const ids = items.map((r) => r.refId);
-      const docs = await (Model as mongoose.Model<any>)
-        .find({ _id: { $in: ids } })
-        .lean();
-      const byId = new Map(docs.map((d: any) => [String(d._id), d]));
-
-      for (const ref of items) {
-        const doc = byId.get(String(ref.refId));
-        if (!doc) continue;
-        const normalized = normalizeContentItem(doc, ref.refModel);
-        out.push({
-          ...normalized,
-          name: ref.label?.trim() || normalized.name,
-          image: ref.image || normalized.image,
-          description: ref.description || normalized.description,
-        });
-      }
-    }),
-  );
-
-  const orderMap = new Map(
-    refs.map((r, i) => [`${r.refModel}:${String(r.refId)}`, r.order ?? i]),
-  );
-  out.sort((a, b) => {
-    const ak = `${a.contentType}:${a._id}`;
-    const bk = `${b.contentType}:${b._id}`;
-    return (orderMap.get(ak) ?? 0) - (orderMap.get(bk) ?? 0);
-  });
-
-  return out;
-}
-
-/* -------------------------------------------------------------------------- */
-/*                              Public dispatcher                             */
-/* -------------------------------------------------------------------------- */
-
-export async function resolveSource(
-  source: IBlockSource,
-  ctx: ResolveContext = {},
-): Promise<NormalizedContentItem[]> {
-  const limit = source.limit ?? 12;
-
-  switch (source.type) {
-    case "collection": {
-      if (!source.collectionId) return [];
-      return resolveCollection(source.collectionId, ctx, limit);
-    }
-    case "category": {
-      return resolveCategories(limit);
-    }
-    case "promotion": {
-      if (!source.promotionId) return [];
-      if (source.promotionMode === "self") {
-        return resolvePromotionSelf(source.promotionId);
-      }
-      return resolvePromotionProducts(source.promotionId, limit);
-    }
-    case "recommendation": {
-      if (!source.recommendationKind) return [];
-      return resolveRecommendation(source.recommendationKind, limit, ctx);
-    }
-    case "related": {
-      if (!ctx.productId) return [];
-      if (
-        source.relatedStrategy === "collection" &&
-        source.relatedCollectionId
-      ) {
-        return resolveCollection(source.relatedCollectionId, ctx, limit);
-      }
-      const raw = await getRelatedProducts(ctx.productId, limit);
-      return raw.map((d) => {
-        const item = normalizeProduct(d);
-        const score = typeof d.score === "number" ? d.score : undefined;
-        return score != null ? { ...item, meta: { score } } : item;
-      });
-    }
-    case "manual":
-      return resolveManualRefs(source.refs ?? []);
-    default:
-      return [];
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/*                     Source-specific display directives                     */
-/* -------------------------------------------------------------------------- */
-
-export function applySourceStyles(
-  items: NormalizedContentItem[],
-  sourceType: string,
-  styles?: BlockSourceStyles | null,
-): NormalizedContentItem[] {
-  if (!styles) return items;
-
-  return items.map((item) => {
-    let subline = item.subline ?? null;
-    let badge = item.badge ?? null;
-
-    if (sourceType === "promotion") {
-      if (!styles.promotionShowCode || styles.promotionBadgeStyle === "none") {
-        badge = null;
-      } else if (item.meta?.code) {
-        badge = item.meta.code;
-      }
-    } else if (sourceType === "collection") {
-      if (styles.collectionShowItemCount) {
-        const count = items.length;
-        const text = `${count} item${count === 1 ? "" : "s"}`;
-        if (styles.collectionCountPosition === "badge") badge = text;
-        else if (styles.collectionCountPosition === "subline") subline = text;
-      }
-    } else if (sourceType === "recommendation") {
-      if (styles.recommendationBadgeStyle === "none") {
-        badge = null;
-      } else if (styles.recommendationBadgeStyle !== "default") {
-        badge = styles.recommendationBadgeStyle;
-      }
-      if (styles.recommendationShowReason && item.meta?.reason) {
-        subline = item.meta.reason;
-      }
-    } else if (sourceType === "related") {
-      if (styles.relatedShowScore && item.meta?.score != null) {
-        subline = `Match ${Math.round(item.meta.score * 100)}%`;
-      }
-    } else if (sourceType === "manual") {
-      if (!styles.manualShowDescription) {
-        return { ...item, subline, badge, description: null };
-      }
-    }
-
-    return { ...item, subline, badge };
-  });
 }
