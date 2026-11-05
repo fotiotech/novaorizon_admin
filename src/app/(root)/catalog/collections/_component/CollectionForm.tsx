@@ -34,6 +34,26 @@ type Rule = {
   position: number;
 };
 
+/* -------------------------------------------------------------------------- */
+/*                                Style tokens                                */
+/* -------------------------------------------------------------------------- */
+
+const inputCls =
+  "w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500";
+
+const selectCls =
+  "w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500";
+
+const textareaCls =
+  "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500";
+
+const labelCls = "block text-sm font-medium text-gray-700 mb-1.5";
+
+const sectionCard =
+  "rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden";
+
+const sectionPad = "p-5 sm:p-6";
+
 export default function CollectionForm({ id }: { id?: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -189,6 +209,8 @@ export default function CollectionForm({ id }: { id?: string }) {
       .then((res) => res.success && setAvailableItems(res.data || []))
       .catch(console.error);
   }, [formData.targetType, formData.type, itemSearch, sortOrder]);
+
+  /* ------------------------------ handlers ------------------------------- */
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -399,7 +421,7 @@ export default function CollectionForm({ id }: { id?: string }) {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex h-64 items-center justify-center">
         <Spinner />
       </div>
     );
@@ -409,580 +431,614 @@ export default function CollectionForm({ id }: { id?: string }) {
     formData.type === "recommendation" &&
     ["personalized", "recentlyViewed"].includes(formData.recommendationType);
 
+  /* ------------------------------- render -------------------------------- */
+
   return (
-    <div className="p-4 lg:p-6 max-w-5xl mx-auto">
-      {error && (
-        <Notification
-          type="error"
-          message={error}
-          onClose={() => setError(null)}
-        />
-      )}
-      {success && (
-        <Notification
-          type="success"
-          message={success}
-          onClose={() => setSuccess(null)}
-        />
-      )}
-
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">
-          {id ? "Edit" : "Create"} Collection
-        </h1>
-        <p className="text-gray-600 mt-1">
-          Rule‑based, manual, or recommendation, targeting{" "}
-          {cfg.label.toLowerCase()}.
-        </p>
-      </div>
-
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white rounded-lg shadow-md p-6 space-y-6"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block mb-2 font-medium text-gray-700">
-              Target Entity *
-            </label>
-            <select
-              name="targetType"
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
-              value={formData.targetType}
-              onChange={handleChange}
-              disabled={isSubmitting}
-            >
-              {TARGET_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {ENTITY_METADATA[t].label}
-                </option>
-              ))}
-            </select>
-            <p className="text-sm text-gray-500 mt-1">
-              Changing this resets rules, manual picks, and the default card
-              shape.
-            </p>
-          </div>
-          <div>
-            <label className="block mb-2 font-medium text-gray-700">
-              Collection Type *
-            </label>
-            <select
-              name="type"
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
-              value={formData.type}
-              onChange={handleChange}
-              disabled={isSubmitting}
-            >
-              {cfg.supportsRule && <option value="rule">Rule‑based</option>}
-              {cfg.supportsManual && (
-                <option value="manual">Manual selection</option>
-              )}
-              {cfg.supportsRecommendation && (
-                <option value="recommendation">Recommendation</option>
-              )}
-            </select>
-          </div>
-        </div>
-
-        {formData.type === "recommendation" && cfg.supportsRecommendation && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg border border-blue-200 bg-blue-50">
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">
-                Kind *
-              </label>
-              <select
-                name="recommendationType"
-                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
-                value={formData.recommendationType}
-                onChange={handleChange}
-                disabled={isSubmitting}
-              >
-                <option value="">Select…</option>
-                {(cfg.recommendationTypes ?? []).map((k) => (
-                  <option key={k} value={k}>
-                    {k}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">
-                Limit
-              </label>
-              <input
-                type="number"
-                name="recommendationLimit"
-                min={1}
-                max={100}
-                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
-                value={formData.recommendationLimit}
-                onChange={handleChange}
-                disabled={isSubmitting}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Number of items to return (1‑100).
-              </p>
-            </div>
-            {recNeedsUser && (
-              <p className="md:col-span-2 text-xs text-gray-600">
-                "{formData.recommendationType}" resolves per signed-in shopper —
-                anonymous visitors get nothing back.
-              </p>
-            )}
-          </div>
+    <div className="min-h-screen bg-gray-50/60 pb-24">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+        {error && (
+          <Notification
+            type="error"
+            message={error}
+            onClose={() => setError(null)}
+          />
+        )}
+        {success && (
+          <Notification
+            type="success"
+            message={success}
+            onClose={() => setSuccess(null)}
+          />
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block mb-2 font-medium text-gray-700">
-              Name *
-            </label>
-            <input
-              type="text"
-              name="name"
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
-              required
-              disabled={isSubmitting}
-              value={formData.name}
-              onChange={handleChange}
-              placeholder={`e.g. Featured ${cfg.label}`}
-            />
-          </div>
-          <div>
-            <label className="block mb-2 font-medium text-gray-700">
-              Status
-            </label>
-            <select
-              name="status"
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
-              value={formData.status}
-              onChange={handleChange}
-              disabled={isSubmitting}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className="block mb-2 font-medium text-gray-700">
-            Description
-          </label>
-          <textarea
-            name="description"
-            rows={3}
-            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
-            disabled={isSubmitting}
-            value={formData.description}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div>
-          <label className="block mb-2 font-medium text-gray-700">
-            Cover Image
-          </label>
-          <FilesUploader
-            files={files}
-            loading={fileLoading}
-            addFiles={addFiles}
-            onRemove={handleRemoveImage}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block mb-2 font-medium text-gray-700">
-              Order
-            </label>
-            <input
-              type="number"
-              name="order"
-              min={0}
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
-              value={formData.order}
-              onChange={handleChange}
-              disabled={isSubmitting}
-            />
-          </div>
-          <div className="flex items-center gap-3 mt-7 select-none">
-            <Toggle
-              checked={formData.showName}
-              onChange={(v) => setFormData((p) => ({ ...p, showName: v }))}
-              label="Show collection name in rendered output"
-              disabled={isSubmitting}
-            />
-            <span className="text-gray-700">
-              Show collection name in rendered output
+        {/* Page header */}
+        <header className="mb-6">
+          <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">
+            {id ? "Edit collection" : "New collection"}
+          </h1>
+          <p className="mt-1 text-sm text-gray-600">
+            Rule-based, manual, or recommendation — targeting{" "}
+            <span className="font-medium text-gray-800">
+              {cfg.label.toLowerCase()}
             </span>
-          </div>
-        </div>
+            .
+          </p>
+        </header>
 
-        {/* ------------------------------ CTA ------------------------------ */}
-        <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800">Call to action</h3>
-            <span className="text-xs text-gray-500">
-              Renders next to the section heading
-            </span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block mb-1 text-sm text-gray-700">Style</label>
-              <select
-                name="ctaStyle"
-                className="w-full border rounded p-2 text-sm"
-                value={formData.ctaStyle}
-                onChange={handleChange}
-                disabled={isSubmitting}
-              >
-                <option value="none">None</option>
-                <option value="link">Link</option>
-                <option value="button">Button</option>
-              </select>
-            </div>
-            <div>
-              <label className="block mb-1 text-sm text-gray-700">Text</label>
-              <input
-                type="text"
-                name="ctaText"
-                className="w-full border rounded p-2 text-sm"
-                value={formData.ctaText}
-                onChange={handleChange}
-                disabled={isSubmitting || formData.ctaStyle === "none"}
-                placeholder="e.g. See all"
-              />
-            </div>
-            <div>
-              <label className="block mb-1 text-sm text-gray-700">Link</label>
-              <input
-                type="text"
-                name="ctaLink"
-                className="w-full border rounded p-2 text-sm"
-                value={formData.ctaLink}
-                onChange={handleChange}
-                disabled={isSubmitting || formData.ctaStyle === "none"}
-                placeholder="/products or https://…"
-              />
-            </div>
-          </div>
-          {formData.ctaStyle !== "none" &&
-            (!formData.ctaText.trim() || !formData.ctaLink.trim()) && (
-              <p className="text-xs text-amber-600">
-                Both text and link are required for the CTA to render.
-              </p>
-            )}
-        </div>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* ────────────────────────── BASICS ────────────────────────── */}
+          <section className={sectionCard}>
+            <div className={`${sectionPad} space-y-4`}>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="lg:col-span-2">
+                  <label className={labelCls}>
+                    Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    className={inputCls}
+                    required
+                    disabled={isSubmitting}
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder={`e.g. Featured ${cfg.label}`}
+                  />
+                </div>
 
-        {formData.type === "rule" && (
-          <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-800">Sort (optional)</h3>
-              <span className="text-xs text-gray-500">
-                Leave field empty to keep MongoDB's natural order
-              </span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Status</label>
+                  <select
+                    name="status"
+                    className={selectCls}
+                    value={formData.status}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className={labelCls}>
+                    Target entity <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    name="targetType"
+                    className={selectCls}
+                    value={formData.targetType}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                  >
+                    {TARGET_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {ENTITY_METADATA[t].label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={labelCls}>
+                    Collection type <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    name="type"
+                    className={selectCls}
+                    value={formData.type}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                  >
+                    {cfg.supportsRule && (
+                      <option value="rule">Rule-based</option>
+                    )}
+                    {cfg.supportsManual && (
+                      <option value="manual">Manual selection</option>
+                    )}
+                    {cfg.supportsRecommendation && (
+                      <option value="recommendation">Recommendation</option>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={labelCls}>Sort order</label>
+                  <input
+                    type="number"
+                    name="order"
+                    min={0}
+                    className={inputCls}
+                    value={formData.order}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block mb-1 text-sm text-gray-700">
-                  Field
-                </label>
-                <input
-                  type="text"
-                  name="sort.field"
-                  className="w-full border rounded p-2 text-sm"
-                  value={formData.sort.field}
-                  onChange={handleChange}
-                  placeholder="e.g. trendingRank"
+                <label className={labelCls}>Description</label>
+                <textarea
+                  name="description"
+                  rows={3}
+                  className={textareaCls}
                   disabled={isSubmitting}
+                  value={formData.description}
+                  onChange={handleChange}
+                  placeholder="Optional. Shown only in admin lists."
                 />
               </div>
-              <div>
-                <label className="block mb-1 text-sm text-gray-700">
-                  Direction
-                </label>
-                <select
-                  name="sort.direction"
-                  className="w-full border rounded p-2 text-sm"
-                  value={formData.sort.direction}
-                  onChange={handleChange}
-                  disabled={isSubmitting || !formData.sort.field}
-                >
-                  <option value="asc">Ascending (1, 2, 3…)</option>
-                  <option value="desc">Descending (…, 3, 2, 1)</option>
-                </select>
+
+              <div className="flex items-center gap-3 rounded-lg bg-gray-50 px-4 py-3">
+                <Toggle
+                  checked={formData.showName}
+                  onChange={(v) => setFormData((p) => ({ ...p, showName: v }))}
+                  label="Show collection name in rendered output"
+                  disabled={isSubmitting}
+                />
+                <span className="text-sm text-gray-700">
+                  Show collection name in rendered output
+                </span>
               </div>
             </div>
-          </div>
-        )}
+          </section>
 
-        <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-          <h3 className="font-semibold text-gray-800">Display</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div>
-              <label className="block mb-1 text-sm text-gray-700">Layout</label>
-              <select
-                name="display.layout"
-                className="w-full border rounded p-2 text-sm"
-                value={formData.display.layout}
-                onChange={handleChange}
-                disabled={isSubmitting}
-              >
-                {LAYOUTS.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block mb-1 text-sm text-gray-700">
-                Columns
-              </label>
-              <input
-                type="number"
-                name="display.columns"
-                min={1}
-                max={6}
-                className="w-full border rounded p-2 text-sm"
-                value={formData.display.columns}
-                onChange={handleChange}
-                disabled={
-                  isSubmitting ||
-                  formData.display.layout === "carousel" ||
-                  formData.display.layout === "list"
-                }
-              />
-            </div>
-            <div>
-              <label className="block mb-1 text-sm text-gray-700">
-                Gap (px)
-              </label>
-              <input
-                type="number"
-                name="display.gap"
-                min={0}
-                max={64}
-                className="w-full border rounded p-2 text-sm"
-                value={formData.display.gap}
-                onChange={handleChange}
-                disabled={isSubmitting}
-              />
-            </div>
-            <div>
-              <label className="block mb-1 text-sm text-gray-700">Images</label>
-              <select
-                name="display.showImages"
-                className="w-full border rounded p-2 text-sm"
-                value={formData.display.showImages ? "true" : "false"}
-                onChange={handleChange}
-                disabled={isSubmitting}
-              >
-                <option value="true">Show</option>
-                <option value="false">Hide</option>
-              </select>
-            </div>
-            <div>
-              <label className="block mb-1 text-sm text-gray-700">Shape</label>
-              <select
-                name="display.cardShape"
-                className="w-full border rounded p-2 text-sm"
-                value={formData.display.cardShape}
-                onChange={handleChange}
-                disabled={isSubmitting}
-                title={
-                  formData.targetType === "Category"
-                    ? "Circle is the natural shape for categories."
-                    : "Round or square card corners."
-                }
-              >
-                <option value="default">Default</option>
-                <option value="circle">Circle</option>
-              </select>
-            </div>
-          </div>
-        </div>
+          {/* ──────────────────── RECOMMENDATION (if any) ────────────── */}
+          {formData.type === "recommendation" && cfg.supportsRecommendation && (
+            <section className="rounded-xl border border-blue-200 bg-blue-50/60 shadow-sm">
+              <div className={`${sectionPad} space-y-4`}>
+                <SectionLabel>Recommendation</SectionLabel>
 
-        {formData.type === "rule" ? (
-          <RuleEditor
-            rules={rules}
-            onRulesChange={setRules}
-            targetType={formData.targetType}
-          />
-        ) : formData.type === "manual" ? (
-          <div className="border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h3 className="text-lg font-semibold">Select {cfg.label}</h3>
-              <div className="text-sm">
-                <Counter current={items.length} max={MANUAL_ITEM_LIMIT} />
-              </div>
-            </div>
-
-            <div className="flex gap-2 mb-3">
-              <input
-                type="text"
-                placeholder={`Search ${cfg.label.toLowerCase()}…`}
-                value={itemSearch}
-                onChange={(e) => setItemSearch(e.target.value)}
-                className="flex-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <select
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
-                className="p-2 border rounded"
-              >
-                <option value="asc">Name (A → Z)</option>
-                <option value="desc">Name (Z → A)</option>
-              </select>
-            </div>
-
-            <div className="flex items-center justify-between mb-2 text-sm">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={selectAllVisible}
-                  disabled={
-                    isSubmitting ||
-                    availableItems.length === 0 ||
-                    allVisibleSelected ||
-                    atLimit
-                  }
-                  className="px-3 py-1 border border-blue-500 text-blue-600 rounded hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  title={
-                    atLimit
-                      ? `Selection limit of ${MANUAL_ITEM_LIMIT} reached`
-                      : `Add all visible items (max ${MANUAL_ITEM_LIMIT} total)`
-                  }
-                >
-                  Select all visible
-                </button>
-                <button
-                  type="button"
-                  onClick={clearAllVisible}
-                  disabled={isSubmitting || !someVisibleSelected}
-                  className="px-3 py-1 border border-gray-400 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Clear
-                </button>
-              </div>
-              <span className="text-gray-500">
-                {availableItems.length} visible
-              </span>
-            </div>
-
-            <div className="max-h-72 overflow-y-auto border rounded divide-y divide-gray-100">
-              {availableItems.length === 0 ? (
-                <p className="p-6 text-center text-gray-500">
-                  No {cfg.label.toLowerCase()} found.
-                </p>
-              ) : (
-                availableItems.map((item) => {
-                  const selected = items.includes(item._id);
-                  const disabled = !selected && atLimit;
-                  return (
-                    <div
-                      key={item._id}
-                      role="checkbox"
-                      aria-checked={selected}
-                      aria-disabled={disabled}
-                      tabIndex={disabled ? -1 : 0}
-                      onClick={() => !disabled && toggleItem(item._id)}
-                      onKeyDown={(e) => {
-                        if (disabled) return;
-                        if (e.key === " " || e.key === "Enter") {
-                          e.preventDefault();
-                          toggleItem(item._id);
-                        }
-                      }}
-                      className={`flex items-center gap-3 p-3 cursor-pointer transition-colors focus:outline-none focus:bg-blue-50 ${
-                        disabled
-                          ? "opacity-50 cursor-not-allowed"
-                          : selected
-                            ? "bg-blue-50/60 hover:bg-blue-50"
-                            : "hover:bg-gray-50"
-                      }`}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelCls}>
+                      Kind <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      name="recommendationType"
+                      className={selectCls}
+                      value={formData.recommendationType}
+                      onChange={handleChange}
+                      disabled={isSubmitting}
                     >
-                      <Checkbox checked={selected} disabled={disabled} />
-                      {item.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.imageUrl}
-                          alt=""
-                          className={`h-9 w-9 object-cover border bg-white shrink-0 ${
-                            formData.display.cardShape === "circle"
-                              ? "rounded-full"
-                              : "rounded-md"
-                          }`}
-                        />
-                      ) : (
-                        <div className="h-9 w-9 rounded-md border bg-gray-100 shrink-0" />
-                      )}
-                      <span
-                        className={`text-sm truncate ${
-                          selected
-                            ? "text-gray-900 font-medium"
-                            : "text-gray-700"
-                        }`}
+                      <option value="">Select…</option>
+                      {(cfg.recommendationTypes ?? []).map((k) => (
+                        <option key={k} value={k}>
+                          {k}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Limit</label>
+                    <input
+                      type="number"
+                      name="recommendationLimit"
+                      min={1}
+                      max={100}
+                      className={inputCls}
+                      value={formData.recommendationLimit}
+                      onChange={handleChange}
+                      disabled={isSubmitting}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Number of items to return (1-100).
+                    </p>
+                  </div>
+                </div>
+
+                {recNeedsUser && (
+                  <p className="rounded-md bg-blue-100/70 px-3 py-2 text-xs text-blue-800">
+                    "{formData.recommendationType}" resolves per signed-in
+                    shopper — anonymous visitors see nothing.
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* ─────────────────────── CONTENT ─────────────────────────── */}
+          <section className={sectionCard}>
+            <div className={sectionPad}>
+              <div className="mb-4 flex items-center justify-between">
+                <SectionLabel>
+                  {formData.type === "rule"
+                    ? "Content rules"
+                    : formData.type === "manual"
+                      ? `Content selection`
+                      : "Content"}
+                </SectionLabel>
+                {formData.type === "manual" && (
+                  <Counter current={items.length} max={MANUAL_ITEM_LIMIT} />
+                )}
+              </div>
+
+              {formData.type === "rule" ? (
+                <RuleEditor
+                  rules={rules}
+                  onRulesChange={setRules}
+                  targetType={formData.targetType}
+                />
+              ) : formData.type === "manual" ? (
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      type="text"
+                      placeholder={`Search ${cfg.label.toLowerCase()}…`}
+                      value={itemSearch}
+                      onChange={(e) => setItemSearch(e.target.value)}
+                      className={inputCls}
+                    />
+                    <select
+                      value={sortOrder}
+                      onChange={(e) =>
+                        setSortOrder(e.target.value as "asc" | "desc")
+                      }
+                      className={`${selectCls} sm:w-48`}
+                    >
+                      <option value="asc">Name (A → Z)</option>
+                      <option value="desc">Name (Z → A)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={selectAllVisible}
+                        disabled={
+                          isSubmitting ||
+                          availableItems.length === 0 ||
+                          allVisibleSelected ||
+                          atLimit
+                        }
+                        className="rounded-md border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        {item.name}
-                      </span>
+                        Select all visible
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearAllVisible}
+                        disabled={isSubmitting || !someVisibleSelected}
+                        className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Clear
+                      </button>
                     </div>
-                  );
-                })
+                    <span className="text-xs text-gray-500">
+                      {availableItems.length} visible
+                    </span>
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100">
+                    {availableItems.length === 0 ? (
+                      <p className="p-6 text-center text-sm text-gray-500">
+                        No {cfg.label.toLowerCase()} found.
+                      </p>
+                    ) : (
+                      availableItems.map((item) => {
+                        const selected = items.includes(item._id);
+                        const disabled = !selected && atLimit;
+                        return (
+                          <div
+                            key={item._id}
+                            role="checkbox"
+                            aria-checked={selected}
+                            aria-disabled={disabled}
+                            tabIndex={disabled ? -1 : 0}
+                            onClick={() => !disabled && toggleItem(item._id)}
+                            onKeyDown={(e) => {
+                              if (disabled) return;
+                              if (e.key === " " || e.key === "Enter") {
+                                e.preventDefault();
+                                toggleItem(item._id);
+                              }
+                            }}
+                            className={`flex cursor-pointer items-center gap-3 p-3 transition-colors focus:outline-none focus:bg-blue-50 ${
+                              disabled
+                                ? "cursor-not-allowed opacity-50"
+                                : selected
+                                  ? "bg-blue-50/60 hover:bg-blue-50"
+                                  : "hover:bg-gray-50"
+                            }`}
+                          >
+                            <Checkbox checked={selected} disabled={disabled} />
+                            {item.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={item.imageUrl}
+                                alt=""
+                                className={`h-9 w-9 shrink-0 border bg-white object-cover ${
+                                  formData.display.cardShape === "circle"
+                                    ? "rounded-full"
+                                    : "rounded-md"
+                                }`}
+                              />
+                            ) : (
+                              <div className="h-9 w-9 shrink-0 rounded-md border bg-gray-100" />
+                            )}
+                            <span
+                              className={`truncate text-sm ${
+                                selected
+                                  ? "font-medium text-gray-900"
+                                  : "text-gray-700"
+                              }`}
+                            >
+                              {item.name}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-6 text-center text-sm text-gray-500">
+                  Recommendation collections resolve at runtime. Preview items
+                  are not shown.
+                </p>
               )}
             </div>
-          </div>
-        ) : null}
+          </section>
 
-        <div>
-          <button
-            type="button"
-            onClick={() => setShowJson(!showJson)}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            {showJson ? "Hide" : "Show"} JSON preview
-          </button>
-          {showJson && (
-            <pre className="mt-2 bg-gray-900 text-gray-100 p-4 rounded text-xs overflow-auto max-h-60">
-              {JSON.stringify(
-                {
-                  ...formData,
-                  ...(formData.type === "rule" && { rules }),
-                  ...(formData.type === "manual" && { items }),
-                },
-                null,
-                2,
+          {/* ────────────────────── PRESENTATION ─────────────────────── */}
+          <section className={sectionCard}>
+            <div className={`${sectionPad} space-y-5`}>
+              <SectionLabel>Presentation</SectionLabel>
+
+              {/* Display */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+                <div>
+                  <label className={labelCls}>Layout</label>
+                  <select
+                    name="display.layout"
+                    className={selectCls}
+                    value={formData.display.layout}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                  >
+                    {LAYOUTS.map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Columns</label>
+                  <input
+                    type="number"
+                    name="display.columns"
+                    min={1}
+                    max={6}
+                    className={inputCls}
+                    value={formData.display.columns}
+                    onChange={handleChange}
+                    disabled={
+                      isSubmitting ||
+                      formData.display.layout === "carousel" ||
+                      formData.display.layout === "list"
+                    }
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Gap (px)</label>
+                  <input
+                    type="number"
+                    name="display.gap"
+                    min={0}
+                    max={64}
+                    className={inputCls}
+                    value={formData.display.gap}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Images</label>
+                  <select
+                    name="display.showImages"
+                    className={selectCls}
+                    value={formData.display.showImages ? "true" : "false"}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                  >
+                    <option value="true">Show</option>
+                    <option value="false">Hide</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Card shape</label>
+                  <select
+                    name="display.cardShape"
+                    className={selectCls}
+                    value={formData.display.cardShape}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                    title={
+                      formData.targetType === "Category"
+                        ? "Circle is the natural shape for categories."
+                        : "Round or square card corners."
+                    }
+                  >
+                    <option value="default">Default</option>
+                    <option value="circle">Circle</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Sort — only for rule collections */}
+              {formData.type === "rule" && (
+                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Sort
+                  </p>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={labelCls}>Field</label>
+                      <input
+                        type="text"
+                        name="sort.field"
+                        className={inputCls}
+                        value={formData.sort.field}
+                        onChange={handleChange}
+                        placeholder="e.g. trendingRank"
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Direction</label>
+                      <select
+                        name="sort.direction"
+                        className={selectCls}
+                        value={formData.sort.direction}
+                        onChange={handleChange}
+                        disabled={isSubmitting || !formData.sort.field}
+                      >
+                        <option value="asc">Ascending (1, 2, 3…)</option>
+                        <option value="desc">Descending (…, 3, 2, 1)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
               )}
-            </pre>
-          )}
-        </div>
 
-        <div className="flex justify-end gap-3 pt-2">
+              {/* CTA */}
+              <div className="rounded-lg border border-gray-200 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Call to action
+                  </p>
+                  <span className="text-xs text-gray-400">
+                    Rendered next to the section heading
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className={labelCls}>Style</label>
+                    <select
+                      name="ctaStyle"
+                      className={selectCls}
+                      value={formData.ctaStyle}
+                      onChange={handleChange}
+                      disabled={isSubmitting}
+                    >
+                      <option value="none">None</option>
+                      <option value="link">Link</option>
+                      <option value="button">Button</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Text</label>
+                    <input
+                      type="text"
+                      name="ctaText"
+                      className={inputCls}
+                      value={formData.ctaText}
+                      onChange={handleChange}
+                      disabled={isSubmitting || formData.ctaStyle === "none"}
+                      placeholder="e.g. See all"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Link</label>
+                    <input
+                      type="text"
+                      name="ctaLink"
+                      className={inputCls}
+                      value={formData.ctaLink}
+                      onChange={handleChange}
+                      disabled={isSubmitting || formData.ctaStyle === "none"}
+                      placeholder="/products or https://…"
+                    />
+                  </div>
+                </div>
+                {formData.ctaStyle !== "none" &&
+                  (!formData.ctaText.trim() || !formData.ctaLink.trim()) && (
+                    <p className="mt-2 text-xs text-amber-600">
+                      Both text and link are required for the CTA to render.
+                    </p>
+                  )}
+              </div>
+
+              {/* Cover image */}
+              <div>
+                <label className={labelCls}>Cover image</label>
+                <FilesUploader
+                  files={files}
+                  loading={fileLoading}
+                  addFiles={addFiles}
+                  onRemove={handleRemoveImage}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ──────────────────── ADVANCED / JSON ─────────────────────── */}
+          <section className={sectionCard}>
+            <button
+              type="button"
+              onClick={() => setShowJson(!showJson)}
+              className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-gray-50 sm:px-6"
+            >
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Advanced
+              </span>
+              <span className="flex items-center gap-1 text-xs text-gray-500">
+                {showJson ? "Hide" : "Show"} JSON preview
+                <Chevron open={showJson} />
+              </span>
+            </button>
+            {showJson && (
+              <div className="border-t border-gray-100 bg-gray-900 px-5 py-4 sm:px-6">
+                <pre className="overflow-auto max-h-60 text-xs text-gray-100">
+                  {JSON.stringify(
+                    {
+                      ...formData,
+                      ...(formData.type === "rule" && { rules }),
+                      ...(formData.type === "manual" && { items }),
+                    },
+                    null,
+                    2,
+                  )}
+                </pre>
+              </div>
+            )}
+          </section>
+        </form>
+      </div>
+
+      {/* Sticky action bar */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+        <div className="mx-auto flex max-w-5xl items-center justify-end gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => router.push(LIST_PATH)}
-            className="px-5 py-2.5 border rounded-lg"
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
             disabled={isSubmitting}
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="bg-primary text-white px-5 py-2.5 rounded-lg disabled:opacity-50 flex items-center"
+            form=""
+            onClick={handleSubmit}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSubmitting}
           >
             {isSubmitting ? (
-              <Spinner />
+              <>
+                <Spinner />
+                <span className="ml-1">Saving…</span>
+              </>
             ) : id ? (
-              "Update Collection"
+              "Update collection"
             ) : (
-              "Create Collection"
+              "Create collection"
             )}
           </button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
@@ -990,6 +1046,33 @@ export default function CollectionForm({ id }: { id?: string }) {
 /* -------------------------------------------------------------------------- */
 /*                          Small reusable widgets                            */
 /* -------------------------------------------------------------------------- */
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+      {children}
+    </p>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`transition-transform ${open ? "rotate-180" : ""}`}
+      aria-hidden
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
 
 function Checkbox({
   checked,
@@ -1001,17 +1084,17 @@ function Checkbox({
   return (
     <span
       aria-hidden
-      className={`w-5 h-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-colors ${
+      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
         disabled
           ? "border-gray-200 bg-gray-50"
           : checked
             ? "border-blue-600 bg-blue-600"
-            : "border-gray-300 bg-white group-hover:border-blue-400"
+            : "border-gray-300 bg-white"
       }`}
     >
       {checked && (
         <svg
-          className="w-3.5 h-3.5 text-white"
+          className="h-3.5 w-3.5 text-white"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -1047,7 +1130,7 @@ function Toggle({
       disabled={disabled}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
         checked ? "bg-blue-600" : "bg-gray-300"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+      } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
     >
       <span
         className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
@@ -1067,7 +1150,7 @@ function Counter({ current, max }: { current: number; max: number }) {
         ? "text-amber-600 font-medium"
         : "text-gray-600";
   return (
-    <span className={`inline-flex items-center gap-1.5 ${tone}`}>
+    <span className={`inline-flex items-center gap-1.5 text-sm ${tone}`}>
       {current} / {max} selected
       {current >= max && <span aria-hidden>· limit reached</span>}
     </span>
