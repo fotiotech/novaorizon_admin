@@ -1,10 +1,9 @@
-"use server";
-
 import Notification from "@/models/Notification";
 import User from "@/models/User";
 import { connection } from "@/utils/connection";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
+import { requireAdminApi } from "@/lib/api-auth";
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID as string,
@@ -16,15 +15,20 @@ const pusher = new Pusher({
 
 export async function GET() {
   try {
+    const auth = await requireAdminApi();
+    if (auth.response) return auth.response;
+
     await connection();
     const PAGE_SIZE = 10;
-    const notifications = await Notification.find()
+    const notifications = await Notification.find({ userId: auth.user.id })
       .sort({ timestamp: -1 })
       .limit(PAGE_SIZE)
       .lean();
 
     const userIds = notifications.map((n) => n.userId);
-    const users = await User.find({ _id: { $in: userIds } }).lean();
+    const users = await User.find({ _id: { $in: userIds } })
+      .select("name email image role")
+      .lean();
     const userMap = Object.fromEntries(
       users.map((u: any) => [u._id.toString(), u]),
     );
@@ -49,8 +53,17 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdminApi();
+    if (auth.response) return auth.response;
+
     await connection();
     const { userId, message, type = "system" } = await request.json();
+    if (typeof message !== "string" || message.trim().length === 0) {
+      return NextResponse.json({ error: "Message is required" }, { status: 400 });
+    }
+    if (typeof userId !== "string" || !userId) {
+      return NextResponse.json({ error: "userId is required" }, { status: 400 });
+    }
 
     const notification = new Notification({ userId, message, type });
     await notification.save();

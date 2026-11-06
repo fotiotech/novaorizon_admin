@@ -1,11 +1,15 @@
 // admin/app/api/analytics/history/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getVisitorHistory, type Period } from "@/lib/events/visitorQueries";
+import { requireAdminApi } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAdminApi();
+  if (auth.response) return auth.response;
+
   const period = (req.nextUrl.searchParams.get("period") ?? "day") as Period;
   const range = Number(req.nextUrl.searchParams.get("range") ?? 30);
 

@@ -1,30 +1,14 @@
-import React, { useState } from "react";
-import PayPalButton from "@/app/(root)/profile/_component/PaypalButton";
+import React from "react";
 
-const PaypalPayment = () => {
-  const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
-
-  const handleSuccess = (details: any) => {
-    setPaymentStatus(
-      "Payment successful! Transaction completed by " +
-        details.payer.name.given_name,
-    );
-  };
-
-  const handleError = (error: any) => {
-    setPaymentStatus("Payment failed! " + error);
-  };
-  return (
-    <div className="my-3">
-      <PayPalButton
-        amount="0.01"
-        currency="USD"
-        onSuccess={handleSuccess}
-        onError={handleError}
-      />
-      {paymentStatus && <p>{paymentStatus}</p>}
-    </div>
-  );
-};
+/**
+ * PayPal is disabled until a server-side create/capture flow with amount
+ * verification is wired in. The previous component charged a hard-coded
+ * $0.01 on the client and never persisted a payment.
+ */
+const PaypalPayment = () => (
+  <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+    PayPal is temporarily unavailable.
+  </div>
+);
 
 export default PaypalPayment;

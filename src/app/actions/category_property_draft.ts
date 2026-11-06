@@ -1,5 +1,6 @@
 // app/actions/category_property_draft.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import CategoryPropertyDraft from "@/models/CategoryPropertyDraft";
 import { connection } from "@/utils/connection";
@@ -14,6 +15,7 @@ export async function getCategoryPropertyDraft(
   key: string,
   userId?: string | null,
 ): Promise<CategoryPropertyDraftPayload | null> {
+  await requireAdmin();
   if (!key) return null;
   await connection();
 
@@ -37,6 +39,7 @@ export async function saveCategoryPropertyDraft(input: {
   version: number;
   data: any;
 }): Promise<{ savedAt: number }> {
+  await requireAdmin();
   const { key, userId, version, data } = input;
   if (!key) throw new Error("Draft key is required");
 
@@ -56,6 +59,7 @@ export async function deleteCategoryPropertyDraft(
   key: string,
   userId?: string | null,
 ): Promise<{ success: true }> {
+  await requireAdmin();
   if (!key) return { success: true };
   await connection();
   await CategoryPropertyDraft.deleteOne({ key, userId: userId ?? null });

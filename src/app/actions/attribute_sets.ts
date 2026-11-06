@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import mongoose from "mongoose";
 import AttributeSet from "@/models/AttributeSet";
 import CategoryProperty from "@/models/CategoryProperty";
@@ -78,6 +80,7 @@ export async function createAttributeSet(data: {
   description?: string;
   sortOrder?: number;
 }) {
+  await requireAdmin();
   await connection();
 
   const title = data.title?.trim() ?? "";
@@ -115,6 +118,7 @@ export async function createAttributeSet(data: {
 //  getAttributeSets
 // ========================================================================
 export async function getAttributeSets() {
+  await requireAdmin();
   await connection();
   try {
     const attributeSets = await AttributeSet.find()
@@ -131,6 +135,7 @@ export async function getAttributeSets() {
 //  getAttributeSet
 // ========================================================================
 export async function getAttributeSet(id: string) {
+  await requireAdmin();
   await connection();
   try {
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -157,6 +162,7 @@ export async function updateAttributeSet(
     sortOrder?: number;
   },
 ) {
+  await requireAdmin();
   await connection();
 
   const title = data.title?.trim() ?? "";
@@ -211,6 +217,7 @@ export async function updateAttributeSet(
 //  then deletes the set itself.
 // ========================================================================
 export async function deleteAttributeSet(id: string) {
+  await requireAdmin();
   await connection();
   try {
     if (!mongoose.Types.ObjectId.isValid(id)) {

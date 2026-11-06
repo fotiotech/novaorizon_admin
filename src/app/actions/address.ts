@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Types } from "mongoose";
@@ -38,6 +40,7 @@ const addressSchema = z.object({
  * Create a new billing address for the authenticated user.
  */
 export async function createAddress(formData: FormData) {
+  await requireAdmin();
   const userId = await getAuthenticatedUser();
   await connection();
 
@@ -73,6 +76,7 @@ export async function createAddress(formData: FormData) {
  * Get all addresses for the authenticated user.
  */
 export async function getUserAddresses() {
+  await requireAdmin();
   const userId = await getAuthenticatedUser();
   await connection();
 
@@ -88,6 +92,7 @@ export async function getUserAddresses() {
  * automatically unsets other defaults for this user.
  */
 export async function updateAddress(addressId: string, formData: FormData) {
+  await requireAdmin();
   const userId = await getAuthenticatedUser();
   await connection();
 
@@ -126,6 +131,7 @@ export async function updateAddress(addressId: string, formData: FormData) {
  * Prevents deletion if the address is linked to an existing credit card.
  */
 export async function deleteAddress(addressId: string) {
+  await requireAdmin();
   const userId = await getAuthenticatedUser();
   await connection();
 
@@ -162,6 +168,7 @@ export async function deleteAddress(addressId: string) {
  * Set a specific address as the default (convenience wrapper).
  */
 export async function setDefaultAddress(addressId: string) {
+  await requireAdmin();
   const userId = await getAuthenticatedUser();
   await connection();
 

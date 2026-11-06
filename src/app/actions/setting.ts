@@ -4,6 +4,7 @@
 import { connection } from "@/utils/connection";
 import Setting, { ISetting } from "@/models/Setting";
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/authz";
 
 const DEFAULT_KEY = "general";
 
@@ -115,6 +116,7 @@ function serialize(doc: any): GeneralSettings {
 /*  Read                                                               */
 /* ------------------------------------------------------------------ */
 export async function getGeneralSettings(): Promise<GeneralSettings> {
+  await requireAdmin();
   try {
     await connection();
     const doc = await Setting.findOne({ key: DEFAULT_KEY }).lean();
@@ -131,6 +133,7 @@ export async function getGeneralSettings(): Promise<GeneralSettings> {
 export async function updateGeneralSettings(
   input: Partial<GeneralSettings>,
 ): Promise<{ success: boolean; data?: GeneralSettings; error?: string }> {
+  await requireAdmin();
   try {
     await connection();
 

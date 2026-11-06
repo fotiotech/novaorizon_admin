@@ -41,12 +41,13 @@ const UserSchema = new Schema(
     password: {
       type: String,
       required: true,
+      select: false,
     },
     emailVerified: { type: Date, default: null },
     isVerified: { type: Boolean, default: false },
-    verificationToken: { type: String, default: null },
+    verificationToken: { type: String, default: null, select: false },
     tokenExpiry: { type: Date, default: null },
-    resetPasswordToken: { type: String, default: null },
+    resetPasswordToken: { type: String, default: null, select: false },
     resetPasswordExpiry: { type: Date, default: null },
 
     role: {
@@ -55,6 +56,7 @@ const UserSchema = new Schema(
       default: "customer",
       index: true,
     },
+    permissions: { type: [String], default: [] },
 
     // NextAuth / adapter collections
     accounts: { type: [Schema.Types.Mixed], default: [] },
@@ -168,7 +170,16 @@ const UserSchema = new Schema(
         return ret;
       },
     },
-    toObject: { virtuals: true },
+    toObject: {
+      virtuals: true,
+      transform(_doc, ret: Record<string, any>) {
+        delete ret.password;
+        delete ret.verificationToken;
+        delete ret.resetPasswordToken;
+        delete ret.__v;
+        return ret;
+      },
+    },
   },
 );
 

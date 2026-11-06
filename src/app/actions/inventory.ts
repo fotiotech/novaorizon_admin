@@ -1,4 +1,6 @@
 "use server";
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 
 import Product from "@/models/Product";
@@ -17,6 +19,7 @@ function getLowStockThreshold(product: any) {
 }
 
 export async function getInventory() {
+  await requireAdmin();
   await connection();
   try {
     const inventoryData = await Product.find(
@@ -59,6 +62,7 @@ export async function updateInventory(
     lowStockThreshold?: number;
   },
 ) {
+  await requireAdmin();
   await connection();
   try {
     const product = await Product.findById(productId);
@@ -98,6 +102,7 @@ export async function updateInventory(
 }
 
 export async function getInventoryStats() {
+  await requireAdmin();
   await connection();
   try {
     const stats = await Product.aggregate([

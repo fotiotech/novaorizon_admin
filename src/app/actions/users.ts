@@ -2,13 +2,14 @@
 import { connection } from "@/utils/connection";
 import User from "@/models/User";
 import { revalidatePath } from "next/cache";
-import { auth } from "../auth";
+import { requireAdmin, requireUser } from "@/lib/authz";
 
 export async function updateUserRoleAndPermissions(
   userId: string,
   role: string,
   permissions: string[],
 ) {
+  const actor = await requireAdmin();
   await connection();
 
   try {
@@ -27,6 +28,14 @@ export async function updateUserRoleAndPermissions(
           ),
         )
       : [];
+
+    // Never allow an admin to remove their own admin role by accident.
+    if (actor.id === userId && role !== "admin") {
+      return {
+        success: false,
+        message: "You cannot remove your own admin role.",
+      };
+    }
 
     const user = await User.findByIdAndUpdate(
       userId,
@@ -83,6 +92,7 @@ type LeanProfileDoc = {
 /* -------------------------------------------------------------------------- */
 
 export async function findUsers(_id?: string) {
+  await requireAdmin();
   await connection();
   if (_id) {
     const data = await User.findOne({ _id });
@@ -104,9 +114,8 @@ export async function findUsers(_id?: string) {
 }
 
 export async function getUserProfile() {
-  const session = await auth();
-  const userId = (session?.user as any)?.id;
-  if (!userId) return null;
+  const session = await requireUser();
+  const userId = session.id;
 
   await connection();
 
@@ -160,9 +169,8 @@ export async function updateUserProfile(payload: {
     newsletter?: boolean;
   };
 }) {
-  const session = await auth();
-  const userId = (session?.user as any)?.id;
-  if (!userId) return { error: "Not authenticated" };
+  const session = await requireUser();
+  const userId = session.id;
 
   await connection();
 

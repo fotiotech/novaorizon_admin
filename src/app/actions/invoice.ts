@@ -1,4 +1,6 @@
 "use server";
+
+import { requireAdmin } from "@/lib/authz";
 import mongoose from "mongoose";
 import { connection } from "@/utils/connection";
 import Order from "@/models/Order";
@@ -23,6 +25,7 @@ function generateInvoiceNumber(): string {
 export async function createInvoice(
   orderNumber: string,
 ): Promise<{ success: boolean; invoice?: any; error?: string }> {
+  await requireAdmin();
   await connection();
 
   try {
@@ -85,6 +88,7 @@ export async function createInvoice(
 export async function getInvoiceByOrderNumber(
   orderNumber: string,
 ): Promise<{ success: boolean; invoice?: any; error?: string }> {
+  await requireAdmin();
   await connection();
 
   try {
@@ -112,6 +116,7 @@ export async function getInvoicesByUserId(
   total?: number;
   error?: string;
 }> {
+  await requireAdmin();
   await connection();
 
   const { page = 1, limit = 10 } = options || {};
@@ -154,6 +159,7 @@ export async function findInvoices(options?: {
   total?: number;
   error?: string;
 }> {
+  await requireAdmin();
   await connection();
 
   const {
@@ -204,6 +210,7 @@ export async function updateInvoiceStatus(
   invoiceNumber: string,
   newStatus: "issued" | "paid" | "cancelled",
 ): Promise<{ success: boolean; invoice?: any; error?: string }> {
+  await requireAdmin();
   await connection();
 
   try {
@@ -231,6 +238,7 @@ export async function updateInvoiceStatus(
 export async function downloadInvoice(
   invoiceNumber: string,
 ): Promise<{ success: boolean; data?: any; error?: string }> {
+  await requireAdmin();
   await connection();
 
   try {

@@ -4,19 +4,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Pusher from "pusher-js";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "";
-
 export function useUnreadOrderNotifications() {
   const [count, setCount] = useState(0);
   const pusherRef = useRef<Pusher | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!API) return;
     try {
-      const res = await fetch(
-        `${API}/api/notifications/unread-count?type=order`, // ← plural
-        { cache: "no-store", credentials: "include" },
-      );
+      const res = await fetch("/api/notifications/unread-count?type=order", {
+        cache: "no-store",
+        credentials: "include",
+      });
 
       if (!res.ok) {
         console.error("[unread-orders] non-OK:", res.status);
@@ -33,9 +30,8 @@ export function useUnreadOrderNotifications() {
   }, []);
 
   const markAllRead = useCallback(async (): Promise<boolean> => {
-    if (!API) return false;
     try {
-      const res = await fetch(`${API}/api/notifications/mark-all-read`, {
+      const res = await fetch("/api/notifications/mark-all-read", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

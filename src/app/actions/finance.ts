@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 // @/app/actions/finance.ts
 import Order from "@/models/Order";
 import Transaction from "@/models/Transaction";
@@ -18,6 +20,7 @@ import {
 export async function getFinancialStats(
   timeRange = "month",
 ): Promise<ApiResponse<FinancialStats>> {
+  await requireAdmin();
   await connection();
 
   try {
@@ -106,6 +109,7 @@ export async function getTransactions(
   filters: TransactionFilters = {},
   timeRange = "month",
 ): Promise<ApiResponse<TransactionType[]>> {
+  await requireAdmin();
   await connection();
 
   try {
@@ -150,6 +154,7 @@ export async function updateTransactionStatus(
   transactionId: string,
   status: string,
 ): Promise<ApiResponse<TransactionType>> {
+  await requireAdmin();
   await connection();
 
   try {
@@ -182,6 +187,7 @@ export async function updateTransactionStatus(
 export async function getChartData(
   timeRange = "month",
 ): Promise<ApiResponse<ChartData>> {
+  await requireAdmin();
   await connection();
 
   try {
@@ -285,6 +291,7 @@ export async function exportFinancialData(
   timeRange: string,
   filters: TransactionFilters = {},
 ): Promise<ApiResponse<any> | string> {
+  await requireAdmin();
   await connection();
 
   try {

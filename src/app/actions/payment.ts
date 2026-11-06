@@ -1,47 +1,25 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Types } from "mongoose";
-import { auth } from "@/app/auth";
 
 import { connection } from "@/utils/connection";
 import Address from "@/models/Address";
 import { PaymentMethod } from "@/models/PaymentMethod";
-
-// Helper to detect card type from number
-function getCardType(cardNumber: string): string {
-  const cleaned = cardNumber.replace(/\D/g, "");
-  if (/^4/.test(cleaned)) return "Visa";
-  if (/^5[1-5]/.test(cleaned)) return "Mastercard";
-  if (/^3[47]/.test(cleaned)) return "Amex";
-  if (/^6(?:011|5)/.test(cleaned)) return "Discover";
-  return "Card";
-}
-
-// Helper to get last 4 digits
-function getLast4(cardNumber: string): string {
-  return cardNumber.replace(/\D/g, "").slice(-4);
-}
+import { requireUser } from "@/lib/authz";
 
 // ------------------ Authentication Helper ------------------
 async function getAuthenticatedUser() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
+  const user = await requireUser();
+  return user.id;
 }
 
 // ------------------ Validation Schemas (Zod) ------------------
+// Card entry is disabled until a tokenizing/hosted form is integrated.
 const paymentMethodSchema = z.discriminatedUnion("methodType", [
-  z.object({
-    methodType: z.literal("CreditCard"),
-    details: z.object({
-      cardNumber: z.string().min(1, "Card number is required"),
-      expiryDate: z.string().min(1, "Expiry date is required"), // format "MM/YY"
-      cardholderName: z.string().min(1, "Cardholder name is required"),
-      billingAddressId: z.string().min(1, "Billing address is required"),
-    }),
-  }),
   z.object({
     methodType: z.literal("MobileMoney"),
     details: z.object({
@@ -62,46 +40,21 @@ const paymentMethodSchema = z.discriminatedUnion("methodType", [
 export async function createPaymentMethod(
   data: z.infer<typeof paymentMethodSchema>,
 ) {
+  await requireAdmin();
   const userId = await getAuthenticatedUser();
   await connection();
 
-  const validated = paymentMethodSchema.parse(data);
-
-  if (validated.methodType === "CreditCard") {
-    const { billingAddressId, cardNumber, expiryDate, cardholderName } =
-      validated.details;
-
-    // Verify address belongs to user
-    const address = await Address.findOne({
-      _id: billingAddressId,
-      userId: new Types.ObjectId(userId),
-    });
-    if (!address) throw new Error("Invalid billing address");
-
-    // Compute derived fields
-    const last4 = getLast4(cardNumber);
-    const cardType = getCardType(cardNumber);
-    const [expiryMonth, expiryYear] = expiryDate.split("/"); // "12/25" -> ["12", "25"]
-
-    const card = new PaymentMethod({
-      userId: new Types.ObjectId(userId),
-      methodType: "CreditCard",
-      details: {
-        cardNumber,
-        last4,
-        cardType,
-        expiryMonth,
-        expiryYear,
-        expiryDate,
-        cardholderName,
-        billingAddressId: new Types.ObjectId(billingAddressId),
-      },
-    });
-
-    await card.save();
-    revalidatePath("/profile/payment-methods");
-    return { success: true, paymentMethod: JSON.parse(JSON.stringify(card)) };
+  if (
+    data &&
+    typeof data === "object" &&
+    (data as { methodType?: string }).methodType === "CreditCard"
+  ) {
+    throw new Error(
+      "Card payments are not enabled yet. Please use Mobile Money or PayPal.",
+    );
   }
+
+  const validated = paymentMethodSchema.parse(data);
 
   // Mobile Money
   if (validated.methodType === "MobileMoney") {
@@ -132,6 +85,7 @@ export async function createPaymentMethod(
 
 // ------------------ GET Payment Methods ------------------
 export async function getUserPaymentMethods() {
+  await requireAdmin();
   const userId = await getAuthenticatedUser();
   await connection();
 
@@ -151,6 +105,7 @@ export async function getUserPaymentMethods() {
 
 // ------------------ DELETE Payment Method ------------------
 export async function deletePaymentMethod(paymentMethodId: string) {
+  await requireAdmin();
   const userId = await getAuthenticatedUser();
   await connection();
 
@@ -173,6 +128,7 @@ export async function updateCreditCard(
     billingAddressId?: string;
   },
 ) {
+  await requireAdmin();
   const userId = await getAuthenticatedUser();
   await connection();
 

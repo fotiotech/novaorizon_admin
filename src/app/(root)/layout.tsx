@@ -1,11 +1,19 @@
 import AdminLayout from "@/components/AdminLayout";
 import { Toaster } from "react-hot-toast";
+import { redirect } from "next/navigation";
+import { getAuthUser } from "@/lib/authz";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Defense in depth: the proxy also redirects non-admins, but every
+  // admin page is gated again at the server boundary.
+  const user = await getAuthUser();
+  if (!user) redirect("/auth/login");
+  if (user.role !== "admin") redirect("/auth/unauthorized");
+
   return (
     <AdminLayout>
       {children}

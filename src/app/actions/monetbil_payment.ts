@@ -7,10 +7,12 @@ import { NextResponse } from "next/server";
 import User from "@/models/User";
 import Order from "@/models/Order"; // Adjust the path based on your project structure
 import Shipping from "@/models/Shipping";
+import { requireAdmin } from "@/lib/authz";
 
 export async function generatePaymentLink(
   paymentData: MonetbilPaymentRequest,
 ): Promise<string | null> {
+  await requireAdmin();
   try {
     const response = await axios.post(
       `https://api.monetbil.com/widget/v2.1/${paymentData.serviceKey}`,
@@ -46,7 +48,7 @@ export async function generatePaymentLink(
 }
 
 // Payment Notification Handler
-export async function getPaymentNotification(request: Request) {
+async function getPaymentNotification(request: Request) {
   try {
     // Extract query parameters from the URL
     const { searchParams } = new URL(request.url);
@@ -118,6 +120,7 @@ export async function updateOrderStatus(
   transaction_id: string,
   status: string,
 ) {
+  await requireAdmin();
   if (!payment_ref || !transaction_id || !status) return null;
   try {
     await connection();

@@ -12,6 +12,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { v4 as uuidv4 } from "uuid";
+import { requireAdmin } from "@/lib/authz";
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION!,
@@ -33,6 +34,12 @@ function extractKeyFromUrl(url: string): string {
   return urlObj.pathname.slice(1);
 }
 
+function assertUploadKey(key: string): void {
+  if (!key.startsWith("uploads/") || key.includes("..")) {
+    throw new Error("Invalid object key");
+  }
+}
+
 // -------------------- CREATE (presigned PUT URL) --------------------
 export async function getPresignedUploadUrl(
   fileName: string,
@@ -41,6 +48,8 @@ export async function getPresignedUploadUrl(
   existingKey?: string,
   subfolder?: string, // NEW
 ) {
+  await requireAdmin();
+  if (existingKey) assertUploadKey(existingKey);
   let fileKey: string;
   if (existingKey) {
     fileKey = existingKey;
@@ -63,6 +72,7 @@ export async function getPresignedUploadUrl(
 
 // -------------------- READ (list objects) --------------------
 export async function listS3Objects(instanceId?: string, subfolder?: string) {
+  await requireAdmin();
   let prefix = "uploads/";
   if (instanceId) {
     prefix += `${instanceId}/`;
@@ -88,6 +98,8 @@ export async function listS3Objects(instanceId?: string, subfolder?: string) {
 
 // -------------------- READ (presigned GET URL) --------------------
 export async function getPresignedGetUrl(fileKey: string, expiresIn = 60) {
+  await requireAdmin();
+  assertUploadKey(fileKey);
   const command = new GetObjectCommand({
     Bucket: BUCKET,
     Key: fileKey,
@@ -100,6 +112,8 @@ export async function getPresignedUpdateUrl(
   existingKey: string,
   contentType: string,
 ) {
+  await requireAdmin();
+  assertUploadKey(existingKey);
   const command = new PutObjectCommand({
     Bucket: BUCKET,
     Key: existingKey,
@@ -111,9 +125,11 @@ export async function getPresignedUpdateUrl(
 
 // -------------------- DELETE (single) --------------------
 export async function deleteS3Object(fileUrlOrKey: string) {
+  await requireAdmin();
   const key = fileUrlOrKey.startsWith("http")
     ? extractKeyFromUrl(fileUrlOrKey)
     : fileUrlOrKey;
+  assertUploadKey(key);
   const command = new DeleteObjectCommand({
     Bucket: BUCKET,
     Key: key,
@@ -124,9 +140,11 @@ export async function deleteS3Object(fileUrlOrKey: string) {
 
 // -------------------- DELETE (batch) --------------------
 export async function deleteMultipleS3Objects(fileUrlsOrKeys: string[]) {
+  await requireAdmin();
   const keys = fileUrlsOrKeys.map((item) =>
     item.startsWith("http") ? extractKeyFromUrl(item) : item,
   );
+  keys.forEach(assertUploadKey);
   const command = new DeleteObjectsCommand({
     Bucket: BUCKET,
     Delete: {

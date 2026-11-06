@@ -240,7 +240,8 @@ export type Customer = {
   billingMethod?: {
     methodType: string; // e.g., "Credit Card", "PayPal", etc.
     details?: {
-      cardNumber?: string;
+      token?: string;
+      last4?: string;
       expiryDate?: string;
       cardholderName?: string;
     };

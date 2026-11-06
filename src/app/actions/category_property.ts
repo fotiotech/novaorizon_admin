@@ -1,6 +1,7 @@
 // app/actions/category_property.ts
 
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import mongoose from "mongoose";
 import { connection } from "@/utils/connection";
@@ -294,6 +295,7 @@ export async function collectAncestorProperties(categoryId: string): Promise<{
   mappings: any[];
   propertyIds: string[];
 }> {
+  await requireAdmin();
   await connection();
   const propertyIds: string[] = [];
   const visited = new Set<string>();
@@ -368,6 +370,7 @@ export async function ensureCategoryPropertyFromMappings(
   categoryId: string,
   mappings: any[],
 ): Promise<string | null> {
+  await requireAdmin();
   const category = await Category.findById(categoryId).select(
     "name inheritedProperty",
   );
@@ -428,6 +431,7 @@ export async function ensureCategoryPropertyFromMappings(
 export async function applyInheritedPropertyToCategory(
   categoryId: string,
 ): Promise<{ propertyId: string | null; warning?: string }> {
+  await requireAdmin();
   await connection();
 
   const category: any = await Category.findById(categoryId)
@@ -481,6 +485,7 @@ export async function applyInheritedPropertyToCategory(
 export async function rerunInheritanceForCategoryAndDescendants(
   categoryId: string,
 ): Promise<void> {
+  await requireAdmin();
   await connection();
 
   if (!mongoose.Types.ObjectId.isValid(categoryId)) return;
@@ -696,6 +701,7 @@ async function pruneSubtree(
 export async function pruneDescendantSnapshots(
   categoryId: string,
 ): Promise<number> {
+  await requireAdmin();
   await connection();
   if (!mongoose.Types.ObjectId.isValid(categoryId)) return 0;
 
@@ -715,6 +721,7 @@ export async function pruneDescendantSnapshots(
 export async function pruneDescendantsAfterPropertyUpdate(
   propertyId: string,
 ): Promise<{ categoriesProcessed: number; snapshotsUpdated: number }> {
+  await requireAdmin();
   await connection();
 
   if (!mongoose.Types.ObjectId.isValid(propertyId)) {
@@ -796,6 +803,7 @@ export async function buildAttributeSetsFromMappings(
     }[];
   }[],
 ): Promise<AttributeSetResult[]> {
+  await requireAdmin();
   if (!Array.isArray(mappings) || mappings.length === 0) return [];
 
   // ---- 1. Collect every ID up front so we can batch-fetch. ---------
@@ -994,6 +1002,7 @@ export async function getCategoryProperty(
   id?: string,
   options?: { includeReadOnly?: boolean },
 ): Promise<any> {
+  await requireAdmin();
   await connection();
   if (id) {
     const property = await CategoryProperty.findById(id).lean();
@@ -1022,6 +1031,7 @@ export async function createCategoryPropertyWithMappings(data: {
     }[];
   }[];
 }) {
+  await requireAdmin();
   await connection();
   const { code, name, description, mappings } = data;
 
@@ -1078,6 +1088,7 @@ export async function updateCategoryPropertyWithMappings(
     }[];
   },
 ) {
+  await requireAdmin();
   await connection();
   const property = await CategoryProperty.findById(id);
   if (!property) return { error: "Category property not found" };
@@ -1128,6 +1139,7 @@ export async function updateCategoryPropertyWithMappings(
 }
 
 export async function deleteCategoryProperty(id: string) {
+  await requireAdmin();
   try {
     await connection();
     const property = await CategoryProperty.findById(id);

@@ -4,8 +4,12 @@ import { FormState, SignupFormSchema } from "./definitions";
 import User from "@/models/User";
 import { connection } from "@/utils/connection";
 import crypto from "crypto";
+import { requireAdmin } from "@/lib/authz";
 
 export async function signup(state: FormState, formData: FormData) {
+  // Staff accounts are created by an existing admin, never by the public.
+  await requireAdmin();
+
   const validatedFields = SignupFormSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),

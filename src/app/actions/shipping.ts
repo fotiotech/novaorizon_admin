@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 import Shipping from "@/models/Shipping";
 import Order from "@/models/Order";
@@ -18,24 +20,28 @@ const statusTransitions: Record<string, string[]> = {
 
 // Create a new Shipping entry
 export async function createShipping(data: any) {
+  await requireAdmin();
   await connection();
   return await Shipping.create(data);
 }
 
 // Get a single Shipping entry by ID
 export async function getShippingById(id: string) {
+  await requireAdmin();
   await connection();
   return await Shipping.findById(id).exec();
 }
 
 // Get all Shipping entries
 export async function getAllShippings() {
+  await requireAdmin();
   await connection();
   return await Shipping.find({}).exec();
 }
 
 // Update a Shipping entry by ID
 export async function updateShipping(id: string, data: any) {
+  await requireAdmin();
   await connection();
 
   const shipping = await Shipping.findById(id).exec();
@@ -98,6 +104,7 @@ export async function updateShipping(id: string, data: any) {
 
 // Delete a Shipping entry by ID
 export async function deleteShipping(id: string) {
+  await requireAdmin();
   await connection();
   return await Shipping.findByIdAndDelete(id).exec();
 }

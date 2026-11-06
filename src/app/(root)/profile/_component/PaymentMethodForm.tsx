@@ -17,7 +17,7 @@ export default function PaymentMethodForm({
   onSuccess,
   onCancel,
 }: PaymentMethodFormProps) {
-  const [methodType, setMethodType] = useState<MethodType>("CreditCard");
+  const [methodType, setMethodType] = useState<MethodType>("MobileMoney");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +84,6 @@ export default function PaymentMethodForm({
           onChange={(e) => setMethodType(e.target.value as MethodType)}
           className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
         >
-          <option value="CreditCard">Credit / Debit Card</option>
           <option value="MobileMoney">Mobile Money (Cameroon)</option>
           <option value="PayPal">PayPal</option>
         </select>

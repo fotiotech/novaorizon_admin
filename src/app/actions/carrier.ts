@@ -1,4 +1,6 @@
 "use server";
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 
 import Carrier from "@/models/Carrier";
@@ -7,6 +9,7 @@ import { revalidatePath } from "next/cache";
 
 // CREATE
 export const createCarrier = async (data: any) => {
+  await requireAdmin();
   try {
     // Ensure `costPerKm` is a number
     data.costWeight = parseFloat(data.costWeight);
@@ -35,6 +38,7 @@ export const createCarrier = async (data: any) => {
 
 // READ
 export async function getCarriers() {
+  await requireAdmin();
   await connection();
   const carriers = await Carrier.find();
   return carriers.map((data) => ({
@@ -49,6 +53,7 @@ export async function getCarriers() {
 
 // carrier.ts
 export async function getCarriersById(_id: string) {
+  await requireAdmin();
   await connection();
   const data = await Carrier.findOne({ _id });
 
@@ -82,6 +87,7 @@ export async function updateCarrier(
     status: string;
   }>,
 ) {
+  await requireAdmin();
   await connection();
 
   try {
@@ -129,6 +135,7 @@ export async function updateCarrier(
 
 // DELETE
 export async function deleteCarrier(id: string) {
+  await requireAdmin();
   await connection();
 
   await Product.updateMany({ carrier: id }, { $unset: { carrier: "" } });
@@ -142,6 +149,7 @@ export async function calculateShippingPrice(
   weight?: number,
   distance?: number,
 ) {
+  await requireAdmin();
   try {
     // Connect to MongoDB (if not already connected)
     await connection();

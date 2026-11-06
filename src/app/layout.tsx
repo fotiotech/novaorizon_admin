@@ -57,11 +57,6 @@ export default async function Layout({
             `,
           }}
         />
-        {/* Monetbil Widget */}
-        <Script
-          src="https://www.monetbil.com/widget/v2/monetbil.min.js"
-          strategy="afterInteractive"
-        />
       </body>
     </html>
   );

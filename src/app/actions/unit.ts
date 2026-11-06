@@ -1,5 +1,6 @@
 // lib/actions/unitActions.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import { connection } from "@/utils/connection";
 import { revalidatePath } from "next/cache";
@@ -7,6 +8,7 @@ import Unit from "@/models/Unit";
 import "@/models/UnitFamily";
 
 export async function createUnit(formData: FormData) {
+  await requireAdmin();
   try {
     await connection();
 
@@ -29,6 +31,7 @@ export async function createUnit(formData: FormData) {
 }
 
 export async function updateUnit(id: string, formData: FormData) {
+  await requireAdmin();
   try {
     await connection();
 
@@ -49,6 +52,7 @@ export async function updateUnit(id: string, formData: FormData) {
 }
 
 export async function deleteUnit(id: string) {
+  await requireAdmin();
   try {
     await connection();
     await Unit.findByIdAndDelete(id);
@@ -60,8 +64,8 @@ export async function deleteUnit(id: string) {
   }
 }
 
-
 export async function getUnits(unitFamilyId?: string) {
+  await requireAdmin();
   try {
     await connection();
     const query = unitFamilyId ? { unitFamily: unitFamilyId } : {};

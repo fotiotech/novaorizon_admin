@@ -1,5 +1,6 @@
 // app/actions/menu.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import { connection } from "@/utils/connection";
 import {
@@ -81,6 +82,7 @@ const REF_FETCHERS: Record<string, { find: Function }> = {
 export async function getMenuRefOptions(): Promise<
   ActionResult<MenuRefOptions>
 > {
+  await requireAdmin();
   try {
     await connection();
 
@@ -196,6 +198,7 @@ async function enrichItemsWithSlugs(
 export async function getMenusByLocation(
   location: string,
 ): Promise<ActionResult<any[]>> {
+  await requireAdmin();
   try {
     await connection();
     const menus = await Menu.find({ location, visible: { $ne: false } })
@@ -216,6 +219,7 @@ export async function getMenusByLocation(
 }
 
 export async function getMenuById(id: string): Promise<ActionResult<any>> {
+  await requireAdmin();
   try {
     await connection();
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -230,6 +234,7 @@ export async function getMenuById(id: string): Promise<ActionResult<any>> {
 }
 
 export async function getAllMenus(): Promise<ActionResult<any[]>> {
+  await requireAdmin();
   try {
     await connection();
     const menus = await Menu.find().sort({ createdAt: -1 }).lean();
@@ -488,6 +493,7 @@ async function safeDeleteS3(key: string, label = "menu asset") {
 /* -------------------------------------------------------------------------- */
 
 export async function createMenu(menuData: any): Promise<ActionResult<any>> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -517,6 +523,7 @@ export async function updateMenu(
   id: string,
   menuData: any,
 ): Promise<ActionResult<any>> {
+  await requireAdmin();
   try {
     await connection();
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -589,6 +596,7 @@ export async function updateMenu(
 }
 
 export async function deleteMenu(id: string): Promise<ActionResult<null>> {
+  await requireAdmin();
   try {
     await connection();
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -621,6 +629,7 @@ export async function deleteMenu(id: string): Promise<ActionResult<null>> {
 export async function deleteMenuBackgroundImage(
   menuId: string,
 ): Promise<ActionResult<null>> {
+  await requireAdmin();
   try {
     await connection();
     if (!mongoose.Types.ObjectId.isValid(menuId)) {
@@ -644,6 +653,7 @@ export async function deleteMenuBackgroundImage(
 export async function deleteMenuImage(
   menuId: string,
 ): Promise<ActionResult<null>> {
+  await requireAdmin();
   try {
     await connection();
     if (!mongoose.Types.ObjectId.isValid(menuId)) {

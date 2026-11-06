@@ -6,6 +6,7 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start --webpack",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit",
     "migrate:camelcase": "tsx scripts/migrate-camelcase.ts"
   },
   "dependencies": {

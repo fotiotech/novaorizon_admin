@@ -1,5 +1,6 @@
 // app/actions/trustBadge.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import { connection } from "@/utils/connection";
 import TrustBadge, { ITrustBadgeDoc } from "@/models/TrustBadge";
@@ -80,6 +81,7 @@ const revalidate = () => {
 export async function listTrustBadges(opts?: {
   includeInactive?: boolean;
 }): Promise<TrustBadgeDTO[]> {
+  await requireAdmin();
   try {
     await connection();
     const filter = opts?.includeInactive ? {} : { isActive: true };
@@ -116,12 +118,14 @@ export async function listTrustBadges(opts?: {
 }
 
 export async function listActiveTrustBadges(): Promise<TrustBadgeDTO[]> {
+  await requireAdmin();
   return listTrustBadges({ includeInactive: false });
 }
 
 export async function getTrustBadge(
   id: string,
 ): Promise<ActionResult<TrustBadgeDTO>> {
+  await requireAdmin();
   try {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return { success: false, error: "Invalid badge id" };
@@ -142,6 +146,7 @@ export async function getTrustBadge(
 export async function createTrustBadge(
   input: TrustBadgeInput,
 ): Promise<ActionResult<TrustBadgeDTO>> {
+  await requireAdmin();
   try {
     const invalid = validate(input);
     if (invalid) return { success: false, error: invalid };
@@ -184,6 +189,7 @@ export async function updateTrustBadge(
   id: string,
   input: TrustBadgeInput,
 ): Promise<ActionResult<{ badge: TrustBadgeDTO; syncedHeroes: number }>> {
+  await requireAdmin();
   try {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return { success: false, error: "Invalid badge id" };
@@ -251,6 +257,7 @@ export async function deleteTrustBadge(
   id: string,
   opts?: { force?: boolean },
 ): Promise<ActionResult<{ affectedHeroes: number }>> {
+  await requireAdmin();
   try {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return { success: false, error: "Invalid badge id" };
@@ -302,6 +309,7 @@ export async function deleteTrustBadge(
 export async function reorderTrustBadges(
   orderedIds: string[],
 ): Promise<ActionResult> {
+  await requireAdmin();
   try {
     if (!Array.isArray(orderedIds)) {
       return { success: false, error: "orderedIds must be an array" };
@@ -334,6 +342,7 @@ export async function reorderTrustBadges(
 export async function resyncTrustBadgeInHeroes(
   id: string,
 ): Promise<ActionResult<{ syncedHeroes: number }>> {
+  await requireAdmin();
   try {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return { success: false, error: "Invalid badge id" };

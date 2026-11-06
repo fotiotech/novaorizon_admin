@@ -1,5 +1,7 @@
 // app/actions/brand.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
+
 import { connection } from "@/utils/connection";
 
 import Brand from "@/models/Brand";
@@ -8,6 +10,7 @@ import slugify from "slugify";
 
 // Fetch all brands
 export async function getBrands(brandId?: string) {
+  await requireAdmin();
   try {
     await connection();
 
@@ -32,6 +35,7 @@ export async function getBrands(brandId?: string) {
 }
 
 export async function findProductsByBrand(brandId: string) {
+  await requireAdmin();
   await connection();
 
   if (brandId) {
@@ -65,6 +69,7 @@ export async function createBrand(data: {
   logoUrl?: string;
   status?: "active" | "inactive";
 }) {
+  await requireAdmin();
   await connection();
 
   // Exclude `_id` from the data to let MongoDB generate it automatically
@@ -87,12 +92,14 @@ export async function updateBrand(
     status: "active" | "inactive";
   }>,
 ) {
+  await requireAdmin();
   await connection();
   await Brand.findByIdAndUpdate(id, data, { new: true });
 }
 
 // Delete a brand
 export async function deleteBrand(id: string) {
+  await requireAdmin();
   await connection();
 
   await Product.updateMany({ brand: id }, { $unset: { brand: "" } });

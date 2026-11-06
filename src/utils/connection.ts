@@ -1,38 +1,26 @@
 import mongoose from "mongoose";
 
-let isConnected = false; // track the connection
+let connectionPromise: Promise<typeof mongoose> | null = null;
 
-export async function connection() {
-  if (isConnected) {
-    console.log("[MongoDB] Already connected");
-    return;
+/**
+ * Connect once per process. Never log the URI — it contains credentials.
+ */
+export async function connection(): Promise<void> {
+  if (mongoose.connection.readyState === 1) return;
+
+  if (!connectionPromise) {
+    const uri = process.env.MONGODB_URI;
+    if (!uri) throw new Error("MONGODB_URI is not configured");
+
+    connectionPromise = mongoose
+      .connect(uri, { dbName: process.env.MONGODB_DB_NAME ?? "fotiodb" })
+      .then((instance) => instance)
+      .catch((error) => {
+        connectionPromise = null;
+        console.error("[MongoDB] connection failed");
+        throw error;
+      });
   }
 
-  try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error("MONGODB_URI is not defined in environment variables");
-    }
-
-    console.log(
-      "[MongoDB] Attempting to connect with URI:",
-      process.env.MONGODB_URI?.substring(0, 20) + "..." // Only show start of URI for security
-    );
-
-    await mongoose.connect(process.env.MONGODB_URI as string, {
-      dbName: "fotiodb",
-    });
-    isConnected = true;
-    console.log("[MongoDB] Successfully connected to database");
-
-    // Test the connection by trying to list collections
-    const collections = await mongoose.connection.db
-      ?.listCollections()
-      .toArray();
-    
-  } catch (error) {
-    console.error("[MongoDB] Connection error:", error);
-    // Reset the connection flag since the connection failed
-    isConnected = false;
-    throw error; // Re-throw to handle it in the calling code
-  }
+  await connectionPromise;
 }

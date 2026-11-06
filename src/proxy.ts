@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 
 const PUBLIC_PATHS = [
   "/auth/login",
-  "/auth/sign_up",
+  // Staff accounts are invite-only: /auth/sign_up is deliberately not
+  // public and the signup action requires an existing admin.
   "/auth/error",
   "/auth/unauthorized",
 ];

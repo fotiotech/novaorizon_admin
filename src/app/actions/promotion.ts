@@ -1,5 +1,6 @@
 // app/actions/promotion.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import Promotion from "@/models/Promotion";
 import PromotionUsage from "@/models/PromotionUsage";
@@ -51,6 +52,7 @@ function normalizeScope(scope: any) {
 // Options for the composer
 // ─────────────────────────────────────────────────────────────────────
 export async function getPromotionOptions() {
+  await requireAdmin();
   await ensureConnection();
 
   const [customerGroups, promotions, products, categories, brands] =
@@ -98,6 +100,7 @@ export async function getPromotionOptions() {
 // CRUD
 // ─────────────────────────────────────────────────────────────────────
 export async function createPromotion(data: any) {
+  await requireAdmin();
   await ensureConnection();
 
   if (!data.calculationType) {
@@ -155,6 +158,7 @@ export async function createPromotion(data: any) {
 }
 
 export async function updatePromotion(id: string, data: any) {
+  await requireAdmin();
   await ensureConnection();
 
   if (!isValidObjectId(id)) {
@@ -234,6 +238,7 @@ export async function updatePromotion(id: string, data: any) {
 }
 
 export async function deletePromotion(id: string) {
+  await requireAdmin();
   await ensureConnection();
 
   if (!isValidObjectId(id)) {
@@ -257,6 +262,7 @@ export async function deletePromotion(id: string) {
 }
 
 export async function getPromotion(id: string) {
+  await requireAdmin();
   await ensureConnection();
 
   if (!isValidObjectId(id)) {
@@ -279,6 +285,7 @@ export async function listPromotions(
   filter: any = {},
   options: { limit?: number; skip?: number; sort?: any } = {},
 ) {
+  await requireAdmin();
   await ensureConnection();
 
   const { limit = 20, skip = 0, sort = { createdAt: -1 } } = options;
@@ -303,6 +310,7 @@ export async function listPromotions(
 /** Every product-scoped promotion, active or not — the admin may need
  *  to see and unselect one that was deactivated after being attached. */
 export async function getSelectablePromotions() {
+  await requireAdmin();
   await ensureConnection();
 
   const promotions = await Promotion.find({
@@ -327,6 +335,7 @@ export async function getSelectablePromotions() {
 export async function getProductPromotions(
   productId: string,
 ): Promise<string[]> {
+  await requireAdmin();
   await ensureConnection();
   if (!isValidObjectId(productId)) return [];
 
@@ -346,6 +355,7 @@ export async function syncProductPromotions(
   productId: string,
   promotionIds: string[],
 ): Promise<{ success: true }> {
+  await requireAdmin();
   await ensureConnection();
   if (!isValidObjectId(productId)) {
     throw new Error("Invalid product ID");

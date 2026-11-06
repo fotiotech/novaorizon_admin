@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 // app/actions/contact.ts (append)
 import { revalidatePath } from "next/cache";
 import mongoose from "mongoose";
@@ -18,6 +20,7 @@ export async function getContactMessages(options?: {
   currentPage: number;
   counts: Record<string, number>;
 }> {
+  await requireAdmin();
   await connection();
 
   const { status, search, page = 1, limit = 10 } = options || {};
@@ -75,6 +78,7 @@ export async function getContactMessages(options?: {
 }
 
 export async function getContactMessageById(id: string) {
+  await requireAdmin();
   await connection();
   if (!mongoose.Types.ObjectId.isValid(id)) return null;
   const msg = await ContactMessage.findById(id).lean();
@@ -91,6 +95,7 @@ export async function updateContactStatus(
   id: string,
   status: "new" | "read" | "replied" | "archived",
 ): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
   await connection();
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return { success: false, error: "Invalid message id." };
@@ -106,6 +111,7 @@ export async function updateContactStatus(
 }
 
 export async function getNewContactCount(): Promise<number> {
+  await requireAdmin();
   await connection();
   try {
     return await ContactMessage.countDocuments({ status: "new" });
@@ -118,6 +124,7 @@ export async function getNewContactCount(): Promise<number> {
 export async function deleteContactMessage(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
   await connection();
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return { success: false, error: "Invalid message id." };

@@ -1,5 +1,6 @@
 // app/actions/meta-tag-actions.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import { revalidatePath } from "next/cache";
 import MetaTagUrlModel from "@/models/MetaTagUrl";
@@ -16,8 +17,9 @@ import { connection } from "@/utils/connection";
 export async function getMetaTags(
   page: number = 1,
   limit: number = 10,
-  search: string = ""
+  search: string = "",
 ): Promise<MetaTagListResponse> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -62,6 +64,7 @@ export async function getMetaTags(
 
 // Get meta tag by ID
 export async function getMetaTagById(id: string): Promise<MetaTagResponse> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -91,6 +94,7 @@ export async function getMetaTagById(id: string): Promise<MetaTagResponse> {
 
 // Get meta tag by URL
 export async function getMetaTagByUrl(url: string): Promise<MetaTagResponse> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -143,8 +147,9 @@ export async function getMetaTagByUrl(url: string): Promise<MetaTagResponse> {
 
 // Create new meta tag
 export async function createMetaTag(
-  formData: MetaTagFormData
+  formData: MetaTagFormData,
 ): Promise<MetaTagResponse> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -200,8 +205,9 @@ export async function createMetaTag(
 // Update meta tag
 export async function updateMetaTag(
   id: string,
-  formData: MetaTagFormData
+  formData: MetaTagFormData,
 ): Promise<MetaTagResponse> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -255,7 +261,7 @@ export async function updateMetaTag(
     const updatedMetaTag = await MetaTagUrlModel.findByIdAndUpdate(
       id,
       updateData,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).lean();
 
     if (!updatedMetaTag) {
@@ -279,6 +285,7 @@ export async function updateMetaTag(
 
 // Delete meta tag
 export async function deleteMetaTag(id: string): Promise<MetaTagResponse> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -309,8 +316,9 @@ export async function deleteMetaTag(id: string): Promise<MetaTagResponse> {
 
 // Toggle meta tag active status
 export async function toggleMetaTagStatus(
-  id: string
+  id: string,
 ): Promise<MetaTagResponse> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -347,8 +355,9 @@ export async function toggleMetaTagStatus(
 // Bulk update meta tags
 export async function bulkUpdateMetaTags(
   ids: string[],
-  updates: Partial<MetaTagFormData>
+  updates: Partial<MetaTagFormData>,
 ): Promise<BulkUpdateResponse> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -377,7 +386,7 @@ export async function bulkUpdateMetaTags(
 
     const result = await MetaTagUrlModel.updateMany(
       { _id: { $in: ids } },
-      updateData
+      updateData,
     );
 
     revalidatePath("/admin/meta-tags");
@@ -397,6 +406,7 @@ export async function bulkUpdateMetaTags(
 
 // Get meta tags for sitemap (active URLs only)
 export async function getMetaTagsForSitemap(): Promise<MetaTagListResponse> {
+  await requireAdmin();
   try {
     await connection();
 

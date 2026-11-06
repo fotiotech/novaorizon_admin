@@ -1,4 +1,6 @@
 "use server";
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 
 import Offer from "@/models/Offer";
@@ -17,12 +19,14 @@ export async function createOffer(data: {
   };
   isActive: boolean;
 }) {
+  await requireAdmin();
   await connection();
   await Offer.create(data);
   revalidatePath("/admin/discounts_coupons");
 }
 
 export async function readOffers(id?: string) {
+  await requireAdmin();
   await connection();
   if (id) {
     const offer = await Offer.findById(id);
@@ -35,6 +39,7 @@ export async function readOffers(id?: string) {
 }
 
 export async function updateOffer(id: string, updates: Partial<typeof Offer>) {
+  await requireAdmin();
   await connection();
   await Offer.findByIdAndUpdate(id, updates, {
     new: true,
@@ -43,6 +48,7 @@ export async function updateOffer(id: string, updates: Partial<typeof Offer>) {
 }
 
 export async function deleteOffer(id: string) {
+  await requireAdmin();
   await connection();
   await Offer.findByIdAndDelete(id);
   return { success: true };

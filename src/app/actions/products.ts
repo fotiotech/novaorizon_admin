@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 import { revalidatePath, revalidateTag } from "next/cache";
 import slugify from "slugify";
@@ -687,6 +689,7 @@ async function prepareProductPayload(formData: any): Promise<PrepareResult> {
 // ==================================================================
 
 export async function findProductById(id: string): Promise<any> {
+  await requireAdmin();
   try {
     await connection();
     const product = await Product.findById(id).lean();
@@ -705,6 +708,7 @@ export async function findProductById(id: string): Promise<any> {
 export async function findProducts(
   params: ProductListParams = {},
 ): Promise<ProductListResult> {
+  await requireAdmin();
   await connection();
 
   const page = Math.max(1, Number(params.page) || 1);
@@ -847,6 +851,7 @@ export async function listProducts(
   limit: number;
   skip: number;
 }> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -909,6 +914,7 @@ export async function listProducts(
 export async function getProductFilterCategories(): Promise<
   { id: string; name: string }[]
 > {
+  await requireAdmin();
   try {
     await connection();
     const rows = await Product.aggregate([
@@ -939,6 +945,7 @@ export async function getProductFilterCategories(): Promise<
 // ==================================================================
 
 export async function createProduct(formData: any): Promise<ProductResponse> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -1055,6 +1062,7 @@ export async function updateProduct(
   id: string,
   formData: any,
 ): Promise<ProductResponse> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -1113,6 +1121,7 @@ export async function updateProductCategory(
   productId: string,
   categoryId: string | null,
 ): Promise<ProductResponse> {
+  await requireAdmin();
   try {
     await connection();
     if (!productId) return { success: false, error: "Product ID required" };
@@ -1161,6 +1170,7 @@ export async function updateProductStatus(
   productId: string,
   status: "active" | "inactive" | "draft",
 ): Promise<ProductResponse> {
+  await requireAdmin();
   try {
     await connection();
     if (!productId) return { success: false, error: "Product ID required" };
@@ -1212,6 +1222,7 @@ export async function recreateProduct(
   id: string,
   draftKey: string = NEW_PRODUCT_DRAFT_KEY,
 ): Promise<ProductResponse> {
+  await requireAdmin();
   try {
     await connection();
     if (!id) return { success: false, error: "Product ID required" };
@@ -1301,6 +1312,7 @@ export async function recreateProduct(
 // DELETE
 // ==================================================================
 export async function deleteProduct(id: string): Promise<ProductResponse> {
+  await requireAdmin();
   try {
     await connection();
     if (!id) return { success: false, error: "Product ID required" };
@@ -1340,6 +1352,7 @@ export async function deleteProductImages(
   productId?: string,
   imageUrl?: string,
 ): Promise<ProductResponse> {
+  await requireAdmin();
   try {
     await connection();
     if (!productId && !imageUrl) {
@@ -1403,6 +1416,7 @@ export async function updateProductQuantity(
   productId: string,
   quantity: number,
 ): Promise<ProductResponse> {
+  await requireAdmin();
   try {
     await connection();
     if (!productId) return { success: false, error: "Product ID required" };
@@ -1450,6 +1464,7 @@ export async function updateProductStockLevel(
   quantity: number,
   lowStockThreshold: number,
 ): Promise<ProductResponse> {
+  await requireAdmin();
   try {
     await connection();
     if (!productId) return { success: false, error: "Product ID required" };
@@ -1516,6 +1531,7 @@ export async function updateProductStockLevel(
 export async function getCategoryProductCounts(): Promise<
   Record<string, number>
 > {
+  await requireAdmin();
   try {
     await connection();
     const rows = await Product.aggregate([

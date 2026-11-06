@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { v4 as uuidv4 } from "uuid";
 
@@ -12,6 +14,7 @@ const s3Client = new S3Client({
 });
 
 export async function uploadToS3(formData: FormData) {
+  await requireAdmin();
   const file = formData.get("file") as File;
   if (!file) {
     throw new Error("No file provided");

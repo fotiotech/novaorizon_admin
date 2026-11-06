@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -50,6 +52,7 @@ function formDataToObject(formData: FormData): Record<string, any> {
 // 3. Create Page
 // ----------------------------------------------
 export async function createPage(formData: FormData) {
+  await requireAdmin();
   await connection();
 
   const raw = formDataToObject(formData);
@@ -95,6 +98,7 @@ export async function createPage(formData: FormData) {
 // 4. Update Page
 // ----------------------------------------------
 export async function updatePage(id: string, formData: FormData) {
+  await requireAdmin();
   await connection();
 
   const raw = formDataToObject(formData);
@@ -142,6 +146,7 @@ export async function updatePage(id: string, formData: FormData) {
 // 5. Delete Page
 // ----------------------------------------------
 export async function deletePage(id: string): Promise<{ error?: string }> {
+  await requireAdmin();
   await connection();
   try {
     await PageModel.findByIdAndDelete(id);
@@ -157,6 +162,7 @@ export async function deletePage(id: string): Promise<{ error?: string }> {
 // 6. Fetch helpers (server components)
 // ----------------------------------------------
 export async function getPages(): Promise<Omit<IPage, keyof Document>[]> {
+  await requireAdmin();
   await connection();
   const pages = await PageModel.find({}).sort({ createdAt: -1 }).lean();
   return pages.map((p) => ({
@@ -169,6 +175,7 @@ export async function getPages(): Promise<Omit<IPage, keyof Document>[]> {
 }
 
 export async function getPageById(id: string): Promise<any | null> {
+  await requireAdmin();
   await connection();
   const page = await PageModel.findById(id).lean();
   if (!page) return null;
@@ -182,6 +189,7 @@ export async function getPageById(id: string): Promise<any | null> {
 }
 
 export async function getPageBySlug(slug: string): Promise<any | null> {
+  await requireAdmin();
   await connection();
   const page = await PageModel.findOne({ slug, status: "published" }).lean();
   if (!page) return null;

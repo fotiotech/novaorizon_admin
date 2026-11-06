@@ -1,5 +1,6 @@
 // app/actions/payment-settings.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import { connection } from "@/utils/connection";
 import PaymentSettings, {
@@ -154,6 +155,7 @@ function serialize(doc: any): PaymentSettingsData {
 /*  Read                                                               */
 /* ------------------------------------------------------------------ */
 export async function getPaymentSettings(): Promise<PaymentSettingsData> {
+  await requireAdmin();
   try {
     await connection();
     const doc = await PaymentSettings.findOne({ key: KEY }).lean();
@@ -187,6 +189,7 @@ function providerPatch(input: any): MobileMoneyProviderConfig {
 export async function updatePaymentSettings(
   input: Partial<PaymentSettingsData>,
 ): Promise<{ success: boolean; data?: PaymentSettingsData; error?: string }> {
+  await requireAdmin();
   try {
     await connection();
 

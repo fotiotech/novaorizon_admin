@@ -1,5 +1,7 @@
 // app/actions/analytic.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
+
 import { connection } from "@/utils/connection";
 import Order from "@/models/Order";
 import User from "@/models/User";
@@ -13,6 +15,7 @@ import "@/models/Category";
 import { ProductAnalytics } from "@/constant/types/product";
 
 export async function getUserAnalytics(): Promise<UserAnalytics> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -131,6 +134,7 @@ export async function getUserAnalytics(): Promise<UserAnalytics> {
 }
 
 export async function getOrderAnalytics() {
+  await requireAdmin();
   try {
     await connection();
 
@@ -182,6 +186,7 @@ export async function getOrderAnalytics() {
 }
 
 export async function getProductAnalytics(): Promise<ProductAnalytics> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -283,6 +288,7 @@ export async function getProductAnalytics(): Promise<ProductAnalytics> {
 }
 
 export async function getFacebookAdsAnalytics() {
+  await requireAdmin();
   try {
     await connection();
     const FacebookAdsSettings = require("@/models/FacebookAdsSettings").default;
@@ -384,6 +390,7 @@ export async function getFacebookAdsAnalytics() {
 }
 
 export async function getOverviewData() {
+  await requireAdmin();
   try {
     await connection();
 

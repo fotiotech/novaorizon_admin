@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 import Product from "@/models/Product";
 import {
@@ -22,6 +24,7 @@ export type { FacebookAdsConnectionInput } from "@/lib/facebookAds";
 export async function validateFacebookAdsConnection(
   input: Partial<FacebookAdsConnectionInput>,
 ) {
+  await requireAdmin();
   const parsed = FacebookAdsConnectionSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -46,12 +49,14 @@ export async function validateFacebookAdsConnection(
  * Never expose this to the browser directly — use loadFacebookAdsSettings().
  */
 export async function getFacebookAdsSettings() {
+  await requireAdmin();
   const settings = await getSecret();
   return settings ?? null;
 }
 
 /** UI-facing: returns the settings with sensitive values masked. */
 export async function loadFacebookAdsSettings() {
+  await requireAdmin();
   const settings = await getSecret();
   if (!settings) return null;
   return maskSecrets(settings);
@@ -60,6 +65,7 @@ export async function loadFacebookAdsSettings() {
 export async function saveFacebookAdsSettings(
   input: Partial<FacebookAdsConnectionInput>,
 ) {
+  await requireAdmin();
   const existing = (await getSecret()) ?? {};
 
   // Strip masked sentinels + empty sensitive values so we don't
@@ -106,6 +112,7 @@ export async function saveFacebookAdsSettings(
 /* ============================ sync (Meta) =========================== */
 
 export async function syncFacebookCampaigns() {
+  await requireAdmin();
   const settings = await getFacebookAdsSettings();
 
   if (!settings) {
@@ -141,6 +148,7 @@ export async function syncFacebookCampaigns() {
 }
 
 export async function syncFacebookAdSets() {
+  await requireAdmin();
   const settings = await getFacebookAdsSettings();
 
   if (!settings) {
@@ -176,6 +184,7 @@ export async function syncFacebookAdSets() {
 }
 
 export async function syncFacebookCatalogProducts(limit = 25) {
+  await requireAdmin();
   const settings = await getFacebookAdsSettings();
 
   if (!settings) {
@@ -295,6 +304,7 @@ export async function createFacebookCampaign(input: {
   objective?: FacebookAdsConnectionInput["defaultObjective"];
   status?: "ACTIVE" | "PAUSED";
 }) {
+  await requireAdmin();
   const settings = await getFacebookAdsSettings();
 
   if (!settings) {
@@ -393,6 +403,7 @@ export async function createFacebookAdSet(input: {
     };
   };
 }) {
+  await requireAdmin();
   const settings = await getFacebookAdsSettings();
 
   if (!settings) {
@@ -483,6 +494,7 @@ export async function createFacebookAdCreative(input: {
   imageUrl?: string;
   callToAction?: "LEARN_MORE" | "SHOP_NOW" | "VISIT_SITE" | "ORDER_NOW";
 }) {
+  await requireAdmin();
   const settings = await getFacebookAdsSettings();
 
   if (!settings) {
@@ -578,6 +590,7 @@ export async function createFacebookAd(input: {
   creativeId: string;
   status?: "ACTIVE" | "PAUSED";
 }) {
+  await requireAdmin();
   const settings = await getFacebookAdsSettings();
 
   if (!settings) {
@@ -641,6 +654,7 @@ export async function createFacebookAd(input: {
 /* ============================== insights ============================ */
 
 export async function getCampaignInsights(campaignId: string) {
+  await requireAdmin();
   const settings = await getFacebookAdsSettings();
 
   if (!settings) {
@@ -712,6 +726,7 @@ export async function getCampaignInsights(campaignId: string) {
 }
 
 export async function getAdSetInsights(adSetId: string) {
+  await requireAdmin();
   const settings = await getFacebookAdsSettings();
 
   if (!settings) {

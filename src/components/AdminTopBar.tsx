@@ -63,10 +63,7 @@ const AdminTopBar = ({
   // ── Notifications ─────────────────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/notify`,
-        { timeout: 10000 },
-      );
+      const res = await axios.get("/api/notify", { timeout: 10000 });
       if (!Array.isArray(res.data)) {
         setNotifications([]);
         return;

@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 import Draft from "@/models/Draft";
 import { auth } from "../auth";
@@ -28,6 +30,7 @@ function toSerializable<T>(value: T): T {
 }
 
 export async function saveProductDraft(productId: string, data: any) {
+  await requireAdmin();
   try {
     await connection();
     const session = await auth();
@@ -56,6 +59,7 @@ export async function saveProductDraft(productId: string, data: any) {
 export async function getProductDraft(
   productId: string,
 ): Promise<{ data: any; updatedAt: Date } | null> {
+  await requireAdmin();
   try {
     await connection();
     const session = await auth();
@@ -75,6 +79,7 @@ export async function getProductDraft(
 }
 
 export async function deleteProductDraft(productId: string) {
+  await requireAdmin();
   try {
     await connection();
     const session = await auth();

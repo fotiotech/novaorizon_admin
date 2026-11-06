@@ -1,9 +1,12 @@
 "use server";
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 
 import { Review } from "@/models/Review";
 
 export async function findReviews(productId?: string) {
+  await requireAdmin();
   await connection();
 
   try {
@@ -27,6 +30,7 @@ export async function createReview(data: {
   reviewText?: string;
   mediaUrl?: string[];
 }) {
+  await requireAdmin();
   await connection();
 
   try {

@@ -8,6 +8,7 @@ import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import type { Provider } from "next-auth/providers";
 import User from "@/models/User";
+import { consumeRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const providers: Provider[] = [
   Credentials({
@@ -17,13 +18,26 @@ const providers: Provider[] = [
     },
     async authorize(credentials) {
       try {
-        await connection();
-
         if (!credentials?.email || !credentials?.password) {
           throw new Error("Missing credentials");
         }
 
-        const user = await User.findOne({ email: credentials.email });
+        const email = String(credentials.email).trim().toLowerCase();
+        const ip = await getClientIp();
+        const limit = await consumeRateLimit(
+          `admin-login:${ip}:${email}`,
+          5,
+          15 * 60 * 1000,
+        );
+        if (!limit.ok) {
+          throw new Error("Too many sign-in attempts. Try again later.");
+        }
+
+        await connection();
+
+        const user = await User.findOne({ email }).select(
+          "+password",
+        );
 
         if (!user || !(await user.matchPassword(credentials.password))) {
           throw new Error("Invalid credentials");

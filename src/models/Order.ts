@@ -30,6 +30,9 @@ export interface OrderDocument extends Document {
   returnReason?: string;
   returnRequestedAt?: Date;
   refundedAt?: Date;
+  paidAt?: Date;
+  inventoryDeducted?: boolean;
+  inventoryStatus?: "pending" | "processing" | "deducted" | "shortage";
   paymentMethod: string;
   transaction_id?: string;
   billingAddressId?: mongoose.Types.ObjectId;
@@ -110,6 +113,13 @@ const OrderSchema = new mongoose.Schema<OrderDocument>(
       default: "pending",
     },
     paymentMethod: { type: String, required: true },
+    paidAt: { type: Date },
+    inventoryDeducted: { type: Boolean, default: false },
+    inventoryStatus: {
+      type: String,
+      enum: ["pending", "processing", "deducted", "shortage"],
+      default: "pending",
+    },
     billingAddressId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Address",

@@ -1,5 +1,6 @@
 // app/actions/seo.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import { connection } from "@/utils/connection";
 import SeoSetting from "@/models/SeoSetting";
@@ -21,6 +22,7 @@ function asString(value: unknown, fallback = ""): string {
 }
 
 export async function getSeoSetting(): Promise<SeoForm> {
+  await requireAdmin();
   await connection();
   const doc: any = await SeoSetting.findOne({ key: SINGLETON_KEY }).lean();
 
@@ -38,6 +40,7 @@ export async function getSeoSetting(): Promise<SeoForm> {
 }
 
 export async function saveSeoSetting(input: SeoForm) {
+  await requireAdmin();
   await connection();
   try {
     const data = {

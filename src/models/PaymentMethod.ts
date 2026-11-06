@@ -12,7 +12,8 @@ interface IPaymentMethodBase extends Document {
 interface ICreditCardPaymentMethod extends IPaymentMethodBase {
   methodType: "CreditCard";
   details: {
-    cardNumber: string; // we'll store full but we can mask
+    /** Gateway token. Never store a PAN in this database. */
+    token?: string;
     last4: string; // added
     cardType: string; // added: Visa, Mastercard, etc.
     expiryMonth: string; // added
@@ -69,7 +70,7 @@ const BasePaymentMethodSchema = new Schema<IPaymentMethodBase>(
 // --- Credit Card Schema (References Address) ---
 const CreditCardSchema = new Schema<ICreditCardPaymentMethod>({
   details: {
-    cardNumber: { type: String, required: true },
+    token: { type: String, select: false },
     last4: { type: String, required: true },
     cardType: { type: String, required: true },
     expiryMonth: { type: String, required: true },

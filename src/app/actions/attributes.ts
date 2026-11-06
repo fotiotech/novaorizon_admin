@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 import Attribute from "@/models/Attribute";
 import AttributeGroup from "@/models/AttributeGroup";
@@ -45,6 +47,7 @@ function normalizeUnitFamilyId(value: any): string | null {
 }
 
 export async function findAttributesAndValues(id?: string) {
+  await requireAdmin();
   try {
     await connection();
 
@@ -104,6 +107,7 @@ export async function findAttributesAndValues(id?: string) {
 
 // createAttribute – handle empty unitFamily safely
 export async function createAttribute(formData: AttributeFormData) {
+  await requireAdmin();
   const { codes, unitFamilies, names, isRequired, sort_orders, option, type } =
     formData;
   if (!Array.isArray(names) || names.length === 0) {
@@ -157,6 +161,7 @@ export async function updateAttribute(
   _id: string,
   params: AttributeUpdateParams,
 ) {
+  await requireAdmin();
   await connection();
 
   try {
@@ -204,6 +209,7 @@ export async function updateAttribute(
 // app/actions/attributes.ts
 
 export async function deleteAttribute(id: string) {
+  await requireAdmin();
   await connection();
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -290,6 +296,7 @@ export async function getAttributesUsageMap(): Promise<
     }
   >
 > {
+  await requireAdmin();
   await connection();
 
   const [properties, categories, groups] = await Promise.all([

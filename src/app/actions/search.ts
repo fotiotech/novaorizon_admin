@@ -1,4 +1,6 @@
 "use server";
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 
 import { Brand, Category } from "@/constant/types";
@@ -11,6 +13,7 @@ export async function getSearch(
   priceMin?: string,
   priceMax?: string,
 ) {
+  await requireAdmin();
   await connection();
   try {
     if (!query) return { products: [], filters: {} };

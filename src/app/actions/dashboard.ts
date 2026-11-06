@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import Order, { OrderDocument } from "@/models/Order";
@@ -8,6 +10,7 @@ import Product from "@/models/Product";
 
 // 1. Get total revenue, order count, and user count
 export async function getDashboardStats() {
+  await requireAdmin();
   await connection();
 
   const [orderCount, userCount, revenueAgg] = await Promise.all([
@@ -29,6 +32,7 @@ export async function getDashboardStats() {
 
 // 2. Sales by month (last 12 months)
 export async function getMonthlySales() {
+  await requireAdmin();
   await connection();
 
   const sales = await Order.aggregate([
@@ -52,6 +56,7 @@ export async function getMonthlySales() {
 
 // 3. Top selling products
 export async function getTopProducts(limit = 5) {
+  await requireAdmin();
   await connection();
 
   const products = await Order.aggregate([
@@ -75,6 +80,7 @@ export async function getTopProducts(limit = 5) {
 
 // 4. Orders grouped by status
 export async function getOrdersByStatus() {
+  await requireAdmin();
   await connection();
 
   const statusCounts = await Order.aggregate([
@@ -96,6 +102,7 @@ export async function getOrdersByStatus() {
 
 // 5. Revenue by payment method
 export async function getRevenueByPaymentMethod() {
+  await requireAdmin();
   await connection();
 
   const revenue = await Order.aggregate([

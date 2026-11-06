@@ -43,7 +43,7 @@ export default function PaymentMethodsPage() {
       {paymentMethods.map((pm: any) => (
         <div key={pm._id}>
           {pm.methodType === "CreditCard" && (
-            <span>💳 **** {pm.details.cardNumber.slice(-4)}</span>
+            <span>💳 **** {pm.details.last4 ?? "XXXX"}</span>
           )}
           {pm.methodType === "MobileMoney" && (
             <span>

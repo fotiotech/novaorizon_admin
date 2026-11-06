@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
@@ -49,6 +51,7 @@ export async function getCart(identifier: {
   userId?: string;
   sessionId?: string;
 }) {
+  await requireAdmin();
   await connection();
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) return null;
@@ -99,6 +102,7 @@ export async function mergeGuestSessionData({
   sessionId?: string;
   userId: string;
 }) {
+  await requireAdmin();
   await connection();
 
   const identifiers = Array.from(
@@ -192,6 +196,7 @@ export async function addToCart(
   identifier: { userId?: string; sessionId?: string },
   input: CartItemInput,
 ) {
+  await requireAdmin();
   await connection();
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) throw new Error("No identifier provided");
@@ -270,6 +275,7 @@ export async function updateCartItem(
   itemId: string,
   quantity: number,
 ) {
+  await requireAdmin();
   await connection();
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) throw new Error("No identifier");
@@ -312,6 +318,7 @@ export async function removeFromCart(
   identifier: { userId?: string; sessionId?: string },
   itemId: string,
 ) {
+  await requireAdmin();
   return updateCartItem(identifier, itemId, 0);
 }
 
@@ -320,6 +327,7 @@ export async function clearCart(identifier: {
   userId?: string;
   sessionId?: string;
 }) {
+  await requireAdmin();
   await connection();
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) throw new Error("No identifier");
@@ -344,6 +352,7 @@ export async function applyDiscount(
   discountValue: number,
   couponCode?: string,
 ) {
+  await requireAdmin();
   await connection();
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) throw new Error("No identifier");

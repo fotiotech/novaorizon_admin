@@ -78,10 +78,7 @@ const NotificationPage = () => {
   // ── Fetch ─────────────────────────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/notify`,
-        { timeout: 10000 },
-      );
+      const res = await axios.get("/api/notify", { timeout: 10000 });
 
       if (!Array.isArray(res.data)) {
         console.error("[notifications] Unexpected response shape:", res.data);
@@ -150,7 +147,7 @@ const NotificationPage = () => {
   const markAsRead = async (id: string) => {
     try {
       // Uses your existing /api/notify/[id]/route.ts
-      await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/api/notify/${id}`);
+      await axios.patch(`/api/notify/${id}`);
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
       );
@@ -163,9 +160,7 @@ const NotificationPage = () => {
     try {
       // Bulk endpoint lives under /api/notifications to avoid clashing
       // with the /api/notify/[id] dynamic route.
-      await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/notifications/mark-all-read`,
-      );
+      await axios.patch("/api/notifications/mark-all-read");
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch (err) {
       console.error("Failed to mark all as read:", err);

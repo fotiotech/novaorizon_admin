@@ -1,6 +1,7 @@
 // app/actions/category.ts
 
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import mongoose from "mongoose";
 import slugify from "slugify";
@@ -145,6 +146,7 @@ async function getUniqueCategorySlug(
 }
 
 export async function getCategories() {
+  await requireAdmin();
   await connection();
   const categories = await Category.find().populate("property").lean();
   return toPlain(categories).map(projectForList);
@@ -156,6 +158,7 @@ export async function getCategory(
   parentId?: string | null,
   name?: string | null,
 ): Promise<any> {
+  await requireAdmin();
   await connection();
   if (name) {
     const category = await Category.findOne({ name });
@@ -206,6 +209,7 @@ export async function createCategory(
   },
   id?: string | null,
 ) {
+  await requireAdmin();
   try {
     const {
       name,
@@ -331,6 +335,7 @@ export async function createCategory(
 export async function runCategoryInheritance(
   categoryId: string,
 ): Promise<{ success?: boolean; error?: string; warning?: string }> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -376,6 +381,7 @@ export async function assignCategoryProperty(
   categoryId: string,
   propertyId: string | null,
 ): Promise<{ success?: boolean; error?: string }> {
+  await requireAdmin();
   try {
     await connection();
 
@@ -424,6 +430,7 @@ export async function assignCategoryProperty(
 //  deleteCategory
 // ========================================================================
 export async function deleteCategory(id: string) {
+  await requireAdmin();
   try {
     await connection();
 
@@ -464,6 +471,7 @@ export async function deleteCategory(id: string) {
 export async function getCategoryAttributeSets(
   categoryId: string,
 ): Promise<AttributeSetResult[]> {
+  await requireAdmin();
   await connection();
 
   if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
@@ -493,18 +501,21 @@ export async function getCategoryAttributeSets(
 }
 
 export async function getAllAttributeSets() {
+  await requireAdmin();
   await connection();
   const sets = await AttributeSet.find().select("_id title code").lean();
   return toPlain(sets);
 }
 
 export async function getAllAttributeGroups() {
+  await requireAdmin();
   await connection();
   const groups = await AttributeGroup.find().select("_id name code").lean();
   return toPlain(groups);
 }
 
 export async function getAllAttributes() {
+  await requireAdmin();
   await connection();
   const attrs = await Attribute.find().select("_id name code type").lean();
   return toPlain(attrs);
@@ -514,6 +525,7 @@ export async function deleteCategoryImage(
   categoryId: string,
   imageUrl: string,
 ) {
+  await requireAdmin();
   try {
     await connection();
 
@@ -561,6 +573,7 @@ export async function getCategoriesForTree(): Promise<
     updatedAt?: string;
   }>
 > {
+  await requireAdmin();
   await connection();
 
   const rows = await Category.find(

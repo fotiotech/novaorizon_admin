@@ -1,10 +1,13 @@
 "use server";
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 
 import Customer from "@/models/Customer";
 import { redirect } from "next/navigation";
 
 export async function findCustomer(_id: string) {
+  await requireAdmin();
   await connection();
   if (_id) {
     const data = await Customer.findOne({ userId: _id });
@@ -18,6 +21,7 @@ export async function findCustomer(_id: string) {
 }
 
 export async function updateBillingAddresses(_id: string, formData: FormData) {
+  await requireAdmin();
   if (!_id || !formData) {
     return { success: false, error: "Invalid data" };
   }
@@ -90,6 +94,7 @@ export async function updateShippingInfos(
   useBillingAsShipping: boolean,
   formData?: FormData,
 ) {
+  await requireAdmin();
   if (!userId || !formData) {
     return null;
   }
@@ -147,6 +152,7 @@ export async function getAllCustomers(options?: {
   limit?: number;
   search?: string;
 }) {
+  await requireAdmin();
   try {
     await connection();
     const page = options?.page || 1;
@@ -207,6 +213,7 @@ export async function getAllCustomers(options?: {
 
 // ---------- Delete customer ----------
 export async function deleteCustomer(customerId: string) {
+  await requireAdmin();
   try {
     await connection();
     await Customer.findByIdAndDelete(customerId);
@@ -224,6 +231,7 @@ export async function getReviews(options?: {
   rating?: number;
   status?: string;
 }) {
+  await requireAdmin();
   try {
     await connection();
     const page = options?.page || 1;
@@ -276,6 +284,7 @@ export async function getReviews(options?: {
 
 // ---------- Delete review ----------
 export async function deleteReview(reviewId: string) {
+  await requireAdmin();
   try {
     await connection();
     const Review = (global as any).mongoose?.models?.Review;

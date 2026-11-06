@@ -1,5 +1,7 @@
 "use server";
 
+
+import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 import { Event } from "@/models/Event";
 import mongoose, { Types } from "mongoose";
@@ -8,6 +10,7 @@ import Product from "@/models/Product";
 // ─── 2. Get personalized recommendations ──────────────
 
 export async function getRecommendations(limit: number = 10) {
+  await requireAdmin();
   await connection();
 
   // 1. Count user interactions
@@ -70,6 +73,7 @@ export async function getRecommendations(limit: number = 10) {
 // app/actions/events.ts – updated getTrendingItems
 
 export async function getTrendingItems(limit: number = 10) {
+  await requireAdmin();
   await connection();
 
   const trending = await Event.aggregate([
@@ -120,6 +124,7 @@ export async function getTrendingItems(limit: number = 10) {
 // ─── 4. Recently viewed ─────────────────────────────────
 
 export async function getRecentlyViewed(limit: number = 5) {
+  await requireAdmin();
   await connection();
 
   return Event.aggregate([
@@ -143,6 +148,7 @@ export async function getRelatedProducts(
   productId: string,
   limit: number = 10,
 ) {
+  await requireAdmin();
   await connection();
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     return [];

@@ -1,5 +1,6 @@
 // app/actions/campaigns.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
 
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
@@ -36,6 +37,7 @@ export async function listTemplates(
     isActive?: boolean;
   } = {},
 ) {
+  await requireAdmin();
   await connection();
   const query: any = {};
   if (filter.channel) query.channel = filter.channel;
@@ -46,6 +48,7 @@ export async function listTemplates(
 }
 
 export async function getTemplate(id: string) {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(id)) throw new Error("Invalid template id");
   return MessageTemplate.findById(id).lean();
@@ -58,6 +61,7 @@ export async function createTemplate(input: {
   previewText?: string;
   body: string;
 }) {
+  await requireAdmin();
   await connection();
   const variables = extractVariables(
     [input.subject, input.body].filter(Boolean).join("\n"),
@@ -77,6 +81,7 @@ export async function updateTemplate(
     isActive: boolean;
   }>,
 ) {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(id)) throw new Error("Invalid template id");
 
@@ -101,6 +106,7 @@ export async function updateTemplate(
 }
 
 export async function deleteTemplate(id: string) {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(id)) throw new Error("Invalid template id");
   await MessageTemplate.findByIdAndDelete(id);
@@ -116,6 +122,7 @@ export async function listCampaigns(
   filter: { status?: string; channel?: "email" | "sms" } = {},
   options: { limit?: number; skip?: number } = {},
 ) {
+  await requireAdmin();
   await connection();
   const { limit = 20, skip = 0 } = options;
   const query: any = {};
@@ -134,6 +141,7 @@ export async function listCampaigns(
 }
 
 export async function getCampaign(id: string) {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(id)) throw new Error("Invalid campaign id");
   return MessageCampaign.findById(id).lean();
@@ -148,6 +156,7 @@ export async function createCampaign(input: {
   audience?: any;
   templateId?: string | null;
 }) {
+  await requireAdmin();
   await connection();
   const doc = await MessageCampaign.create({
     ...input,
@@ -169,6 +178,7 @@ export async function updateCampaign(
     scheduledFor: Date | string | null;
   }>,
 ) {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(id)) throw new Error("Invalid campaign id");
 
@@ -200,6 +210,7 @@ export async function updateCampaign(
 }
 
 export async function deleteCampaign(id: string) {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(id)) throw new Error("Invalid campaign id");
   const existing = await MessageCampaign.findById(id).lean();
@@ -269,6 +280,7 @@ function buildAudienceQuery(audience: any, channel: "email" | "sms") {
 }
 
 export async function previewAudience(campaignId: string) {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(campaignId)) throw new Error("Invalid campaign id");
   const campaign: any = await MessageCampaign.findById(campaignId).lean();
@@ -303,6 +315,7 @@ export async function sendCampaignBatch(campaignId: string): Promise<{
   failed: number;
   remaining: number;
 }> {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(campaignId)) throw new Error("Invalid campaign id");
 
@@ -473,6 +486,7 @@ export async function sendCampaignBatch(campaignId: string): Promise<{
 
 /** Fire the first batch — the UI calls this, then polls with `sendCampaignBatch`. */
 export async function startCampaignSend(campaignId: string) {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(campaignId)) throw new Error("Invalid campaign id");
 
@@ -509,6 +523,7 @@ export async function startCampaignSend(campaignId: string) {
 }
 
 export async function pauseCampaign(campaignId: string) {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(campaignId)) throw new Error("Invalid campaign id");
   await MessageCampaign.findByIdAndUpdate(campaignId, {
@@ -523,6 +538,7 @@ export async function listCampaignLogs(
   campaignId: string,
   options: { limit?: number; skip?: number; status?: string } = {},
 ) {
+  await requireAdmin();
   await connection();
   if (!isValidObjectId(campaignId)) throw new Error("Invalid campaign id");
   const { limit = 50, skip = 0, status } = options;

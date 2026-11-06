@@ -10,6 +10,7 @@ import Product from "@/models/Product";
 import Invoice from "@/models/Invoice";
 import "@/models/Address";
 import "@/models/PaymentMethod";
+import { requireAdmin } from "@/lib/authz";
 
 export async function findOrders(options?: {
   orderNumber?: string;
@@ -23,6 +24,7 @@ export async function findOrders(options?: {
   dateTo?: Date;
   carrier?: string; // NEW: filter by carrier name
 }) {
+  await requireAdmin();
   await connection();
 
   const {
@@ -116,6 +118,7 @@ export async function updateOrderStatus(
     orderStatus?: OrderDocument["orderStatus"];
   },
 ): Promise<{ success: boolean; order?: any; error?: string }> {
+  await requireAdmin();
   await connection();
 
   if (!orderNumber) {
@@ -127,11 +130,20 @@ export async function updateOrderStatus(
   }
 
   try {
+    const existing: any = await Order.findOne({ orderNumber })
+      .select("paymentStatus")
+      .lean();
+    const wasPaid = existing?.paymentStatus === "paid";
+
     // Build update object
     const updateFields: any = {};
     if (updates.paymentStatus)
       updateFields.paymentStatus = updates.paymentStatus;
     if (updates.orderStatus) updateFields.orderStatus = updates.orderStatus;
+    if (updates.paymentStatus === "paid" && !wasPaid) {
+      updateFields.paidAt = new Date();
+      updateFields.inventoryStatus = "pending";
+    }
 
     // Use findOneAndUpdate with $set and skip validation (safe for status updates)
     const order = await Order.findOneAndUpdate(
@@ -147,7 +159,13 @@ export async function updateOrderStatus(
       };
     }
 
-    // If paymentStatus becomes "paid", create an invoice
+    // If paymentStatus becomes "paid", deduct inventory and create an invoice.
+    if (updates.paymentStatus === "paid" && !wasPaid) {
+      await deductInventoryForOrder(order).catch((err) => {
+        console.error("[updateOrderStatus] inventory deduction failed:", err);
+      });
+    }
+
     if (updates.paymentStatus === "paid") {
       try {
         const existingInvoice = await Invoice.findOne({
@@ -246,6 +264,7 @@ export async function completePOSOrder(
     address?: string;
   },
 ): Promise<{ success: boolean; order?: any; error?: string }> {
+  await requireAdmin();
   await connection();
 
   const fallbackAddress = {
@@ -376,6 +395,7 @@ export async function requestReturn(
   orderNumber: string,
   reason: string,
 ): Promise<{ success: boolean; error?: string; order?: any }> {
+  await requireAdmin();
   await connection();
 
   const normalizedReason = (reason || "Customer requested a return").trim();
@@ -433,6 +453,7 @@ export async function resolveReturnRequest(
   action: "approve" | "reject",
   options?: { reason?: string; refundAmount?: number },
 ): Promise<{ success: boolean; error?: string; order?: any }> {
+  await requireAdmin();
   await connection();
 
   if (!orderNumber) {
@@ -443,6 +464,10 @@ export async function resolveReturnRequest(
     const order = await Order.findOne({ orderNumber });
     if (!order) {
       return { success: false, error: "Order not found." };
+    }
+
+    if (action === "approve" && order.paymentStatus === "refunded") {
+      return { success: false, error: "This order has already been refunded." };
     }
 
     if (action === "approve") {
@@ -527,6 +552,7 @@ export async function createOrUpdateOrder(
   payment_ref: string,
   data: Partial<OrderDocument>,
 ): Promise<{ success: boolean; order?: any; error?: string }> {
+  await requireAdmin();
   await connection();
 
   if (!payment_ref || !data) {
@@ -609,6 +635,7 @@ export async function createOrUpdateOrder(
 }
 
 export async function deleteOrder(orderNumber: string) {
+  await requireAdmin();
   await connection();
 
   if (!orderNumber) {
@@ -634,9 +661,40 @@ export async function deleteOrder(orderNumber: string) {
   }
 }
 
+async function deductInventoryForOrder(order: any): Promise<void> {
+  const claim = await Order.updateOne(
+    { _id: order._id, inventoryStatus: "pending" },
+    { $set: { inventoryStatus: "processing" } },
+  );
+  if (claim.modifiedCount === 0) return;
+
+  let shortage = false;
+  for (const item of order.products ?? []) {
+    const quantity = Number(item.quantity) || 0;
+    if (!item.productId || quantity <= 0) continue;
+
+    const result = await Product.updateOne(
+      { _id: item.productId, quantity: { $gte: quantity } },
+      { $inc: { quantity: -quantity } },
+    );
+    if (result.modifiedCount === 0) shortage = true;
+  }
+
+  await Order.updateOne(
+    { _id: order._id },
+    {
+      $set: {
+        inventoryDeducted: !shortage,
+        inventoryStatus: shortage ? "shortage" : "deducted",
+      },
+    },
+  );
+}
+
 export async function generateTrackingNumber(
   trackingNumber: string,
 ): Promise<string> {
+  await requireAdmin();
   const existing = await Shipping.findOne({ trackingNumber });
   if (existing) {
     return trackingNumber;

@@ -1,5 +1,7 @@
 // attributegroup.ts
 "use server";
+import { requireAdmin } from "@/lib/authz";
+
 import { connection } from "@/utils/connection";
 import AttributeGroup from "@/models/AttributeGroup";
 import CategoryProperty from "@/models/CategoryProperty";
@@ -55,6 +57,7 @@ function buildTree(flatGroups: Group[]): Group[] {
 export async function findAllAttributeGroups(
   id?: string,
 ): Promise<Group[] | null> {
+  await requireAdmin();
   await connection();
   try {
     const filter = id ? { _id: new mongoose.Types.ObjectId(id) } : {};
@@ -85,6 +88,7 @@ export async function createAttributeGroup(
   parentId: string,
   sortOrder: number,
 ) {
+  await requireAdmin();
   await connection();
   try {
     if (!action) return;
@@ -110,6 +114,7 @@ export async function createAttributeGroup(
 
 // --- findGroup ---
 export async function findGroup(id?: string) {
+  await requireAdmin();
   try {
     await connection();
 
@@ -181,6 +186,7 @@ export async function updateAttributeGroup(
     sortOrder: number;
   }>,
 ) {
+  await requireAdmin();
   await connection();
   try {
     const updateData: any = { ...updates };
@@ -205,6 +211,7 @@ export async function updateAttributeGroup(
 
 // --- deleteAttributeGroup ---
 export async function deleteAttributeGroup(id: string) {
+  await requireAdmin();
   await connection();
   try {
     const groupObjectId = new mongoose.Types.ObjectId(id);
@@ -254,6 +261,7 @@ export async function deleteAttributeGroup(id: string) {
 export async function getAttributeGroupsUsageMap(): Promise<
   Record<string, { categories: Array<{ _id: string; name: string }> }>
 > {
+  await requireAdmin();
   await connection();
 
   const [properties, categories] = await Promise.all([

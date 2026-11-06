@@ -30,7 +30,8 @@ interface ICustomer extends Document {
   billingMethod?: {
     methodType: string; // e.g., "Credit Card", "PayPal", etc.
     details?: {
-      cardNumber?: string;
+      token?: string;
+      last4?: string;
       expiryDate?: string;
       cardholderName?: string;
     };
@@ -75,7 +76,8 @@ const CustomerSchema: Schema<ICustomer> = new Schema(
     billingMethod: {
       methodType: { type: String }, // Type of billing method
       details: {
-        cardNumber: { type: String },
+        token: { type: String, select: false },
+        last4: { type: String },
         expiryDate: { type: String },
         cardholderName: { type: String },
       },
