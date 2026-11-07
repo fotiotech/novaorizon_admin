@@ -1,7 +1,7 @@
 // components/PromotionComposer.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,12 +13,15 @@ import {
 } from "@/app/lib/validation/calc-fields";
 import { ProductPicker, type ProductOption } from "./ProductPicker";
 import { EntityPicker, type EntityOption } from "./EntityPicker";
+import FilesUploader from "@/components/FilesUploader";
+import { useFileUploader } from "@/hooks/useFileUploader";
 
 // ─────────────────────────────────────────────────────────────────────
 const schema = z.object({
   name: z.string().min(1, "Name is required").trim(),
   code: z.string().optional(),
   description: z.string().optional(),
+  imageUrl: z.string().optional(), // NEW
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
   isActive: z.boolean().default(true),
@@ -63,6 +66,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 interface Props {
+  id?: string; // NEW — pass the promotion _id in edit mode
   initialValues?: Partial<FormValues>;
   customerGroups?: { label: string; value: string }[];
   otherPromotions?: { label: string; value: string }[];
@@ -109,6 +113,7 @@ const SCOPE_OPTIONS: {
 ];
 
 export function PromotionComposer({
+  id,
   initialValues,
   customerGroups = [],
   otherPromotions = [],
@@ -127,6 +132,7 @@ export function PromotionComposer({
     handleSubmit,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema) as any,
@@ -134,6 +140,7 @@ export function PromotionComposer({
       name: "",
       code: "",
       description: "",
+      imageUrl: "",
       startDate: "",
       endDate: "",
       isActive: true,
@@ -159,11 +166,49 @@ export function PromotionComposer({
     },
   });
 
+  /* ------------------------------------------------------------------ */
+  /*                        Image uploader wiring                        */
+  /* ------------------------------------------------------------------ */
+
+  const existingImageUrl = (initialValues?.imageUrl as string) || "";
+
+  const {
+    files,
+    loading: fileLoading,
+    addFiles,
+    setFiles,
+  } = useFileUploader(
+    id,
+    existingImageUrl ? [existingImageUrl] : [],
+    "promotions",
+  );
+
+  // Keep RHF's imageUrl in sync with the uploader's files state. This runs
+  // once on mount (files already matches initialValues) and whenever the
+  // user uploads or removes an image.
+  useEffect(() => {
+    const url = files[0] || "";
+    const current = (getValues("imageUrl") as string) || "";
+    if (url !== current) {
+      setValue("imageUrl", url, { shouldDirty: true });
+    }
+  }, [files, getValues, setValue]);
+
+  const handleRemoveImage = async (index: number, _fileUrl: string) => {
+    // Removing from local state is enough: the `useEffect` above syncs
+    // `files` → RHF's `imageUrl`. On save, the empty string replaces the
+    // stored URL in Mongo. The S3 object stays (see note below).
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*                        Existing form logic                          */
+  /* ------------------------------------------------------------------ */
+
   const calcType = watch("calculationType");
   const allCustomers = watch("customerEligibility.allCustomers");
   const scopeAppliesTo = watch("scope.appliesTo");
 
-  // Bundle promotions own their product list, so hide the scope picker.
   const showScope = calcType !== "bundle_discount";
 
   const activeFields: CalcFieldDef[] = useMemo(() => {
@@ -188,8 +233,6 @@ export function PromotionComposer({
   ) => {
     if (next === scopeAppliesTo) return;
     setValue("scope.appliesTo", next, { shouldDirty: true });
-    // Clear the arrays that are no longer relevant so hidden selections
-    // don't leak into the submitted payload.
     if (next !== "products") {
       setValue("scope.productIds", [], { shouldDirty: true });
     }
@@ -202,7 +245,6 @@ export function PromotionComposer({
   };
 
   const handleSubmitForm = async (data: FormValues) => {
-    // Calc-field required checks
     const missing: string[] = [];
     for (const f of activeFields) {
       const v = data.propertyValues?.[f.code];
@@ -218,7 +260,6 @@ export function PromotionComposer({
       return;
     }
 
-    // Scope required checks (skipped for bundles — they carry their own).
     if (showScope) {
       const s = data.scope;
       if (s?.appliesTo === "products" && s.productIds.length === 0) {
@@ -243,7 +284,13 @@ export function PromotionComposer({
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      await onSubmit(data);
+      // Defensive: read latest files state in case useEffect hasn't flushed.
+      const latestImageUrl = files[0] || "";
+      const payload: FormValues = {
+        ...data,
+        imageUrl: latestImageUrl || data.imageUrl || "",
+      };
+      await onSubmit(payload);
       router.push("/marketing/promotions");
     } catch (err: any) {
       setSubmitError(err?.message ?? "Something went wrong");
@@ -427,6 +474,22 @@ export function PromotionComposer({
           />
         </div>
 
+        {/* NEW — Banner image */}
+        <div>
+          <label className={labelCls}>Banner image</label>
+          <FilesUploader
+            files={files}
+            loading={fileLoading}
+            addFiles={addFiles}
+            onRemove={handleRemoveImage}
+          />
+          <p className={helperCls}>
+            Optional. Shown when this promotion is placed in a Content Block
+            with display <code className="text-foreground">banner</code> and
+            promotion mode <code className="text-foreground">self</code>.
+          </p>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className={labelCls}>
@@ -510,7 +573,7 @@ export function PromotionComposer({
         )}
       </fieldset>
 
-      {/* Scope — what the promotion applies to */}
+      {/* Scope */}
       {showScope && (
         <fieldset className={fieldsetCls}>
           <legend className={legendCls}>Applies to</legend>

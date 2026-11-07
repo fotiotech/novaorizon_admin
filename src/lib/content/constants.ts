@@ -1,12 +1,39 @@
 // lib/content/constants.ts
 
+/* -------------------------------------------------------------------------- */
+/*                   Re-exports — canonical in collectionTypes                */
+/* -------------------------------------------------------------------------- */
+
+// CARD_SHAPES / CTA_STYLES are shared between Collection and Block models.
+// Canonical home is `collectionTypes.ts` (block re-uses collection enums).
+export { CARD_SHAPES, CTA_STYLES } from "./collectionTypes";
+export type { CardShape, CtaStyle } from "./collectionTypes";
+
+/* -------------------------------------------------------------------------- */
+/*                               Block location                               */
+/* -------------------------------------------------------------------------- */
+
 /** Where content blocks can be placed. */
 export const BLOCK_LOCATIONS = ["Home", "ProductRelated"] as const;
 export type BlockLocation = (typeof BLOCK_LOCATIONS)[number];
 
-/** Top-level layout of the block. */
-export const BLOCK_DISPLAYS = ["grid", "carousel", "list", "hero"] as const;
+/* -------------------------------------------------------------------------- */
+/*                                Block display                               */
+/* -------------------------------------------------------------------------- */
+
+/** Top-level layout of the block. `banner` is block-only. */
+export const BLOCK_DISPLAYS = [
+  "grid",
+  "carousel",
+  "list",
+  "hero",
+  "banner",
+] as const;
 export type BlockDisplay = (typeof BLOCK_DISPLAYS)[number];
+
+/* -------------------------------------------------------------------------- */
+/*                                 Block source                               */
+/* -------------------------------------------------------------------------- */
 
 /** How the block resolves its entities. */
 export const BLOCK_SOURCE_TYPES = [
@@ -32,6 +59,10 @@ export const BLOCK_REF_MODELS = [
 ] as const;
 export type BlockRefModel = (typeof BLOCK_REF_MODELS)[number];
 
+/* -------------------------------------------------------------------------- */
+/*                            Layout primitives                               */
+/* -------------------------------------------------------------------------- */
+
 /** Grid column counts. */
 export const BLOCK_COLUMN_COUNTS = [1, 2, 3, 4, 5, 6] as const;
 
@@ -47,21 +78,22 @@ export type BlockAnimation = (typeof BLOCK_ANIMATIONS)[number];
 export const BLOCK_ALIGNMENTS = ["start", "center", "end", "stretch"] as const;
 export type BlockAlignment = (typeof BLOCK_ALIGNMENTS)[number];
 
-/** CTA style. */
-export const CTA_STYLES = ["button", "link", "none"] as const;
-export type CtaStyle = (typeof CTA_STYLES)[number];
-
-/** Card shape — orthogonal to layout. */
-export const CARD_SHAPES = ["default", "circle"] as const;
-export type CardShape = (typeof CARD_SHAPES)[number];
+/* -------------------------------------------------------------------------- */
+/*                                   Limits                                   */
+/* -------------------------------------------------------------------------- */
 
 export const DEFAULT_BLOCK_LIMIT = 12;
 export const MAX_BLOCK_LIMIT = 60;
 
-/* --------------------------- Display config ------------------------------ */
+/* -------------------------------------------------------------------------- */
+/*                              Display config                                */
+/* -------------------------------------------------------------------------- */
+
+import type { CardShape } from "./collectionTypes";
 
 export interface BlockDisplayConfig {
   theme: BlockTheme;
+  columns: number;
   gap: number;
   borderless: boolean;
   rounded: boolean;
@@ -73,6 +105,7 @@ export interface BlockDisplayConfig {
 
 export const DEFAULT_BLOCK_DISPLAY_CONFIG: BlockDisplayConfig = {
   theme: "inherit",
+  columns: 4,
   gap: 16,
   borderless: false,
   rounded: true,
@@ -82,7 +115,9 @@ export const DEFAULT_BLOCK_DISPLAY_CONFIG: BlockDisplayConfig = {
   cardShape: "default",
 };
 
-/* ------------------- Source-specific display directives ------------------ */
+/* -------------------------------------------------------------------------- */
+/*                       Source-specific display directives                   */
+/* -------------------------------------------------------------------------- */
 
 export const PROMOTION_BADGE_STYLES = [
   "default",
@@ -103,15 +138,10 @@ export const CARD_VARIANTS = ["card", "bare"] as const;
 export type CardVariant = (typeof CARD_VARIANTS)[number];
 
 export interface BlockSourceStyles {
-  /* promotion */
   promotionBadgeStyle: PromotionBadgeStyle;
   promotionShowCode: boolean;
-
-  /* collection */
   collectionShowItemCount: boolean;
   collectionCountPosition: CollectionCountPosition;
-
-  /* manual */
   manualCardSize: CardSize;
   manualCardVariant: CardVariant;
   manualShowDescription: boolean;

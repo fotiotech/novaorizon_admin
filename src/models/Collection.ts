@@ -5,8 +5,14 @@ import {
   DISPLAY_LAYOUTS,
   CARD_SHAPES,
   CTA_STYLES,
+  COLLECTION_TYPES,
+  DEFAULT_COLLECTION_DISPLAY,
   type TargetType,
 } from "@/lib/content/collectionTypes";
+
+/* -------------------------------------------------------------------------- */
+/*                                Sub-schemas                                 */
+/* -------------------------------------------------------------------------- */
 
 const ruleSchema = new Schema({
   attribute: { type: String, required: true },
@@ -21,22 +27,47 @@ const ruleSchema = new Schema({
 
 const displaySchema = new Schema(
   {
-    layout: { type: String, enum: DISPLAY_LAYOUTS, default: "carousel" },
-    columns: { type: Number, default: 4, min: 1, max: 6 },
-    gap: { type: Number, default: 16, min: 0, max: 64 },
-    showImages: { type: Boolean, default: true },
-    cardShape: { type: String, enum: CARD_SHAPES, default: "default" },
+    layout: {
+      type: String,
+      enum: DISPLAY_LAYOUTS,
+      default: DEFAULT_COLLECTION_DISPLAY.layout,
+    },
+    columns: {
+      type: Number,
+      default: DEFAULT_COLLECTION_DISPLAY.columns,
+      min: 1,
+      max: 6,
+    },
+    gap: {
+      type: Number,
+      default: DEFAULT_COLLECTION_DISPLAY.gap,
+      min: 0,
+      max: 64,
+    },
+    showImages: {
+      type: Boolean,
+      default: DEFAULT_COLLECTION_DISPLAY.showImages,
+    },
+    cardShape: {
+      type: String,
+      enum: CARD_SHAPES,
+      default: DEFAULT_COLLECTION_DISPLAY.cardShape,
+    },
   },
   { _id: false },
 );
 
 const sortSchema = new Schema(
   {
-    field: { type: String }, // e.g. "trendingRank"
+    field: { type: String },
     direction: { type: String, enum: ["asc", "desc"], default: "asc" },
   },
   { _id: false },
 );
+
+/* -------------------------------------------------------------------------- */
+/*                                Root schema                                 */
+/* -------------------------------------------------------------------------- */
 
 const CollectionSchema = new Schema(
   {
@@ -46,7 +77,7 @@ const CollectionSchema = new Schema(
 
     type: {
       type: String,
-      enum: ["rule", "manual", "recommendation"],
+      enum: COLLECTION_TYPES,
       default: "rule",
     },
     targetType: {
@@ -57,8 +88,6 @@ const CollectionSchema = new Schema(
     },
 
     // Only used when type === "recommendation".
-    // "trending" was materialized as a Product field, so only the
-    // per-user kinds remain.
     recommendationType: {
       type: String,
       enum: ["personalized", "recentlyViewed"],
@@ -68,8 +97,7 @@ const CollectionSchema = new Schema(
     items: [{ type: Schema.Types.ObjectId, refPath: "targetType" }],
     rules: [ruleSchema],
 
-    // Optional sort for rule collections. Enables "Trending (by rank)",
-    // "Bestsellers (by rank)", "Newest first", etc.
+    // Optional sort for rule collections.
     sort: { type: sortSchema, default: undefined },
 
     display: { type: displaySchema, default: () => ({}) },
@@ -105,5 +133,11 @@ CollectionSchema.index({ "rules.attribute": 1 });
 export const Collection =
   mongoose.models.Collection || mongoose.model("Collection", CollectionSchema);
 
-export { TARGET_TYPES, DISPLAY_LAYOUTS, CARD_SHAPES, CTA_STYLES };
+export {
+  TARGET_TYPES,
+  DISPLAY_LAYOUTS,
+  CARD_SHAPES,
+  CTA_STYLES,
+  COLLECTION_TYPES,
+};
 export type { TargetType };

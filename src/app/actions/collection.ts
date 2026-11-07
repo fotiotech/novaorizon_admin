@@ -6,7 +6,14 @@ import { revalidatePath } from "next/cache";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import { Collection, TARGET_TYPES, type TargetType } from "@/models/Collection";
-import { CARD_SHAPES, CTA_STYLES } from "@/lib/content/collectionTypes";
+import {
+  CARD_SHAPES,
+  CTA_STYLES,
+  COLLECTION_TYPES,
+  DEFAULT_COLLECTION_DISPLAY,
+  COLLECTION_MANUAL_LIMIT,
+  COLLECTION_LIST_PATH,
+} from "@/lib/content/collectionTypes";
 import { deleteS3Object } from "./s3";
 import { buildQueryFromRules } from "@/lib/content/query";
 import {
@@ -18,10 +25,9 @@ import {
   type RecommendationContext,
 } from "@/lib/content/recommendationResolvers";
 
-const COLLECTION_LIST_PATH = "/catalog/collections";
-const MANUAL_ITEM_LIMIT = 50;
-
-/* ----------------------------- Validation ------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                                 Validation                                 */
+/* -------------------------------------------------------------------------- */
 
 function normalizeTarget(raw: unknown): TargetType | null {
   const t = String(raw ?? "");
@@ -52,9 +58,9 @@ function validateRules(rules: any[], targetType: TargetType) {
 }
 
 function validateItems(items: string[], targetType: TargetType) {
-  if (items.length > MANUAL_ITEM_LIMIT) {
+  if (items.length > COLLECTION_MANUAL_LIMIT) {
     return {
-      error: `A manual collection can contain at most ${MANUAL_ITEM_LIMIT} items. Received ${items.length}.`,
+      error: `A manual collection can contain at most ${COLLECTION_MANUAL_LIMIT} items. Received ${items.length}.`,
     };
   }
   for (const id of items) {
@@ -88,18 +94,30 @@ function validateRecommendation(
   return null;
 }
 
+/* -------------------------------------------------------------------------- */
+/*                              Form parsing                                  */
+/* -------------------------------------------------------------------------- */
+
 function readDisplay(formData: FormData) {
+  const DEF = DEFAULT_COLLECTION_DISPLAY;
+
   const cardShapeRaw =
-    (formData.get("display.cardShape") as string) || "default";
+    (formData.get("display.cardShape") as string) || DEF.cardShape;
   if (!(CARD_SHAPES as readonly string[]).includes(cardShapeRaw)) {
     return { error: "Invalid card shape" as const };
   }
+
+  const showImagesRaw = formData.get("display.showImages");
+  const showImages =
+    showImagesRaw === null ? DEF.showImages : showImagesRaw === "true";
+
   return {
     display: {
-      layout: (formData.get("display.layout") as string) || "carousel",
-      columns: parseInt(formData.get("display.columns") as string) || 4,
-      gap: parseInt(formData.get("display.gap") as string) || 16,
-      showImages: formData.get("display.showImages") === "true",
+      layout: (formData.get("display.layout") as string) || DEF.layout,
+      columns:
+        parseInt(formData.get("display.columns") as string) || DEF.columns,
+      gap: parseInt(formData.get("display.gap") as string) || DEF.gap,
+      showImages,
       cardShape: cardShapeRaw,
     },
   };
@@ -133,7 +151,9 @@ function readSort(formData: FormData) {
   return field ? { field, direction } : undefined;
 }
 
-/* --------------------------- Read: admin list ---------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                              Read: admin list                              */
+/* -------------------------------------------------------------------------- */
 
 export async function getAllCollections(targetType?: TargetType) {
   await requireAdmin();
@@ -151,13 +171,6 @@ export async function getAllCollections(targetType?: TargetType) {
   }
 }
 
-/**
- * Resolves collection items, ordered by `order` ascending and `created_at`
- * descending. Recommendations are only resolved when
- * `resolveRecommendations: true` is passed (the storefront does this with a
- * `recommendationContext.userId`). The admin list calls without that flag —
- * recommendation rows come back with `isDynamic: true` and no items.
- */
 export async function getResolvedCollections(opts?: {
   targetType?: TargetType;
   status?: "active" | "inactive";
@@ -194,7 +207,7 @@ export async function getResolvedCollections(opts?: {
             c.targetType as TargetType,
           );
           if (Object.keys(query).length > 0) {
-            let q = cfg.model.find(query).limit(MANUAL_ITEM_LIMIT);
+            let q = cfg.model.find(query).limit(COLLECTION_MANUAL_LIMIT);
             if (c.sort?.field) {
               q = q.sort({
                 [c.sort.field]: c.sort.direction === "asc" ? 1 : -1,
@@ -250,7 +263,9 @@ export async function getResolvedCollections(opts?: {
   }
 }
 
-/* ------------------------------ Create ---------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                                   Create                                   */
+/* -------------------------------------------------------------------------- */
 
 export async function createCollection(formData: FormData) {
   await requireAdmin();
@@ -289,7 +304,7 @@ export async function createCollection(formData: FormData) {
     const cfg = getEntityConfig(targetType);
     if (!cfg) return { success: false, error: "Unknown target type" };
 
-    if (!["rule", "manual", "recommendation"].includes(type)) {
+    if (!(COLLECTION_TYPES as readonly string[]).includes(type)) {
       return { success: false, error: "Invalid collection type" };
     }
     if (type === "rule" && !cfg.supportsRule) {
@@ -385,7 +400,9 @@ export async function createCollection(formData: FormData) {
   }
 }
 
-/* ------------------------------ Update ---------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                                   Update                                   */
+/* -------------------------------------------------------------------------- */
 
 export async function updateCollection(id: string, formData: FormData) {
   await requireAdmin();
@@ -430,7 +447,7 @@ export async function updateCollection(id: string, formData: FormData) {
     const cfg = getEntityConfig(targetType);
     if (!cfg) return { success: false, error: "Unknown target type" };
 
-    if (!["rule", "manual", "recommendation"].includes(type)) {
+    if (!(COLLECTION_TYPES as readonly string[]).includes(type)) {
       return { success: false, error: "Invalid collection type" };
     }
 
@@ -514,7 +531,9 @@ export async function updateCollection(id: string, formData: FormData) {
   }
 }
 
-/* --------------------------- Single + delete ---------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                            Single + delete                                 */
+/* -------------------------------------------------------------------------- */
 
 export async function getCollectionById(id: string) {
   await requireAdmin();
@@ -570,7 +589,9 @@ export async function deleteCollectionImage(collectionId: string) {
   }
 }
 
-/* ----------------------- Pickers for manual / refs ---------------------- */
+/* -------------------------------------------------------------------------- */
+/*                        Pickers for manual / refs                           */
+/* -------------------------------------------------------------------------- */
 
 export async function fetchAvailableItems(
   targetType: string,
@@ -593,7 +614,7 @@ export async function fetchAvailableItems(
     const docs = await cfg.model
       .find(filter)
       .sort({ name: sortOrder === "asc" ? 1 : -1 })
-      .limit(MANUAL_ITEM_LIMIT)
+      .limit(COLLECTION_MANUAL_LIMIT)
       .lean();
 
     return {

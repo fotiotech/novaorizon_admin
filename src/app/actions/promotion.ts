@@ -10,7 +10,7 @@ import Category from "@/models/Category";
 import Brand from "@/models/Brand";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { CALC_FIELDS } from "@/app/lib/validation/calc-fields";
 
 async function ensureConnection() {
@@ -46,6 +46,24 @@ function normalizeScope(scope: any) {
     brandIds: appliesTo === "brands" ? (scope?.brandIds ?? []) : [],
     excludeProductIds: scope?.excludeProductIds ?? [],
   };
+}
+
+/**
+ * Invalidate any content block that may render this promotion.
+ *
+ * Blocks resolve their promotion snapshot at request time (see
+ * `lib/content/blocks/resolve.ts` — `resolvePromotionSource`). Editing
+ * a promotion — including its banner `imageUrl` — must invalidate the
+ * cached block payload so the storefront reflects the change on the
+ * next request instead of waiting out `revalidate: 300` in
+ * `unstable_cache`.
+ *
+ * We don't know which block locations reference this promotion, so we
+ * drop the generic `blocks` tag. Every cached entry under
+ * `getCachedBlocksForLocation(...)` is registered with it.
+ */
+function revalidatePromotionConsumers() {
+  updateTag("blocks");
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -119,6 +137,11 @@ export async function createPromotion(data: any) {
   const payload = {
     name: data.name,
     description: data.description,
+    // Banner image — used when this promotion renders as a block banner
+    // (source.type: "promotion" + promotionMode: "self"). Empty string
+    // and undefined are both valid "no image"; we normalize to undefined
+    // so the schema doesn't persist "".
+    imageUrl: data.imageUrl || undefined,
     code: data.code?.trim().toUpperCase() || undefined,
     startDate: new Date(data.startDate),
     endDate: new Date(data.endDate),
@@ -148,6 +171,7 @@ export async function createPromotion(data: any) {
   try {
     const promotion = await Promotion.create(payload);
     revalidatePath("/marketing/promotions");
+    revalidatePromotionConsumers();
     return promotion.toObject();
   } catch (err: any) {
     if (err.code === 11000) {
@@ -203,6 +227,13 @@ export async function updatePromotion(id: string, data: any) {
     exclusiveWith: data.exclusiveWith ?? existing.exclusiveWith,
   };
 
+  // Banner image. `!== undefined` (not `?? existing`) so the composer can
+  // clear the image by sending `""`. If the field isn't in the payload at
+  // all (older clients, or unrelated updates), leave the stored URL alone.
+  if (data.imageUrl !== undefined) {
+    update.imageUrl = data.imageUrl || "";
+  }
+
   if (data.scope !== undefined) {
     update.scope = normalizeScope(data.scope);
   }
@@ -228,6 +259,7 @@ export async function updatePromotion(id: string, data: any) {
 
     revalidatePath("/marketing/promotions");
     revalidatePath(`/marketing/promotions/edit/${id}`);
+    revalidatePromotionConsumers();
     return updated;
   } catch (err: any) {
     if (err.code === 11000) {
@@ -258,6 +290,11 @@ export async function deletePromotion(id: string) {
   if (!result) throw new Error("Promotion not found");
 
   revalidatePath("/marketing/promotions");
+  // A deleted promotion makes any block that referenced it render
+  // nothing — the resolve step returns [] for the missing document and
+  // `getBlocksForLocation` filters empty sections out. Refresh the tag
+  // so the storefront doesn't keep serving a stale banner.
+  revalidatePromotionConsumers();
   return { success: true };
 }
 
@@ -388,5 +425,9 @@ export async function syncProductPromotions(
   }
 
   revalidatePath("/marketing/promotions");
+  // Scope changes affect which products appear in a promotion-sourced
+  // block (e.g. `display: "banner"` with `promotionMode: "products"`),
+  // so drop the block cache too.
+  revalidatePromotionConsumers();
   return { success: true };
 }

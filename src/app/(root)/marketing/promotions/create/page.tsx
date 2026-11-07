@@ -11,7 +11,7 @@ export default async function CreatePromotionPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-3xl px-3 py-6 sm:px-6">
       <PromotionComposer
         customerGroups={options.customerGroups}
         otherPromotions={options.promotions}

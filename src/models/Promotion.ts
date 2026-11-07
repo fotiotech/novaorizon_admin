@@ -71,18 +71,6 @@ const promotionTypeSchema = new Schema(
 
 // ─────────────────────────────────────────────────────────────────────
 // Sub-schema — what products the promotion applies to.
-//
-// The promotion is the source of truth. The storefront evaluator
-// resolves "does this promotion apply to product P?" by:
-//
-//   appliesTo === "all"        → always applies
-//   appliesTo === "products"   → P._id ∈ productIds
-//   appliesTo === "categories" → P.categoryId ∈ categoryIds
-//   appliesTo === "brands"     → P.brand ∈ brandIds
-//
-// `excludeProductIds` is a carve-out that runs after the above.
-// Bundle/`buy_x_get_y` still use their own structural product lists
-// inside `propertyValues` — that's definition, not scope.
 // ─────────────────────────────────────────────────────────────────────
 const promotionScopeSchema = new Schema(
   {
@@ -118,6 +106,10 @@ const promotionSchema = new Schema(
     name: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
 
+    // NEW — banner image. Used when a promotion is rendered with
+    // `promotionMode: "self"` inside a Content Block (display: "banner").
+    imageUrl: { type: String, trim: true },
+
     code: {
       type: String,
       trim: true,
@@ -150,13 +142,8 @@ const promotionSchema = new Schema(
   { timestamps: true },
 );
 
-// Primary lookup for the storefront: active promotions inside a window.
 promotionSchema.index({ isActive: 1, startDate: 1, endDate: 1 });
-
-// Filter by calculation type (admin list views, reporting).
 promotionSchema.index({ "promotionType.calculationType": 1 });
-
-// Scope lookups — resolve "which promotions apply to this product?"
 promotionSchema.index({ "scope.appliesTo": 1, "scope.productIds": 1 });
 promotionSchema.index({ "scope.appliesTo": 1, "scope.categoryIds": 1 });
 promotionSchema.index({ "scope.appliesTo": 1, "scope.brandIds": 1 });
@@ -190,4 +177,23 @@ export type PromotionScopeDoc = {
   categoryIds: any[];
   brandIds: any[];
   excludeProductIds: any[];
+};
+
+// NEW — convenience type for the resolver / admin read paths.
+export type PromotionDoc = {
+  _id: any;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  code?: string;
+  isActive: boolean;
+  startDate: Date;
+  endDate: Date;
+  priority: number;
+  promotionType: {
+    calculationType: string;
+    properties?: PromotionPropertyDoc[];
+  };
+  scope?: PromotionScopeDoc;
+  propertyValues?: Record<string, any>;
 };
