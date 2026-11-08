@@ -8,6 +8,10 @@ import Notification from "@/components/Notification";
 import { getAllBlocks, deleteBlock, reorderBlocks } from "@/app/actions/blocks";
 import { BLOCK_LOCATIONS, type BlockLocation } from "@/lib/content/constants";
 
+/* -------------------------------------------------------------------------- */
+/*                                   Types                                    */
+/* -------------------------------------------------------------------------- */
+
 interface BlockRow {
   _id: string;
   name: string;
@@ -15,10 +19,32 @@ interface BlockRow {
   display: string;
   status: "active" | "inactive";
   order: number;
-  source: { type: string };
+  /** Editorial blocks carry an editorialId and no source. */
+  source?: { type: string };
+  editorialId?: string | null;
 }
 
 const LIST_PATH = "/channels/store/content/blocks";
+
+/** Short summary of what this block renders. */
+function describeBlock(b: BlockRow): string {
+  if (b.display === "editorial") {
+    return b.editorialId ? "editorial" : "editorial (missing)";
+  }
+  return b.source?.type ?? "source (missing)";
+}
+
+/** Badge color per block family. */
+function badgeClass(b: BlockRow): string {
+  if (b.display === "editorial") {
+    return "bg-violet-50 text-violet-700";
+  }
+  return "bg-blue-50 text-blue-700";
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                    Page                                    */
+/* -------------------------------------------------------------------------- */
 
 export default function BlocksAdminPage() {
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
@@ -52,7 +78,6 @@ export default function BlocksAdminPage() {
       if (!map.has(b.location)) map.set(b.location, []);
       map.get(b.location)!.push(b);
     }
-    // Sort each group by order asc
     for (const [loc, list] of map) {
       map.set(
         loc,
@@ -93,7 +118,6 @@ export default function BlocksAdminPage() {
 
     const orderedIds = next.map((b) => b._id);
 
-    // Optimistic update
     setBlocks((prev) => {
       const others = prev.filter((b) => b.location !== location);
       const reordered = next.map((b, i) => ({ ...b, order: i }));
@@ -212,8 +236,10 @@ export default function BlocksAdminPage() {
                             <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-600">
                               {b.display}
                             </span>
-                            <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-blue-700">
-                              {b.source.type}
+                            <span
+                              className={`rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${badgeClass(b)}`}
+                            >
+                              {describeBlock(b)}
                             </span>
                             {b.status === "inactive" && (
                               <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-700">

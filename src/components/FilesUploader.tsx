@@ -6,21 +6,30 @@ import { useDropzone } from "react-dropzone";
 import Image from "next/image";
 import { Modal } from "@/components/ux/Modal";
 
+type InFlightUpload = { url: string; progress: number };
+
 type FilesUploaderProps = {
   files: string[];
+  /** New uploads currently in flight — rendered as placeholder tiles with progress. */
+  inFlightUploads?: InFlightUpload[];
   addFiles: (newFiles: File[]) => void;
   onRemove: (index: number, fileUrl: string) => Promise<any>;
   loading?: boolean;
+  /** Progress for EXISTING files being overwritten (keyed by basename). */
   progressByName?: Record<string, number>;
-  /** When true, renders a single small thumbnail that opens the modal. */
   compact?: boolean;
 };
 
 const MAX_VISIBLE = 2;
 const ACCEPT = { "image/*": [".jpeg", ".jpg", ".png", ".gif", ".webp"] };
 
+type RenderSlot =
+  | { kind: "file"; url: string; index: number }
+  | { kind: "uploading"; url: string; progress: number };
+
 const FilesUploader: React.FC<FilesUploaderProps> = ({
   files,
+  inFlightUploads = [],
   addFiles,
   onRemove,
   progressByName = {},
@@ -30,9 +39,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const modalInputRef = useRef<HTMLInputElement>(null);
 
-  const onDrop = (acceptedFiles: File[]) => {
-    addFiles(acceptedFiles);
-  };
+  const onDrop = (acceptedFiles: File[]) => addFiles(acceptedFiles);
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
@@ -41,6 +48,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     noClick: true,
   });
 
+  // Progress for an already-saved file (i.e. one being overwritten).
   const getProgress = (url: string) => {
     const fileName = url.split("/").pop() || "";
     return progressByName[fileName];
@@ -59,7 +67,6 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
       alert("Please wait for the upload to complete before removing the file");
       return;
     }
-
     if (!window.confirm("Remove this image?")) return;
 
     try {
@@ -78,10 +85,17 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     }
   };
 
-  const total = fileArray.length;
-  const visibleImages = fileArray
-    .slice(0, MAX_VISIBLE)
-    .map((url, index) => ({ url, index }));
+  // Merge saved files + in-flight uploads into a single ordered list.
+  const slots: RenderSlot[] = [
+    ...fileArray.map((url, index) => ({ kind: "file" as const, url, index })),
+    ...inFlightUploads.map((u) => ({
+      kind: "uploading" as const,
+      url: u.url,
+      progress: u.progress,
+    })),
+  ];
+  const total = slots.length;
+  const visibleSlots = slots.slice(0, MAX_VISIBLE);
   const remaining = Math.max(0, total - MAX_VISIBLE);
 
   // ------------------------------------------------------------------
@@ -100,20 +114,26 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     </button>
   );
 
-  const renderImageTile = (
-    slot: { url: string; index: number },
-    showOverlay = false,
-  ) => {
-    const { url, index } = slot;
-    const progress = getProgress(url);
-    const isUploading = progress !== undefined && progress < 100;
+  const renderImageTile = (slot: RenderSlot, showOverlay = false) => {
+    // For uploads, progress comes from the slot itself.
+    // For saved files, progress comes from progressByName (updates only).
+    const progress =
+      slot.kind === "uploading" ? slot.progress : getProgress(slot.url);
+    const isUploading =
+      slot.kind === "uploading" || (progress !== undefined && progress < 100);
+
+    const index = slot.kind === "file" ? slot.index : -1;
 
     return (
       <button
         type="button"
         onClick={() => setIsModalOpen(true)}
         aria-label={
-          showOverlay ? `View all ${total} images` : `View image ${index + 1}`
+          showOverlay
+            ? `View all ${total} images`
+            : slot.kind === "uploading"
+              ? "Upload in progress"
+              : `View image ${index + 1}`
         }
         className="group relative h-full w-full overflow-hidden rounded-xl border border-border bg-muted"
       >
@@ -122,17 +142,17 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
             <div className="h-1 w-full overflow-hidden rounded-full bg-border">
               <div
                 className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${progress}%` }}
+                style={{ width: `${progress ?? 0}%` }}
               />
             </div>
             <span className="text-[10px] text-muted-foreground">
-              {progress}%
+              {progress ?? 0}%
             </span>
           </div>
         ) : (
           <Image
-            src={url}
-            alt={`Image ${index + 1}`}
+            src={slot.url}
+            alt={index >= 0 ? `Image ${index + 1}` : "Uploaded image"}
             fill
             sizes="(max-width: 768px) 30vw, 160px"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
@@ -150,14 +170,12 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   };
 
   // ------------------------------------------------------------------
-  // Compact trigger — sized for a table cell
+  // Compact trigger
   // ------------------------------------------------------------------
   const renderCompactTrigger = () => {
-    const firstUrl = fileArray[0];
-    const progress = firstUrl ? getProgress(firstUrl) : undefined;
-    const isUploading = progress !== undefined && progress < 100;
+    const firstSlot = slots[0];
 
-    if (total === 0) {
+    if (!firstSlot) {
       return (
         <button
           type="button"
@@ -170,6 +188,14 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
       );
     }
 
+    const progress =
+      firstSlot.kind === "uploading"
+        ? firstSlot.progress
+        : getProgress(firstSlot.url);
+    const isUploading =
+      firstSlot.kind === "uploading" ||
+      (progress !== undefined && progress < 100);
+
     return (
       <button
         type="button"
@@ -179,11 +205,11 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
       >
         {isUploading ? (
           <span className="flex h-full w-full items-center justify-center text-[10px] font-medium text-muted-foreground">
-            {progress}%
+            {progress ?? 0}%
           </span>
         ) : (
           <Image
-            src={firstUrl}
+            src={firstSlot.url}
             alt="Variant image"
             fill
             sizes="40px"
@@ -201,7 +227,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   };
 
   // ------------------------------------------------------------------
-  // Modal (shared by both variants)
+  // Modal
   // ------------------------------------------------------------------
   const modal = (
     <Modal
@@ -214,6 +240,11 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
         <div className="flex flex-none items-center justify-between">
           <span className="text-xs text-muted-foreground">
             {total} {total === 1 ? "image" : "images"}
+            {inFlightUploads.length > 0 && (
+              <span className="ml-1 text-primary">
+                ({inFlightUploads.length} uploading…)
+              </span>
+            )}
           </span>
           <button
             type="button"
@@ -246,13 +277,22 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
         ) : (
           <div className="-mr-2 flex-1 overflow-y-auto pr-2">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {fileArray.map((url, index) => {
-                const progress = getProgress(url);
-                const isUploading = progress !== undefined && progress < 100;
+              {slots.map((slot) => {
+                const progress =
+                  slot.kind === "uploading"
+                    ? slot.progress
+                    : getProgress(slot.url);
+                const isUploading =
+                  slot.kind === "uploading" ||
+                  (progress !== undefined && progress < 100);
 
                 return (
                   <div
-                    key={`${url}-${index}`}
+                    key={
+                      slot.kind === "uploading"
+                        ? `uploading-${slot.url}`
+                        : `${slot.url}-${slot.index}`
+                    }
                     className="group relative aspect-square overflow-hidden rounded-xl border border-border bg-muted"
                   >
                     {isUploading ? (
@@ -260,27 +300,31 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
                           <div
                             className="h-full rounded-full bg-primary transition-all"
-                            style={{ width: `${progress}%` }}
+                            style={{ width: `${progress ?? 0}%` }}
                           />
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {progress}%
+                          {progress ?? 0}%
                         </span>
                       </div>
                     ) : (
                       <Image
-                        src={url}
-                        alt={`Image ${index + 1}`}
+                        src={slot.url}
+                        alt={
+                          slot.kind === "file"
+                            ? `Image ${slot.index + 1}`
+                            : "Uploaded image"
+                        }
                         fill
                         sizes="(max-width: 640px) 45vw, 200px"
                         className="object-cover"
                       />
                     )}
 
-                    {!isUploading && (
+                    {!isUploading && slot.kind === "file" && (
                       <button
                         type="button"
-                        onClick={(e) => handleRemove(e, index, url)}
+                        onClick={(e) => handleRemove(e, slot.index, slot.url)}
                         className="absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-destructive focus:opacity-100 group-hover:opacity-100"
                         aria-label="Remove image"
                       >
@@ -298,7 +342,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   );
 
   // ------------------------------------------------------------------
-  // Compact mode — table cell friendly
+  // Compact mode
   // ------------------------------------------------------------------
   if (compact) {
     return (
@@ -316,7 +360,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
     <>
       <div
         {...getRootProps()}
-        className={`relative my-4 w-full max-w-[200px] transition-all  md:max-w-[220px] ${
+        className={`relative my-4 w-full max-w-[200px] transition-all md:max-w-[220px] ${
           isDragActive
             ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background"
             : ""
@@ -328,7 +372,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
 
         {total === 1 && (
           <div className="grid aspect-[2/1] grid-cols-2 gap-1.5">
-            {renderImageTile(visibleImages[0])}
+            {renderImageTile(visibleSlots[0])}
             {renderAddTile()}
           </div>
         )}
@@ -336,10 +380,10 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
         {total >= 2 && (
           <div className="grid aspect-[3/2] grid-cols-3 grid-rows-2 gap-1.5">
             <div className="col-span-2 row-span-2">
-              {renderImageTile(visibleImages[0])}
+              {renderImageTile(visibleSlots[0])}
             </div>
             <div className="col-span-1 row-span-1">
-              {renderImageTile(visibleImages[1], remaining > 0)}
+              {renderImageTile(visibleSlots[1], remaining > 0)}
             </div>
             <div className="col-span-1 row-span-1">{renderAddTile()}</div>
           </div>

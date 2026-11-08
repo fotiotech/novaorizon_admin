@@ -554,7 +554,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           aria-label="Home"
         >
           <Image
-            src="light-logo.png"
+            src="/light-logo.png"
             alt="logo"
             width={128}
             height={88}

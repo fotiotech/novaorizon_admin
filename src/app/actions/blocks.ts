@@ -1,10 +1,11 @@
 // app/actions/blocks.ts
 "use server";
 import { requireAdmin } from "@/lib/authz";
-import { revalidatePath, revalidateTag, updateTag } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import { Block } from "@/models/Block";
+import { EditorialContent } from "@/models/EditorialContent";
 import { Collection } from "@/models/Collection";
 import Category from "@/models/Category";
 import Promotion from "@/models/Promotion";
@@ -19,14 +20,17 @@ import {
   BLOCK_ALIGNMENTS,
   CTA_STYLES,
   CARD_SHAPES,
+  CARD_RATIOS,
+  CARD_SIZES,
+  TITLE_POSITIONS,
+  IMAGE_POSITIONS,
   MAX_BLOCK_LIMIT,
+  isFeatureDisplay,
+  isStandardDisplay,
   type BlockLocation,
 } from "@/lib/content/constants";
 
 const LIST_PATH = "/channels/store/content/blocks";
-
-// Local extension until constants.ts is updated in batch 2.
-const DISPLAYS = [...BLOCK_DISPLAYS, "banner"] as const;
 
 /* -------------------------------------------------------------------------- */
 /*                                  helpers                                   */
@@ -59,12 +63,23 @@ function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n));
 }
 
+const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+function readColor(raw: unknown): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  if (s === "transparent") return "transparent";
+  if (HEX_RE.test(s)) return s;
+  return "";
+}
+
 function revalidateBlocks(location: BlockLocation) {
   revalidatePath("/");
   revalidatePath("/products/[slug]", "page");
   revalidatePath(LIST_PATH);
   updateTag("blocks");
   updateTag(`blocks:${location}`);
+  updateTag("editorials");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -82,12 +97,6 @@ export type SourcePreviewResult =
   | { success: true; data: SourcePreviewData }
   | { success: false; error: string; missing?: boolean };
 
-/**
- * Resolve a small preview payload for a block's source selection so the
- * admin form can render a rich "selected" card instead of just a name.
- * Returns `missing: true` when the referenced item was deleted — the form
- * shows a warning instead of an endless spinner.
- */
 export async function getSourcePreview(
   sourceType: string,
   id: string,
@@ -133,10 +142,7 @@ export async function getSourcePreview(
           _id: String(doc._id),
           name: doc.name,
           imageUrl: img,
-          meta: {
-            slug: doc.slug,
-            status: doc.status,
-          },
+          meta: { slug: doc.slug, status: doc.status },
         },
       };
     }
@@ -165,18 +171,123 @@ export async function getSourcePreview(
       };
     }
 
+    if (sourceType === "editorial") {
+      const doc: any = await EditorialContent.findById(id)
+        .select("name image images heading")
+        .lean();
+      if (!doc) return { success: false, error: "Not found", missing: true };
+      return {
+        success: true,
+        data: {
+          _id: String(doc._id),
+          name: doc.name,
+          imageUrl:
+            doc.image ||
+            (Array.isArray(doc.images) && doc.images.length > 0
+              ? doc.images[0]
+              : null),
+          meta: {
+            headline: doc.heading?.title ?? "",
+            imageCount: Array.isArray(doc.images) ? doc.images.length : 0,
+          },
+        },
+      };
+    }
+
     return { success: false, error: "Unsupported source type" };
   } catch (err) {
     console.error("[getSourcePreview]", err);
     return { success: false, error: "Failed to load preview" };
   }
 }
+
 /* -------------------------------------------------------------------------- */
 /*                             form parsing                                   */
 /* -------------------------------------------------------------------------- */
 
 type ParseOk = { doc: Record<string, any> };
 type ParseErr = { error: string };
+
+function parseDisplayConfig(fd: FormData): Record<string, any> {
+  return {
+    theme: pickEnum(fd.get("displayConfig.theme"), BLOCK_THEMES, "inherit"),
+    columns: clamp(readNum(fd, "displayConfig.columns", 4), 1, 6),
+    gap: clamp(readNum(fd, "displayConfig.gap", 16), 0, 64),
+    borderless: readBool(fd, "displayConfig.borderless"),
+    rounded: readBool(fd, "displayConfig.rounded", true),
+    shadow: readBool(fd, "displayConfig.shadow"),
+    alignment: pickEnum(
+      fd.get("displayConfig.alignment"),
+      BLOCK_ALIGNMENTS,
+      "start",
+    ),
+    animation: pickEnum(
+      fd.get("displayConfig.animation"),
+      BLOCK_ANIMATIONS,
+      "fade",
+    ),
+    cardShape: pickEnum(
+      fd.get("displayConfig.cardShape"),
+      CARD_SHAPES,
+      "default",
+    ),
+    cardRatio: pickEnum(fd.get("displayConfig.cardRatio"), CARD_RATIOS, "1:1"),
+    cardSize: pickEnum(fd.get("displayConfig.cardSize"), CARD_SIZES, "md"),
+    titlePosition: pickEnum(
+      fd.get("displayConfig.titlePosition"),
+      TITLE_POSITIONS,
+      "below",
+    ),
+    imagePosition: pickEnum(
+      fd.get("displayConfig.imagePosition"),
+      IMAGE_POSITIONS,
+      "center",
+    ),
+    backgroundColor: readColor(fd.get("displayConfig.backgroundColor")),
+    textColor: readColor(fd.get("displayConfig.textColor")),
+  };
+}
+
+function parseCta(fd: FormData) {
+  return {
+    text: String(fd.get("cta.text") ?? "").trim(),
+    link: String(fd.get("cta.link") ?? "").trim(),
+    style: pickEnum(fd.get("cta.style"), CTA_STYLES, "none"),
+  };
+}
+
+/** Reject display/source combinations the renderer can't fulfil. */
+async function validateEditorialForDisplay(
+  editorialId: string,
+  display: string,
+): Promise<string | null> {
+  const doc: any = await EditorialContent.findById(editorialId)
+    .select("image secondaryImage images heading")
+    .lean();
+  if (!doc) return "The referenced editorial was deleted.";
+
+  const hasImage = Boolean(doc.image);
+  const hasSecondary = Boolean(doc.secondaryImage);
+  const imageCount = Array.isArray(doc.images) ? doc.images.length : 0;
+
+  if (display === "feature-duo") {
+    if (!hasImage || !hasSecondary) {
+      return "The duo display needs both a primary and a secondary image in the editorial.";
+    }
+    return null;
+  }
+  if (isFeatureDisplay(display) || display === "banner") {
+    if (!hasImage) {
+      return "This display needs a primary image in the editorial.";
+    }
+    return null;
+  }
+  // Grid, carousel, list, hero
+  if (imageCount === 0) {
+    return "Grid, carousel, list, and hero displays need at least one image in the editorial's gallery.";
+  }
+  return null;
+}
 
 function parseBlockForm(fd: FormData): ParseOk | ParseErr {
   const name = String(fd.get("name") ?? "").trim();
@@ -187,12 +298,28 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
     BLOCK_LOCATIONS,
     "Home" as BlockLocation,
   );
-  const display = pickEnum(fd.get("display"), DISPLAYS, "grid");
+  const display = pickEnum(fd.get("display"), BLOCK_DISPLAYS, "grid");
+
   const sourceType = pickEnum(
     fd.get("source.type"),
     BLOCK_SOURCE_TYPES,
     "collection",
   );
+
+  // Display must fit the source family.
+  if (sourceType !== "editorial" && isFeatureDisplay(display)) {
+    return {
+      error:
+        "Feature displays require an editorial source. Pick a collection, category, promotion, or manual source — or switch to editorial.",
+    };
+  }
+  if (
+    sourceType === "editorial" &&
+    !isStandardDisplay(display) &&
+    !isFeatureDisplay(display)
+  ) {
+    return { error: "Invalid display for editorial source." };
+  }
 
   const source: any = { type: sourceType };
 
@@ -216,6 +343,11 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
       PROMOTION_MODES,
       "products",
     );
+  } else if (sourceType === "editorial") {
+    const id = String(fd.get("source.editorialId") ?? "");
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return { error: "Select an editorial from the library" };
+    source.editorialId = new mongoose.Types.ObjectId(id);
   } else if (sourceType === "manual") {
     let raw: any[] = [];
     try {
@@ -245,39 +377,33 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
     source.items = items;
   }
 
+  // Only sourced blocks own a heading + CTA. Editorial blocks inherit
+  // both from the editorial.
+  const heading =
+    sourceType === "editorial"
+      ? { title: "", subtitle: "", showHeading: true }
+      : {
+          title: String(fd.get("heading.title") ?? "").trim(),
+          subtitle: String(fd.get("heading.subtitle") ?? "").trim(),
+          showHeading: readBool(fd, "heading.showHeading", true),
+        };
+
+  const cta =
+    sourceType === "editorial"
+      ? { text: "", link: "", style: "none" as const }
+      : parseCta(fd);
+
+  if (cta.style !== "none" && (!cta.text || !cta.link)) {
+    return { error: "CTA requires both text and link" };
+  }
+
   const doc: Record<string, any> = {
     name,
     location,
     display,
     source,
-    heading: {
-      title: String(fd.get("heading.title") ?? "").trim(),
-      subtitle: String(fd.get("heading.subtitle") ?? "").trim(),
-      showHeading: readBool(fd, "heading.showHeading", true),
-    },
-    displayConfig: {
-      theme: pickEnum(fd.get("displayConfig.theme"), BLOCK_THEMES, "inherit"),
-      columns: clamp(readNum(fd, "displayConfig.columns", 4), 1, 6),
-      gap: clamp(readNum(fd, "displayConfig.gap", 16), 0, 64),
-      borderless: readBool(fd, "displayConfig.borderless"),
-      rounded: readBool(fd, "displayConfig.rounded", true),
-      shadow: readBool(fd, "displayConfig.shadow"),
-      alignment: pickEnum(
-        fd.get("displayConfig.alignment"),
-        BLOCK_ALIGNMENTS,
-        "start",
-      ),
-      animation: pickEnum(
-        fd.get("displayConfig.animation"),
-        BLOCK_ANIMATIONS,
-        "fade",
-      ),
-      cardShape: pickEnum(
-        fd.get("displayConfig.cardShape"),
-        CARD_SHAPES,
-        "default",
-      ),
-    },
+    heading,
+    displayConfig: parseDisplayConfig(fd),
     sourceStyles: {
       promotionBadgeStyle: String(
         fd.get("sourceStyles.promotionBadgeStyle") ?? "default",
@@ -300,11 +426,7 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
         true,
       ),
     },
-    cta: {
-      text: String(fd.get("cta.text") ?? "").trim(),
-      link: String(fd.get("cta.link") ?? "").trim(),
-      style: pickEnum(fd.get("cta.style"), CTA_STYLES, "none"),
-    },
+    cta,
     limit: clamp(readNum(fd, "limit", 12), 1, MAX_BLOCK_LIMIT),
     status: pickEnum(
       fd.get("status"),
@@ -313,10 +435,6 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
     ),
     order: Math.max(0, readNum(fd, "order", 0)),
   };
-
-  if (doc.cta.style !== "none" && (!doc.cta.text || !doc.cta.link)) {
-    return { error: "CTA requires both text and link" };
-  }
 
   return { doc };
 }
@@ -367,6 +485,15 @@ export async function createBlock(formData: FormData) {
 
   try {
     await connection();
+
+    if (parsed.doc.source.type === "editorial") {
+      const err = await validateEditorialForDisplay(
+        String(parsed.doc.source.editorialId),
+        parsed.doc.display,
+      );
+      if (err) return { success: false, message: err };
+    }
+
     const doc = new Block(parsed.doc);
     await doc.save();
     revalidateBlocks(doc.location as BlockLocation);
@@ -394,6 +521,15 @@ export async function updateBlock(id: string, formData: FormData) {
 
   try {
     await connection();
+
+    if (parsed.doc.source.type === "editorial") {
+      const err = await validateEditorialForDisplay(
+        String(parsed.doc.source.editorialId),
+        parsed.doc.display,
+      );
+      if (err) return { success: false, message: err };
+    }
+
     const updated = await Block.findByIdAndUpdate(id, parsed.doc, {
       new: true,
       runValidators: true,

@@ -8,15 +8,21 @@ import {
 import { getEntityConfig } from "@/lib/content/entityRegistry";
 import { buildProductQueryFromScope } from "@/lib/content/query";
 import Product from "@/models/Product";
+import { EditorialContent } from "@/models/EditorialContent";
 import {
   DEFAULT_BLOCK_DISPLAY_CONFIG,
   DEFAULT_BLOCK_SOURCE_STYLES,
+  isFeatureDisplay,
   type BlockAnimation,
   type BlockAlignment,
   type BlockLocation,
   type BlockSourceStyles,
-  type CardShape,
   type BlockTheme,
+  type CardShape,
+  type CardRatio,
+  type CardSize,
+  type TitlePosition,
+  type ImagePosition,
 } from "@/lib/content/constants";
 
 /* -------------------------------------------------------------------------- */
@@ -39,7 +45,6 @@ export interface ResolvedCta {
   style: "none" | "link" | "button";
 }
 
-/** Superset of DEFAULT_BLOCK_DISPLAY_CONFIG that includes `columns`. */
 export interface ResolvedDisplayConfig {
   theme: BlockTheme;
   columns: number;
@@ -50,9 +55,23 @@ export interface ResolvedDisplayConfig {
   alignment: BlockAlignment;
   animation: BlockAnimation;
   cardShape: CardShape;
+  cardRatio: CardRatio;
+  cardSize: CardSize;
+  titlePosition: TitlePosition;
+  imagePosition: ImagePosition;
+  backgroundColor: string;
+  textColor: string;
 }
 
 export type ResolvedSourceStyles = BlockSourceStyles;
+
+export interface ResolvedEditorial {
+  eyebrow: string;
+  body: string;
+  image: string | null;
+  secondaryImage: string | null;
+  images: string[];
+}
 
 export interface ResolvedBlock {
   block: {
@@ -67,6 +86,7 @@ export interface ResolvedBlock {
     limit: number;
   };
   items: NormalizedContentItem[];
+  editorial?: ResolvedEditorial;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -75,17 +95,12 @@ export interface ResolvedBlock {
 
 const DEFAULT_DISPLAY: ResolvedDisplayConfig = {
   ...DEFAULT_BLOCK_DISPLAY_CONFIG,
-  columns: 4,
 };
 
 /* -------------------------------------------------------------------------- */
 /*                             Source resolvers                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Resolve a manual `{ refModel, refId }[]` list. Groups by model so we issue
- * one query per distinct model, then re-orders to match the authored order.
- */
 async function resolveManualSource(
   source: any,
   limit: number,
@@ -95,7 +110,6 @@ async function resolveManualSource(
     : [];
   if (raw.length === 0) return [];
 
-  // Group ids by model for batched fetches.
   const grouped = new Map<string, string[]>();
   for (const it of raw) {
     if (!it?.refModel || !it?.refId) continue;
@@ -128,10 +142,6 @@ async function resolveManualSource(
   return out;
 }
 
-/**
- * Category source: return products that belong to the category.
- * For "category tile" blocks use a Collection with targetType=Category.
- */
 async function resolveCategorySource(
   source: any,
   limit: number,
@@ -147,11 +157,6 @@ async function resolveCategorySource(
   return (docs as any[]).map((d) => normalizeContentItem(d, "Product"));
 }
 
-/**
- * Promotion source:
- *   - "products" → every product in the promotion's scope
- *   - "self"     → the promotion tile itself (banner-friendly, keeps imageUrl)
- */
 async function resolvePromotionSource(
   source: any,
   limit: number,
@@ -165,8 +170,6 @@ async function resolvePromotionSource(
 
   if (source.promotionMode === "self") {
     const item = normalizeContentItem(promo, "Promotion");
-    // Promotions store their own imageUrl; expose it so a banner display
-    // has something to paint.
     if (!item.image) item.image = promo.imageUrl ?? null;
     return [item];
   }
@@ -177,55 +180,40 @@ async function resolvePromotionSource(
 }
 
 /* -------------------------------------------------------------------------- */
+/*                        Editorial source → resolved                         */
+/* -------------------------------------------------------------------------- */
+
+function buildItemsFromEditorial(
+  blockId: string,
+  display: string,
+  editorial: { image: string | null; images: string[] },
+  href: string,
+): NormalizedContentItem[] {
+  // Feature displays and the banner display render the editorial's story
+  // directly — no items needed.
+  if (isFeatureDisplay(display) || display === "banner") return [];
+
+  // Standard card displays use the gallery.
+  return editorial.images
+    .filter((u) => u && u.trim().length > 0)
+    .map((url, i) => ({
+      _id: `${blockId}-editorial-${i}`,
+      name: "",
+      image: url,
+      href: href || "#",
+      contentType: "Page",
+    }));
+}
+
+/* -------------------------------------------------------------------------- */
 /*                                 resolveBlock                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Turn one raw `Block` document into a storefront-ready payload.
- * Returns `null` for inactive blocks or unknown source types.
- */
 export async function resolveBlock(
   raw: any,
   ctx: ResolveCtx = {},
 ): Promise<ResolvedBlock | null> {
   if (!raw || raw.status !== "active") return null;
-
-  const limit = Math.min(Number(raw.limit) || 12, 60);
-  const source = raw.source ?? {};
-  let items: NormalizedContentItem[] = [];
-
-  switch (source.type) {
-    case "collection":
-      if (source.collectionId) {
-        items = await resolveCollection(
-          source.collectionId,
-          { userId: ctx.userId },
-          limit,
-        );
-      }
-      break;
-
-    case "category":
-      items = await resolveCategorySource(source, limit);
-      break;
-
-    case "promotion":
-      items = await resolvePromotionSource(source, limit);
-      break;
-
-    case "manual":
-      items = await resolveManualSource(source, limit);
-      break;
-
-    default:
-      return null;
-  }
-
-  const heading: ResolvedHeading = {
-    title: raw.heading?.title ?? "",
-    subtitle: raw.heading?.subtitle ?? "",
-    showHeading: raw.heading?.showHeading !== false,
-  };
 
   const displayConfig: ResolvedDisplayConfig = {
     ...DEFAULT_DISPLAY,
@@ -237,24 +225,108 @@ export async function resolveBlock(
     ...(raw.sourceStyles ?? {}),
   };
 
+  const heading: ResolvedHeading = {
+    title: raw.heading?.title ?? "",
+    subtitle: raw.heading?.subtitle ?? "",
+    showHeading: raw.heading?.showHeading !== false,
+  };
+
   const cta: ResolvedCta = {
     text: raw.cta?.text ?? "",
     link: raw.cta?.link ?? "",
     style: (raw.cta?.style ?? "none") as ResolvedCta["style"],
   };
 
-  return {
-    block: {
-      _id: String(raw._id),
-      name: raw.name ?? "",
-      location: raw.location,
-      display: raw.display ?? "grid",
-      heading,
-      displayConfig,
-      sourceStyles,
-      cta,
-      limit,
-    },
-    items,
+  const blockMeta = {
+    _id: String(raw._id),
+    name: raw.name ?? "",
+    location: raw.location,
+    display: raw.display ?? "grid",
+    heading,
+    displayConfig,
+    sourceStyles,
+    cta,
+    limit: Math.min(Number(raw.limit) || 12, 60),
   };
+
+  const source = raw.source ?? {};
+
+  /* ──────────────── EDITORIAL SOURCE ───────────────────────────── */
+  if (source.type === "editorial") {
+    if (!source.editorialId) return null;
+
+    const doc: any = await EditorialContent.findById(source.editorialId).lean();
+    if (!doc) return null;
+
+    const editorial: ResolvedEditorial = {
+      eyebrow: doc.eyebrow ?? "",
+      body: doc.body ?? "",
+      image: doc.image || null,
+      secondaryImage: doc.secondaryImage || null,
+      images: Array.isArray(doc.images)
+        ? doc.images.filter(
+            (u: any) => typeof u === "string" && u.trim().length > 0,
+          )
+        : [],
+    };
+
+    // Editorial owns headline + CTA — override block defaults.
+    const editorialHeading: ResolvedHeading = {
+      title: doc.heading?.title ?? "",
+      subtitle: doc.heading?.subtitle ?? "",
+      showHeading: true,
+    };
+
+    const editorialCta: ResolvedCta = {
+      text: doc.cta?.text ?? "",
+      link: doc.cta?.link ?? "",
+      style: (doc.cta?.style ?? "none") as ResolvedCta["style"],
+    };
+
+    const items = buildItemsFromEditorial(
+      blockMeta._id,
+      blockMeta.display,
+      editorial,
+      editorialCta.link,
+    );
+
+    return {
+      block: {
+        ...blockMeta,
+        heading: editorialHeading,
+        cta: editorialCta,
+      },
+      items,
+      editorial,
+    };
+  }
+
+  /* ──────────────── OTHER SOURCES ──────────────────────────────── */
+  let items: NormalizedContentItem[] = [];
+  const limit = blockMeta.limit;
+
+  switch (source.type) {
+    case "collection":
+      if (source.collectionId) {
+        items = await resolveCollection(
+          source.collectionId,
+          { userId: ctx.userId },
+          limit,
+        );
+      }
+      break;
+    case "category":
+      items = await resolveCategorySource(source, limit);
+      break;
+    case "promotion":
+      items = await resolvePromotionSource(source, limit);
+      break;
+    case "manual":
+      items = await resolveManualSource(source, limit);
+      break;
+    default:
+      return null;
+  }
+
+  return { block: blockMeta, items };
 }

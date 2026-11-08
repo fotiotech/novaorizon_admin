@@ -2,13 +2,7 @@
 import { auth } from "@/app/auth";
 import { NextResponse } from "next/server";
 
-const PUBLIC_PATHS = [
-  "/auth/login",
-  // Staff accounts are invite-only: /auth/sign_up is deliberately not
-  // public and the signup action requires an existing admin.
-  "/auth/error",
-  "/auth/unauthorized",
-];
+const PUBLIC_PATHS = ["/auth/login", "/auth/error", "/auth/unauthorized"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some(
@@ -17,6 +11,15 @@ function isPublic(pathname: string) {
 }
 
 export default auth((request) => {
+  // Server actions POST to page URLs. Letting them through untouched means
+  // any rewrite we do here cannot turn the action's JSON response into the
+  // HTML of /auth/unauthorized (which the client sees as
+  // "An unexpected response was received from the server").
+  // Authorization is enforced inside the action itself via requireAdmin().
+  if (request.headers.get("next-action")) {
+    return NextResponse.next();
+  }
+
   const { nextUrl } = request;
   const user = request.auth?.user;
   const pathname = nextUrl.pathname;
@@ -30,7 +33,6 @@ export default auth((request) => {
   }
 
   if (user.role !== "admin") {
-    // rewrite, NOT redirect — avoids the fetch loop
     return NextResponse.rewrite(new URL("/auth/unauthorized", nextUrl.origin));
   }
 

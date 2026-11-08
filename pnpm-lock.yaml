@@ -147,9 +147,6 @@ importers:
       '@types/react-dnd':
         specifier: ^2.0.36
         version: 2.0.36
-      auth-lib:
-        specifier: ^1.0.0
-        version: 1.0.0
       axios:
         specifier: ^1.7.4
         version: 1.20.0(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
@@ -172,8 +169,8 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       cn:
-        specifier: ^0.2.6
-        version: 0.2.6
+        specifier: ^0.5.2
+        version: 0.5.2
       date-fns:
         specifier: ^3.6.0
         version: 3.6.0
@@ -259,7 +256,7 @@ importers:
         specifier: ^14.2.3
         version: 14.4.1(react@19.2.8)
       react-google-recaptcha-v3:
-        specifier: ^1.10.1
+        specifier: ^1.11.0
         version: 1.11.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react-hook-form:
         specifier: ^7.85.0
@@ -2505,6 +2502,7 @@ packages:
   '@smithy/core@3.36.0':
     resolution: {integrity: sha512-3hJiwG1F5t1SoXqp/yOCmYXziyx7ZVqF63S5W6YU201e/qwVaHPex+E/3vvyY9a3ORq/b+BydeNZpP2saQ9X2g==}
     engines: {node: '>=18.0.0'}
+    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.5.2':
     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}
@@ -3311,9 +3309,6 @@ packages:
     resolution: {integrity: sha512-0bDNnY/u6pPwHDMoF0FieU354oBi0a8rD9FcsLwzcGWbc8KS8KPIi7y+s13OlVY+gMWc/9xEMUgNE6Qm8ZllYQ==}
     engines: {node: '>=4'}
 
-  auth-lib@1.0.0:
-    resolution: {integrity: sha512-B7rGXKv0vi8OB9NAOPHiPYBAPsD0Zq+4WUZV7OOBPFBf1erzZK2SnJ5I0fkLKgveKSOQOiwdSAqwwC7Di4eubw==}
-
   available-typed-arrays@1.0.7:
     resolution: {integrity: sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ==}
     engines: {node: '>= 0.4'}
@@ -3534,6 +3529,11 @@ packages:
   cn@0.2.6:
     resolution: {integrity: sha512-+i4L0zUGgRcEnhsxueVrP7iBGxBx5iD0WOTYg1MwFEu2ZyCmH5Ov2V1cul2Ht5UchRQQgftCf4be/RxspuW6QQ==}
     engines: {node: '>=20'}
+    hasBin: true
+
+  cn@0.5.2:
+    resolution: {integrity: sha512-wm10E6iuJ37rALOw3D+3cfaXXZSLNMh2uxpQn3dNICqfJM59yXqgbA9/9Iiz155j5kYNLdK6WreNdW3NQtx3OQ==}
+    engines: {node: '>=22'}
     hasBin: true
 
   code-block-writer@13.0.3:
@@ -10666,8 +10666,6 @@ snapshots:
 
   attr-accept@2.2.5: {}
 
-  auth-lib@1.0.0: {}
-
   available-typed-arrays@1.0.7:
     dependencies:
       possible-typed-array-names: 1.1.0
@@ -10901,6 +10899,8 @@ snapshots:
   clsx@2.1.1: {}
 
   cn@0.2.6: {}
+
+  cn@0.5.2: {}
 
   code-block-writer@13.0.3: {}
 

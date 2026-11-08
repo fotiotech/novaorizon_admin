@@ -11,14 +11,14 @@ import {
   BLOCK_ALIGNMENTS,
   CTA_STYLES,
   CARD_SHAPES,
+  CARD_RATIOS,
+  CARD_SIZES,
+  TITLE_POSITIONS,
+  IMAGE_POSITIONS,
   DEFAULT_BLOCK_DISPLAY_CONFIG,
   DEFAULT_BLOCK_SOURCE_STYLES,
   MAX_BLOCK_LIMIT,
 } from "@/lib/content/constants";
-
-/* -------------------------------------------------------------------------- */
-/*                                Sub-schemas                                 */
-/* -------------------------------------------------------------------------- */
 
 const ManualRefSchema = new Schema(
   {
@@ -77,6 +77,36 @@ const DisplayConfigSchema = new Schema(
       enum: CARD_SHAPES,
       default: DEFAULT_BLOCK_DISPLAY_CONFIG.cardShape,
     },
+    cardRatio: {
+      type: String,
+      enum: CARD_RATIOS,
+      default: DEFAULT_BLOCK_DISPLAY_CONFIG.cardRatio,
+    },
+    cardSize: {
+      type: String,
+      enum: CARD_SIZES,
+      default: DEFAULT_BLOCK_DISPLAY_CONFIG.cardSize,
+    },
+    titlePosition: {
+      type: String,
+      enum: TITLE_POSITIONS,
+      default: DEFAULT_BLOCK_DISPLAY_CONFIG.titlePosition,
+    },
+    imagePosition: {
+      type: String,
+      enum: IMAGE_POSITIONS,
+      default: DEFAULT_BLOCK_DISPLAY_CONFIG.imagePosition,
+    },
+    backgroundColor: {
+      type: String,
+      default: DEFAULT_BLOCK_DISPLAY_CONFIG.backgroundColor,
+      trim: true,
+    },
+    textColor: {
+      type: String,
+      default: DEFAULT_BLOCK_DISPLAY_CONFIG.textColor,
+      trim: true,
+    },
   },
   { _id: false },
 );
@@ -130,6 +160,7 @@ const SourceSchema = new Schema(
     collectionId: { type: Schema.Types.ObjectId, ref: "Collection" },
     categoryId: { type: Schema.Types.ObjectId, ref: "Category" },
     promotionId: { type: Schema.Types.ObjectId, ref: "Promotion" },
+    editorialId: { type: Schema.Types.ObjectId, ref: "EditorialContent" },
     promotionMode: {
       type: String,
       enum: PROMOTION_MODES,
@@ -139,10 +170,6 @@ const SourceSchema = new Schema(
   },
   { _id: false },
 );
-
-/* -------------------------------------------------------------------------- */
-/*                                Root schema                                 */
-/* -------------------------------------------------------------------------- */
 
 const BlockSchema = new Schema(
   {
@@ -167,12 +194,7 @@ const BlockSchema = new Schema(
     displayConfig: { type: DisplayConfigSchema, default: () => ({}) },
     sourceStyles: { type: SourceStylesSchema, default: () => ({}) },
     cta: { type: CtaSchema, default: () => ({}) },
-    limit: {
-      type: Number,
-      default: 12,
-      min: 1,
-      max: MAX_BLOCK_LIMIT,
-    },
+    limit: { type: Number, default: 12, min: 1, max: MAX_BLOCK_LIMIT },
     status: {
       type: String,
       enum: ["active", "inactive"],
@@ -180,23 +202,23 @@ const BlockSchema = new Schema(
     },
     order: { type: Number, default: 0, min: 0 },
   },
-  {
-    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
-  },
+  { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } },
 );
 
-/* -------------------------------------------------------------------------- */
-/*                                   Indexes                                  */
-/* -------------------------------------------------------------------------- */
+BlockSchema.pre("validate", function (next) {
+  const t = this.source?.type;
+  if (!t) return next(new Error("A content source is required."));
+  if (t === "editorial" && !this.source.editorialId) {
+    return next(new Error("Editorial source requires an editorialId."));
+  }
+  next();
+});
 
 BlockSchema.index({ location: 1, status: 1, order: 1 });
 BlockSchema.index({ "source.collectionId": 1 });
 BlockSchema.index({ "source.categoryId": 1 });
 BlockSchema.index({ "source.promotionId": 1 });
-
-/* -------------------------------------------------------------------------- */
-/*                                   Exports                                  */
-/* -------------------------------------------------------------------------- */
+BlockSchema.index({ "source.editorialId": 1 });
 
 export const Block =
   mongoose.models.Block || mongoose.model("Block", BlockSchema);

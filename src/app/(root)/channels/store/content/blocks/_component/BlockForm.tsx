@@ -5,8 +5,10 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
+import { BottomSheet } from "./BottomSheet";
 import { RefPicker } from "./RefPicker";
 import { ManualPicker, type ManualItem } from "./ManualPicker";
+import { EditorialPicker } from "./EditorialPicker";
 import {
   createBlock,
   updateBlock,
@@ -17,6 +19,7 @@ import {
 import {
   BLOCK_LOCATIONS,
   BLOCK_DISPLAYS,
+  STANDARD_DISPLAYS,
   BLOCK_THEMES,
   BLOCK_ALIGNMENTS,
   BLOCK_ANIMATIONS,
@@ -24,12 +27,16 @@ import {
   PROMOTION_MODES,
   CTA_STYLES,
   CARD_SHAPES,
+  CARD_RATIOS,
+  CARD_SIZES,
+  TITLE_POSITIONS,
+  IMAGE_POSITIONS,
   BLOCK_COLUMN_COUNTS,
   PROMOTION_BADGE_STYLES,
   COLLECTION_COUNT_POSITIONS,
-  CARD_SIZES,
   CARD_VARIANTS,
   MAX_BLOCK_LIMIT,
+  isFeatureDisplay,
   type BlockLocation,
   type BlockSourceType,
   type PromotionMode,
@@ -53,6 +60,7 @@ const SOURCE_LABEL: Record<BlockSourceType, string> = {
   collection: "Collection",
   category: "Category",
   promotion: "Promotion",
+  editorial: "Editorial",
   manual: "Manual items",
 };
 
@@ -62,12 +70,14 @@ const SOURCE_HELP: Record<BlockSourceType, string> = {
   category: "Shows products that belong to the selected category.",
   promotion:
     "Renders items from the promotion's scope, or the promotion tile itself (for banners).",
+  editorial:
+    "Renders content from the editorial library. Card displays use its gallery; feature displays use its story.",
   manual:
     "Hand-pick any combination of products, categories, collections, brands, promotions, or pages.",
 };
 
 const SOURCE_REF_TYPE: Record<
-  Exclude<BlockSourceType, "manual">,
+  Exclude<BlockSourceType, "manual" | "editorial">,
   RegistryKey
 > = {
   collection: "Collection",
@@ -90,6 +100,7 @@ interface FormState {
     collectionId: string;
     categoryId: string;
     promotionId: string;
+    editorialId: string;
     promotionMode: PromotionMode;
     items: ManualItem[];
   };
@@ -103,6 +114,12 @@ interface FormState {
     alignment: string;
     animation: string;
     cardShape: string;
+    cardRatio: string;
+    cardSize: string;
+    titlePosition: string;
+    imagePosition: string;
+    backgroundColor: string;
+    textColor: string;
   };
   sourceStyles: {
     promotionBadgeStyle: string;
@@ -140,6 +157,7 @@ const INITIAL: FormState = {
     collectionId: "",
     categoryId: "",
     promotionId: "",
+    editorialId: "",
     promotionMode: "products",
     items: [],
   },
@@ -153,6 +171,12 @@ const INITIAL: FormState = {
     alignment: "start",
     animation: "fade",
     cardShape: "default",
+    cardRatio: "1:1",
+    cardSize: "md",
+    titlePosition: "below",
+    imagePosition: "center",
+    backgroundColor: "",
+    textColor: "",
   },
   sourceStyles: {
     promotionBadgeStyle: "default",
@@ -178,18 +202,28 @@ export default function BlockForm({ id }: { id?: string }) {
 
   const [editingSource, setEditingSource] = useState(false);
   const [preview, setPreview] = useState<PreviewState>({ status: "idle" });
+  const [presentationOpen, setPresentationOpen] = useState(false);
+
+  const sourceType = formData.source.type;
+  const isEditorialSource = sourceType === "editorial";
+  const allowedDisplays = isEditorialSource
+    ? BLOCK_DISPLAYS
+    : STANDARD_DISPLAYS;
 
   const currentSourceId =
-    formData.source.type === "collection"
+    sourceType === "collection"
       ? formData.source.collectionId
-      : formData.source.type === "category"
+      : sourceType === "category"
         ? formData.source.categoryId
-        : formData.source.type === "promotion"
+        : sourceType === "promotion"
           ? formData.source.promotionId
-          : "";
+          : sourceType === "editorial"
+            ? formData.source.editorialId
+            : "";
 
   const hasSelection = currentSourceId !== "";
 
+  /* ------------------------------- load ---------------------------------- */
   useEffect(() => {
     if (!id) {
       setLoading(false);
@@ -225,6 +259,9 @@ export default function BlockForm({ id }: { id?: string }) {
             promotionId: d.source?.promotionId
               ? String(d.source.promotionId)
               : "",
+            editorialId: d.source?.editorialId
+              ? String(d.source.editorialId)
+              : "",
             promotionMode: d.source?.promotionMode || "products",
             items: Array.isArray(d.source?.items)
               ? d.source.items.map((it: any) => ({
@@ -253,14 +290,15 @@ export default function BlockForm({ id }: { id?: string }) {
     })();
   }, [id]);
 
+  /* Preview fetch for all source types except manual */
   useEffect(() => {
-    if (formData.source.type === "manual" || !currentSourceId) {
+    if (sourceType === "manual" || !currentSourceId) {
       setPreview({ status: "idle" });
       return;
     }
     let cancelled = false;
     setPreview({ status: "loading" });
-    getSourcePreview(formData.source.type, currentSourceId)
+    getSourcePreview(sourceType, currentSourceId)
       .then((res) => {
         if (cancelled) return;
         if (res.success) setPreview({ status: "loaded", data: res.data });
@@ -274,17 +312,20 @@ export default function BlockForm({ id }: { id?: string }) {
     return () => {
       cancelled = true;
     };
-  }, [formData.source.type, currentSourceId]);
+  }, [sourceType, currentSourceId]);
 
+  /* Reset source edit mode when source changes */
   useEffect(() => {
     setEditingSource(false);
   }, [
-    formData.source.type,
+    sourceType,
     formData.source.collectionId,
     formData.source.categoryId,
     formData.source.promotionId,
+    formData.source.editorialId,
   ]);
 
+  /* ----------------------------- handlers -------------------------------- */
   const setField = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setFormData((p) => ({ ...p, [k]: v }));
 
@@ -312,37 +353,49 @@ export default function BlockForm({ id }: { id?: string }) {
   const handleSourceTypeChange = (nextType: BlockSourceType) => {
     setSource({ type: nextType });
     setEditingSource(false);
+
+    // If the display was a feature display and we're switching to a
+    // non-editorial source, fall back to grid — feature displays can't
+    // render collection/category/promotion/manual content.
+    if (nextType !== "editorial" && isFeatureDisplay(formData.display)) {
+      setField("display", "grid");
+    }
   };
 
   const handleSourceClear = () => {
-    if (formData.source.type === "collection") setSource({ collectionId: "" });
-    else if (formData.source.type === "category") setSource({ categoryId: "" });
-    else if (formData.source.type === "promotion")
-      setSource({ promotionId: "" });
+    if (sourceType === "collection") setSource({ collectionId: "" });
+    else if (sourceType === "category") setSource({ categoryId: "" });
+    else if (sourceType === "promotion") setSource({ promotionId: "" });
+    else if (sourceType === "editorial") setSource({ editorialId: "" });
     setEditingSource(false);
   };
 
+  /* ------------------------------ submit --------------------------------- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
     try {
       if (!formData.name.trim()) return setError("Name is required");
-      if (formData.source.type !== "manual" && !hasSelection) {
-        return setError(
-          `Select a ${SOURCE_LABEL[formData.source.type].toLowerCase()}`,
-        );
+
+      if (sourceType === "editorial") {
+        if (!formData.source.editorialId) {
+          return setError("Pick an editorial from the library");
+        }
+      } else {
+        if (!hasSelection) {
+          return setError(`Select a ${SOURCE_LABEL[sourceType].toLowerCase()}`);
+        }
+        if (sourceType === "manual" && formData.source.items.length === 0) {
+          return setError("Add at least one item");
+        }
+        if (
+          formData.cta.style !== "none" &&
+          (!formData.cta.text.trim() || !formData.cta.link.trim())
+        ) {
+          return setError("CTA requires both text and link");
+        }
       }
-      if (
-        formData.source.type === "manual" &&
-        formData.source.items.length === 0
-      )
-        return setError("Add at least one item");
-      if (
-        formData.cta.style !== "none" &&
-        (!formData.cta.text.trim() || !formData.cta.link.trim())
-      )
-        return setError("CTA requires both text and link");
 
       const fd = new FormData();
       fd.append("name", formData.name.trim());
@@ -352,25 +405,45 @@ export default function BlockForm({ id }: { id?: string }) {
       fd.append("order", String(formData.order));
       fd.append("limit", String(formData.limit));
 
-      fd.append("source.type", formData.source.type);
-      if (formData.source.type === "collection")
+      fd.append("source.type", sourceType);
+
+      if (sourceType === "collection")
         fd.append("source.collectionId", formData.source.collectionId);
-      if (formData.source.type === "category")
+      else if (sourceType === "category")
         fd.append("source.categoryId", formData.source.categoryId);
-      if (formData.source.type === "promotion") {
+      else if (sourceType === "promotion") {
         fd.append("source.promotionId", formData.source.promotionId);
         fd.append("source.promotionMode", formData.source.promotionMode);
-      }
-      if (formData.source.type === "manual")
+      } else if (sourceType === "editorial") {
+        fd.append("source.editorialId", formData.source.editorialId);
+      } else if (sourceType === "manual") {
         fd.append("source.items", JSON.stringify(formData.source.items));
+      }
 
-      fd.append("heading.title", formData.heading.title);
-      fd.append("heading.subtitle", formData.heading.subtitle);
-      fd.append(
-        "heading.showHeading",
-        formData.heading.showHeading ? "true" : "false",
-      );
+      // Heading and CTA only exist for sourced blocks. Editorial blocks
+      // inherit them from the referenced editorial.
+      if (sourceType !== "editorial") {
+        fd.append("heading.title", formData.heading.title);
+        fd.append("heading.subtitle", formData.heading.subtitle);
+        fd.append(
+          "heading.showHeading",
+          formData.heading.showHeading ? "true" : "false",
+        );
 
+        (
+          Object.keys(
+            formData.sourceStyles,
+          ) as (keyof typeof formData.sourceStyles)[]
+        ).forEach((k) =>
+          fd.append(`sourceStyles.${k}`, String(formData.sourceStyles[k])),
+        );
+
+        fd.append("cta.text", formData.cta.text.trim());
+        fd.append("cta.link", formData.cta.link.trim());
+        fd.append("cta.style", formData.cta.style);
+      }
+
+      // Presentation is universal.
       (
         Object.keys(
           formData.displayConfig,
@@ -378,17 +451,6 @@ export default function BlockForm({ id }: { id?: string }) {
       ).forEach((k) =>
         fd.append(`displayConfig.${k}`, String(formData.displayConfig[k])),
       );
-      (
-        Object.keys(
-          formData.sourceStyles,
-        ) as (keyof typeof formData.sourceStyles)[]
-      ).forEach((k) =>
-        fd.append(`sourceStyles.${k}`, String(formData.sourceStyles[k])),
-      );
-
-      fd.append("cta.text", formData.cta.text.trim());
-      fd.append("cta.link", formData.cta.link.trim());
-      fd.append("cta.style", formData.cta.style);
 
       const res = id ? await updateBlock(id, fd) : await createBlock(fd);
 
@@ -420,13 +482,26 @@ export default function BlockForm({ id }: { id?: string }) {
   const columnsDisabled =
     formData.display === "carousel" || formData.display === "list";
   const showSourcePicker =
-    formData.source.type === "manual" || !hasSelection || editingSource;
+    sourceType === "manual" || !hasSelection || editingSource;
+
+  const dc = formData.displayConfig;
+  const presentationSummary = [
+    `${dc.cardSize} cards`,
+    dc.cardRatio,
+    `${dc.gap}px gap`,
+    dc.titlePosition !== "below" ? `${dc.titlePosition} title` : null,
+    `${dc.theme} theme`,
+    dc.backgroundColor ? "custom bg" : null,
+    dc.textColor ? "custom text" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   /* --------------------------------- render -------------------------------- */
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-3xl  lg:px-8">
+      <div className="mx-auto max-w-3xl lg:px-8">
         {error && (
           <Notification
             type="error"
@@ -447,8 +522,9 @@ export default function BlockForm({ id }: { id?: string }) {
             {id ? "Edit block" : "New block"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Place a collection, category, promotion, or manual list on a page in
-            a specific layout.
+            {isEditorialSource
+              ? "Editorial blocks reference content from the editorial library. The block decides how it's presented."
+              : "Place a collection, category, promotion, or manual list on a page in a specific layout."}
           </p>
         </header>
 
@@ -464,7 +540,7 @@ export default function BlockForm({ id }: { id?: string }) {
                 value={formData.name}
                 onChange={(e) => setField("name", e.target.value)}
                 disabled={isSubmitting}
-                placeholder="e.g. Featured products"
+                placeholder="e.g. Home — Featured products"
               />
             </Field>
 
@@ -505,14 +581,14 @@ export default function BlockForm({ id }: { id?: string }) {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Display">
+              <Field label="Display" hint={SOURCE_HELP[sourceType]}>
                 <select
                   className={inputCls}
                   value={formData.display}
                   onChange={(e) => setField("display", e.target.value)}
                   disabled={isSubmitting}
                 >
-                  {BLOCK_DISPLAYS.map((d) => (
+                  {allowedDisplays.map((d) => (
                     <option key={d} value={d}>
                       {d}
                     </option>
@@ -534,69 +610,75 @@ export default function BlockForm({ id }: { id?: string }) {
               </Field>
             </div>
 
-            <Field
-              label="Item limit"
-              hint={`Maximum ${MAX_BLOCK_LIMIT} items.`}
-            >
-              <input
-                type="number"
-                min={1}
-                max={MAX_BLOCK_LIMIT}
-                className={inputCls}
-                value={formData.limit}
-                onChange={(e) =>
-                  setField(
-                    "limit",
-                    Math.min(
-                      MAX_BLOCK_LIMIT,
-                      Math.max(1, Number(e.target.value) || 12),
-                    ),
-                  )
-                }
-                disabled={isSubmitting}
-              />
-            </Field>
-          </fieldset>
-
-          {/* ─────────────── HEADING ─────────────── */}
-          <fieldset className={fieldsetCls}>
-            <legend className={legendCls}>Heading</legend>
-
-            <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
-              <input
-                type="checkbox"
-                checked={formData.heading.showHeading}
-                onChange={(e) => setHeading({ showHeading: e.target.checked })}
-                disabled={isSubmitting}
-                className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
-              />
-              Show heading
-            </label>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Title">
+            {!isEditorialSource && (
+              <Field
+                label="Item limit"
+                hint={`Maximum ${MAX_BLOCK_LIMIT} items.`}
+              >
                 <input
-                  type="text"
+                  type="number"
+                  min={1}
+                  max={MAX_BLOCK_LIMIT}
                   className={inputCls}
-                  value={formData.heading.title}
-                  onChange={(e) => setHeading({ title: e.target.value })}
-                  disabled={isSubmitting || !formData.heading.showHeading}
-                  placeholder="e.g. Trending now"
+                  value={formData.limit}
+                  onChange={(e) =>
+                    setField(
+                      "limit",
+                      Math.min(
+                        MAX_BLOCK_LIMIT,
+                        Math.max(1, Number(e.target.value) || 12),
+                      ),
+                    )
+                  }
+                  disabled={isSubmitting}
                 />
               </Field>
-
-              <Field label="Subtitle">
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={formData.heading.subtitle}
-                  onChange={(e) => setHeading({ subtitle: e.target.value })}
-                  disabled={isSubmitting || !formData.heading.showHeading}
-                  placeholder="Optional short line"
-                />
-              </Field>
-            </div>
+            )}
           </fieldset>
+
+          {/* ─────────────── HEADING (non-editorial only) ─────────────── */}
+          {!isEditorialSource && (
+            <fieldset className={fieldsetCls}>
+              <legend className={legendCls}>Heading</legend>
+
+              <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
+                <input
+                  type="checkbox"
+                  checked={formData.heading.showHeading}
+                  onChange={(e) =>
+                    setHeading({ showHeading: e.target.checked })
+                  }
+                  disabled={isSubmitting}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+                />
+                Show heading
+              </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Title">
+                  <input
+                    type="text"
+                    className={inputCls}
+                    value={formData.heading.title}
+                    onChange={(e) => setHeading({ title: e.target.value })}
+                    disabled={isSubmitting || !formData.heading.showHeading}
+                    placeholder="e.g. Trending now"
+                  />
+                </Field>
+
+                <Field label="Subtitle">
+                  <input
+                    type="text"
+                    className={inputCls}
+                    value={formData.heading.subtitle}
+                    onChange={(e) => setHeading({ subtitle: e.target.value })}
+                    disabled={isSubmitting || !formData.heading.showHeading}
+                    placeholder="Optional short line"
+                  />
+                </Field>
+              </div>
+            </fieldset>
+          )}
 
           {/* ─────────────── SOURCE ─────────────── */}
           <fieldset className={fieldsetCls}>
@@ -605,11 +687,15 @@ export default function BlockForm({ id }: { id?: string }) {
             <Field
               label="Type"
               required
-              hint={SOURCE_HELP[formData.source.type]}
+              hint={
+                isEditorialSource
+                  ? "Editorial adds extra displays — the block will render the editorial's content instead of products."
+                  : undefined
+              }
             >
               <select
                 className={inputCls}
-                value={formData.source.type}
+                value={sourceType}
                 onChange={(e) =>
                   handleSourceTypeChange(e.target.value as BlockSourceType)
                 }
@@ -623,7 +709,35 @@ export default function BlockForm({ id }: { id?: string }) {
               </select>
             </Field>
 
-            {formData.source.type === "manual" ? (
+            {sourceType === "editorial" ? (
+              <Field label="Editorial" required>
+                {showSourcePicker ? (
+                  <div>
+                    <EditorialPicker
+                      value={formData.source.editorialId}
+                      onChange={(vid) => setSource({ editorialId: vid })}
+                      disabled={isSubmitting}
+                    />
+                    {hasSelection && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingSource(false)}
+                        className="mt-1.5 text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                      >
+                        Cancel — keep current selection
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <SourcePreviewCard
+                    state={preview}
+                    sourceType={sourceType}
+                    onEdit={() => setEditingSource(true)}
+                    onRemove={handleSourceClear}
+                  />
+                )}
+              </Field>
+            ) : sourceType === "manual" ? (
               <Field label="Items">
                 <ManualPicker
                   value={formData.source.items}
@@ -632,26 +746,23 @@ export default function BlockForm({ id }: { id?: string }) {
                 />
               </Field>
             ) : (
-              <Field label={SOURCE_LABEL[formData.source.type]} required>
+              <Field label={SOURCE_LABEL[sourceType]} required>
                 {showSourcePicker ? (
                   <div>
                     <RefPicker
                       label=""
                       refType={
                         SOURCE_REF_TYPE[
-                          formData.source.type as
-                            | "collection"
-                            | "category"
-                            | "promotion"
+                          sourceType as "collection" | "category" | "promotion"
                         ]
                       }
                       value={currentSourceId}
                       onChange={(v) => {
-                        if (formData.source.type === "collection")
+                        if (sourceType === "collection")
                           setSource({ collectionId: v });
-                        else if (formData.source.type === "category")
+                        else if (sourceType === "category")
                           setSource({ categoryId: v });
-                        else if (formData.source.type === "promotion")
+                        else if (sourceType === "promotion")
                           setSource({ promotionId: v });
                       }}
                       disabled={isSubmitting}
@@ -670,8 +781,7 @@ export default function BlockForm({ id }: { id?: string }) {
                 ) : (
                   <SourcePreviewCard
                     state={preview}
-                    sourceType={formData.source.type}
-                    promotionMode={formData.source.promotionMode}
+                    sourceType={sourceType}
                     onEdit={() => setEditingSource(true)}
                     onRemove={handleSourceClear}
                   />
@@ -679,7 +789,7 @@ export default function BlockForm({ id }: { id?: string }) {
               </Field>
             )}
 
-            {formData.source.type === "promotion" && (
+            {sourceType === "promotion" && (
               <div className="space-y-4 border-t border-border pt-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Promotion mode">
@@ -746,7 +856,7 @@ export default function BlockForm({ id }: { id?: string }) {
               </div>
             )}
 
-            {formData.source.type === "collection" && (
+            {sourceType === "collection" && (
               <div className="space-y-4 border-t border-border pt-4">
                 <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
                   <input
@@ -787,43 +897,24 @@ export default function BlockForm({ id }: { id?: string }) {
               </div>
             )}
 
-            {formData.source.type === "manual" && (
+            {sourceType === "manual" && (
               <div className="space-y-4 border-t border-border pt-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Card size">
-                    <select
-                      className={inputCls}
-                      value={formData.sourceStyles.manualCardSize}
-                      onChange={(e) =>
-                        setSourceStyles({ manualCardSize: e.target.value })
-                      }
-                      disabled={isSubmitting}
-                    >
-                      {CARD_SIZES.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-
-                  <Field label="Card variant">
-                    <select
-                      className={inputCls}
-                      value={formData.sourceStyles.manualCardVariant}
-                      onChange={(e) =>
-                        setSourceStyles({ manualCardVariant: e.target.value })
-                      }
-                      disabled={isSubmitting}
-                    >
-                      {CARD_VARIANTS.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                </div>
+                <Field label="Card variant">
+                  <select
+                    className={inputCls}
+                    value={formData.sourceStyles.manualCardVariant}
+                    onChange={(e) =>
+                      setSourceStyles({ manualCardVariant: e.target.value })
+                    }
+                    disabled={isSubmitting}
+                  >
+                    {CARD_VARIANTS.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
                 <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
                   <input
@@ -843,183 +934,77 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
           </fieldset>
 
-          {/* ─────────────── CALL TO ACTION ─────────────── */}
-          <fieldset className={fieldsetCls}>
-            <legend className={legendCls}>Call to action</legend>
+          {/* ─────────────── CALL TO ACTION (non-editorial only) ─────────────── */}
+          {!isEditorialSource && (
+            <fieldset className={fieldsetCls}>
+              <legend className={legendCls}>Call to action</legend>
 
-            <Field label="Style">
-              <select
-                className={inputCls}
-                value={formData.cta.style}
-                onChange={(e) =>
-                  setCta({
-                    style: e.target.value as FormState["cta"]["style"],
-                  })
-                }
-                disabled={isSubmitting}
-              >
-                {CTA_STYLES.map((s) => (
-                  <option key={s} value={s}>
-                    {s === "none" ? "None" : s === "link" ? "Link" : "Button"}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Text">
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={formData.cta.text}
-                  onChange={(e) => setCta({ text: e.target.value })}
-                  disabled={isSubmitting || formData.cta.style === "none"}
-                  placeholder="e.g. See all"
-                />
-              </Field>
-
-              <Field label="Link">
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={formData.cta.link}
-                  onChange={(e) => setCta({ link: e.target.value })}
-                  disabled={isSubmitting || formData.cta.style === "none"}
-                  placeholder="/products"
-                />
-              </Field>
-            </div>
-          </fieldset>
-
-          {/* ─────────────── PRESENTATION ─────────────── */}
-          <fieldset className={fieldsetCls}>
-            <legend className={legendCls}>Presentation</legend>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Theme">
+              <Field label="Style">
                 <select
                   className={inputCls}
-                  value={formData.displayConfig.theme}
-                  onChange={(e) => setDisplayConfig({ theme: e.target.value })}
-                  disabled={isSubmitting}
-                >
-                  {BLOCK_THEMES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Card shape">
-                <select
-                  className={inputCls}
-                  value={formData.displayConfig.cardShape}
+                  value={formData.cta.style}
                   onChange={(e) =>
-                    setDisplayConfig({ cardShape: e.target.value })
-                  }
-                  disabled={isSubmitting}
-                >
-                  {CARD_SHAPES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Columns">
-                <select
-                  className={inputCls}
-                  value={formData.displayConfig.columns}
-                  onChange={(e) =>
-                    setDisplayConfig({ columns: Number(e.target.value) })
-                  }
-                  disabled={isSubmitting || columnsDisabled}
-                >
-                  {BLOCK_COLUMN_COUNTS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Gap (px)">
-                <input
-                  type="number"
-                  min={0}
-                  max={64}
-                  className={inputCls}
-                  value={formData.displayConfig.gap}
-                  onChange={(e) =>
-                    setDisplayConfig({
-                      gap: Math.min(
-                        64,
-                        Math.max(0, Number(e.target.value) || 0),
-                      ),
+                    setCta({
+                      style: e.target.value as FormState["cta"]["style"],
                     })
                   }
                   disabled={isSubmitting}
-                />
-              </Field>
-
-              <Field label="Alignment">
-                <select
-                  className={inputCls}
-                  value={formData.displayConfig.alignment}
-                  onChange={(e) =>
-                    setDisplayConfig({ alignment: e.target.value })
-                  }
-                  disabled={isSubmitting}
                 >
-                  {BLOCK_ALIGNMENTS.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
+                  {CTA_STYLES.map((s) => (
+                    <option key={s} value={s}>
+                      {s === "none" ? "None" : s === "link" ? "Link" : "Button"}
                     </option>
                   ))}
                 </select>
               </Field>
-            </div>
 
-            <Field label="Animation">
-              <select
-                className={inputCls}
-                value={formData.displayConfig.animation}
-                onChange={(e) =>
-                  setDisplayConfig({ animation: e.target.value })
-                }
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Text">
+                  <input
+                    type="text"
+                    className={inputCls}
+                    value={formData.cta.text}
+                    onChange={(e) => setCta({ text: e.target.value })}
+                    disabled={isSubmitting || formData.cta.style === "none"}
+                    placeholder="e.g. See all"
+                  />
+                </Field>
+
+                <Field label="Link">
+                  <input
+                    type="text"
+                    className={inputCls}
+                    value={formData.cta.link}
+                    onChange={(e) => setCta({ link: e.target.value })}
+                    disabled={isSubmitting || formData.cta.style === "none"}
+                    placeholder="/products"
+                  />
+                </Field>
+              </div>
+            </fieldset>
+          )}
+
+          {/* ─────────────── PRESENTATION (universal) ─────────────── */}
+          <fieldset className={fieldsetCls}>
+            <legend className={legendCls}>Presentation</legend>
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[14px] font-medium text-foreground">
+                  Cards, spacing & colors
+                </p>
+                <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+                  {presentationSummary}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPresentationOpen(true)}
                 disabled={isSubmitting}
+                className="shrink-0 rounded-lg border border-border bg-background px-3.5 py-2 text-[13px] font-medium text-foreground transition hover:bg-muted disabled:opacity-50"
               >
-                {BLOCK_ANIMATIONS.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <div className="grid gap-2 sm:grid-cols-3">
-              <ToggleCard
-                label="Borderless"
-                checked={formData.displayConfig.borderless}
-                onChange={(v) => setDisplayConfig({ borderless: v })}
-                disabled={isSubmitting}
-              />
-              <ToggleCard
-                label="Rounded"
-                checked={formData.displayConfig.rounded}
-                onChange={(v) => setDisplayConfig({ rounded: v })}
-                disabled={isSubmitting}
-              />
-              <ToggleCard
-                label="Shadow"
-                checked={formData.displayConfig.shadow}
-                onChange={(v) => setDisplayConfig({ shadow: v })}
-                disabled={isSubmitting}
-              />
+                Edit
+              </button>
             </div>
           </fieldset>
 
@@ -1052,6 +1037,255 @@ export default function BlockForm({ id }: { id?: string }) {
           </div>
         </form>
       </div>
+
+      {/* Presentation bottomsheet */}
+      <BottomSheet
+        open={presentationOpen}
+        onClose={() => setPresentationOpen(false)}
+        title="Presentation"
+      >
+        <div className="space-y-6">
+          {/* Theme */}
+          <section>
+            <SheetLabel>Theme</SheetLabel>
+            <Field label="Theme">
+              <select
+                className={inputCls}
+                value={dc.theme}
+                onChange={(e) => setDisplayConfig({ theme: e.target.value })}
+              >
+                {BLOCK_THEMES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </section>
+
+          {/* Layout */}
+          <section>
+            <SheetLabel>Layout</SheetLabel>
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                label="Columns"
+                hint={columnsDisabled ? "Not used by this layout." : undefined}
+              >
+                <select
+                  className={inputCls}
+                  value={dc.columns}
+                  onChange={(e) =>
+                    setDisplayConfig({ columns: Number(e.target.value) })
+                  }
+                  disabled={columnsDisabled}
+                >
+                  {BLOCK_COLUMN_COUNTS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Spacing (px)">
+                <input
+                  type="number"
+                  min={0}
+                  max={64}
+                  className={inputCls}
+                  value={dc.gap}
+                  onChange={(e) =>
+                    setDisplayConfig({
+                      gap: Math.min(
+                        64,
+                        Math.max(0, Number(e.target.value) || 0),
+                      ),
+                    })
+                  }
+                />
+              </Field>
+
+              <Field label="Alignment">
+                <select
+                  className={inputCls}
+                  value={dc.alignment}
+                  onChange={(e) =>
+                    setDisplayConfig({ alignment: e.target.value })
+                  }
+                >
+                  {BLOCK_ALIGNMENTS.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Animation">
+                <select
+                  className={inputCls}
+                  value={dc.animation}
+                  onChange={(e) =>
+                    setDisplayConfig({ animation: e.target.value })
+                  }
+                >
+                  {BLOCK_ANIMATIONS.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </section>
+
+          {/* Card */}
+          <section>
+            <SheetLabel>Card</SheetLabel>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Ratio">
+                <select
+                  className={inputCls}
+                  value={dc.cardRatio}
+                  onChange={(e) =>
+                    setDisplayConfig({ cardRatio: e.target.value })
+                  }
+                >
+                  {CARD_RATIOS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Size">
+                <select
+                  className={inputCls}
+                  value={dc.cardSize}
+                  onChange={(e) =>
+                    setDisplayConfig({ cardSize: e.target.value })
+                  }
+                >
+                  {CARD_SIZES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Shape">
+                <select
+                  className={inputCls}
+                  value={dc.cardShape}
+                  onChange={(e) =>
+                    setDisplayConfig({ cardShape: e.target.value })
+                  }
+                >
+                  {CARD_SHAPES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Title position">
+                <select
+                  className={inputCls}
+                  value={dc.titlePosition}
+                  onChange={(e) =>
+                    setDisplayConfig({ titlePosition: e.target.value })
+                  }
+                >
+                  {TITLE_POSITIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p === "below"
+                        ? "Below image"
+                        : p === "overlay-top"
+                          ? "Overlay top"
+                          : p === "overlay-bottom"
+                            ? "Overlay bottom"
+                            : "Hidden"}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </section>
+
+          {/* Image */}
+          <section>
+            <SheetLabel>Image</SheetLabel>
+            <Field label="Crop focus">
+              <select
+                className={inputCls}
+                value={dc.imagePosition}
+                onChange={(e) =>
+                  setDisplayConfig({ imagePosition: e.target.value })
+                }
+              >
+                {IMAGE_POSITIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </section>
+
+          {/* Colors */}
+          <section>
+            <SheetLabel>Colors</SheetLabel>
+            <div className="space-y-3">
+              <ColorField
+                label="Background"
+                value={dc.backgroundColor}
+                onChange={(v) => setDisplayConfig({ backgroundColor: v })}
+              />
+              <ColorField
+                label="Text"
+                value={dc.textColor}
+                onChange={(v) => setDisplayConfig({ textColor: v })}
+              />
+              <p className={helperCls}>Leave empty to inherit the theme.</p>
+            </div>
+          </section>
+
+          {/* Style toggles */}
+          <section>
+            <SheetLabel>Style</SheetLabel>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <ToggleCard
+                label="Borderless"
+                checked={dc.borderless}
+                onChange={(v) => setDisplayConfig({ borderless: v })}
+              />
+              <ToggleCard
+                label="Rounded"
+                checked={dc.rounded}
+                onChange={(v) => setDisplayConfig({ rounded: v })}
+              />
+              <ToggleCard
+                label="Shadow"
+                checked={dc.shadow}
+                onChange={(v) => setDisplayConfig({ shadow: v })}
+              />
+            </div>
+          </section>
+        </div>
+
+        <div className="sticky bottom-0 -mx-4 mt-6 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5">
+          <button
+            type="button"
+            onClick={() => setPresentationOpen(false)}
+            className="w-full rounded-lg bg-primary px-4 py-2.5 text-[14px] font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            Done
+          </button>
+        </div>
+      </BottomSheet>
     </div>
   );
 }
@@ -1080,6 +1314,14 @@ function Field({
       {children}
       {hint && <p className={helperCls}>{hint}</p>}
     </div>
+  );
+}
+
+function SheetLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      {children}
+    </p>
   );
 }
 
@@ -1113,6 +1355,67 @@ function ToggleCard({
   );
 }
 
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const swatchValue =
+    value && value !== "transparent" && value.startsWith("#")
+      ? value.length === 4
+        ? `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`
+        : value.slice(0, 7)
+      : "#ffffff";
+
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <div className="flex items-center gap-2">
+        <label
+          className="relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-border"
+          style={{
+            backgroundColor: value || "transparent",
+            backgroundImage: value
+              ? undefined
+              : "repeating-linear-gradient(45deg, #eee, #eee 4px, #fff 4px, #fff 8px)",
+          }}
+          aria-label={`Pick ${label.toLowerCase()} color`}
+        >
+          <input
+            type="color"
+            value={swatchValue}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          />
+        </label>
+
+        <input
+          type="text"
+          className={inputCls}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="#RRGGBB or transparent"
+        />
+
+        {value ? (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="shrink-0 rounded-lg border border-border bg-background px-2.5 py-2 text-[12px] text-foreground/70 hover:bg-muted"
+            aria-label={`Clear ${label.toLowerCase()} color`}
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*                          Source preview card                               */
 /* -------------------------------------------------------------------------- */
@@ -1120,13 +1423,11 @@ function ToggleCard({
 function SourcePreviewCard({
   state,
   sourceType,
-  promotionMode,
   onEdit,
   onRemove,
 }: {
   state: PreviewState;
   sourceType: BlockSourceType;
-  promotionMode: PromotionMode;
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -1199,8 +1500,7 @@ function SourcePreviewCard({
       const parts: string[] = [];
       if (d.meta.calculationType) parts.push(d.meta.calculationType);
       if (d.meta.code) parts.push(`Code: ${d.meta.code}`);
-      if (promotionMode === "self") parts.push("Banner (self)");
-      else parts.push("Products in scope");
+      if (d.meta.isActive === false) parts.push("inactive");
       return parts.join(" · ");
     }
     if (sourceType === "collection") {
@@ -1208,6 +1508,12 @@ function SourcePreviewCard({
     }
     if (sourceType === "category" && d.meta.slug) {
       return `/${d.meta.slug}`;
+    }
+    if (sourceType === "editorial") {
+      const count = d.meta.imageCount ?? 0;
+      return count > 0
+        ? `${count} gallery image${count === 1 ? "" : "s"}`
+        : "no gallery images";
     }
     return null;
   })();

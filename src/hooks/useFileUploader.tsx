@@ -9,6 +9,7 @@ import {
 } from "@/app/actions/s3";
 
 type FailedUpload = { file: File; error: string };
+export type InFlightUpload = { url: string; progress: number };
 
 export const useFileUploader = (
   instanceId?: string,
@@ -24,20 +25,44 @@ export const useFileUploader = (
   const [progressByName, setProgressByName] = useState<Record<string, number>>(
     {},
   );
+  // In-flight NEW uploads, shown as tiles until they land in `files`.
+  // Updates (overwrites) don't appear here — their URL is already in
+  // `files`, and progress is tracked via `progressByName` on that tile.
+  const [inFlightUploads, setInFlightUploads] = useState<InFlightUpload[]>([]);
+
   const mountedRef = useRef(true);
   const prevInitialFilesRef = useRef<string[]>(safeInitialFiles);
 
+  // ---------------------------------------------------------------------
+  // Sync external initialFiles changes.
+  // ---------------------------------------------------------------------
+  // The dependency is the CONTENT SIGNATURE (a string), not the array
+  // reference. A parent that computes `initialFiles` inline — e.g.
+  //   useFileUploader(id, editorial?.images ?? [], ...)
+  //   useFileUploader(id, product.images.map(i => i.url), ...)
+  // creates a new array reference every render. Depending on the array
+  // itself would fire this effect on every render and, combined with the
+  // state updates below, produce "Maximum update depth exceeded".
+  // Depending on the string signature only re-fires when the CONTENT
+  // actually changes.
+  const initialFilesSignature = JSON.stringify(
+    Array.isArray(initialFiles) ? initialFiles : [],
+  );
+
   useEffect(() => {
-    const safeFiles = Array.isArray(initialFiles) ? initialFiles : [];
+    const safeFiles: string[] = JSON.parse(initialFilesSignature);
     const prev = prevInitialFilesRef.current;
-    if (
-      safeFiles.length !== prev.length ||
-      safeFiles.some((url, i) => url !== prev[i])
-    ) {
-      setFiles(safeFiles);
-      prevInitialFilesRef.current = safeFiles;
-    }
-  }, [initialFiles]);
+
+    const sameContent =
+      safeFiles.length === prev.length &&
+      safeFiles.every((url, i) => url === prev[i]);
+
+    if (sameContent) return;
+
+    setFiles(safeFiles);
+    prevInitialFilesRef.current = safeFiles;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFilesSignature]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -54,6 +79,10 @@ export const useFileUploader = (
       if (!toUpload.length) return;
       setLoading(true);
       const uploadedUrls: string[] = [];
+      // Every URL we START uploading in this batch (success or fail).
+      // Used to remove placeholder tiles from inFlightUploads atomically
+      // at the end of the batch.
+      const startedUrls: string[] = [];
 
       for (const file of toUpload) {
         if (!mountedRef.current) break;
@@ -88,6 +117,18 @@ export const useFileUploader = (
           }
 
           progressKey = fileKey.split("/").pop() || filename;
+          const publicUrl = `https://${process.env.NEXT_PUBLIC_AWS_BUCKET_NAME}.s3.${process.env.NEXT_PUBLIC_AWS_REGION}.amazonaws.com/${fileKey}`;
+
+          // Track NEW uploads (not updates) so the UI can render a
+          // placeholder tile with a live progress bar.
+          if (!updateKey && mountedRef.current) {
+            startedUrls.push(publicUrl);
+            setInFlightUploads((prev) => [
+              ...prev,
+              { url: publicUrl, progress: 0 },
+            ]);
+          }
+
           if (mountedRef.current) {
             setProgressByName((prev) => ({ ...prev, [progressKey!]: 0 }));
           }
@@ -102,16 +143,26 @@ export const useFileUploader = (
             xhr.timeout = 120_000;
 
             xhr.upload.addEventListener("progress", (event) => {
-              if (event.lengthComputable && mountedRef.current && progressKey) {
-                const pct = Math.round((event.loaded / event.total) * 100);
+              if (!event.lengthComputable || !mountedRef.current) return;
+              const pct = Math.round((event.loaded / event.total) * 100);
+
+              // Updates: progress shown on the existing tile via progressByName
+              if (progressKey) {
                 setProgressByName((prev) => ({ ...prev, [progressKey!]: pct }));
+              }
+              // New uploads: progress shown on the placeholder tile
+              if (!updateKey) {
+                setInFlightUploads((prev) =>
+                  prev.map((u) =>
+                    u.url === publicUrl ? { ...u, progress: pct } : u,
+                  ),
+                );
               }
             });
 
             xhr.onload = () => {
               // S3 returns 200; some S3-compatible providers return 201/204.
               if (xhr.status >= 200 && xhr.status < 300) {
-                const publicUrl = `https://${process.env.NEXT_PUBLIC_AWS_BUCKET_NAME}.s3.${process.env.NEXT_PUBLIC_AWS_REGION}.amazonaws.com/${fileKey}`;
                 uploadedUrls.push(publicUrl);
                 resolve();
               } else {
@@ -125,8 +176,8 @@ export const useFileUploader = (
 
             xhr.onerror = () => {
               // Only fires when the browser blocks the request before it
-              // reaches a readable response — CORS, DNS, offline, mixed
-              // content, or a cross-region 301 without CORS headers.
+              // reaches a readable response — CSP, CORS, DNS, offline,
+              // mixed content, or a cross-region 301 without CORS headers.
               const origin =
                 typeof window !== "undefined"
                   ? window.location.origin
@@ -135,7 +186,7 @@ export const useFileUploader = (
                 new Error(
                   `Network error uploading "${filename}" (status=${xhr.status}). ` +
                     `Browser blocked the request before it reached S3 — check ` +
-                    `that the bucket CORS allows PUT with Content-Type from ` +
+                    `CSP connect-src allows https://*.amazonaws.com from ` +
                     `${origin}, and that AWS_REGION matches the bucket region.`,
                 ),
               );
@@ -151,15 +202,20 @@ export const useFileUploader = (
         } catch (error) {
           console.error("Upload error for", filename, error);
           if (mountedRef.current) {
-            // Keep failed uploads around so callers can surface / retry them
-            // instead of silently dropping them.
+            // Keep failed uploads around so callers can surface / retry
+            // them instead of silently dropping them.
             setFailedFiles((prev) => [
               ...prev,
               { file, error: (error as Error).message },
             ]);
           }
         } finally {
-          if (mountedRef.current && progressKey) {
+          // Clear the per-file progress entry. For updates this is the
+          // only tracking mechanism. For new uploads we don't delete here
+          // because the tile lives in inFlightUploads and its progress
+          // is tracked there — deleting here would clear the bar before
+          // the placeholder is removed at end of batch.
+          if (mountedRef.current && progressKey && updateKey) {
             setProgressByName((prev) => {
               const updated = { ...prev };
               delete updated[progressKey!];
@@ -170,21 +226,28 @@ export const useFileUploader = (
       }
 
       if (mountedRef.current) {
-        if (updateKey && uploadedUrls.length > 0) {
-          // Only overwrite the entry if the update actually succeeded —
-          // otherwise we'd write `undefined` into the files array.
-          setFiles((prev) => {
-            const index = prev.findIndex((url) => url.includes(updateKey));
-            if (index !== -1) {
-              const next = [...prev];
-              next[index] = uploadedUrls[0];
-              return next;
-            }
-            return prev;
-          });
-        } else if (!updateKey && uploadedUrls.length > 0) {
+        // Batch the `files` addition and `inFlightUploads` cleanup
+        // together so the placeholder tile is replaced by the real image
+        // in one render — no flicker between 100% and "image loaded".
+        if (!updateKey && uploadedUrls.length > 0) {
           setFiles((prev) => [...prev, ...uploadedUrls]);
         }
+        if (!updateKey && startedUrls.length > 0) {
+          setInFlightUploads((prev) =>
+            prev.filter((u) => !startedUrls.includes(u.url)),
+          );
+        }
+        // On failure, remove placeholder tiles for the failed files so
+        // they don't linger at some stale progress %.
+        const failedInBatch = startedUrls.filter(
+          (url) => !uploadedUrls.includes(url),
+        );
+        if (!updateKey && failedInBatch.length > 0) {
+          setInFlightUploads((prev) =>
+            prev.filter((u) => !failedInBatch.includes(u.url)),
+          );
+        }
+
         setPendingFiles([]);
         setLoading(false);
       }
@@ -297,6 +360,7 @@ export const useFileUploader = (
 
   return {
     files,
+    inFlightUploads,
     loading,
     progressByName,
     failedFiles,

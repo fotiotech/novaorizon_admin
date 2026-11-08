@@ -5,10 +5,6 @@ import { Block } from "@/models/Block";
 import { resolveBlock, type ResolvedBlock, type ResolveCtx } from "./resolve";
 import type { BlockLocation } from "@/lib/content/constants";
 
-/**
- * Fresh resolve. Use on pages that depend on user context (e.g.
- * ProductRelated blocks backed by "recentlyViewed").
- */
 export async function getBlocksForLocation(
   location: BlockLocation,
   ctx: ResolveCtx = {},
@@ -22,26 +18,20 @@ export async function getBlocksForLocation(
   const resolved = await Promise.all(
     docs.map((d) =>
       resolveBlock(d, ctx).catch((err) => {
-        // One bad block must not take down the page.
         console.error("[getBlocksForLocation] resolve failed:", d._id, err);
         return null;
       }),
     ),
   );
 
+  // Editorial blocks legitimately have zero items — their content lives
+  // on `editorial`. Every other block requires at least one item to render.
   return resolved.filter(
-    (r): r is ResolvedBlock => r !== null && r.items.length > 0,
+    (r): r is ResolvedBlock =>
+      r !== null && (r.items.length > 0 || Boolean(r.editorial)),
   );
 }
 
-/**
- * Cached resolve — no user context. Use on Home / landing pages where the
- * blocks are anonymous-friendly. Invalidate via `revalidateTag("blocks:Home")`
- * (already wired in `app/actions/blocks.ts`).
- *
- * Do NOT use this for locations containing recommendation blocks; those need
- * a userId and must hit `getBlocksForLocation` directly.
- */
 export const getCachedBlocksForLocation = (location: BlockLocation) =>
   unstable_cache(() => getBlocksForLocation(location), ["blocks", location], {
     tags: ["blocks", `blocks:${location}`],
