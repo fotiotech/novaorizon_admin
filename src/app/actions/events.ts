@@ -1,6 +1,5 @@
 "use server";
 
-
 import { requireAdmin } from "@/lib/authz";
 import { connection } from "@/utils/connection";
 import { Event } from "@/models/Event";

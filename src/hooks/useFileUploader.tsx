@@ -8,16 +8,18 @@ import {
   getPresignedUpdateUrl,
 } from "@/app/actions/s3";
 
+type FailedUpload = { file: File; error: string };
+
 export const useFileUploader = (
   instanceId?: string,
   initialFiles: string[] = [],
   subfolder?: string,
 ) => {
-  // ✅ Guard: ensure initialFiles is always an array
   const safeInitialFiles = Array.isArray(initialFiles) ? initialFiles : [];
 
   const [files, setFiles] = useState<string[]>(safeInitialFiles);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [failedFiles, setFailedFiles] = useState<FailedUpload[]>([]);
   const [loading, setLoading] = useState(false);
   const [progressByName, setProgressByName] = useState<Record<string, number>>(
     {},
@@ -25,7 +27,6 @@ export const useFileUploader = (
   const mountedRef = useRef(true);
   const prevInitialFilesRef = useRef<string[]>(safeInitialFiles);
 
-  // ----- Sync external initialFiles changes (with guard) -----
   useEffect(() => {
     const safeFiles = Array.isArray(initialFiles) ? initialFiles : [];
     const prev = prevInitialFilesRef.current;
@@ -57,14 +58,14 @@ export const useFileUploader = (
       for (const file of toUpload) {
         if (!mountedRef.current) break;
 
-        let filename: string;
-        if (updateKey) {
-          filename = updateKey.split("/").pop() || makeFilename(file);
-        } else {
-          filename = makeFilename(file);
-        }
+        const filename = updateKey
+          ? updateKey.split("/").pop() || makeFilename(file)
+          : makeFilename(file);
 
-        setProgressByName((prev) => ({ ...prev, [filename]: 0 }));
+        // progressKey MUST equal the S3 object's basename so that
+        // FilesUploader's `getProgress(url)` — which does
+        // `url.split("/").pop()` — finds the right entry.
+        let progressKey: string | undefined;
 
         try {
           let uploadUrl: string;
@@ -86,6 +87,11 @@ export const useFileUploader = (
             fileKey = result.fileKey;
           }
 
+          progressKey = fileKey.split("/").pop() || filename;
+          if (mountedRef.current) {
+            setProgressByName((prev) => ({ ...prev, [progressKey!]: 0 }));
+          }
+
           await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open("PUT", uploadUrl, true);
@@ -93,31 +99,70 @@ export const useFileUploader = (
               "Content-Type",
               file.type || "application/octet-stream",
             );
+            xhr.timeout = 120_000;
+
             xhr.upload.addEventListener("progress", (event) => {
-              if (event.lengthComputable && mountedRef.current) {
+              if (event.lengthComputable && mountedRef.current && progressKey) {
                 const pct = Math.round((event.loaded / event.total) * 100);
-                setProgressByName((prev) => ({ ...prev, [filename]: pct }));
+                setProgressByName((prev) => ({ ...prev, [progressKey!]: pct }));
               }
             });
+
             xhr.onload = () => {
-              if (xhr.status === 200) {
+              // S3 returns 200; some S3-compatible providers return 201/204.
+              if (xhr.status >= 200 && xhr.status < 300) {
                 const publicUrl = `https://${process.env.NEXT_PUBLIC_AWS_BUCKET_NAME}.s3.${process.env.NEXT_PUBLIC_AWS_REGION}.amazonaws.com/${fileKey}`;
                 uploadedUrls.push(publicUrl);
                 resolve();
               } else {
-                reject(new Error(`Upload failed: ${xhr.statusText}`));
+                reject(
+                  new Error(
+                    `Upload rejected: HTTP ${xhr.status} ${xhr.statusText || ""}`.trim(),
+                  ),
+                );
               }
             };
-            xhr.onerror = () => reject(new Error("Network error"));
+
+            xhr.onerror = () => {
+              // Only fires when the browser blocks the request before it
+              // reaches a readable response — CORS, DNS, offline, mixed
+              // content, or a cross-region 301 without CORS headers.
+              const origin =
+                typeof window !== "undefined"
+                  ? window.location.origin
+                  : "your origin";
+              reject(
+                new Error(
+                  `Network error uploading "${filename}" (status=${xhr.status}). ` +
+                    `Browser blocked the request before it reached S3 — check ` +
+                    `that the bucket CORS allows PUT with Content-Type from ` +
+                    `${origin}, and that AWS_REGION matches the bucket region.`,
+                ),
+              );
+            };
+
+            xhr.ontimeout = () =>
+              reject(new Error(`Upload timed out: "${filename}"`));
+            xhr.onabort = () =>
+              reject(new Error(`Upload aborted: "${filename}"`));
+
             xhr.send(file);
           });
         } catch (error) {
           console.error("Upload error for", filename, error);
-        } finally {
           if (mountedRef.current) {
+            // Keep failed uploads around so callers can surface / retry them
+            // instead of silently dropping them.
+            setFailedFiles((prev) => [
+              ...prev,
+              { file, error: (error as Error).message },
+            ]);
+          }
+        } finally {
+          if (mountedRef.current && progressKey) {
             setProgressByName((prev) => {
               const updated = { ...prev };
-              delete updated[filename];
+              delete updated[progressKey!];
               return updated;
             });
           }
@@ -125,17 +170,19 @@ export const useFileUploader = (
       }
 
       if (mountedRef.current) {
-        if (updateKey) {
+        if (updateKey && uploadedUrls.length > 0) {
+          // Only overwrite the entry if the update actually succeeded —
+          // otherwise we'd write `undefined` into the files array.
           setFiles((prev) => {
             const index = prev.findIndex((url) => url.includes(updateKey));
             if (index !== -1) {
-              const newFiles = [...prev];
-              newFiles[index] = uploadedUrls[0];
-              return newFiles;
+              const next = [...prev];
+              next[index] = uploadedUrls[0];
+              return next;
             }
             return prev;
           });
-        } else {
+        } else if (!updateKey && uploadedUrls.length > 0) {
           setFiles((prev) => [...prev, ...uploadedUrls]);
         }
         setPendingFiles([]);
@@ -156,6 +203,15 @@ export const useFileUploader = (
     if (!newFiles.length) return;
     setPendingFiles((prev) => [...prev, ...newFiles]);
   }, []);
+
+  const retryFailed = useCallback(() => {
+    if (!failedFiles.length) return;
+    const toRetry = failedFiles.map((f) => f.file);
+    setFailedFiles([]);
+    setPendingFiles((prev) => [...prev, ...toRetry]);
+  }, [failedFiles]);
+
+  const clearFailed = useCallback(() => setFailedFiles([]), []);
 
   const listFiles = useCallback(async () => {
     setLoading(true);
@@ -187,16 +243,13 @@ export const useFileUploader = (
     [files, uploadFiles],
   );
 
-  // ✅ RESTORED: removeFile accepts (index, fileUrl) and extracts file key from URL
   const removeFile = useCallback(
     async (index: number, fileUrl: string) => {
       if (index < 0 || index >= files.length) {
         return { success: false, message: "Index out of bounds" };
       }
-      // Use the provided fileUrl, but fallback to files[index] if needed
       const url = fileUrl || files[index];
       try {
-        // Extract file key from the full URL
         const urlObj = new URL(url);
         const fileKey = urlObj.pathname.startsWith("/")
           ? urlObj.pathname.slice(1)
@@ -236,6 +289,7 @@ export const useFileUploader = (
       await deleteMultipleS3Objects(files);
       setFiles([]);
       setPendingFiles([]);
+      setFailedFiles([]);
     } catch (error) {
       console.error("Clear files error:", error);
     }
@@ -245,12 +299,15 @@ export const useFileUploader = (
     files,
     loading,
     progressByName,
+    failedFiles,
     addFiles,
     setFiles,
     listFiles,
     updateFile,
-    removeFile, // ✅ now expects (index, fileUrl)
+    removeFile,
     removeMultipleFiles,
+    retryFailed,
+    clearFailed,
     clearFiles,
   };
 };

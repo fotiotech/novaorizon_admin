@@ -1,9 +1,17 @@
+// models/Event.ts
 import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IEvent extends Document {
   userId: string;
   itemId?: mongoose.Types.ObjectId;
-  eventType: "view" | "cart_add" | "purchase" | "like" | "page_view";
+  eventType:
+    | "view"
+    | "cart_add"
+    | "purchase"
+    | "like"
+    | "unlike"
+    | "share"
+    | "page_view";
   score: number;
   sessionId?: string;
   metadata?: Record<string, any>;
@@ -31,7 +39,15 @@ const EventSchema = new Schema<IEvent>(
     },
     eventType: {
       type: String,
-      enum: ["view", "cart_add", "purchase", "like", "page_view"],
+      enum: [
+        "view",
+        "cart_add",
+        "purchase",
+        "like",
+        "unlike",
+        "share",
+        "page_view",
+      ],
       required: true,
     },
     score: { type: Number, default: 1 },
@@ -55,15 +71,15 @@ const EventSchema = new Schema<IEvent>(
   { timestamps: false },
 );
 
-// ─── Indexes ─────────────────────────────────────────────
 EventSchema.index({ userId: 1, itemId: 1 });
 EventSchema.index({ userId: 1, eventType: 1 });
-
-// Time-range queries lead with isBot then timestamp.
 EventSchema.index({ isBot: 1, timestamp: -1 });
 EventSchema.index({ isBot: 1, eventType: 1, timestamp: -1 });
 EventSchema.index({ isBot: 1, itemId: 1, timestamp: -1 });
-EventSchema.index({ isBot: 1, itemId: 1, eventType: 1 });
+
+// ── Like-state lookups ──────────────────────────────────────────────────
+EventSchema.index({ itemId: 1, eventType: 1, timestamp: -1 });
+EventSchema.index({ userId: 1, itemId: 1, eventType: 1, timestamp: -1 });
 
 export const Event: Model<IEvent> =
   mongoose.models.Event || mongoose.model<IEvent>("Event", EventSchema);

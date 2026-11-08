@@ -17,7 +17,7 @@ type FilesUploaderProps = {
 };
 
 const MAX_VISIBLE = 2;
-const ACCEPT = { "image/*": [".jpeg", ".jpg", ".png", ".gif"] };
+const ACCEPT = { "image/*": [".jpeg", ".jpg", ".png", ".gif", ".webp"] };
 
 const FilesUploader: React.FC<FilesUploaderProps> = ({
   files,
@@ -226,7 +226,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
           <input
             ref={modalInputRef}
             type="file"
-            accept="image/jpeg,image/jpg,image/png,image/gif"
+            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
             multiple
             className="hidden"
             onChange={handleModalAdd}

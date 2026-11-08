@@ -554,7 +554,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
           aria-label="Home"
         >
           <Image
-            src="/light-logo.png"
+            src="novaorizon.png"
             alt="logo"
             width={128}
             height={88}
@@ -562,7 +562,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
             className="block h-[44px] w-auto dark:hidden"
           />
           <Image
-            src="/dark-logo.png"
+            src="/novaorizon-dark.png"
             alt="logo"
             width={128}
             height={88}
