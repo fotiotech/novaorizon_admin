@@ -1,7 +1,14 @@
 // app/(catalog)/catalog/products/component/Fields.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback, memo } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  memo,
+} from "react";
 import Select, { MultiValue } from "react-select";
 import FilesUploader from "../../../../../components/FilesUploader";
 import { getBrands } from "@/app/actions/brand";
@@ -50,6 +57,14 @@ const hasDisplayValue = (v: unknown): boolean => {
     return Object.keys(v).length > 0;
   }
   return false;
+};
+
+/** True for "tags", "Tags", "tags_field"-style codes — case-insensitive. */
+const isTagsCode = (code: string): boolean => {
+  const normalized = code
+    .replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
+    .toLowerCase();
+  return normalized === "tags";
 };
 
 // ------------------------------------------------------------------
@@ -278,6 +293,128 @@ const GalleryUploaderWrapper: React.FC<{
 GalleryUploaderWrapper.displayName = "GalleryUploaderWrapper";
 
 // ------------------------------------------------------------------
+// Tags field
+//
+// Always stores an array of strings, regardless of the configured
+// attribute type (`text`, `tags`, etc.). Accepts arrays (canonical)
+// and legacy comma-joined strings as input.
+// ------------------------------------------------------------------
+const TagsField: React.FC<{
+  field: unknown;
+  code: string;
+  name?: string;
+  isRequired?: boolean;
+  handleAttributeChange: (code: string, value: any) => void;
+}> = ({ field, code, name, isRequired, handleAttributeChange }) => {
+  const tagsArray = useMemo<string[]>(() => {
+    if (Array.isArray(field)) {
+      return field.filter((x): x is string => typeof x === "string");
+    }
+    if (typeof field === "string" && field.trim()) {
+      return field
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+    }
+    return [];
+  }, [field]);
+
+  const externalText = tagsArray.join(", ");
+  const [text, setText] = useState(externalText);
+  // Guard so we don't clobber what the user is typing when the parent
+  // re-renders after an onChange we ourselves dispatched.
+  const lastSyncedRef = useRef(externalText);
+
+  useEffect(() => {
+    if (externalText !== lastSyncedRef.current) {
+      lastSyncedRef.current = externalText;
+      setText(externalText);
+    }
+  }, [externalText]);
+
+  const commit = useCallback(
+    (raw: string) => {
+      const next = raw
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      lastSyncedRef.current = next.join(", ");
+      handleAttributeChange(code, next);
+    },
+    [code, handleAttributeChange],
+  );
+
+  // Live preview derived from what the user is *currently typing*, so a
+  // chip appears the moment they hit the comma — not one render later.
+  const previewTags = useMemo<string[]>(
+    () =>
+      text
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
+    [text],
+  );
+
+  return (
+    <div>
+      <div className="relative">
+        <input
+          id={`field-${code}`}
+          type="text"
+          className={FIELD_INPUT_CLASS}
+          value={text}
+          placeholder=" "
+          onChange={(e) => {
+            setText(e.target.value);
+            commit(e.target.value);
+          }}
+          onBlur={(e) => {
+            // Normalize display + value on blur so "a,b" becomes "a, b".
+            const next = e.target.value
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean);
+            const normalized = next.join(", ");
+            if (normalized !== text) {
+              lastSyncedRef.current = normalized;
+              setText(normalized);
+            }
+            handleAttributeChange(code, next);
+          }}
+          required={isRequired}
+          aria-required={isRequired}
+        />
+        <FloatingLabel
+          htmlFor={`field-${code}`}
+          floated={text.length > 0}
+          required={isRequired}
+        >
+          {name}
+        </FloatingLabel>
+      </div>
+
+      <p className="mt-1 text-xs text-muted-foreground">
+        Enter text, comma separated
+      </p>
+
+      {previewTags.length > 0 && (
+        <ul className="mt-2 flex flex-wrap gap-1.5">
+          {previewTags.map((tag, index) => (
+            <li
+              key={`${index}-${tag}`}
+              className="inline-flex items-center rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
+            >
+              {tag}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+TagsField.displayName = "TagsField";
+
+// ------------------------------------------------------------------
 // Description field
 // ------------------------------------------------------------------
 const DescriptionField: React.FC<{
@@ -481,9 +618,25 @@ const Fields: React.FC<FieldProps> = React.memo(
       type === "date" ||
       type === "select" ||
       type === "multi-select" ||
+      (isTagsCode(code) && type !== "multi-select" && type !== "checkbox") ||
       (type === "textarea" && code !== "description");
 
     const renderField = () => {
+      // `tags` is special-cased: even if the admin configures it as `text`,
+      // we always store an array of strings. Types that already produce
+      // arrays (`multi-select`, `checkbox`) fall through to their handlers.
+      if (isTagsCode(code) && type !== "multi-select" && type !== "checkbox") {
+        return (
+          <TagsField
+            field={field}
+            code={code}
+            name={name}
+            isRequired={isRequired}
+            handleAttributeChange={handleAttributeChange}
+          />
+        );
+      }
+
       switch (type) {
         case "file":
           if (code === "images") {
