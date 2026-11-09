@@ -1,4 +1,4 @@
-// models/EditorialContent.ts
+// models/BannerContent.ts
 import mongoose, { Schema } from "mongoose";
 import { CTA_STYLES } from "@/lib/content/constants";
 
@@ -20,11 +20,11 @@ const CtaSchema = new Schema(
 );
 
 /**
- * Editorial content is display-agnostic. Layout choice lives on the
- * block. Editors fill whatever slots they want; blocks consume what
- * they need for the chosen display.
+ * A banner is a single hero unit — one image, one headline, one CTA.
+ * Blocks reference several banners (bannerIds) and choose how to lay
+ * them out.
  */
-const EditorialContentSchema = new Schema(
+const BannerContentSchema = new Schema(
   {
     name: {
       type: String,
@@ -36,41 +36,33 @@ const EditorialContentSchema = new Schema(
     body: { type: String, default: "" },
     heading: { type: HeadingSchema, default: () => ({}) },
 
-    /** Primary hero. Used by feature layouts and the banner display. */
     image: { type: String, default: "" },
-    /** Only used by the duo display. */
-    secondaryImage: { type: String, default: "" },
-    /** Cards. Used by grid, carousel, list, hero displays. */
-    images: { type: [String], default: [] },
 
     cta: { type: CtaSchema, default: () => ({}) },
   },
   { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } },
 );
 
-EditorialContentSchema.pre("validate", function (next) {
+BannerContentSchema.pre("validate", function (next) {
   const hasAnyContent =
-    Boolean(this.heading?.title) ||
-    Boolean(this.body) ||
-    Boolean(this.image) ||
-    (Array.isArray(this.images) && this.images.length > 0);
+    Boolean(this.heading?.title) || Boolean(this.body) || Boolean(this.image);
 
   if (!hasAnyContent) {
     return next(
       new Error(
-        "Editorial needs at least a headline, body, or image to be usable.",
+        "Banner needs at least a headline, body, or image to be usable.",
       ),
     );
   }
   next();
 });
 
-EditorialContentSchema.index({ name: 1 });
+BannerContentSchema.index({ name: 1 });
 
-export const EditorialContent =
-  mongoose.models.EditorialContent ||
-  mongoose.model("EditorialContent", EditorialContentSchema);
+export const BannerContent =
+  mongoose.models.BannerContent ||
+  mongoose.model("BannerContent", BannerContentSchema);
 
-export type EditorialContentDoc = mongoose.InferSchemaType<
-  typeof EditorialContentSchema
+export type BannerContentDoc = mongoose.InferSchemaType<
+  typeof BannerContentSchema
 >;

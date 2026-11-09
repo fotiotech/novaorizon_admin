@@ -1,18 +1,20 @@
-// components/content/editorials/EditorialForm.tsx
+// components/content/banners/BannerForm.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import FilesUploader from "@/components/FilesUploader";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import {
-  createEditorial,
-  updateEditorial,
-  getEditorial,
-} from "@/app/actions/editorial-content";
+  createBanner,
+  updateBanner,
+  getBanner,
+} from "@/app/actions/banner-content";
 import { CTA_STYLES } from "@/lib/content/constants";
+
+/* ------------------------------- style tokens ------------------------------ */
 
 const labelCls = "block text-[13px] font-medium text-foreground mb-1.5";
 const inputCls =
@@ -21,7 +23,9 @@ const helperCls = "mt-1.5 text-[12px] text-muted-foreground";
 const fieldsetCls = "rounded-xl border border-border bg-card p-5 space-y-4";
 const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
 
-const LIST_PATH = "/channels/store/content/editorials";
+const LIST_PATH = "/channels/store/content/banners";
+
+/* --------------------------------- types ---------------------------------- */
 
 interface FormState {
   name: string;
@@ -29,8 +33,6 @@ interface FormState {
   body: string;
   heading: { title: string; subtitle: string };
   image: string;
-  secondaryImage: string;
-  images: string[];
   cta: {
     text: string;
     link: string;
@@ -44,12 +46,12 @@ const INITIAL: FormState = {
   body: "",
   heading: { title: "", subtitle: "" },
   image: "",
-  secondaryImage: "",
-  images: [],
   cta: { text: "", link: "", style: "none" },
 };
 
-export default function EditorialForm({ id }: { id?: string }) {
+/* ---------------------------------- form ---------------------------------- */
+
+export default function BannerForm({ id }: { id?: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(!!id);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -57,71 +59,20 @@ export default function EditorialForm({ id }: { id?: string }) {
   const [success, setSuccess] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormState>(INITIAL);
 
-  // ---------------------------------------------------------------------
-  // Stable initial-value arrays
-  // ---------------------------------------------------------------------
-  // The hook syncs `initialFiles` into its own state. Even with the
-  // signature-based dependency (which fixes the loop), passing a fresh
-  // array every render still triggers a JSON.stringify + effect call per
-  // parent render — cheap but pointless. Memoizing on the actual value
-  // keeps the reference stable when nothing has changed.
-  const initialPrimary = useMemo(
-    () => (formData.image ? [formData.image] : []),
-    [formData.image],
-  );
-  const initialSecondary = useMemo(
-    () => (formData.secondaryImage ? [formData.secondaryImage] : []),
-    [formData.secondaryImage],
-  );
-  // formData.images already comes from the sync effect below, which only
-  // updates it when content differs — so this reference is stable unless
-  // the gallery actually changed.
-  const initialCollection = formData.images;
-
-  // ---------------------------------------------------------------------
-  // Uploaders
-  // ---------------------------------------------------------------------
   const {
     files: primaryFiles,
     inFlightUploads: primaryInFlight,
     loading: primaryLoading,
     addFiles: addPrimary,
-    removeFile: removePrimary,
+    setFiles: setPrimaryFiles,
     progressByName: primaryProgress,
   } = useFileUploader(
-    id ? `editorial-${id}-primary` : undefined,
-    initialPrimary,
-    "editorial/primary",
+    id ? `banner-${id}-primary` : undefined,
+    formData.image ? [formData.image] : [],
+    "banners/primary",
   );
 
-  const {
-    files: secondaryFiles,
-    inFlightUploads: secondaryInFlight,
-    loading: secondaryLoading,
-    addFiles: addSecondary,
-    removeFile: removeSecondary,
-    progressByName: secondaryProgress,
-  } = useFileUploader(
-    id ? `editorial-${id}-secondary` : undefined,
-    initialSecondary,
-    "editorial/secondary",
-  );
-
-  const {
-    files: collectionFiles,
-    loading: collectionLoading,
-    addFiles: addCollection,
-    removeFile: removeCollection,
-    progressByName: collectionProgress,
-  } = useFileUploader(
-    id ? `editorial-${id}-collection` : undefined,
-    initialCollection,
-    "editorial/collection",
-  );
-
-  // ---------------------------------------------------------------------
-  // Load existing editorial
-  // ---------------------------------------------------------------------
+  /* ------------------------------- load ---------------------------------- */
   useEffect(() => {
     if (!id) {
       setLoading(false);
@@ -130,9 +81,9 @@ export default function EditorialForm({ id }: { id?: string }) {
     (async () => {
       try {
         setLoading(true);
-        const res = await getEditorial(id);
+        const res = await getBanner(id);
         if (!res.success || !res.data) {
-          setError(res.error || "Failed to load editorial");
+          setError(res.error || "Failed to load banner");
           return;
         }
         const d: any = res.data;
@@ -145,10 +96,6 @@ export default function EditorialForm({ id }: { id?: string }) {
             subtitle: d.heading?.subtitle ?? "",
           },
           image: d.image || "",
-          secondaryImage: d.secondaryImage || "",
-          images: Array.isArray(d.images)
-            ? d.images.filter((x: any) => typeof x === "string")
-            : [],
           cta: {
             text: d.cta?.text ?? "",
             link: d.cta?.link ?? "",
@@ -156,43 +103,26 @@ export default function EditorialForm({ id }: { id?: string }) {
           },
         });
       } catch (err) {
-        console.error("[EditorialForm] load", err);
-        setError("Failed to load editorial");
+        console.error("[BannerForm] load", err);
+        setError("Failed to load banner");
       } finally {
         setLoading(false);
       }
     })();
   }, [id]);
 
-  // ---------------------------------------------------------------------
-  // Sync uploader files → formData (single source of truth)
-  // ---------------------------------------------------------------------
+  /* ---------------------------------------------------------------------- */
+  /* Sync uploader → formData, guarded against the initial-load race.       */
+  /* ---------------------------------------------------------------------- */
+  const lastSyncedImageRef = useRef<string | null>(null);
   useEffect(() => {
     const url = primaryFiles[0] || "";
-    if (url !== formData.image) {
-      setFormData((p) => ({ ...p, image: url }));
-    }
-  }, [primaryFiles, formData.image]);
+    if (lastSyncedImageRef.current === url) return;
+    lastSyncedImageRef.current = url;
+    setFormData((p) => (p.image === url ? p : { ...p, image: url }));
+  }, [primaryFiles]);
 
-  useEffect(() => {
-    const url = secondaryFiles[0] || "";
-    if (url !== formData.secondaryImage) {
-      setFormData((p) => ({ ...p, secondaryImage: url }));
-    }
-  }, [secondaryFiles, formData.secondaryImage]);
-
-  useEffect(() => {
-    if (
-      collectionFiles.length !== formData.images.length ||
-      collectionFiles.some((u, i) => u !== formData.images[i])
-    ) {
-      setFormData((p) => ({ ...p, images: collectionFiles }));
-    }
-  }, [collectionFiles, formData.images]);
-
-  // ---------------------------------------------------------------------
-  // Field helpers
-  // ---------------------------------------------------------------------
+  /* ----------------------------- handlers -------------------------------- */
   const setField = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setFormData((p) => ({ ...p, [k]: v }));
 
@@ -202,6 +132,7 @@ export default function EditorialForm({ id }: { id?: string }) {
   const setCta = (patch: Partial<FormState["cta"]>) =>
     setFormData((p) => ({ ...p, cta: { ...p.cta, ...patch } }));
 
+  /* ------------------------------ submit --------------------------------- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -212,20 +143,15 @@ export default function EditorialForm({ id }: { id?: string }) {
       const hasAnyContent =
         Boolean(formData.heading.title.trim()) ||
         Boolean(formData.body.trim()) ||
-        Boolean(formData.image.trim()) ||
-        formData.images.length > 0;
+        Boolean(formData.image.trim());
 
       if (!hasAnyContent) {
-        return setError(
-          "Add at least a headline, body, primary image, or gallery image.",
-        );
+        return setError("Add at least a headline, body, or image.");
       }
 
-      if (
-        formData.cta.style !== "none" &&
-        (!formData.cta.text.trim() || !formData.cta.link.trim())
-      ) {
-        return setError("CTA requires both text and link");
+      // CTA: link is required when a style is chosen; text is optional.
+      if (formData.cta.style !== "none" && !formData.cta.link.trim()) {
+        return setError("CTA requires a link");
       }
 
       const fd = new FormData();
@@ -235,27 +161,23 @@ export default function EditorialForm({ id }: { id?: string }) {
       fd.append("heading.title", formData.heading.title);
       fd.append("heading.subtitle", formData.heading.subtitle);
       fd.append("image", formData.image);
-      fd.append("secondaryImage", formData.secondaryImage);
-      fd.append("images", JSON.stringify(formData.images));
       fd.append("cta.text", formData.cta.text.trim());
       fd.append("cta.link", formData.cta.link.trim());
       fd.append("cta.style", formData.cta.style);
 
-      const res = id
-        ? await updateEditorial(id, fd)
-        : await createEditorial(fd);
+      const res = id ? await updateBanner(id, fd) : await createBanner(fd);
 
       if (res.success) {
-        setSuccess(id ? "Editorial updated" : "Editorial created");
+        setSuccess(id ? "Banner updated" : "Banner created");
         setTimeout(() => {
           router.push(LIST_PATH);
           router.refresh();
         }, 900);
       } else {
-        setError(res.message || "Failed to save editorial");
+        setError(res.message || "Failed to save banner");
       }
     } catch (err) {
-      console.error("[EditorialForm] submit", err);
+      console.error("[BannerForm] submit", err);
       setError("Unexpected error");
     } finally {
       setIsSubmitting(false);
@@ -269,6 +191,8 @@ export default function EditorialForm({ id }: { id?: string }) {
       </div>
     );
   }
+
+  /* --------------------------------- render -------------------------------- */
 
   return (
     <div className="min-h-screen bg-background">
@@ -290,17 +214,20 @@ export default function EditorialForm({ id }: { id?: string }) {
 
         <header className="mb-6">
           <h1 className="text-xl font-semibold text-foreground">
-            {id ? "Edit editorial" : "New editorial"}
+            {id ? "Edit banner" : "New banner"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Reusable content — reference it from any number of blocks.
+            A single hero unit — image, headline, body, and CTA. Blocks select
+            one or more banners and choose how to lay them out.
           </p>
         </header>
 
         <div className="mb-6 rounded-lg border border-border bg-muted/40 px-4 py-3 text-[13px] text-muted-foreground">
-          Editorial content is display-agnostic. Blocks decide how to present it
-          — as a grid, carousel, list, hero, banner, or feature. Fill whichever
-          image slots your blocks will use; empty slots are ignored.
+          Banners are reusable across blocks. The <strong>banner</strong>{" "}
+          display renders each banner as a full-width hero carousel; card
+          displays (<strong>grid</strong>, <strong>carousel</strong>,{" "}
+          <strong>list</strong>, <strong>hero</strong>) render each banner as a
+          card.
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 pb-24">
@@ -318,7 +245,7 @@ export default function EditorialForm({ id }: { id?: string }) {
                 value={formData.name}
                 onChange={(e) => setField("name", e.target.value)}
                 disabled={isSubmitting}
-                placeholder="e.g. Winter Story 2025"
+                placeholder="e.g. Winter Campaign 2025"
               />
             </Field>
           </fieldset>
@@ -362,77 +289,42 @@ export default function EditorialForm({ id }: { id?: string }) {
 
             <Field
               label="Body"
-              hint="Story copy for feature displays. Optional intro for card displays. Blank line splits paragraphs."
+              hint="Shown in the banner display. Up to 2 short paragraphs."
             >
               <textarea
                 className={`${inputCls} min-h-[120px] resize-y`}
                 value={formData.body}
                 onChange={(e) => setField("body", e.target.value)}
                 disabled={isSubmitting}
-                placeholder="Write the story…"
+                placeholder="A short story…"
               />
             </Field>
           </fieldset>
 
           <fieldset className={fieldsetCls}>
-            <legend className={legendCls}>Images</legend>
-
-            <p className={helperCls}>
-              Fill whichever slots your blocks will use:
-            </p>
+            <legend className={legendCls}>Image</legend>
 
             <div>
               <label className={labelCls}>
                 Primary image
                 <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
-                  — used by feature and banner displays
+                  — used as the banner background
                 </span>
               </label>
               <FilesUploader
                 files={primaryFiles}
                 inFlightUploads={primaryInFlight}
                 addFiles={addPrimary}
-                onRemove={removePrimary}
+                onRemove={async (i) =>
+                  setPrimaryFiles((prev) => prev.filter((_, k) => k !== i))
+                }
                 loading={primaryLoading}
                 progressByName={primaryProgress}
-              />
-            </div>
-
-            <div>
-              <label className={labelCls}>
-                Secondary image
-                <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
-                  — used by the duo display
-                </span>
-              </label>
-              <FilesUploader
-                files={secondaryFiles}
-                inFlightUploads={secondaryInFlight}
-                addFiles={addSecondary}
-                onRemove={removeSecondary}
-                loading={secondaryLoading}
-                progressByName={secondaryProgress}
-              />
-            </div>
-
-            <div>
-              <label className={labelCls}>
-                Gallery
-                <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
-                  ({collectionFiles.length}) — used by grid, carousel, list, and
-                  hero displays
-                </span>
-              </label>
-              <FilesUploader
-                files={collectionFiles}
-                loading={collectionLoading}
-                addFiles={addCollection}
-                onRemove={removeCollection}
-                progressByName={collectionProgress}
+                maxFiles={1}
               />
               <p className={helperCls}>
-                Upload multiple images at once. The block chooses ratio, size,
-                spacing, and display.
+                One image per banner. Wide aspect (21:9 or 16:9) works best in
+                the banner display.
               </p>
             </div>
           </fieldset>
@@ -460,7 +352,10 @@ export default function EditorialForm({ id }: { id?: string }) {
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Text">
+              <Field
+                label="Text"
+                hint="Optional. Falls back to a default label."
+              >
                 <input
                   type="text"
                   className={inputCls}
@@ -470,7 +365,7 @@ export default function EditorialForm({ id }: { id?: string }) {
                   placeholder="e.g. Explore"
                 />
               </Field>
-              <Field label="Link">
+              <Field label="Link" required>
                 <input
                   type="text"
                   className={inputCls}
@@ -481,6 +376,12 @@ export default function EditorialForm({ id }: { id?: string }) {
                 />
               </Field>
             </div>
+
+            {formData.cta.style !== "none" && !formData.cta.link.trim() && (
+              <p className="text-[12px] text-amber-700">
+                A CTA needs a link to render. Add one or set style to None.
+              </p>
+            )}
           </fieldset>
 
           <div className="flex items-center justify-end gap-2">
@@ -503,9 +404,9 @@ export default function EditorialForm({ id }: { id?: string }) {
                   <span>Saving…</span>
                 </>
               ) : id ? (
-                "Update editorial"
+                "Update banner"
               ) : (
-                "Create editorial"
+                "Create banner"
               )}
             </button>
           </div>
@@ -514,6 +415,10 @@ export default function EditorialForm({ id }: { id?: string }) {
     </div>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                Primitives                                  */
+/* -------------------------------------------------------------------------- */
 
 function Field({
   label,

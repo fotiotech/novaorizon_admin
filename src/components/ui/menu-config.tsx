@@ -368,8 +368,8 @@ export const rawMenuConfig = [
                 icon: <MenuIcon />,
               },
               {
-                name: "Editorials",
-                href: "/channels/store/content/editorials",
+                name: "Banners",
+                href: "/channels/store/content/banners",
                 icon: <MenuIcon />,
               },
               {

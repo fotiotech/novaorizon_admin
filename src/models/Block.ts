@@ -160,7 +160,8 @@ const SourceSchema = new Schema(
     collectionId: { type: Schema.Types.ObjectId, ref: "Collection" },
     categoryId: { type: Schema.Types.ObjectId, ref: "Category" },
     promotionId: { type: Schema.Types.ObjectId, ref: "Promotion" },
-    editorialId: { type: Schema.Types.ObjectId, ref: "EditorialContent" },
+    // Multiple banners per block. Order is preserved.
+    bannerIds: [{ type: Schema.Types.ObjectId, ref: "BannerContent" }],
     promotionMode: {
       type: String,
       enum: PROMOTION_MODES,
@@ -208,8 +209,11 @@ const BlockSchema = new Schema(
 BlockSchema.pre("validate", function (next) {
   const t = this.source?.type;
   if (!t) return next(new Error("A content source is required."));
-  if (t === "editorial" && !this.source.editorialId) {
-    return next(new Error("Editorial source requires an editorialId."));
+  if (t === "banner") {
+    const ids = this.source.bannerIds ?? [];
+    if (!ids.length) {
+      return next(new Error("Banner source requires at least one bannerId."));
+    }
   }
   next();
 });
@@ -218,7 +222,7 @@ BlockSchema.index({ location: 1, status: 1, order: 1 });
 BlockSchema.index({ "source.collectionId": 1 });
 BlockSchema.index({ "source.categoryId": 1 });
 BlockSchema.index({ "source.promotionId": 1 });
-BlockSchema.index({ "source.editorialId": 1 });
+BlockSchema.index({ "source.bannerIds": 1 });
 
 export const Block =
   mongoose.models.Block || mongoose.model("Block", BlockSchema);

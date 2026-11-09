@@ -1,12 +1,12 @@
 // app/(root)/channels/store/content/editorials/[id]/page.tsx
 
-import EditorialForm from "../_component/EditorialForm";
+import BannerForm from "../_component/BannerForm";
 
-export default async function EditEditorialPage({
+export default async function EditBannerPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <EditorialForm id={id} />;
+  return <BannerForm id={id} />;
 }

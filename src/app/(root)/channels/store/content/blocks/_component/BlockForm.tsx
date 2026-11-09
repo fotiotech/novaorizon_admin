@@ -8,7 +8,7 @@ import Notification from "@/components/Notification";
 import { BottomSheet } from "./BottomSheet";
 import { RefPicker } from "./RefPicker";
 import { ManualPicker, type ManualItem } from "./ManualPicker";
-import { EditorialPicker } from "./EditorialPicker";
+import { BannerPicker } from "./BannerPicker";
 import {
   createBlock,
   updateBlock,
@@ -19,7 +19,6 @@ import {
 import {
   BLOCK_LOCATIONS,
   BLOCK_DISPLAYS,
-  STANDARD_DISPLAYS,
   BLOCK_THEMES,
   BLOCK_ALIGNMENTS,
   BLOCK_ANIMATIONS,
@@ -36,7 +35,6 @@ import {
   COLLECTION_COUNT_POSITIONS,
   CARD_VARIANTS,
   MAX_BLOCK_LIMIT,
-  isFeatureDisplay,
   type BlockLocation,
   type BlockSourceType,
   type PromotionMode,
@@ -60,7 +58,7 @@ const SOURCE_LABEL: Record<BlockSourceType, string> = {
   collection: "Collection",
   category: "Category",
   promotion: "Promotion",
-  editorial: "Editorial",
+  banner: "Banners",
   manual: "Manual items",
 };
 
@@ -70,14 +68,14 @@ const SOURCE_HELP: Record<BlockSourceType, string> = {
   category: "Shows products that belong to the selected category.",
   promotion:
     "Renders items from the promotion's scope, or the promotion tile itself (for banners).",
-  editorial:
-    "Renders content from the editorial library. Card displays use its gallery; feature displays use its story.",
+  banner:
+    "Renders one or more reusable banners. The banner display shows a hero carousel; card displays show one card per banner.",
   manual:
     "Hand-pick any combination of products, categories, collections, brands, promotions, or pages.",
 };
 
 const SOURCE_REF_TYPE: Record<
-  Exclude<BlockSourceType, "manual" | "editorial">,
+  Exclude<BlockSourceType, "manual" | "banner">,
   RegistryKey
 > = {
   collection: "Collection",
@@ -100,7 +98,7 @@ interface FormState {
     collectionId: string;
     categoryId: string;
     promotionId: string;
-    editorialId: string;
+    bannerIds: string[];
     promotionMode: PromotionMode;
     items: ManualItem[];
   };
@@ -157,7 +155,7 @@ const INITIAL: FormState = {
     collectionId: "",
     categoryId: "",
     promotionId: "",
-    editorialId: "",
+    bannerIds: [],
     promotionMode: "products",
     items: [],
   },
@@ -205,10 +203,7 @@ export default function BlockForm({ id }: { id?: string }) {
   const [presentationOpen, setPresentationOpen] = useState(false);
 
   const sourceType = formData.source.type;
-  const isEditorialSource = sourceType === "editorial";
-  const allowedDisplays = isEditorialSource
-    ? BLOCK_DISPLAYS
-    : STANDARD_DISPLAYS;
+  const isBannerSource = sourceType === "banner";
 
   const currentSourceId =
     sourceType === "collection"
@@ -217,11 +212,11 @@ export default function BlockForm({ id }: { id?: string }) {
         ? formData.source.categoryId
         : sourceType === "promotion"
           ? formData.source.promotionId
-          : sourceType === "editorial"
-            ? formData.source.editorialId
-            : "";
+          : "";
 
-  const hasSelection = currentSourceId !== "";
+  const hasSelection = isBannerSource
+    ? formData.source.bannerIds.length > 0
+    : currentSourceId !== "";
 
   /* ------------------------------- load ---------------------------------- */
   useEffect(() => {
@@ -259,9 +254,9 @@ export default function BlockForm({ id }: { id?: string }) {
             promotionId: d.source?.promotionId
               ? String(d.source.promotionId)
               : "",
-            editorialId: d.source?.editorialId
-              ? String(d.source.editorialId)
-              : "",
+            bannerIds: Array.isArray(d.source?.bannerIds)
+              ? d.source.bannerIds.map((bid: any) => String(bid))
+              : [],
             promotionMode: d.source?.promotionMode || "products",
             items: Array.isArray(d.source?.items)
               ? d.source.items.map((it: any) => ({
@@ -290,9 +285,15 @@ export default function BlockForm({ id }: { id?: string }) {
     })();
   }, [id]);
 
-  /* Preview fetch for all source types except manual */
+  /* Preview fetch — skipped for banner + manual sources.
+     Banner has no single "current" item to preview; the picker itself
+     shows the list. Manual picker renders its own thumbnails. */
   useEffect(() => {
-    if (sourceType === "manual" || !currentSourceId) {
+    if (
+      sourceType === "manual" ||
+      sourceType === "banner" ||
+      !currentSourceId
+    ) {
       setPreview({ status: "idle" });
       return;
     }
@@ -314,7 +315,7 @@ export default function BlockForm({ id }: { id?: string }) {
     };
   }, [sourceType, currentSourceId]);
 
-  /* Reset source edit mode when source changes */
+  /* Reset source edit mode whenever the selection changes. */
   useEffect(() => {
     setEditingSource(false);
   }, [
@@ -322,7 +323,7 @@ export default function BlockForm({ id }: { id?: string }) {
     formData.source.collectionId,
     formData.source.categoryId,
     formData.source.promotionId,
-    formData.source.editorialId,
+    formData.source.bannerIds,
   ]);
 
   /* ----------------------------- handlers -------------------------------- */
@@ -353,20 +354,13 @@ export default function BlockForm({ id }: { id?: string }) {
   const handleSourceTypeChange = (nextType: BlockSourceType) => {
     setSource({ type: nextType });
     setEditingSource(false);
-
-    // If the display was a feature display and we're switching to a
-    // non-editorial source, fall back to grid — feature displays can't
-    // render collection/category/promotion/manual content.
-    if (nextType !== "editorial" && isFeatureDisplay(formData.display)) {
-      setField("display", "grid");
-    }
   };
 
   const handleSourceClear = () => {
     if (sourceType === "collection") setSource({ collectionId: "" });
     else if (sourceType === "category") setSource({ categoryId: "" });
     else if (sourceType === "promotion") setSource({ promotionId: "" });
-    else if (sourceType === "editorial") setSource({ editorialId: "" });
+    else if (sourceType === "banner") setSource({ bannerIds: [] });
     setEditingSource(false);
   };
 
@@ -378,9 +372,9 @@ export default function BlockForm({ id }: { id?: string }) {
     try {
       if (!formData.name.trim()) return setError("Name is required");
 
-      if (sourceType === "editorial") {
-        if (!formData.source.editorialId) {
-          return setError("Pick an editorial from the library");
+      if (isBannerSource) {
+        if (formData.source.bannerIds.length === 0) {
+          return setError("Select at least one banner from the library");
         }
       } else {
         if (!hasSelection) {
@@ -414,15 +408,18 @@ export default function BlockForm({ id }: { id?: string }) {
       else if (sourceType === "promotion") {
         fd.append("source.promotionId", formData.source.promotionId);
         fd.append("source.promotionMode", formData.source.promotionMode);
-      } else if (sourceType === "editorial") {
-        fd.append("source.editorialId", formData.source.editorialId);
+      } else if (sourceType === "banner") {
+        fd.append(
+          "source.bannerIds",
+          JSON.stringify(formData.source.bannerIds),
+        );
       } else if (sourceType === "manual") {
         fd.append("source.items", JSON.stringify(formData.source.items));
       }
 
-      // Heading and CTA only exist for sourced blocks. Editorial blocks
-      // inherit them from the referenced editorial.
-      if (sourceType !== "editorial") {
+      // Block-level heading + CTA are only used for sourced (non-banner)
+      // blocks. Banner blocks inherit those from the banners themselves.
+      if (!isBannerSource) {
         fd.append("heading.title", formData.heading.title);
         fd.append("heading.subtitle", formData.heading.subtitle);
         fd.append(
@@ -443,7 +440,6 @@ export default function BlockForm({ id }: { id?: string }) {
         fd.append("cta.style", formData.cta.style);
       }
 
-      // Presentation is universal.
       (
         Object.keys(
           formData.displayConfig,
@@ -481,8 +477,6 @@ export default function BlockForm({ id }: { id?: string }) {
 
   const columnsDisabled =
     formData.display === "carousel" || formData.display === "list";
-  const showSourcePicker =
-    sourceType === "manual" || !hasSelection || editingSource;
 
   const dc = formData.displayConfig;
   const presentationSummary = [
@@ -522,8 +516,8 @@ export default function BlockForm({ id }: { id?: string }) {
             {id ? "Edit block" : "New block"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {isEditorialSource
-              ? "Editorial blocks reference content from the editorial library. The block decides how it's presented."
+            {isBannerSource
+              ? "Banner blocks reference one or more banners from the library. The block decides how to lay them out."
               : "Place a collection, category, promotion, or manual list on a page in a specific layout."}
           </p>
         </header>
@@ -540,7 +534,7 @@ export default function BlockForm({ id }: { id?: string }) {
                 value={formData.name}
                 onChange={(e) => setField("name", e.target.value)}
                 disabled={isSubmitting}
-                placeholder="e.g. Home — Featured products"
+                placeholder="e.g. Home — Winter campaign"
               />
             </Field>
 
@@ -581,14 +575,14 @@ export default function BlockForm({ id }: { id?: string }) {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Display" hint={SOURCE_HELP[sourceType]}>
+              <Field label="Display">
                 <select
                   className={inputCls}
                   value={formData.display}
                   onChange={(e) => setField("display", e.target.value)}
                   disabled={isSubmitting}
                 >
-                  {allowedDisplays.map((d) => (
+                  {BLOCK_DISPLAYS.map((d) => (
                     <option key={d} value={d}>
                       {d}
                     </option>
@@ -610,7 +604,7 @@ export default function BlockForm({ id }: { id?: string }) {
               </Field>
             </div>
 
-            {!isEditorialSource && (
+            {!isBannerSource && (
               <Field
                 label="Item limit"
                 hint={`Maximum ${MAX_BLOCK_LIMIT} items.`}
@@ -636,8 +630,8 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
           </fieldset>
 
-          {/* ─────────────── HEADING (non-editorial only) ─────────────── */}
-          {!isEditorialSource && (
+          {/* ─────────────── HEADING (non-banner only) ─────────────── */}
+          {!isBannerSource && (
             <fieldset className={fieldsetCls}>
               <legend className={legendCls}>Heading</legend>
 
@@ -684,15 +678,7 @@ export default function BlockForm({ id }: { id?: string }) {
           <fieldset className={fieldsetCls}>
             <legend className={legendCls}>Source</legend>
 
-            <Field
-              label="Type"
-              required
-              hint={
-                isEditorialSource
-                  ? "Editorial adds extra displays — the block will render the editorial's content instead of products."
-                  : undefined
-              }
-            >
+            <Field label="Type" required hint={SOURCE_HELP[sourceType]}>
               <select
                 className={inputCls}
                 value={sourceType}
@@ -709,33 +695,17 @@ export default function BlockForm({ id }: { id?: string }) {
               </select>
             </Field>
 
-            {sourceType === "editorial" ? (
-              <Field label="Editorial" required>
-                {showSourcePicker ? (
-                  <div>
-                    <EditorialPicker
-                      value={formData.source.editorialId}
-                      onChange={(vid) => setSource({ editorialId: vid })}
-                      disabled={isSubmitting}
-                    />
-                    {hasSelection && (
-                      <button
-                        type="button"
-                        onClick={() => setEditingSource(false)}
-                        className="mt-1.5 text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                      >
-                        Cancel — keep current selection
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <SourcePreviewCard
-                    state={preview}
-                    sourceType={sourceType}
-                    onEdit={() => setEditingSource(true)}
-                    onRemove={handleSourceClear}
-                  />
-                )}
+            {sourceType === "banner" ? (
+              <Field
+                label="Banners"
+                required
+                hint="Select one or more banners. Order matters — the banner display uses the first as the default slide."
+              >
+                <BannerPicker
+                  value={formData.source.bannerIds}
+                  onChange={(ids) => setSource({ bannerIds: ids })}
+                  disabled={isSubmitting}
+                />
               </Field>
             ) : sourceType === "manual" ? (
               <Field label="Items">
@@ -747,7 +717,7 @@ export default function BlockForm({ id }: { id?: string }) {
               </Field>
             ) : (
               <Field label={SOURCE_LABEL[sourceType]} required>
-                {showSourcePicker ? (
+                {!hasSelection || editingSource ? (
                   <div>
                     <RefPicker
                       label=""
@@ -934,8 +904,8 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
           </fieldset>
 
-          {/* ─────────────── CALL TO ACTION (non-editorial only) ─────────────── */}
-          {!isEditorialSource && (
+          {/* ─────────────── CALL TO ACTION (non-banner only) ─────────────── */}
+          {!isBannerSource && (
             <fieldset className={fieldsetCls}>
               <legend className={legendCls}>Call to action</legend>
 
@@ -991,7 +961,7 @@ export default function BlockForm({ id }: { id?: string }) {
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[14px] font-medium text-foreground">
-                  Cards, spacing & colors
+                  Layout, cards & colors
                 </p>
                 <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
                   {presentationSummary}
@@ -1045,7 +1015,6 @@ export default function BlockForm({ id }: { id?: string }) {
         title="Presentation"
       >
         <div className="space-y-6">
-          {/* Theme */}
           <section>
             <SheetLabel>Theme</SheetLabel>
             <Field label="Theme">
@@ -1063,7 +1032,6 @@ export default function BlockForm({ id }: { id?: string }) {
             </Field>
           </section>
 
-          {/* Layout */}
           <section>
             <SheetLabel>Layout</SheetLabel>
             <div className="grid grid-cols-2 gap-3">
@@ -1139,7 +1107,6 @@ export default function BlockForm({ id }: { id?: string }) {
             </div>
           </section>
 
-          {/* Card */}
           <section>
             <SheetLabel>Card</SheetLabel>
             <div className="grid grid-cols-2 gap-3">
@@ -1215,7 +1182,6 @@ export default function BlockForm({ id }: { id?: string }) {
             </div>
           </section>
 
-          {/* Image */}
           <section>
             <SheetLabel>Image</SheetLabel>
             <Field label="Crop focus">
@@ -1235,7 +1201,6 @@ export default function BlockForm({ id }: { id?: string }) {
             </Field>
           </section>
 
-          {/* Colors */}
           <section>
             <SheetLabel>Colors</SheetLabel>
             <div className="space-y-3">
@@ -1253,7 +1218,6 @@ export default function BlockForm({ id }: { id?: string }) {
             </div>
           </section>
 
-          {/* Style toggles */}
           <section>
             <SheetLabel>Style</SheetLabel>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -1508,12 +1472,6 @@ function SourcePreviewCard({
     }
     if (sourceType === "category" && d.meta.slug) {
       return `/${d.meta.slug}`;
-    }
-    if (sourceType === "editorial") {
-      const count = d.meta.imageCount ?? 0;
-      return count > 0
-        ? `${count} gallery image${count === 1 ? "" : "s"}`
-        : "no gallery images";
     }
     return null;
   })();

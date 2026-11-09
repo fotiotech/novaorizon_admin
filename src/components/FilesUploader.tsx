@@ -18,6 +18,8 @@ type FilesUploaderProps = {
   /** Progress for EXISTING files being overwritten (keyed by basename). */
   progressByName?: Record<string, number>;
   compact?: boolean;
+  /** Maximum number of files. Undefined = unlimited. */
+  maxFiles?: number;
 };
 
 const MAX_VISIBLE = 2;
@@ -34,21 +36,35 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   onRemove,
   progressByName = {},
   compact = false,
+  maxFiles,
 }) => {
   const fileArray = Array.isArray(files) ? files : [];
   const [isModalOpen, setIsModalOpen] = useState(false);
   const modalInputRef = useRef<HTMLInputElement>(null);
 
-  const onDrop = (acceptedFiles: File[]) => addFiles(acceptedFiles);
+  const totalOnDiskOrInFlight = fileArray.length + inFlightUploads.length;
+  const atMax = maxFiles != null && totalOnDiskOrInFlight >= maxFiles;
+
+  const pickWithinLimit = (incoming: File[]): File[] => {
+    if (!incoming.length) return [];
+    if (maxFiles == null || maxFiles <= 0) return incoming;
+    const available = Math.max(0, maxFiles - totalOnDiskOrInFlight);
+    if (available === 0) return [];
+    return incoming.slice(0, available);
+  };
+
+  const onDrop = (acceptedFiles: File[]) => {
+    const accepted = pickWithinLimit(acceptedFiles);
+    if (accepted.length > 0) addFiles(accepted);
+  };
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: ACCEPT,
-    multiple: true,
+    multiple: !maxFiles || maxFiles > 1,
     noClick: true,
   });
 
-  // Progress for an already-saved file (i.e. one being overwritten).
   const getProgress = (url: string) => {
     const fileName = url.split("/").pop() || "";
     return progressByName[fileName];
@@ -79,10 +95,10 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
 
   const handleModalAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files;
-    if (picked && picked.length > 0) {
-      addFiles(Array.from(picked));
-      e.target.value = "";
-    }
+    if (!picked || picked.length === 0) return;
+    const accepted = pickWithinLimit(Array.from(picked));
+    if (accepted.length > 0) addFiles(accepted);
+    e.target.value = "";
   };
 
   // Merge saved files + in-flight uploads into a single ordered list.
@@ -101,22 +117,28 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   // ------------------------------------------------------------------
   // Tile renderers
   // ------------------------------------------------------------------
-  const renderAddTile = () => (
+  const renderAddTile = (disabled = false) => (
     <button
       type="button"
-      onClick={open}
-      className="group flex h-full w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border bg-card/60 text-center transition-colors hover:border-primary/60 hover:bg-primary/5"
+      onClick={disabled ? undefined : open}
+      disabled={disabled}
+      className={`group flex h-full w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border bg-card/60 text-center transition-colors ${
+        disabled
+          ? "cursor-not-allowed opacity-50"
+          : "hover:border-primary/60 hover:bg-primary/5"
+      }`}
+      title={disabled ? "Maximum reached" : "Add image"}
     >
       <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:scale-105">
         <Add style={{ fontSize: 18 }} />
       </span>
-      <span className="text-[11px] font-medium text-foreground">Add</span>
+      <span className="text-[11px] font-medium text-foreground">
+        {disabled ? "Full" : "Add"}
+      </span>
     </button>
   );
 
   const renderImageTile = (slot: RenderSlot, showOverlay = false) => {
-    // For uploads, progress comes from the slot itself.
-    // For saved files, progress comes from progressByName (updates only).
     const progress =
       slot.kind === "uploading" ? slot.progress : getProgress(slot.url);
     const isUploading =
@@ -240,6 +262,7 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
         <div className="flex flex-none items-center justify-between">
           <span className="text-xs text-muted-foreground">
             {total} {total === 1 ? "image" : "images"}
+            {maxFiles != null && <span className="ml-1">/ {maxFiles} max</span>}
             {inFlightUploads.length > 0 && (
               <span className="ml-1 text-primary">
                 ({inFlightUploads.length} uploading…)
@@ -249,16 +272,17 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
           <button
             type="button"
             onClick={() => modalInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
+            disabled={atMax}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Add style={{ fontSize: 16 }} />
-            Add images
+            {atMax ? "Max reached" : "Add images"}
           </button>
           <input
             ref={modalInputRef}
             type="file"
             accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-            multiple
+            multiple={!maxFiles || maxFiles > 1}
             className="hidden"
             onChange={handleModalAdd}
           />
@@ -354,7 +378,41 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
   }
 
   // ------------------------------------------------------------------
-  // Full bento mode
+  // Single-file mode — used when maxFiles === 1
+  // ------------------------------------------------------------------
+  if (maxFiles === 1) {
+    const firstSlot = slots[0];
+
+    return (
+      <>
+        <div
+          {...getRootProps()}
+          className={`relative my-4 w-full max-w-[200px] transition-all md:max-w-[220px] ${
+            isDragActive
+              ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background"
+              : ""
+          }`}
+        >
+          <input {...getInputProps()} />
+          <div className="aspect-square">
+            {firstSlot ? renderImageTile(firstSlot) : renderAddTile(false)}
+          </div>
+
+          {isDragActive && !atMax && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-primary/10 backdrop-blur-sm">
+              <p className="text-xs font-medium text-primary">
+                Drop image here
+              </p>
+            </div>
+          )}
+        </div>
+        {modal}
+      </>
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // Full bento mode — multi-file
   // ------------------------------------------------------------------
   return (
     <>
@@ -368,12 +426,14 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
       >
         <input {...getInputProps()} />
 
-        {total === 0 && <div className="aspect-square">{renderAddTile()}</div>}
+        {total === 0 && (
+          <div className="aspect-square">{renderAddTile(false)}</div>
+        )}
 
         {total === 1 && (
           <div className="grid aspect-[2/1] grid-cols-2 gap-1.5">
             {renderImageTile(visibleSlots[0])}
-            {renderAddTile()}
+            {renderAddTile(atMax)}
           </div>
         )}
 
@@ -385,11 +445,11 @@ const FilesUploader: React.FC<FilesUploaderProps> = ({
             <div className="col-span-1 row-span-1">
               {renderImageTile(visibleSlots[1], remaining > 0)}
             </div>
-            <div className="col-span-1 row-span-1">{renderAddTile()}</div>
+            <div className="col-span-1 row-span-1">{renderAddTile(atMax)}</div>
           </div>
         )}
 
-        {isDragActive && (
+        {isDragActive && !atMax && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-primary/10 backdrop-blur-sm">
             <p className="text-xs font-medium text-primary">Drop images here</p>
           </div>

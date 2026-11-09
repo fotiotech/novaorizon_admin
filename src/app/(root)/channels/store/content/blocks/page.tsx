@@ -19,24 +19,37 @@ interface BlockRow {
   display: string;
   status: "active" | "inactive";
   order: number;
-  /** Editorial blocks carry an editorialId and no source. */
-  source?: { type: string };
-  editorialId?: string | null;
+  source?: {
+    type: string;
+    /** Present when `type === "banner"`. Ordered, can be 0..N. */
+    bannerIds?: string[];
+  };
 }
 
 const LIST_PATH = "/channels/store/content/blocks";
 
-/** Short summary of what this block renders. */
+/* -------------------------------------------------------------------------- */
+/*                                  Helpers                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Human label for what this block renders. */
 function describeBlock(b: BlockRow): string {
-  if (b.display === "editorial") {
-    return b.editorialId ? "editorial" : "editorial (missing)";
+  const t = b.source?.type;
+  if (!t) return "source (missing)";
+
+  if (t === "banner") {
+    const n = b.source?.bannerIds?.length ?? 0;
+    if (n === 0) return "banner (empty)";
+    if (n === 1) return "banner";
+    return `${n} banners`;
   }
-  return b.source?.type ?? "source (missing)";
+
+  return t;
 }
 
-/** Badge color per block family. */
+/** Badge color per source family. */
 function badgeClass(b: BlockRow): string {
-  if (b.display === "editorial") {
+  if (b.source?.type === "banner") {
     return "bg-violet-50 text-violet-700";
   }
   return "bg-blue-50 text-blue-700";

@@ -8,11 +8,10 @@ import {
 import { getEntityConfig } from "@/lib/content/entityRegistry";
 import { buildProductQueryFromScope } from "@/lib/content/query";
 import Product from "@/models/Product";
-import { EditorialContent } from "@/models/EditorialContent";
+import { BannerContent } from "@/models/BannerContent";
 import {
   DEFAULT_BLOCK_DISPLAY_CONFIG,
   DEFAULT_BLOCK_SOURCE_STYLES,
-  isFeatureDisplay,
   type BlockAnimation,
   type BlockAlignment,
   type BlockLocation,
@@ -65,12 +64,14 @@ export interface ResolvedDisplayConfig {
 
 export type ResolvedSourceStyles = BlockSourceStyles;
 
-export interface ResolvedEditorial {
+export interface ResolvedBanner {
+  _id: string;
+  name: string;
   eyebrow: string;
   body: string;
+  heading: { title: string; subtitle: string };
   image: string | null;
-  secondaryImage: string | null;
-  images: string[];
+  cta: ResolvedCta;
 }
 
 export interface ResolvedBlock {
@@ -86,7 +87,8 @@ export interface ResolvedBlock {
     limit: number;
   };
   items: NormalizedContentItem[];
-  editorial?: ResolvedEditorial;
+  /** Present only when the source is a banner. Ordered per source.bannerIds. */
+  banners?: ResolvedBanner[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -180,29 +182,67 @@ async function resolvePromotionSource(
 }
 
 /* -------------------------------------------------------------------------- */
-/*                        Editorial source → resolved                         */
+/*                        Banner source → resolved                            */
 /* -------------------------------------------------------------------------- */
 
-function buildItemsFromEditorial(
-  blockId: string,
-  display: string,
-  editorial: { image: string | null; images: string[] },
-  href: string,
-): NormalizedContentItem[] {
-  // Feature displays and the banner display render the editorial's story
-  // directly — no items needed.
-  if (isFeatureDisplay(display) || display === "banner") return [];
+async function resolveBanners(bannerIds: any[]): Promise<ResolvedBanner[]> {
+  if (!bannerIds || bannerIds.length === 0) return [];
 
-  // Standard card displays use the gallery.
-  return editorial.images
-    .filter((u) => u && u.trim().length > 0)
-    .map((url, i) => ({
-      _id: `${blockId}-editorial-${i}`,
-      name: "",
-      image: url,
-      href: href || "#",
-      contentType: "Page",
-    }));
+  // Validate IDs before querying so a corrupted doc can't crash Mongo.
+  const validIds = bannerIds
+    .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
+    .map((id) => new mongoose.Types.ObjectId(String(id)));
+
+  if (validIds.length === 0) return [];
+
+  const docs: any[] = await BannerContent.find({
+    _id: { $in: validIds },
+  }).lean();
+
+  // Preserve the authored order.
+  const byId = new Map(docs.map((d) => [String(d._id), d]));
+
+  const out: ResolvedBanner[] = [];
+  for (const id of validIds) {
+    const d = byId.get(String(id));
+    if (!d) continue;
+    out.push({
+      _id: String(d._id),
+      name: d.name ?? "",
+      eyebrow: d.eyebrow ?? "",
+      body: d.body ?? "",
+      heading: {
+        title: d.heading?.title ?? "",
+        subtitle: d.heading?.subtitle ?? "",
+      },
+      image: d.image || null,
+      cta: {
+        text: d.cta?.text ?? "",
+        link: d.cta?.link ?? "",
+        style: (d.cta?.style ?? "none") as ResolvedCta["style"],
+      },
+    });
+  }
+  return out;
+}
+
+/**
+ * A block's `items` for banner source is one item per banner. Card
+ * layouts use this; the banner display reads `banners` directly.
+ */
+function buildItemsFromBanners(
+  blockId: string,
+  banners: ResolvedBanner[],
+): NormalizedContentItem[] {
+  return banners.map((b, i) => ({
+    _id: `${blockId}-banner-${i}-${b._id}`,
+    name: b.heading.title || b.name,
+    image: b.image,
+    description: b.body || null,
+    href: b.cta.link || "#",
+    contentType: "Page",
+    badge: b.eyebrow || null,
+  }));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -251,53 +291,23 @@ export async function resolveBlock(
 
   const source = raw.source ?? {};
 
-  /* ──────────────── EDITORIAL SOURCE ───────────────────────────── */
-  if (source.type === "editorial") {
-    if (!source.editorialId) return null;
+  /* ──────────────── BANNER SOURCE ───────────────────────────────── */
+  if (source.type === "banner") {
+    const banners = await resolveBanners(source.bannerIds ?? []);
+    if (banners.length === 0) return null;
 
-    const doc: any = await EditorialContent.findById(source.editorialId).lean();
-    if (!doc) return null;
-
-    const editorial: ResolvedEditorial = {
-      eyebrow: doc.eyebrow ?? "",
-      body: doc.body ?? "",
-      image: doc.image || null,
-      secondaryImage: doc.secondaryImage || null,
-      images: Array.isArray(doc.images)
-        ? doc.images.filter(
-            (u: any) => typeof u === "string" && u.trim().length > 0,
-          )
-        : [],
-    };
-
-    // Editorial owns headline + CTA — override block defaults.
-    const editorialHeading: ResolvedHeading = {
-      title: doc.heading?.title ?? "",
-      subtitle: doc.heading?.subtitle ?? "",
-      showHeading: true,
-    };
-
-    const editorialCta: ResolvedCta = {
-      text: doc.cta?.text ?? "",
-      link: doc.cta?.link ?? "",
-      style: (doc.cta?.style ?? "none") as ResolvedCta["style"],
-    };
-
-    const items = buildItemsFromEditorial(
-      blockMeta._id,
-      blockMeta.display,
-      editorial,
-      editorialCta.link,
-    );
+    // Block-level heading and CTA are not used for banner source.
+    // Each banner carries its own.
+    const items = buildItemsFromBanners(blockMeta._id, banners);
 
     return {
       block: {
         ...blockMeta,
-        heading: editorialHeading,
-        cta: editorialCta,
+        heading: { title: "", subtitle: "", showHeading: false },
+        cta: { text: "", link: "", style: "none" },
       },
       items,
-      editorial,
+      banners,
     };
   }
 

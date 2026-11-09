@@ -1,4 +1,4 @@
-// app/(root)/channels/store/content/editorials/page.tsx
+// app/(root)/channels/store/content/banners/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,15 +6,15 @@ import Link from "next/link";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import {
-  listEditorials,
-  deleteEditorial,
-  type EditorialListItem,
-} from "@/app/actions/editorial-content";
+  listBanners,
+  deleteBanner,
+  type BannerListItem,
+} from "@/app/actions/banner-content";
 
-const LIST_PATH = "/channels/store/content/editorials";
+const LIST_PATH = "/channels/store/content/banners";
 
-export default function EditorialsListPage() {
-  const [rows, setRows] = useState<EditorialListItem[]>([]);
+export default function BannersListPage() {
+  const [rows, setRows] = useState<BannerListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -23,11 +23,11 @@ export default function EditorialsListPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await listEditorials();
+      const res = await listBanners();
       setRows(res.data);
     } catch (err) {
       console.error(err);
-      setError("Failed to load editorials");
+      setError("Failed to load banners");
     } finally {
       setLoading(false);
     }
@@ -41,10 +41,10 @@ export default function EditorialsListPage() {
     if (!window.confirm(`Delete "${name}"?`)) return;
     setBusyId(id);
     try {
-      const res = await deleteEditorial(id);
+      const res = await deleteBanner(id);
       if (res.success) {
         setRows((prev) => prev.filter((r) => r._id !== id));
-        setSuccess("Editorial deleted");
+        setSuccess("Banner deleted");
         setTimeout(() => setSuccess(null), 2000);
       } else {
         setError(res.error || "Failed to delete");
@@ -82,29 +82,28 @@ export default function EditorialsListPage() {
 
         <header className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold text-foreground">
-              Editorials
-            </h1>
+            <h1 className="text-xl font-semibold text-foreground">Banners</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Reusable rich content. Reference from any editorial block.
+              Reusable banner content. Blocks select one or more banners and
+              choose how to lay them out.
             </p>
           </div>
           <Link
             href={`${LIST_PATH}/new`}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
-            + New editorial
+            + New banner
           </Link>
         </header>
 
         {rows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
-            <p className="text-sm text-muted-foreground">No editorials yet.</p>
+            <p className="text-sm text-muted-foreground">No banners yet.</p>
             <Link
               href={`${LIST_PATH}/new`}
               className="mt-3 inline-block rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
             >
-              Create your first editorial
+              Create your first banner
             </Link>
           </div>
         ) : (
@@ -121,22 +120,23 @@ export default function EditorialsListPage() {
                   <img
                     src={row.imageUrl}
                     alt=""
-                    className="h-12 w-12 shrink-0 rounded-md border border-border bg-muted object-cover"
+                    className="h-12 w-16 shrink-0 rounded-md border border-border bg-muted object-cover"
                   />
                 ) : (
-                  <div className="h-12 w-12 shrink-0 rounded-md border border-dashed border-border bg-muted/40" />
+                  <div className="h-12 w-16 shrink-0 rounded-md border border-dashed border-border bg-muted/40" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-semibold text-foreground">
-                      {row.name}
-                    </p>
-                    <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      {row.imageCount === 0
-                        ? "no gallery"
-                        : `${row.imageCount} gallery image${row.imageCount === 1 ? "" : "s"}`}
-                    </span>
-                  </div>
+                  <p className="truncate font-semibold text-foreground">
+                    {row.name}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Updated{" "}
+                    {new Date(row.updated_at).toLocaleDateString(undefined, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Link

@@ -15,7 +15,7 @@ export const BLOCK_SOURCE_TYPES = [
   "category",
   "promotion",
   "manual",
-  "editorial",
+  "banner",
 ] as const;
 export type BlockSourceType = (typeof BLOCK_SOURCE_TYPES)[number];
 
@@ -35,51 +35,23 @@ export type BlockRefModel = (typeof BLOCK_REF_MODELS)[number];
 /* ------------------------------ Block display ---------------------------- */
 
 /**
- * Displays any source can use: collection, category, promotion, manual,
- * and editorial-with-images[].
+ * Every display works with every source. The source decides what content
+ * the block has; the display decides how it's presented.
+ *
+ *   grid      → responsive card grid
+ *   carousel  → horizontally scrollable rail
+ *   list      → vertical list rows
+ *   hero      → 1 large + 2 small cards
+ *   banner    → single full-width hero with overlaid copy
  */
-export const STANDARD_DISPLAYS = [
+export const BLOCK_DISPLAYS = [
   "grid",
   "carousel",
   "list",
   "hero",
   "banner",
 ] as const;
-export type StandardDisplay = (typeof STANDARD_DISPLAYS)[number];
-
-/**
- * Displays only valid when `source.type === "editorial"`. They render the
- * editorial's story (eyebrow / body / image / secondaryImage) with
- * story-first layout. Grouped under `"feature-*"` so they sort together
- * in the form.
- */
-export const FEATURE_DISPLAYS = [
-  "feature-split-left",
-  "feature-split-right",
-  "feature-overlay",
-  "feature-stacked",
-  "feature-duo",
-] as const;
-export type FeatureDisplay = (typeof FEATURE_DISPLAYS)[number];
-
-export const BLOCK_DISPLAYS = [
-  ...STANDARD_DISPLAYS,
-  ...FEATURE_DISPLAYS,
-] as const;
 export type BlockDisplay = (typeof BLOCK_DISPLAYS)[number];
-
-export function isFeatureDisplay(d: string): d is FeatureDisplay {
-  return (FEATURE_DISPLAYS as readonly string[]).includes(d);
-}
-
-export function isStandardDisplay(d: string): d is StandardDisplay {
-  return (STANDARD_DISPLAYS as readonly string[]).includes(d);
-}
-
-/** Displays allowed for a given source type. */
-export function displaysForSource(sourceType: string): readonly BlockDisplay[] {
-  return sourceType === "editorial" ? BLOCK_DISPLAYS : STANDARD_DISPLAYS;
-}
 
 /* --------------------------- Layout primitives --------------------------- */
 

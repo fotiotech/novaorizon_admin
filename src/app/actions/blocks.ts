@@ -5,7 +5,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { connection } from "@/utils/connection";
 import mongoose from "mongoose";
 import { Block } from "@/models/Block";
-import { EditorialContent } from "@/models/EditorialContent";
+import { BannerContent } from "@/models/BannerContent";
 import { Collection } from "@/models/Collection";
 import Category from "@/models/Category";
 import Promotion from "@/models/Promotion";
@@ -25,12 +25,11 @@ import {
   TITLE_POSITIONS,
   IMAGE_POSITIONS,
   MAX_BLOCK_LIMIT,
-  isFeatureDisplay,
-  isStandardDisplay,
   type BlockLocation,
 } from "@/lib/content/constants";
 
 const LIST_PATH = "/channels/store/content/blocks";
+const MAX_BANNERS_PER_BLOCK = 20;
 
 /* -------------------------------------------------------------------------- */
 /*                                  helpers                                   */
@@ -73,13 +72,30 @@ function readColor(raw: unknown): string {
   return "";
 }
 
+function readIdArray(fd: FormData, key: string, limit: number): string[] {
+  try {
+    const raw = fd.get(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(String(raw));
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (x): x is string =>
+          typeof x === "string" && mongoose.Types.ObjectId.isValid(x),
+      )
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
 function revalidateBlocks(location: BlockLocation) {
   revalidatePath("/");
   revalidatePath("/products/[slug]", "page");
   revalidatePath(LIST_PATH);
   updateTag("blocks");
   updateTag(`blocks:${location}`);
-  updateTag("editorials");
+  updateTag("banners");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -171,9 +187,9 @@ export async function getSourcePreview(
       };
     }
 
-    if (sourceType === "editorial") {
-      const doc: any = await EditorialContent.findById(id)
-        .select("name image images heading")
+    if (sourceType === "banner") {
+      const doc: any = await BannerContent.findById(id)
+        .select("name image heading")
         .lean();
       if (!doc) return { success: false, error: "Not found", missing: true };
       return {
@@ -181,14 +197,9 @@ export async function getSourcePreview(
         data: {
           _id: String(doc._id),
           name: doc.name,
-          imageUrl:
-            doc.image ||
-            (Array.isArray(doc.images) && doc.images.length > 0
-              ? doc.images[0]
-              : null),
+          imageUrl: doc.image || null,
           meta: {
             headline: doc.heading?.title ?? "",
-            imageCount: Array.isArray(doc.images) ? doc.images.length : 0,
           },
         },
       };
@@ -256,39 +267,6 @@ function parseCta(fd: FormData) {
   };
 }
 
-/** Reject display/source combinations the renderer can't fulfil. */
-async function validateEditorialForDisplay(
-  editorialId: string,
-  display: string,
-): Promise<string | null> {
-  const doc: any = await EditorialContent.findById(editorialId)
-    .select("image secondaryImage images heading")
-    .lean();
-  if (!doc) return "The referenced editorial was deleted.";
-
-  const hasImage = Boolean(doc.image);
-  const hasSecondary = Boolean(doc.secondaryImage);
-  const imageCount = Array.isArray(doc.images) ? doc.images.length : 0;
-
-  if (display === "feature-duo") {
-    if (!hasImage || !hasSecondary) {
-      return "The duo display needs both a primary and a secondary image in the editorial.";
-    }
-    return null;
-  }
-  if (isFeatureDisplay(display) || display === "banner") {
-    if (!hasImage) {
-      return "This display needs a primary image in the editorial.";
-    }
-    return null;
-  }
-  // Grid, carousel, list, hero
-  if (imageCount === 0) {
-    return "Grid, carousel, list, and hero displays need at least one image in the editorial's gallery.";
-  }
-  return null;
-}
-
 function parseBlockForm(fd: FormData): ParseOk | ParseErr {
   const name = String(fd.get("name") ?? "").trim();
   if (!name) return { error: "Name is required" };
@@ -299,27 +277,11 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
     "Home" as BlockLocation,
   );
   const display = pickEnum(fd.get("display"), BLOCK_DISPLAYS, "grid");
-
   const sourceType = pickEnum(
     fd.get("source.type"),
     BLOCK_SOURCE_TYPES,
     "collection",
   );
-
-  // Display must fit the source family.
-  if (sourceType !== "editorial" && isFeatureDisplay(display)) {
-    return {
-      error:
-        "Feature displays require an editorial source. Pick a collection, category, promotion, or manual source — or switch to editorial.",
-    };
-  }
-  if (
-    sourceType === "editorial" &&
-    !isStandardDisplay(display) &&
-    !isFeatureDisplay(display)
-  ) {
-    return { error: "Invalid display for editorial source." };
-  }
 
   const source: any = { type: sourceType };
 
@@ -343,11 +305,12 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
       PROMOTION_MODES,
       "products",
     );
-  } else if (sourceType === "editorial") {
-    const id = String(fd.get("source.editorialId") ?? "");
-    if (!mongoose.Types.ObjectId.isValid(id))
-      return { error: "Select an editorial from the library" };
-    source.editorialId = new mongoose.Types.ObjectId(id);
+  } else if (sourceType === "banner") {
+    const ids = readIdArray(fd, "source.bannerIds", MAX_BANNERS_PER_BLOCK);
+    if (ids.length === 0) {
+      return { error: "Select at least one banner from the library" };
+    }
+    source.bannerIds = ids.map((id) => new mongoose.Types.ObjectId(id));
   } else if (sourceType === "manual") {
     let raw: any[] = [];
     try {
@@ -377,11 +340,11 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
     source.items = items;
   }
 
-  // Only sourced blocks own a heading + CTA. Editorial blocks inherit
-  // both from the editorial.
+  // Banner source owns heading + CTA on each banner. Block-level
+  // heading + CTA are kept empty for banner source.
   const heading =
-    sourceType === "editorial"
-      ? { title: "", subtitle: "", showHeading: true }
+    sourceType === "banner"
+      ? { title: "", subtitle: "", showHeading: false }
       : {
           title: String(fd.get("heading.title") ?? "").trim(),
           subtitle: String(fd.get("heading.subtitle") ?? "").trim(),
@@ -389,7 +352,7 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
         };
 
   const cta =
-    sourceType === "editorial"
+    sourceType === "banner"
       ? { text: "", link: "", style: "none" as const }
       : parseCta(fd);
 
@@ -478,6 +441,13 @@ export async function getBlockById(id: string) {
 /*                                 mutations                                  */
 /* -------------------------------------------------------------------------- */
 
+/** Verify every referenced banner still exists. */
+async function countMissingBanners(ids: any[]): Promise<number> {
+  if (!ids.length) return 0;
+  const found = await BannerContent.countDocuments({ _id: { $in: ids } });
+  return ids.length - found;
+}
+
 export async function createBlock(formData: FormData) {
   await requireAdmin();
   const parsed = parseBlockForm(formData);
@@ -486,12 +456,14 @@ export async function createBlock(formData: FormData) {
   try {
     await connection();
 
-    if (parsed.doc.source.type === "editorial") {
-      const err = await validateEditorialForDisplay(
-        String(parsed.doc.source.editorialId),
-        parsed.doc.display,
-      );
-      if (err) return { success: false, message: err };
+    if (parsed.doc.source.type === "banner") {
+      const missing = await countMissingBanners(parsed.doc.source.bannerIds);
+      if (missing > 0) {
+        return {
+          success: false,
+          message: `${missing} of the selected banners were deleted. Refresh and pick again.`,
+        };
+      }
     }
 
     const doc = new Block(parsed.doc);
@@ -522,12 +494,14 @@ export async function updateBlock(id: string, formData: FormData) {
   try {
     await connection();
 
-    if (parsed.doc.source.type === "editorial") {
-      const err = await validateEditorialForDisplay(
-        String(parsed.doc.source.editorialId),
-        parsed.doc.display,
-      );
-      if (err) return { success: false, message: err };
+    if (parsed.doc.source.type === "banner") {
+      const missing = await countMissingBanners(parsed.doc.source.bannerIds);
+      if (missing > 0) {
+        return {
+          success: false,
+          message: `${missing} of the selected banners were deleted. Refresh and pick again.`,
+        };
+      }
     }
 
     const updated = await Block.findByIdAndUpdate(id, parsed.doc, {

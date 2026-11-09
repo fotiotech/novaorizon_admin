@@ -24,11 +24,13 @@ export async function getBlocksForLocation(
     ),
   );
 
-  // Editorial blocks legitimately have zero items — their content lives
-  // on `editorial`. Every other block requires at least one item to render.
+  // A block renders when it has items OR banners. `resolveBlock` already
+  // returns null for banner blocks with zero resolved banners, so this
+  // filter is a defensive guard for resolved-but-empty blocks.
   return resolved.filter(
     (r): r is ResolvedBlock =>
-      r !== null && (r.items.length > 0 || Boolean(r.editorial)),
+      r !== null &&
+      (r.items.length > 0 || Boolean(r.banners && r.banners.length > 0)),
   );
 }
 

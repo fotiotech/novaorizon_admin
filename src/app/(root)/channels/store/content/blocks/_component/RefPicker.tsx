@@ -88,7 +88,7 @@ export function RefPicker({
         <input
           type="text"
           className={inputCls}
-          placeholder={placeholder ?? `Search ${refType.toLowerCase()}…`}
+          placeholder={placeholder ?? `Search ${refType?.toLowerCase()}…`}
           value={displayValue}
           onChange={(e) => setSearch(e.target.value)}
           onFocus={() => {
