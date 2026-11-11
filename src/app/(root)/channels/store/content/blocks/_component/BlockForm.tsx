@@ -28,6 +28,7 @@ import {
   CARD_SHAPES,
   CARD_RATIOS,
   CARD_SIZES,
+  CARD_LAYOUTS,
   TITLE_POSITIONS,
   IMAGE_POSITIONS,
   BLOCK_COLUMN_COUNTS,
@@ -41,8 +42,6 @@ import {
 } from "@/lib/content/constants";
 import type { RegistryKey } from "@/lib/content/entityMetadata";
 
-/* ------------------------------- style tokens ------------------------------ */
-
 const labelCls = "block text-[13px] font-medium text-foreground mb-1.5";
 const inputCls =
   "w-full min-w-0 rounded-lg border border-border bg-background px-3.5 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground/50 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-muted/50 disabled:text-muted-foreground";
@@ -51,8 +50,6 @@ const fieldsetCls = "rounded-xl border border-border bg-card p-5 space-y-4";
 const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
 
 const LIST_PATH = "/channels/store/content/blocks";
-
-/* ----------------------------- source labels ------------------------------- */
 
 const SOURCE_LABEL: Record<BlockSourceType, string> = {
   collection: "Collection",
@@ -83,7 +80,11 @@ const SOURCE_REF_TYPE: Record<
   promotion: "Promotion",
 };
 
-/* --------------------------------- types ---------------------------------- */
+const CARD_LAYOUT_LABELS: Record<string, string> = {
+  stacked: "Stacked (image on top)",
+  "image-left": "Image left",
+  "image-right": "Image right",
+};
 
 interface FormState {
   name: string;
@@ -114,6 +115,7 @@ interface FormState {
     cardShape: string;
     cardRatio: string;
     cardSize: string;
+    cardLayout: string;
     titlePosition: string;
     imagePosition: string;
     backgroundColor: string;
@@ -171,6 +173,7 @@ const INITIAL: FormState = {
     cardShape: "default",
     cardRatio: "1:1",
     cardSize: "md",
+    cardLayout: "stacked",
     titlePosition: "below",
     imagePosition: "center",
     backgroundColor: "",
@@ -187,8 +190,6 @@ const INITIAL: FormState = {
   },
   cta: { text: "", link: "", style: "none" },
 };
-
-/* ---------------------------------- form ---------------------------------- */
 
 export default function BlockForm({ id }: { id?: string }) {
   const router = useRouter();
@@ -218,7 +219,6 @@ export default function BlockForm({ id }: { id?: string }) {
     ? formData.source.bannerIds.length > 0
     : currentSourceId !== "";
 
-  /* ------------------------------- load ---------------------------------- */
   useEffect(() => {
     if (!id) {
       setLoading(false);
@@ -285,9 +285,6 @@ export default function BlockForm({ id }: { id?: string }) {
     })();
   }, [id]);
 
-  /* Preview fetch — skipped for banner + manual sources.
-     Banner has no single "current" item to preview; the picker itself
-     shows the list. Manual picker renders its own thumbnails. */
   useEffect(() => {
     if (
       sourceType === "manual" ||
@@ -315,7 +312,6 @@ export default function BlockForm({ id }: { id?: string }) {
     };
   }, [sourceType, currentSourceId]);
 
-  /* Reset source edit mode whenever the selection changes. */
   useEffect(() => {
     setEditingSource(false);
   }, [
@@ -326,7 +322,6 @@ export default function BlockForm({ id }: { id?: string }) {
     formData.source.bannerIds,
   ]);
 
-  /* ----------------------------- handlers -------------------------------- */
   const setField = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setFormData((p) => ({ ...p, [k]: v }));
 
@@ -364,7 +359,6 @@ export default function BlockForm({ id }: { id?: string }) {
     setEditingSource(false);
   };
 
-  /* ------------------------------ submit --------------------------------- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -383,11 +377,8 @@ export default function BlockForm({ id }: { id?: string }) {
         if (sourceType === "manual" && formData.source.items.length === 0) {
           return setError("Add at least one item");
         }
-        if (
-          formData.cta.style !== "none" &&
-          (!formData.cta.text.trim() || !formData.cta.link.trim())
-        ) {
-          return setError("CTA requires both text and link");
+        if (formData.cta.style !== "none" && !formData.cta.link.trim()) {
+          return setError("CTA requires a link");
         }
       }
 
@@ -417,8 +408,6 @@ export default function BlockForm({ id }: { id?: string }) {
         fd.append("source.items", JSON.stringify(formData.source.items));
       }
 
-      // Block-level heading + CTA are only used for sourced (non-banner)
-      // blocks. Banner blocks inherit those from the banners themselves.
       if (!isBannerSource) {
         fd.append("heading.title", formData.heading.title);
         fd.append("heading.subtitle", formData.heading.subtitle);
@@ -477,21 +466,20 @@ export default function BlockForm({ id }: { id?: string }) {
 
   const columnsDisabled =
     formData.display === "carousel" || formData.display === "list";
+  const sideLayout = formData.displayConfig.cardLayout !== "stacked";
 
   const dc = formData.displayConfig;
   const presentationSummary = [
     `${dc.cardSize} cards`,
+    CARD_LAYOUT_LABELS[dc.cardLayout] ?? dc.cardLayout,
     dc.cardRatio,
     `${dc.gap}px gap`,
-    dc.titlePosition !== "below" ? `${dc.titlePosition} title` : null,
     `${dc.theme} theme`,
     dc.backgroundColor ? "custom bg" : null,
     dc.textColor ? "custom text" : null,
   ]
     .filter(Boolean)
     .join(" · ");
-
-  /* --------------------------------- render -------------------------------- */
 
   return (
     <div className="min-h-screen bg-background">
@@ -523,7 +511,6 @@ export default function BlockForm({ id }: { id?: string }) {
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-6 pb-24">
-          {/* ─────────────── GENERAL ─────────────── */}
           <fieldset className={fieldsetCls}>
             <legend className={legendCls}>General</legend>
 
@@ -630,7 +617,6 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
           </fieldset>
 
-          {/* ─────────────── HEADING (non-banner only) ─────────────── */}
           {!isBannerSource && (
             <fieldset className={fieldsetCls}>
               <legend className={legendCls}>Heading</legend>
@@ -674,7 +660,6 @@ export default function BlockForm({ id }: { id?: string }) {
             </fieldset>
           )}
 
-          {/* ─────────────── SOURCE ─────────────── */}
           <fieldset className={fieldsetCls}>
             <legend className={legendCls}>Source</legend>
 
@@ -815,14 +800,6 @@ export default function BlockForm({ id }: { id?: string }) {
                   />
                   Show promotion code
                 </label>
-
-                {formData.display === "banner" &&
-                  formData.source.promotionMode === "products" && (
-                    <p className="text-[13px] text-amber-700">
-                      Banner display usually wants <strong>self</strong> mode so
-                      the promotion tile renders — not its products.
-                    </p>
-                  )}
               </div>
             )}
 
@@ -904,7 +881,6 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
           </fieldset>
 
-          {/* ─────────────── CALL TO ACTION (non-banner only) ─────────────── */}
           {!isBannerSource && (
             <fieldset className={fieldsetCls}>
               <legend className={legendCls}>Call to action</legend>
@@ -929,7 +905,10 @@ export default function BlockForm({ id }: { id?: string }) {
               </Field>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Text">
+                <Field
+                  label="Text"
+                  hint="Optional. Falls back to a default label."
+                >
                   <input
                     type="text"
                     className={inputCls}
@@ -940,7 +919,7 @@ export default function BlockForm({ id }: { id?: string }) {
                   />
                 </Field>
 
-                <Field label="Link">
+                <Field label="Link" required>
                   <input
                     type="text"
                     className={inputCls}
@@ -951,10 +930,15 @@ export default function BlockForm({ id }: { id?: string }) {
                   />
                 </Field>
               </div>
+
+              {formData.cta.style !== "none" && !formData.cta.link.trim() && (
+                <p className="text-[12px] text-amber-700">
+                  A CTA needs a link to render. Add one or set style to None.
+                </p>
+              )}
             </fieldset>
           )}
 
-          {/* ─────────────── PRESENTATION (universal) ─────────────── */}
           <fieldset className={fieldsetCls}>
             <legend className={legendCls}>Presentation</legend>
 
@@ -978,7 +962,6 @@ export default function BlockForm({ id }: { id?: string }) {
             </div>
           </fieldset>
 
-          {/* ─────────────── ACTIONS ─────────────── */}
           <div className="sticky bottom-0 -mx-4 flex items-center justify-end gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             <button
               type="button"
@@ -1008,7 +991,6 @@ export default function BlockForm({ id }: { id?: string }) {
         </form>
       </div>
 
-      {/* Presentation bottomsheet */}
       <BottomSheet
         open={presentationOpen}
         onClose={() => setPresentationOpen(false)}
@@ -1117,6 +1099,7 @@ export default function BlockForm({ id }: { id?: string }) {
                   onChange={(e) =>
                     setDisplayConfig({ cardRatio: e.target.value })
                   }
+                  disabled={sideLayout}
                 >
                   {CARD_RATIOS.map((r) => (
                     <option key={r} value={r}>
@@ -1158,6 +1141,53 @@ export default function BlockForm({ id }: { id?: string }) {
                 </select>
               </Field>
 
+              <Field label="Image position">
+                <select
+                  className={inputCls}
+                  value={dc.imagePosition}
+                  onChange={(e) =>
+                    setDisplayConfig({ imagePosition: e.target.value })
+                  }
+                >
+                  {IMAGE_POSITIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            <div className="mt-3">
+              <label className={labelCls}>Card layout</label>
+              <div className="grid grid-cols-3 gap-2">
+                {CARD_LAYOUTS.map((layout) => {
+                  const selected = dc.cardLayout === layout;
+                  return (
+                    <button
+                      key={layout}
+                      type="button"
+                      onClick={() => setDisplayConfig({ cardLayout: layout })}
+                      className={`rounded-lg border px-3 py-2 text-left text-[12px] transition ${
+                        selected
+                          ? "border-primary/50 bg-primary/5 text-foreground"
+                          : "border-border bg-background text-foreground/80 hover:bg-muted/40"
+                      }`}
+                    >
+                      <span className="block font-medium">
+                        {CARD_LAYOUT_LABELS[layout]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[12px] text-muted-foreground">
+                Side layouts use a fixed image width and ignore the aspect ratio
+                and title-overlay settings.
+              </p>
+            </div>
+
+            <div className="mt-3">
               <Field label="Title position">
                 <select
                   className={inputCls}
@@ -1165,6 +1195,7 @@ export default function BlockForm({ id }: { id?: string }) {
                   onChange={(e) =>
                     setDisplayConfig({ titlePosition: e.target.value })
                   }
+                  disabled={sideLayout}
                 >
                   {TITLE_POSITIONS.map((p) => (
                     <option key={p} value={p}>
@@ -1180,25 +1211,6 @@ export default function BlockForm({ id }: { id?: string }) {
                 </select>
               </Field>
             </div>
-          </section>
-
-          <section>
-            <SheetLabel>Image</SheetLabel>
-            <Field label="Crop focus">
-              <select
-                className={inputCls}
-                value={dc.imagePosition}
-                onChange={(e) =>
-                  setDisplayConfig({ imagePosition: e.target.value })
-                }
-              >
-                {IMAGE_POSITIONS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </Field>
           </section>
 
           <section>
@@ -1253,10 +1265,6 @@ export default function BlockForm({ id }: { id?: string }) {
     </div>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/*                                Primitives                                  */
-/* -------------------------------------------------------------------------- */
 
 function Field({
   label,
@@ -1379,10 +1387,6 @@ function ColorField({
     </div>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/*                          Source preview card                               */
-/* -------------------------------------------------------------------------- */
 
 function SourcePreviewCard({
   state,

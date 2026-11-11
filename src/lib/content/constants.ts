@@ -34,16 +34,6 @@ export type BlockRefModel = (typeof BLOCK_REF_MODELS)[number];
 
 /* ------------------------------ Block display ---------------------------- */
 
-/**
- * Every display works with every source. The source decides what content
- * the block has; the display decides how it's presented.
- *
- *   grid      → responsive card grid
- *   carousel  → horizontally scrollable rail
- *   list      → vertical list rows
- *   hero      → 1 large + 2 small cards
- *   banner    → single full-width hero with overlaid copy
- */
 export const BLOCK_DISPLAYS = [
   "grid",
   "carousel",
@@ -68,14 +58,25 @@ export type BlockAlignment = (typeof BLOCK_ALIGNMENTS)[number];
 
 /* ---------------------------- Card appearance ---------------------------- */
 
+/**
+ * Aspect ratios, ordered from tallest portrait to widest landscape.
+ * New additions: 9:21, 1:2, 4:5, 5:4, 2:1, 21:9 for finer control over
+ * the extremes and intermediate steps.
+ */
 export const CARD_RATIOS = [
-  "1:1",
-  "4:3",
-  "3:4",
-  "16:9",
-  "9:16",
-  "3:2",
-  "2:3",
+  "9:21", // ~0.43 — very tall (phone portrait)
+  "1:2", // 0.5
+  "9:16", // 0.5625
+  "2:3", // 0.67
+  "3:4", // 0.75
+  "4:5", // 0.8
+  "1:1", // 1.0
+  "5:4", // 1.25
+  "4:3", // 1.33
+  "3:2", // 1.5
+  "16:9", // 1.78
+  "2:1", // 2.0 — panoramic
+  "21:9", // 2.33 — cinematic
 ] as const;
 export type CardRatio = (typeof CARD_RATIOS)[number];
 
@@ -102,6 +103,19 @@ export type CardSize = (typeof CARD_SIZES)[number];
 export const CARD_VARIANTS = ["card", "bare"] as const;
 export type CardVariant = (typeof CARD_VARIANTS)[number];
 
+/**
+ * Card layout — how image and text relate inside each card.
+ *
+ *   stacked      → image on top, text below (default)
+ *   image-left   → image on the left, text on the right
+ *   image-right  → text on the left, image on the right
+ *
+ * Side layouts use a fixed image width so the text column reads cleanly.
+ * Aspect ratio and title-position overlays are ignored in side mode.
+ */
+export const CARD_LAYOUTS = ["stacked", "image-left", "image-right"] as const;
+export type CardLayout = (typeof CARD_LAYOUTS)[number];
+
 /* -------------------------------- Limits --------------------------------- */
 
 export const DEFAULT_BLOCK_LIMIT = 12;
@@ -123,6 +137,7 @@ export interface BlockDisplayConfig {
   cardShape: CardShape;
   cardRatio: CardRatio;
   cardSize: CardSize;
+  cardLayout: CardLayout;
   titlePosition: TitlePosition;
   imagePosition: ImagePosition;
   backgroundColor: string;
@@ -141,6 +156,7 @@ export const DEFAULT_BLOCK_DISPLAY_CONFIG: BlockDisplayConfig = {
   cardShape: "default",
   cardRatio: "1:1",
   cardSize: "md",
+  cardLayout: "stacked",
   titlePosition: "below",
   imagePosition: "center",
   backgroundColor: "",

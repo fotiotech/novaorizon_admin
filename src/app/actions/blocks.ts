@@ -22,6 +22,7 @@ import {
   CARD_SHAPES,
   CARD_RATIOS,
   CARD_SIZES,
+  CARD_LAYOUTS,
   TITLE_POSITIONS,
   IMAGE_POSITIONS,
   MAX_BLOCK_LIMIT,
@@ -30,10 +31,6 @@ import {
 
 const LIST_PATH = "/channels/store/content/blocks";
 const MAX_BANNERS_PER_BLOCK = 20;
-
-/* -------------------------------------------------------------------------- */
-/*                                  helpers                                   */
-/* -------------------------------------------------------------------------- */
 
 function pickEnum<T extends readonly string[]>(
   raw: unknown,
@@ -198,9 +195,7 @@ export async function getSourcePreview(
           _id: String(doc._id),
           name: doc.name,
           imageUrl: doc.image || null,
-          meta: {
-            headline: doc.heading?.title ?? "",
-          },
+          meta: { headline: doc.heading?.title ?? "" },
         },
       };
     }
@@ -244,6 +239,11 @@ function parseDisplayConfig(fd: FormData): Record<string, any> {
     ),
     cardRatio: pickEnum(fd.get("displayConfig.cardRatio"), CARD_RATIOS, "1:1"),
     cardSize: pickEnum(fd.get("displayConfig.cardSize"), CARD_SIZES, "md"),
+    cardLayout: pickEnum(
+      fd.get("displayConfig.cardLayout"),
+      CARD_LAYOUTS,
+      "stacked",
+    ),
     titlePosition: pickEnum(
       fd.get("displayConfig.titlePosition"),
       TITLE_POSITIONS,
@@ -340,8 +340,6 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
     source.items = items;
   }
 
-  // Banner source owns heading + CTA on each banner. Block-level
-  // heading + CTA are kept empty for banner source.
   const heading =
     sourceType === "banner"
       ? { title: "", subtitle: "", showHeading: false }
@@ -356,8 +354,8 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
       ? { text: "", link: "", style: "none" as const }
       : parseCta(fd);
 
-  if (cta.style !== "none" && (!cta.text || !cta.link)) {
-    return { error: "CTA requires both text and link" };
+  if (cta.style !== "none" && !cta.link) {
+    return { error: "CTA requires a link" };
   }
 
   const doc: Record<string, any> = {
@@ -441,7 +439,6 @@ export async function getBlockById(id: string) {
 /*                                 mutations                                  */
 /* -------------------------------------------------------------------------- */
 
-/** Verify every referenced banner still exists. */
 async function countMissingBanners(ids: any[]): Promise<number> {
   if (!ids.length) return 0;
   const found = await BannerContent.countDocuments({ _id: { $in: ids } });
@@ -455,7 +452,6 @@ export async function createBlock(formData: FormData) {
 
   try {
     await connection();
-
     if (parsed.doc.source.type === "banner") {
       const missing = await countMissingBanners(parsed.doc.source.bannerIds);
       if (missing > 0) {
@@ -465,7 +461,6 @@ export async function createBlock(formData: FormData) {
         };
       }
     }
-
     const doc = new Block(parsed.doc);
     await doc.save();
     revalidateBlocks(doc.location as BlockLocation);
@@ -493,7 +488,6 @@ export async function updateBlock(id: string, formData: FormData) {
 
   try {
     await connection();
-
     if (parsed.doc.source.type === "banner") {
       const missing = await countMissingBanners(parsed.doc.source.bannerIds);
       if (missing > 0) {
@@ -503,7 +497,6 @@ export async function updateBlock(id: string, formData: FormData) {
         };
       }
     }
-
     const updated = await Block.findByIdAndUpdate(id, parsed.doc, {
       new: true,
       runValidators: true,

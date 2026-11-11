@@ -20,13 +20,10 @@ import {
   type CardShape,
   type CardRatio,
   type CardSize,
+  type CardLayout,
   type TitlePosition,
   type ImagePosition,
 } from "@/lib/content/constants";
-
-/* -------------------------------------------------------------------------- */
-/*                                    Types                                   */
-/* -------------------------------------------------------------------------- */
 
 export interface ResolveCtx {
   userId?: string;
@@ -56,6 +53,7 @@ export interface ResolvedDisplayConfig {
   cardShape: CardShape;
   cardRatio: CardRatio;
   cardSize: CardSize;
+  cardLayout: CardLayout;
   titlePosition: TitlePosition;
   imagePosition: ImagePosition;
   backgroundColor: string;
@@ -87,13 +85,8 @@ export interface ResolvedBlock {
     limit: number;
   };
   items: NormalizedContentItem[];
-  /** Present only when the source is a banner. Ordered per source.bannerIds. */
   banners?: ResolvedBanner[];
 }
-
-/* -------------------------------------------------------------------------- */
-/*                                    Defaults                                */
-/* -------------------------------------------------------------------------- */
 
 const DEFAULT_DISPLAY: ResolvedDisplayConfig = {
   ...DEFAULT_BLOCK_DISPLAY_CONFIG,
@@ -181,14 +174,9 @@ async function resolvePromotionSource(
   return (docs as any[]).map((d) => normalizeContentItem(d, "Product"));
 }
 
-/* -------------------------------------------------------------------------- */
-/*                        Banner source → resolved                            */
-/* -------------------------------------------------------------------------- */
-
 async function resolveBanners(bannerIds: any[]): Promise<ResolvedBanner[]> {
   if (!bannerIds || bannerIds.length === 0) return [];
 
-  // Validate IDs before querying so a corrupted doc can't crash Mongo.
   const validIds = bannerIds
     .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
     .map((id) => new mongoose.Types.ObjectId(String(id)));
@@ -199,7 +187,6 @@ async function resolveBanners(bannerIds: any[]): Promise<ResolvedBanner[]> {
     _id: { $in: validIds },
   }).lean();
 
-  // Preserve the authored order.
   const byId = new Map(docs.map((d) => [String(d._id), d]));
 
   const out: ResolvedBanner[] = [];
@@ -226,10 +213,6 @@ async function resolveBanners(bannerIds: any[]): Promise<ResolvedBanner[]> {
   return out;
 }
 
-/**
- * A block's `items` for banner source is one item per banner. Card
- * layouts use this; the banner display reads `banners` directly.
- */
 function buildItemsFromBanners(
   blockId: string,
   banners: ResolvedBanner[],
@@ -291,13 +274,10 @@ export async function resolveBlock(
 
   const source = raw.source ?? {};
 
-  /* ──────────────── BANNER SOURCE ───────────────────────────────── */
   if (source.type === "banner") {
     const banners = await resolveBanners(source.bannerIds ?? []);
     if (banners.length === 0) return null;
 
-    // Block-level heading and CTA are not used for banner source.
-    // Each banner carries its own.
     const items = buildItemsFromBanners(blockMeta._id, banners);
 
     return {
@@ -311,7 +291,6 @@ export async function resolveBlock(
     };
   }
 
-  /* ──────────────── OTHER SOURCES ──────────────────────────────── */
   let items: NormalizedContentItem[] = [];
   const limit = blockMeta.limit;
 

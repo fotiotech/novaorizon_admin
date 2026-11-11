@@ -13,6 +13,7 @@ import {
   CARD_SHAPES,
   CARD_RATIOS,
   CARD_SIZES,
+  CARD_LAYOUTS,
   TITLE_POSITIONS,
   IMAGE_POSITIONS,
   DEFAULT_BLOCK_DISPLAY_CONFIG,
@@ -87,6 +88,11 @@ const DisplayConfigSchema = new Schema(
       enum: CARD_SIZES,
       default: DEFAULT_BLOCK_DISPLAY_CONFIG.cardSize,
     },
+    cardLayout: {
+      type: String,
+      enum: CARD_LAYOUTS,
+      default: DEFAULT_BLOCK_DISPLAY_CONFIG.cardLayout,
+    },
     titlePosition: {
       type: String,
       enum: TITLE_POSITIONS,
@@ -160,7 +166,6 @@ const SourceSchema = new Schema(
     collectionId: { type: Schema.Types.ObjectId, ref: "Collection" },
     categoryId: { type: Schema.Types.ObjectId, ref: "Category" },
     promotionId: { type: Schema.Types.ObjectId, ref: "Promotion" },
-    // Multiple banners per block. Order is preserved.
     bannerIds: [{ type: Schema.Types.ObjectId, ref: "BannerContent" }],
     promotionMode: {
       type: String,
@@ -223,6 +228,10 @@ BlockSchema.index({ "source.collectionId": 1 });
 BlockSchema.index({ "source.categoryId": 1 });
 BlockSchema.index({ "source.promotionId": 1 });
 BlockSchema.index({ "source.bannerIds": 1 });
+
+if (process.env.NODE_ENV === "development" && mongoose.models.Block) {
+  delete (mongoose.models as any).Block;
+}
 
 export const Block =
   mongoose.models.Block || mongoose.model("Block", BlockSchema);
