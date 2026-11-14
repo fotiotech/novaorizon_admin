@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { signIn, auth, providerMap } from "@/app/auth";
 import { AuthError } from "next-auth";
 import Link from "next/link";
+import Image from "next/image";
 
 const SIGNIN_ERROR_URL = "/auth/error";
 
@@ -20,6 +21,16 @@ export default async function SignInPage(props: {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+      <Link href={"/"} className="mb-8">
+        <Image
+          title="logo"
+          src="/novaorizon-dark.png"
+          width={80}
+          height={40}
+          alt="logo"
+          className="p-2 hover:opacity-80 transition-opacity"
+        />
+      </Link>
       <div className="max-w-md w-full space-y-8 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">

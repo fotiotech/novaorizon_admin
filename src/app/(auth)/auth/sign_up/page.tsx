@@ -65,11 +65,11 @@ export default function SignupForm() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <Link href={"/"} className="mb-8">
         <Image
           title="logo"
-          src="/logo.png"
+          src="/novaorizon-dark.png"
           width={80}
           height={40}
           alt="logo"

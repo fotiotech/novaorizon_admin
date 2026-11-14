@@ -187,7 +187,13 @@ const UserSchema = new Schema(
 /*                                   Indexes                                  */
 /* -------------------------------------------------------------------------- */
 
-UserSchema.index({ "phone.e164": 1 }, { unique: true, sparse: true });
+UserSchema.index(
+  { "phone.e164": 1 },
+  {
+    unique: true,
+    partialFilterExpression: { "phone.e164": { $type: "string" } },
+  },
+);
 UserSchema.index({ "wishlist.product": 1 });
 UserSchema.index({ createdAt: -1 });
 
