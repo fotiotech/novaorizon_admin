@@ -14,15 +14,16 @@ import {
   Close,
   Sort,
 } from "@mui/icons-material";
-import {
-  deleteAttribute,
-  findAttributesAndValues,
-  getAttributesUsageMap,
-} from "@/app/actions/attributes";
+
 import { AttributeFormModal } from "./_component/AttributeFormModal";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { BottomSheet } from "@/components/ux/BottomSheet";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
+import {
+  deleteAttribute,
+  findAttributesAndValues,
+  getAttributesUsageMap,
+} from "@/lib/api/attribute";
 
 type AttributeType = {
   _id?: string;

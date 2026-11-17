@@ -2,13 +2,16 @@
 "use server";
 import { requireAdmin } from "@/lib/authz";
 import { revalidatePath, updateTag } from "next/cache";
-import { connection } from "@/utils/connection";
-import mongoose from "mongoose";
-import { BannerContent } from "@/models/BannerContent";
-import { Block } from "@/models/Block";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
 import { CTA_STYLES } from "@/lib/content/constants";
 
 const LIST_PATH = "/channels/store/content/banners";
+
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
+function isValidObjectId(id: unknown): boolean {
+  return typeof id === "string" && OBJECT_ID_RE.test(id);
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                  types                                     */
@@ -98,51 +101,45 @@ export async function listBanners(): Promise<{
   data: BannerListItem[];
 }> {
   await requireAdmin();
-  await connection();
-  const docs = await BannerContent.find().sort({ updated_at: -1 }).lean();
+  const docs = await apiData<any[]>("/banners");
 
   return {
     success: true,
-    data: (docs as any[]).map((d) => ({
+    data: (docs ?? []).map((d) => ({
       _id: String(d._id),
       name: d.name,
-      imageUrl: d.image || null,
-      updated_at: new Date(d.updated_at).toISOString(),
+      imageUrl: d.imageUrl || null,
+      updated_at: d.updated_at ? new Date(d.updated_at).toISOString() : "",
     })),
   };
 }
 
 export async function getBanner(id: string) {
   await requireAdmin();
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isValidObjectId(id)) {
     return { success: false as const, error: "Invalid ID" };
   }
-  await connection();
-  const doc = await BannerContent.findById(id).lean();
-  if (!doc) return { success: false as const, error: "Not found" };
-  return { success: true as const, data: JSON.parse(JSON.stringify(doc)) };
+  try {
+    const doc = await apiData<any>(`/banners/${encodeURIComponent(id)}`);
+    return { success: true as const, data: doc };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false as const, error: "Not found" };
+    }
+    throw err;
+  }
 }
 
 export async function fetchBannerOptions(
   search?: string,
 ): Promise<BannerOption[]> {
   await requireAdmin();
-  await connection();
-
-  const filter: Record<string, any> = {};
-  if (search && search.trim()) {
-    filter.name = { $regex: search.trim(), $options: "i" };
-  }
-
-  const docs = await BannerContent.find(filter)
-    .select("_id name image")
-    .sort({ updated_at: -1 })
-    .limit(60)
-    .lean();
-
-  return (docs as any[]).map((d) => ({
-    value: String(d._id),
-    label: d.name,
+  const docs = await apiData<BannerOption[]>("/banners/options", {
+    query: search && search.trim() ? { search: search.trim() } : undefined,
+  });
+  return (docs ?? []).map((d) => ({
+    value: String(d.value),
+    label: d.label,
     image: d.image || null,
   }));
 }
@@ -151,22 +148,21 @@ export async function getBannerPreview(
   id: string,
 ): Promise<BannerPreviewResult> {
   await requireAdmin();
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isValidObjectId(id)) {
     return { success: false, error: "Invalid ID" };
   }
-  await connection();
 
-  const doc: any = await BannerContent.findById(id).select("name image").lean();
-  if (!doc) return { success: false, error: "Not found", missing: true };
-
-  return {
-    success: true,
-    data: {
-      _id: String(doc._id),
-      name: doc.name,
-      imageUrl: doc.image || null,
-    },
-  };
+  try {
+    const data = await apiData<BannerPreview>(
+      `/banners/${encodeURIComponent(id)}/preview`,
+    );
+    return { success: true, data };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false, error: "Not found", missing: true };
+    }
+    throw err;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -181,14 +177,15 @@ export async function createBanner(formData: FormData) {
   }
 
   try {
-    await connection();
-    const doc = new BannerContent(parsed.doc);
-    await doc.save();
+    const doc = await apiData<any>("/banners", {
+      method: "POST",
+      body: parsed.doc,
+    });
     revalidatePath(LIST_PATH);
     return {
       success: true as const,
       message: "Banner created",
-      data: JSON.parse(JSON.stringify(doc.toObject())),
+      data: doc,
     };
   } catch (err: any) {
     console.error("[createBanner]", err);
@@ -201,7 +198,7 @@ export async function createBanner(formData: FormData) {
 
 export async function updateBanner(id: string, formData: FormData) {
   await requireAdmin();
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isValidObjectId(id)) {
     return { success: false as const, message: "Invalid ID" };
   }
   const parsed = parseBannerForm(formData);
@@ -210,24 +207,23 @@ export async function updateBanner(id: string, formData: FormData) {
   }
 
   try {
-    await connection();
-    const updated = await BannerContent.findByIdAndUpdate(id, parsed.doc, {
-      new: true,
-      runValidators: true,
+    const updated = await apiData<any>(`/banners/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: parsed.doc,
     });
-    if (!updated) {
-      return { success: false as const, message: "Banner not found" };
-    }
     revalidatePath(LIST_PATH);
     updateTag("blocks");
     updateTag("banners");
     return {
       success: true as const,
       message: "Banner updated",
-      data: JSON.parse(JSON.stringify(updated.toObject())),
+      data: updated,
     };
   } catch (err: any) {
     console.error("[updateBanner]", err);
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false as const, message: "Banner not found" };
+    }
     return {
       success: false as const,
       message: err?.message ?? "Failed to update banner",
@@ -237,27 +233,19 @@ export async function updateBanner(id: string, formData: FormData) {
 
 export async function deleteBanner(id: string) {
   await requireAdmin();
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isValidObjectId(id)) {
     return { success: false as const, error: "Invalid ID" };
   }
 
   try {
-    await connection();
-    const usage = await Block.countDocuments({ "source.bannerIds": id });
-    if (usage > 0) {
-      return {
-        success: false as const,
-        error: `Cannot delete: ${usage} block${usage === 1 ? "" : "s"} still reference this banner. Remove those references first.`,
-      };
-    }
-    const deleted = await BannerContent.findByIdAndDelete(id);
-    if (!deleted) {
-      return { success: false as const, error: "Banner not found" };
-    }
+    await apiFetch(`/banners/${encodeURIComponent(id)}`, { method: "DELETE" });
     revalidatePath(LIST_PATH);
     return { success: true as const, message: "Banner deleted" };
   } catch (err: any) {
     console.error("[deleteBanner]", err);
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false as const, error: "Banner not found" };
+    }
     return {
       success: false as const,
       error: err?.message ?? "Failed to delete banner",

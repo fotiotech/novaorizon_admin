@@ -12,8 +12,7 @@ import {
   Close,
   Refresh,
 } from "@mui/icons-material";
-import { getUserAnalytics } from "@/app/actions/analytic";
-import type { UserAnalytics } from "@/constant/types/user";
+import { fetchUserAnalytics, type UserAnalytics } from "@/lib/api/analytics";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -86,7 +85,8 @@ const ROLE_STYLES: Record<string, string> = {
 };
 
 function formatDate(iso?: string | null): string {
-  if (!iso || iso === "Never") return iso ?? "—";
+  if (!iso) return "—";
+  if (iso === "Never") return iso;
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
@@ -225,11 +225,15 @@ export default function UserDashboard() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getUserAnalytics();
+      const data = await fetchUserAnalytics();
       setUserData(data);
     } catch (err) {
       console.error("Failed to fetch user data:", err);
-      setError("Failed to fetch user data");
+      setError(
+        (err as any)?.response?.data?.message ??
+          (err as Error)?.message ??
+          "Failed to fetch user data",
+      );
     } finally {
       setIsLoading(false);
     }

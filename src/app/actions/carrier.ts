@@ -1,11 +1,14 @@
 "use server";
 
 import { requireAdmin } from "@/lib/authz";
-import { connection } from "@/utils/connection";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
 
-import Carrier from "@/models/Carrier";
-import Product from "@/models/Product";
 import { revalidatePath } from "next/cache";
+
+/**
+ * Carriers live in the Express backend (`/api/carriers`). This module is a
+ * thin, authenticated proxy so the existing UI keeps its call signatures.
+ */
 
 // CREATE
 export const createCarrier = async (data: any) => {
@@ -27,8 +30,10 @@ export const createCarrier = async (data: any) => {
       averageDeliveryTime: region.averageDeliveryTime,
     }));
 
-    const newCarrier = new Carrier(data);
-    await newCarrier.save();
+    await apiFetch("/carriers", {
+      method: "POST",
+      body: data,
+    });
 
     revalidatePath("/sales/fulfillment");
   } catch (error) {
@@ -39,14 +44,15 @@ export const createCarrier = async (data: any) => {
 // READ
 export async function getCarriers() {
   await requireAdmin();
-  await connection();
-  const carriers = await Carrier.find();
-  return carriers.map((data) => ({
-    ...data.toObject(),
-    _id: data?._id.toString(),
-    regionsServed: data.regionsServed.map((region: any) => ({
-      ...region.toObject(),
-      _id: region?._id.toString(),
+
+  const carriers = await apiData<any[]>("/carriers");
+
+  return (carriers ?? []).map((data) => ({
+    ...data,
+    _id: String(data._id),
+    regionsServed: (data.regionsServed ?? []).map((region: any) => ({
+      ...region,
+      _id: region?._id ? String(region._id) : region?._id,
     })),
   }));
 }
@@ -54,19 +60,26 @@ export async function getCarriers() {
 // carrier.ts
 export async function getCarriersById(_id: string) {
   await requireAdmin();
-  await connection();
-  const data = await Carrier.findOne({ _id });
+
+  let data: any;
+  try {
+    data = await apiData<any>(`/carriers/${encodeURIComponent(_id)}`);
+  } catch (error) {
+    // The backend answers 404 for a missing carrier; the old code returned null.
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
 
   // 🛑 If no carrier is found, return null
   if (!data) return null;
 
   return {
-    ...data.toObject(),
-    _id: data._id.toString(),
+    ...data,
+    _id: String(data._id),
     regionsServed:
       data.regionsServed?.map((region: any) => ({
-        ...region.toObject(),
-        _id: region._id?.toString(),
+        ...region,
+        _id: region._id ? String(region._id) : region._id,
       })) || [],
   };
 }
@@ -88,7 +101,6 @@ export async function updateCarrier(
   }>,
 ) {
   await requireAdmin();
-  await connection();
 
   try {
     // Validate `costPerKm` if provided
@@ -116,14 +128,10 @@ export async function updateCarrier(
     }
 
     // Update carrier
-    const updatedCarrier = await Carrier.findByIdAndUpdate(id, updates, {
-      new: true,
-      runValidators: true, // Ensure Mongoose validators run
+    await apiFetch(`/carriers/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: updates,
     });
-
-    if (!updatedCarrier) {
-      throw new Error("Carrier not found");
-    }
 
     // Revalidate page cache
     revalidatePath("/sales/fulfillment");
@@ -136,11 +144,10 @@ export async function updateCarrier(
 // DELETE
 export async function deleteCarrier(id: string) {
   await requireAdmin();
-  await connection();
 
-  await Product.updateMany({ carrier: id }, { $unset: { carrier: "" } });
-
-  return Carrier.findByIdAndDelete(id);
+  return apiFetch(`/carriers/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
 export async function calculateShippingPrice(
@@ -151,36 +158,15 @@ export async function calculateShippingPrice(
 ) {
   await requireAdmin();
   try {
-    // Connect to MongoDB (if not already connected)
-    await connection();
-
-    // Fetch the carrier details
-    const carrier = await Carrier.findById(carrierId);
-    if (!carrier) {
-      throw new Error("Carrier not found");
-    }
-
-    // Find the region details within the carrier's regionsServed
-    const regionDetails = carrier.regionsServed.find(
-      (r: any) => r.region.toLowerCase() === region.toLowerCase(),
-    );
-    if (!regionDetails) {
-      throw new Error(`Region ${region} is not served by this carrier`);
-    }
-
-    // Compute the shipping price
-    const { basePrice } = regionDetails;
-    const costWeight = carrier.costWeight ? carrier.costWeight : 0;
-
-    const w = weight ? weight : 0;
-
-    // Shipping price formula (example: basePrice + (weight * costWeight) + (distance * costPerKm))
-    const shippingPrice = basePrice + w * costWeight;
+    const regionDetails = await apiData<any>("/carriers/calculate-shipping", {
+      method: "POST",
+      body: { carrierId, region, weight },
+    });
 
     return {
-      ...regionDetails.toObject(),
-      _id: regionDetails?._id.toString(),
-      shippingPrice: shippingPrice,
+      ...regionDetails,
+      _id: regionDetails?._id ? String(regionDetails._id) : regionDetails?._id,
+      shippingPrice: regionDetails?.shippingPrice,
     };
   } catch (error) {
     console.error("Error calculating shipping price:", error);

@@ -2,15 +2,9 @@
 "use client";
 
 import React, { ReactNode, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/hooks/useAuth";
 import AdminSideBar from "./AdminSideBar";
 import AdminTopBar from "./AdminTopBar";
-
-declare module "next-auth" {
-  interface User {
-    role?: string;
-  }
-}
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -19,7 +13,9 @@ interface AdminLayoutProps {
 const AdminLayout = ({ children }: AdminLayoutProps) => {
   const [sideBarToggle, setSideBarToggle] = useState(false);
   const [screenSize, setScreenSize] = useState(0);
-  const { status } = useSession();
+  // `loading` is true until the first `/auth/me` resolves — same
+  // semantics as NextAuth's `status === "loading"`, but cookie-based.
+  const { loading } = useAuth();
 
   useEffect(() => {
     const handleResize = () => setScreenSize(window.innerWidth);
@@ -28,7 +24,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  if (status === "loading") {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">

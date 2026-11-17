@@ -1,5 +1,9 @@
 import "server-only";
+
+import { cache } from "react";
+import { cookies } from "next/headers";
 import { auth } from "@/app/auth";
+import { apiFetch } from "@/lib/server-api";
 
 /** Roles accepted by the shared User schema. */
 export type AppRole = "customer" | "seller" | "admin" | "support";
@@ -16,18 +20,20 @@ function readUser(raw: unknown): AuthUser | null {
   if (!raw || typeof raw !== "object") return null;
   const user = raw as {
     id?: unknown;
+    _id?: unknown;
     role?: unknown;
     email?: unknown;
     name?: unknown;
     image?: unknown;
   };
-  if (typeof user.id !== "string" || user.id.length === 0) return null;
+  const id = user.id ?? user._id;
+  if (typeof id !== "string" || id.length === 0) return null;
   const role =
     typeof user.role === "string" && user.role.length > 0
       ? (user.role as AppRole)
       : "customer";
   return {
-    id: user.id,
+    id,
     role,
     email: typeof user.email === "string" ? user.email : null,
     name: typeof user.name === "string" ? user.name : null,
@@ -35,10 +41,42 @@ function readUser(raw: unknown): AuthUser | null {
   };
 }
 
-export async function getAuthUser(): Promise<AuthUser | null> {
+/**
+ * Resolves the signed-in user for Server Actions, Server Components and
+ * Route Handlers.
+ *
+ * Order:
+ *  1. The backend session cookie (`session`), verified through
+ *     `GET /api/auth/me`. This is the canonical path now that the Express
+ *     server owns authentication.
+ *  2. NextAuth (Google sign-in), kept as a bridge while the OAuth flow is
+ *     still handled by the Next.js app.
+ */
+export const getAuthUser = cache(async (): Promise<AuthUser | null> => {
+  let token: string | undefined;
+  try {
+    const store = await cookies();
+    token = store.get("session")?.value;
+  } catch {
+    token = undefined;
+  }
+
+  if (token) {
+    try {
+      const res = await apiFetch<{ data?: unknown }>("/auth/me", {
+        token,
+        cache: "no-store",
+      });
+      const user = readUser(res?.data);
+      if (user) return user;
+    } catch {
+      // Invalid/expired backend session — fall through to NextAuth.
+    }
+  }
+
   const session = await auth();
   return readUser(session?.user);
-}
+});
 
 export class UnauthorizedError extends Error {
   readonly status = 401;

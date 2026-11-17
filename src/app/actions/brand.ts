@@ -1,86 +1,64 @@
 // app/actions/brand.ts
 "use server";
+
 import { requireAdmin } from "@/lib/authz";
+import { apiData, apiFetch } from "@/lib/server-api";
 
-import { connection } from "@/utils/connection";
+/**
+ * Brands live in the Express backend (`/api/brands`). This module is a thin,
+ * authenticated proxy so the existing UI keeps its call signatures.
+ */
 
-import Brand from "@/models/Brand";
-import Product from "@/models/Product";
-import slugify from "slugify";
-
-// Fetch all brands
+// Fetch all brands, or a single brand when `brandId` is provided.
 export async function getBrands(brandId?: string) {
   await requireAdmin();
-  try {
-    await connection();
 
-    if (brandId) {
-      const brand = await Brand.findOne({ _id: brandId });
-      return {
-        ...brand?.toObject(),
-        _id: brand?._id?.toString(),
-      };
-    }
-
-    const brands = await Brand.find().sort({ created_at: -1 });
-
-    return brands.map((brand) => ({
-      ...brand?.toObject(),
-      _id: brand?._id?.toString(),
-    }));
-  } catch (error) {
-    console.error("Error fetching brands:", error);
-    throw error;
+  if (brandId) {
+    const brand = await apiData<any>("/brands", { query: { id: brandId } });
+    return brand ? { ...brand, _id: String(brand._id) } : undefined;
   }
+
+  const brands = await apiData<any[]>("/brands");
+  return (brands ?? []).map((brand) => ({
+    ...brand,
+    _id: String(brand._id),
+  }));
 }
 
 export async function findProductsByBrand(brandId: string) {
   await requireAdmin();
-  await connection();
+  if (!brandId) return undefined;
 
-  if (brandId) {
-    const products = await Product.find({ brand: brandId });
-    if (products) {
-      return products.map((product: any) => ({
-        ...product.toObject(),
-        _id: product._id?.toString(),
-        categoryId: product.categoryId?.toString(),
-        category_id: product.categoryId?.toString(),
-        brand: product.brand?.toString(),
-        attributes: product.attributes?.map((attr: any) => ({
-          ...attr.toObject(),
-          _id: attr._id?.toString(),
-        })),
-      }));
-    }
-  }
+  const products = await apiData<any[]>(
+    `/brands/${encodeURIComponent(brandId)}/products`,
+  );
+
+  return (products ?? []).map((product) => ({
+    ...product,
+    _id: String(product._id),
+    categoryId: product.categoryId ? String(product.categoryId) : product.categoryId,
+    category_id: product.category_id ? String(product.category_id) : product.category_id,
+    brand: product.brand ? String(product.brand) : product.brand,
+  }));
 }
 
 // Create a new brand
-
-function generateSlug(name: string, logoUrl: string) {
-  return slugify(`${name}${logoUrl ? `-${logoUrl}` : ""}`, {
-    lower: true,
-  });
-}
-
 export async function createBrand(data: {
   name: string;
   logoUrl?: string;
   status?: "active" | "inactive";
 }) {
   await requireAdmin();
-  await connection();
+  if (!data) return;
 
-  // Exclude `_id` from the data to let MongoDB generate it automatically
-  if (data) {
-    const { name, logoUrl, status } = data;
-    const url_slug = generateSlug(name, logoUrl as string);
-
-    const newBrand = new Brand({ url_slug, name, logoUrl, status });
-
-    await newBrand.save();
-  }
+  await apiFetch("/brands", {
+    method: "POST",
+    body: {
+      name: data.name,
+      logoUrl: data.logoUrl,
+      status: data.status,
+    },
+  });
 }
 
 // Update an existing brand
@@ -93,16 +71,14 @@ export async function updateBrand(
   }>,
 ) {
   await requireAdmin();
-  await connection();
-  await Brand.findByIdAndUpdate(id, data, { new: true });
+  await apiFetch(`/brands/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: data,
+  });
 }
 
 // Delete a brand
 export async function deleteBrand(id: string) {
   await requireAdmin();
-  await connection();
-
-  await Product.updateMany({ brand: id }, { $unset: { brand: "" } });
-
-  await Brand.findByIdAndDelete(id);
+  await apiFetch(`/brands/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

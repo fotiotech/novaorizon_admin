@@ -5,7 +5,7 @@ import {
   createAttributeSet,
   getAttributeSet,
   updateAttributeSet,
-} from "@/app/actions/attribute_sets";
+} from "@/lib/api/attribute-set";
 
 interface AttributeSetFormProps {
   attributeSetId?: string; // if provided, we're in edit mode

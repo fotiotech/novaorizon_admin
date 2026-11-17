@@ -1,176 +1,132 @@
-import { redirect } from "next/navigation";
-import { signIn, auth, providerMap } from "@/app/auth";
-import { AuthError } from "next-auth";
+"use client";
+
+import { useAuth, type AppRole } from "@/hooks/useAuth";
+import axios from "axios";
 import Link from "next/link";
-import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
-const SIGNIN_ERROR_URL = "/auth/error";
+function postLoginTarget(role: AppRole, callbackUrl: string | null): string {
+  if (callbackUrl) return callbackUrl;
+  return role === "admin" ? "/" : "/";
+}
 
-export default async function SignInPage(props: {
-  searchParams: Promise<{
-    callbackUrl: string | undefined;
-    error: string | undefined;
-  }>;
-}) {
-  const session = await auth();
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<SignInFallback />}>
+      <SignInForm />
+    </Suspense>
+  );
+}
 
-  // If user is already authenticated, redirect to callbackUrl or home
-  if (session) {
-    redirect((await props.searchParams).callbackUrl || "/");
-  }
+function SignInFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-md animate-pulse space-y-4">
+        <div className="h-8 bg-gray-200 rounded" />
+        <div className="h-10 bg-gray-200 rounded" />
+        <div className="h-10 bg-gray-200 rounded" />
+        <div className="h-10 bg-gray-300 rounded" />
+      </div>
+    </div>
+  );
+}
+
+function SignInForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawCallback = searchParams.get("callbackUrl");
+  const { login, user, loading } = useAuth();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (loading) return;
+    if (user) router.replace(postLoginTarget(user.role, rawCallback));
+  }, [loading, user, router, rawCallback]);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    setPending(true);
+
+    try {
+      const signedIn = await login(email.trim().toLowerCase(), password);
+      router.replace(postLoginTarget(signedIn.role, rawCallback));
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response) {
+        const status = err.response.status;
+        const body = (err.response.data ?? {}) as { error?: string };
+        setError(
+          body.error ??
+            (status === 401
+              ? "Invalid email or password"
+              : status === 429
+                ? "Too many attempts. Try again in 15 minutes."
+                : `Sign-in failed (${status}).`),
+        );
+      } else {
+        setError(
+          "Network error. Check that the API server is running and CORS is configured for this origin.",
+        );
+      }
+    } finally {
+      setPending(false);
+    }
+  };
+
+  if (loading) return <SignInFallback />;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50  py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
       <div className="flex flex-col items-center w-full max-w-md space-y-3">
-        <Link href={"/"} className="mb-8">
-          <img
-            title="logo"
-            src="/novaorizon-dark.png"
-            alt="logo"
-            className="h-16 w-40"
-          />
+        <Link href="/" className="mb-8">
+          <img src="/novaorizon-dark.png" alt="logo" className="h-16 w-40" />
         </Link>
-        <div className="max-w-md w-full space-y-8 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
-          <div>
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-              Sign in to your account
-            </h2>
-            {(await props.searchParams).error && (
-              <div className="mt-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-md text-center">
-                {(await props.searchParams).error === "CredentialsSignin"
-                  ? "Invalid email or password"
-                  : "Authentication failed. Please try again."}
-              </div>
-            )}
-          </div>
-
-          <form
-            action={async (formData) => {
-              "use server";
-              try {
-                await signIn("credentials", {
-                  email: formData.get("email"),
-                  password: formData.get("password"),
-                  redirect: false,
-                });
-
-                // If successful, redirect to callback URL or home
-                redirect((await props.searchParams).callbackUrl || "/");
-              } catch (error) {
-                if (error instanceof AuthError) {
-                  return redirect(`${SIGNIN_ERROR_URL}?error=${error.type}`);
-                }
-                throw error;
-              }
-            }}
-            className="mt-8 space-y-6"
-          >
-            <div className="rounded-md shadow-sm -space-y-px">
-              <div>
-                <label htmlFor="email" className="sr-only">
-                  Email address
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-700"
-                  placeholder="Email address"
-                />
-              </div>
-              <div>
-                <label htmlFor="password" className="sr-only">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-700"
-                  placeholder="Password"
-                />
-              </div>
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Sign in
-              </button>
-            </div>
-
-            <div className="text-sm text-center">
-              <Link
-                href="/auth/forgot-password"
-                className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-              >
-                Forgot your password?
-              </Link>
-            </div>
-          </form>
-
-          {Object.values(providerMap).length > 0 && (
-            <div className="mt-6">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300 dark:border-gray-600" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                    Or continue with
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                {Object.values(providerMap).map((provider) => (
-                  <form
-                    key={provider.id}
-                    action={async () => {
-                      "use server";
-                      try {
-                        await signIn(provider.id, {
-                          redirectTo:
-                            (await props.searchParams)?.callbackUrl || "/",
-                        });
-                      } catch (error) {
-                        if (error instanceof AuthError) {
-                          return redirect(
-                            `${SIGNIN_ERROR_URL}?error=${error.type}`,
-                          );
-                        }
-                        throw error;
-                      }
-                    }}
-                  >
-                    <button
-                      type="submit"
-                      className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
-                    >
-                      <span className="sr-only">
-                        Sign in with {provider.name}
-                      </span>
-                      {provider.name}
-                    </button>
-                  </form>
-                ))}
-              </div>
+        <div className="w-full space-y-8 bg-white p-8 rounded-lg shadow-md">
+          <h2 className="text-center text-3xl font-extrabold text-gray-900">
+            Sign in to your account
+          </h2>
+          {error && (
+            <div className="p-3 bg-red-100 text-red-700 rounded-md text-center text-sm">
+              {error}
             </div>
           )}
-
-          <div className="text-center text-sm text-gray-600 dark:text-gray-400">
-            Don't have an account?{" "}
-            <Link
-              href="/auth/sign_up"
-              className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+            <input
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={pending}
+              className="w-full px-3 py-2 border rounded-md disabled:opacity-60"
+            />
+            <input
+              type="password"
+              required
+              autoComplete="current-password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={pending}
+              className="w-full px-3 py-2 border rounded-md disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={pending}
+              className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md disabled:opacity-50"
             >
-              Sign up
+              {pending ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+          <div className="text-sm text-center">
+            <Link href="/auth/forgot-password" className="text-indigo-600">
+              Forgot your password?
             </Link>
           </div>
         </div>

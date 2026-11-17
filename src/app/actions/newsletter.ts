@@ -1,18 +1,27 @@
 // app/actions/newsletter.ts
 "use server";
 
-import crypto from "crypto";
 import { revalidatePath } from "next/cache";
-import mongoose from "mongoose";
-import { connection } from "@/utils/connection";
-import NewsletterSubscriber from "@/models/NewsletterSubscriber";
 import { requireAdmin } from "@/lib/authz";
-import { consumeRateLimit, getClientIp } from "@/lib/rate-limit";
+import { ApiError, apiData, apiFetch, apiRequest } from "@/lib/server-api";
+
+/**
+ * Newsletter subscribers live in the Express backend (`/api/newsletter`).
+ * These actions are thin, authenticated proxies so the existing UI keeps its
+ * call signatures.
+ */
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function makeToken() {
-  return crypto.randomBytes(24).toString("hex");
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    const field = error.fieldErrors
+      ? Object.values(error.fieldErrors).flat()[0]
+      : undefined;
+    return field || error.message || fallback;
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
 }
 
 /* -------------------- Public: Subscribe -------------------- */
@@ -22,64 +31,38 @@ export async function subscribeToNewsletter(payload: {
   source?: string;
   userId?: string | null;
 }): Promise<{ success: boolean; error?: string; message?: string }> {
-  const ip = await getClientIp();
-  const limit = await consumeRateLimit(`newsletter:${ip}`, 10, 60 * 60 * 1000);
-  if (!limit.ok) {
-    return { success: false, error: "Too many requests. Please try again later." };
+  const email = payload.email?.trim().toLowerCase();
+
+  if (!email) {
+    return { success: false, error: "Please enter your email address." };
   }
-  await connection();
+  if (!EMAIL_REGEX.test(email)) {
+    return { success: false, error: "Please enter a valid email address." };
+  }
 
   try {
-    const email = payload.email?.trim().toLowerCase();
-
-    if (!email) {
-      return { success: false, error: "Please enter your email address." };
-    }
-    if (!EMAIL_REGEX.test(email)) {
-      return { success: false, error: "Please enter a valid email address." };
-    }
-
-    const existing = await NewsletterSubscriber.findOne({ email });
-
-    if (existing) {
-      if (existing.status === "subscribed") {
-        return {
-          success: true,
-          message: "You're already subscribed. Thanks for being with us!",
-        };
-      }
-      // Re-subscribe a previously unsubscribed/bounced email
-      existing.status = "subscribed";
-      existing.subscribedAt = new Date();
-      existing.unsubscribedAt = null;
-      if (!existing.unsubscribeToken) {
-        existing.unsubscribeToken = makeToken();
-      }
-      await existing.save();
-      return {
-        success: true,
-        message: "Welcome back! You're subscribed again.",
-      };
-    }
-
-    await NewsletterSubscriber.create({
-      email,
-      source: payload.source || "footer",
-      userId: payload.userId || null,
-      unsubscribeToken: makeToken(),
-      status: "subscribed",
-      subscribedAt: new Date(),
-    });
+    const result = await apiFetch<{ success?: boolean; message?: string }>(
+      "/newsletter/subscribe",
+      {
+        method: "POST",
+        body: {
+          email,
+          source: payload.source,
+          userId: payload.userId ?? null,
+        },
+      },
+    );
 
     return {
       success: true,
-      message: "Thanks for subscribing! Check your inbox for updates.",
+      message:
+        result?.message ?? "Thanks for subscribing! Check your inbox for updates.",
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("[subscribeToNewsletter] Error:", error);
     return {
       success: false,
-      error: error.message || "Unable to subscribe. Please try again.",
+      error: errorMessage(error, "Unable to subscribe. Please try again."),
     };
   }
 }
@@ -89,31 +72,24 @@ export async function subscribeToNewsletter(payload: {
 export async function unsubscribeFromNewsletter(
   token: string,
 ): Promise<{ success: boolean; error?: string; message?: string }> {
-  await connection();
-
   try {
     if (!token) {
       return { success: false, error: "Missing unsubscribe token." };
     }
 
-    const sub = await NewsletterSubscriber.findOne({ unsubscribeToken: token });
-    if (!sub) {
-      return { success: false, error: "Invalid or expired unsubscribe link." };
-    }
-    if (sub.status === "unsubscribed") {
-      return { success: true, message: "You're already unsubscribed." };
-    }
+    const result = await apiFetch<{ success?: boolean; message?: string }>(
+      `/newsletter/unsubscribe/${encodeURIComponent(token)}`,
+    );
 
-    sub.status = "unsubscribed";
-    sub.unsubscribedAt = new Date();
-    await sub.save();
-
-    return { success: true, message: "You've been unsubscribed." };
-  } catch (error: any) {
+    return {
+      success: true,
+      message: result?.message ?? "You've been unsubscribed.",
+    };
+  } catch (error) {
     console.error("[unsubscribeFromNewsletter] Error:", error);
     return {
       success: false,
-      error: error.message || "Unable to unsubscribe.",
+      error: errorMessage(error, "Unable to unsubscribe."),
     };
   }
 }
@@ -138,48 +114,12 @@ export async function getNewsletterSubscribers(options?: {
   };
 }> {
   await requireAdmin();
-  await connection();
 
   const { status, search, page = 1, limit = 20 } = options || {};
-  const query: any = {};
 
-  if (status && status !== "all") query.status = status;
-  if (search) query.email = new RegExp(search, "i");
-
-  const skip = (page - 1) * limit;
-
-  const [subscribers, total, subscribed, unsubscribed, bounced] =
-    await Promise.all([
-      NewsletterSubscriber.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      NewsletterSubscriber.countDocuments(query),
-      NewsletterSubscriber.countDocuments({ status: "subscribed" }),
-      NewsletterSubscriber.countDocuments({ status: "unsubscribed" }),
-      NewsletterSubscriber.countDocuments({ status: "bounced" }),
-    ]);
-
-  return {
-    subscribers: subscribers.map((s) => ({
-      ...s,
-      _id: s._id.toString(),
-      createdAt: s.createdAt?.toISOString?.() ?? s.createdAt,
-      subscribedAt: s.subscribedAt?.toISOString?.() ?? s.subscribedAt,
-      unsubscribedAt:
-        s.unsubscribedAt?.toISOString?.() ?? s.unsubscribedAt ?? null,
-    })),
-    total,
-    totalPages: Math.ceil(total / limit),
-    currentPage: page,
-    counts: {
-      all: subscribed + unsubscribed + bounced,
-      subscribed,
-      unsubscribed,
-      bounced,
-    },
-  };
+  return apiData("/newsletter", {
+    query: { status, search, page, limit },
+  });
 }
 
 /* -------------------- Admin: Delete -------------------- */
@@ -188,17 +128,19 @@ export async function deleteNewsletterSubscriber(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
   await requireAdmin();
-  await connection();
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return { success: false, error: "Invalid id." };
-  }
+
   try {
-    await NewsletterSubscriber.findByIdAndDelete(id);
+    await apiFetch(`/newsletter/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
     revalidatePath("/admin/newsletter");
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     console.error("[deleteNewsletterSubscriber] Error:", error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: errorMessage(error, "Unable to delete subscriber."),
+    };
   }
 }
 
@@ -210,29 +152,16 @@ export async function exportNewsletterCsv(): Promise<{
   error?: string;
 }> {
   await requireAdmin();
-  await connection();
+
   try {
-    const subs = await NewsletterSubscriber.find({ status: "subscribed" })
-      .sort({ subscribedAt: -1 })
-      .lean();
-
-    const rows = [
-      ["email", "status", "source", "subscribedAt"],
-      ...subs.map((s) => [
-        s.email,
-        s.status,
-        s.source || "",
-        s.subscribedAt ? new Date(s.subscribedAt).toISOString() : "",
-      ]),
-    ];
-
-    const csv = rows
-      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-
+    const response = await apiRequest("/newsletter/export");
+    const csv = await response.text();
     return { success: true, csv };
-  } catch (error: any) {
+  } catch (error) {
     console.error("[exportNewsletterCsv] Error:", error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: errorMessage(error, "Unable to export subscribers."),
+    };
   }
 }

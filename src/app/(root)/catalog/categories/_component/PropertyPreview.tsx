@@ -1,9 +1,9 @@
-import {
+import type {
   Mapping,
   AttributeSetOption,
   GroupOption,
   AttributeOption,
-} from "./PropertyForm";
+} from "./types";
 
 interface PreviewProps {
   code: string;
@@ -41,7 +41,7 @@ export default function PropertyPreview({
     return attr ? `code: ${attr.code} - name: ${attr.name}` : attrId;
   };
 
-  const hasContent = code.trim() || name.trim() || mappings.length > 0;
+  const hasContent = Boolean(code.trim() || name.trim() || mappings.length > 0);
 
   if (!hasContent) {
     return (

@@ -1,23 +1,8 @@
 "use server";
 
 import { requireAdmin } from "@/lib/authz";
-import mongoose from "mongoose";
-import { connection } from "@/utils/connection";
-import Order from "@/models/Order";
-import Invoice, { InvoiceDocument } from "@/models/Invoice";
 import { revalidatePath } from "next/cache";
-import "@/models/Address";
-import "@/models/PaymentMethod";
-
-/**
- * Generate a unique invoice number
- * Format: INV-YYYY-XXXXXX (date + random)
- */
-function generateInvoiceNumber(): string {
-  const year = new Date().getFullYear();
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return `INV-${year}-${random}`;
-}
+import { ApiError, apiData } from "@/lib/server-api";
 
 /**
  * Create an invoice for a paid order
@@ -26,55 +11,20 @@ export async function createInvoice(
   orderNumber: string,
 ): Promise<{ success: boolean; invoice?: any; error?: string }> {
   await requireAdmin();
-  await connection();
 
   try {
-    const order: any = await Order.findOne({ orderNumber }).lean();
-    if (!order) {
-      return { success: false, error: "Order not found." };
-    }
-
-    if (order.paymentStatus !== "paid") {
-      return {
-        success: false,
-        error: "Only paid orders can have invoices issued.",
-      };
-    }
-
-    // Check if invoice already exists
-    const existingInvoice = await Invoice.findOne({ orderNumber }).lean();
-    if (existingInvoice) {
-      return { success: true, invoice: existingInvoice };
-    }
-
-    const invoiceNumber = generateInvoiceNumber();
-    const invoice = await Invoice.create({
-      invoiceNumber,
-      orderNumber,
-      orderId: order._id,
-      userId: order.userId,
-      email: order.email,
-      firstName: order.firstName,
-      lastName: order.lastName,
-      products: order.products,
-      subtotal: order.subtotal,
-      tax: order.tax,
-      shippingCost: order.shippingCost,
-      discount: order.discount,
-      total: order.total,
-      billingAddress: order.billingAddress,
-      shippingAddress: order.shippingAddress,
-      paymentMethod: order.paymentMethod,
-      notes: order.notes,
-      status: "paid",
-      issuedAt: new Date(),
-      paidAt: new Date(),
-    });
+    const invoice = await apiData<any>(
+      `/invoices/order/${encodeURIComponent(orderNumber)}`,
+      { method: "POST" },
+    );
 
     revalidatePath("/sales/orders");
-    return { success: true, invoice: invoice.toObject() };
+    return { success: true, invoice };
   } catch (error: any) {
     console.error("[createInvoice] Error:", error);
+    if (error instanceof ApiError && error.status === 404) {
+      return { success: false, error: "Order not found." };
+    }
     return {
       success: false,
       error: error.message || "Unable to create invoice.",
@@ -89,17 +39,18 @@ export async function getInvoiceByOrderNumber(
   orderNumber: string,
 ): Promise<{ success: boolean; invoice?: any; error?: string }> {
   await requireAdmin();
-  await connection();
 
   try {
-    const invoice = await Invoice.findOne({ orderNumber }).lean();
-    if (!invoice) {
-      return { success: false, error: "Invoice not found." };
-    }
+    const invoice = await apiData<any>(
+      `/invoices/order/${encodeURIComponent(orderNumber)}`,
+    );
 
     return { success: true, invoice };
   } catch (error: any) {
     console.error("[getInvoiceByOrderNumber] Error:", error);
+    if (error instanceof ApiError && error.status === 404) {
+      return { success: false, error: "Invoice not found." };
+    }
     return { success: false, error: error.message };
   }
 }
@@ -117,25 +68,19 @@ export async function getInvoicesByUserId(
   error?: string;
 }> {
   await requireAdmin();
-  await connection();
 
   const { page = 1, limit = 10 } = options || {};
 
   try {
-    const skip = (page - 1) * limit;
-    const [invoices, total] = await Promise.all([
-      Invoice.find({ userId })
-        .sort({ issuedAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Invoice.countDocuments({ userId }),
-    ]);
+    const result = await apiData<{ invoices?: any[]; total?: number }>(
+      `/invoices/user/${encodeURIComponent(userId)}`,
+      { query: { page, limit } },
+    );
 
     return {
       success: true,
-      invoices,
-      total,
+      invoices: result?.invoices ?? [],
+      total: result?.total ?? 0,
     };
   } catch (error: any) {
     console.error("[getInvoicesByUserId] Error:", error);
@@ -160,7 +105,6 @@ export async function findInvoices(options?: {
   error?: string;
 }> {
   await requireAdmin();
-  await connection();
 
   const {
     page = 1,
@@ -172,30 +116,24 @@ export async function findInvoices(options?: {
   } = options || {};
 
   try {
-    let query: any = {};
-
-    if (orderNumber) {
-      query.orderNumber = new RegExp(orderNumber, "i");
-    }
-    if (status) {
-      query.status = status;
-    }
-    if (dateFrom || dateTo) {
-      query.issuedAt = {};
-      if (dateFrom) query.issuedAt.$gte = dateFrom;
-      if (dateTo) query.issuedAt.$lte = dateTo;
-    }
-
-    const skip = (page - 1) * limit;
-    const [invoices, total] = await Promise.all([
-      Invoice.find(query).sort({ issuedAt: -1 }).skip(skip).limit(limit).lean(),
-      Invoice.countDocuments(query),
-    ]);
+    const result = await apiData<{ invoices?: any[]; total?: number }>(
+      "/invoices",
+      {
+        query: {
+          page,
+          limit,
+          orderNumber,
+          status,
+          dateFrom: dateFrom ? dateFrom.toISOString() : undefined,
+          dateTo: dateTo ? dateTo.toISOString() : undefined,
+        },
+      },
+    );
 
     return {
       success: true,
-      invoices,
-      total,
+      invoices: result?.invoices ?? [],
+      total: result?.total ?? 0,
     };
   } catch (error: any) {
     console.error("[findInvoices] Error:", error);
@@ -211,23 +149,20 @@ export async function updateInvoiceStatus(
   newStatus: "issued" | "paid" | "cancelled",
 ): Promise<{ success: boolean; invoice?: any; error?: string }> {
   await requireAdmin();
-  await connection();
 
   try {
-    const invoice = await Invoice.findOneAndUpdate(
-      { invoiceNumber },
-      { status: newStatus },
-      { new: true },
+    const invoice = await apiData<any>(
+      `/invoices/${encodeURIComponent(invoiceNumber)}/status`,
+      { method: "PATCH", body: { status: newStatus } },
     );
 
-    if (!invoice) {
-      return { success: false, error: "Invoice not found." };
-    }
-
     revalidatePath("/sales/orders");
-    return { success: true, invoice: invoice.toObject() };
+    return { success: true, invoice };
   } catch (error: any) {
     console.error("[updateInvoiceStatus] Error:", error);
+    if (error instanceof ApiError && error.status === 404) {
+      return { success: false, error: "Invoice not found." };
+    }
     return { success: false, error: error.message };
   }
 }
@@ -239,35 +174,18 @@ export async function downloadInvoice(
   invoiceNumber: string,
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   await requireAdmin();
-  await connection();
 
   try {
-    const invoice: any = await Invoice.findOne({ invoiceNumber }).lean();
-    if (!invoice) {
-      return { success: false, error: "Invoice not found." };
-    }
+    const data = await apiData<any>(
+      `/invoices/${encodeURIComponent(invoiceNumber)}/download`,
+    );
 
-    return {
-      success: true,
-      data: {
-        invoiceNumber: invoice.invoiceNumber,
-        orderNumber: invoice.orderNumber,
-        issuedAt: new Date(invoice.issuedAt).toLocaleDateString(),
-        customer: `${invoice.firstName} ${invoice.lastName}`,
-        email: invoice.email,
-        billingAddress: invoice.billingAddress,
-        shippingAddress: invoice.shippingAddress,
-        products: invoice.products,
-        subtotal: invoice.subtotal,
-        tax: invoice.tax,
-        shippingCost: invoice.shippingCost,
-        discount: invoice.discount,
-        total: invoice.total,
-        paymentMethod: invoice.paymentMethod,
-      },
-    };
+    return { success: true, data };
   } catch (error: any) {
     console.error("[downloadInvoice] Error:", error);
+    if (error instanceof ApiError && error.status === 404) {
+      return { success: false, error: "Invoice not found." };
+    }
     return { success: false, error: error.message };
   }
 }

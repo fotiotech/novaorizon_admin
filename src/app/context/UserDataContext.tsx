@@ -1,22 +1,48 @@
 "use client";
 
+import api from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
-  ReactNode,
+  type ReactNode,
 } from "react";
-import { useSession } from "next-auth/react";
-import { getUserAddresses } from "@/app/actions/address";
-import { getUserPaymentMethods } from "@/app/actions/payment";
-import { getUserProfile } from "@/app/actions/users";
-import { IAddress } from "@/models/Address";
-import { IPaymentMethod } from "@/models/PaymentMethod";
 
 /* -------------------------------------------------------------------------- */
-/*                                   Types                                    */
+/*                              Client-side types                             */
+/*                                                                            */
+/* The original file imported `IAddress` and `IPaymentMethod` from Mongoose   */
+/* models — fine in a Next.js full-stack repo where the frontend and backend  */
+/* are one package, but this frontend is separate from `server/`. Importing   */
+/* a model file here pulls in mongoose at bundle time. These are the JSON     */
+/* shapes that come back from `/api/addresses` and `/api/payment-methods`.    */
 /* -------------------------------------------------------------------------- */
+
+export interface IAddress {
+  _id: string;
+  userId: string;
+  label: string;
+  street: string;
+  city: string;
+  state?: string | null;
+  postalCode: string;
+  country: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IPaymentMethod {
+  _id: string;
+  userId: string;
+  methodType: "CreditCard" | "MobileMoney" | "PayPal";
+  details: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface IPhone {
   countryCode?: string | null;
@@ -85,7 +111,11 @@ export interface ProfileCompletion {
 }
 
 export interface UserDataContextValue {
-  user: any;
+  /**
+   * Auth identity from the JWT. `id` matches `profile._id`.
+   * Not the full DB row — for that, use `profile`.
+   */
+  user: ReturnType<typeof useAuth>["user"];
   profile: IUserProfile | null;
   phone: IPhone | undefined;
   preferences: IPreferences | undefined;
@@ -158,8 +188,7 @@ const UserDataContext = createContext<UserDataContextValue | undefined>(
 );
 
 export function UserDataProvider({ children }: { children: ReactNode }) {
-  const { data: session, status } = useSession();
-  const user = session?.user;
+  const { user, loading: authLoading } = useAuth();
 
   const [profile, setProfile] = useState<IUserProfile | null>(null);
   const [addresses, setAddresses] = useState<IAddress[]>([]);
@@ -167,7 +196,11 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  /**
+   * `user?.id` is the only dep — we don't want to refetch when the user's
+   * display name or image updates but their identity hasn't changed.
+   */
+  const fetchData = useCallback(async () => {
     if (!user?.id) {
       setProfile(null);
       setAddresses([]);
@@ -178,28 +211,47 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
     setError(null);
+
     try {
-      const [prof, addrs, methods] = await Promise.all([
-        getUserProfile(),
-        getUserAddresses(),
-        getUserPaymentMethods(),
+      // Three requests in parallel. Cookie travels automatically
+      // (`withCredentials: true` on the shared `api` client).
+      const [profRes, addrsRes, methodsRes] = await Promise.all([
+        api.get<{ data: IUserProfile }>("/users/me"),
+        api.get<{ data: IAddress[] }>("/addresses"),
+        api.get<{ data: IPaymentMethod[] }>("/payment-methods"),
       ]);
-      setProfile((prof as IUserProfile) ?? null);
-      setAddresses(addrs);
-      setPaymentMethods(methods);
+
+      setProfile(profRes.data.data ?? null);
+      setAddresses(addrsRes.data.data ?? []);
+      setPaymentMethods(methodsRes.data.data ?? []);
     } catch (err: any) {
-      setError(err.message || "Failed to load user data");
+      // A 401 here means the cookie expired between mount and fetch
+      // (edge case: page was open for 30+ days). Clear profile state
+      // so the UI reflects "logged out" rather than stale data.
+      if (err?.response?.status === 401) {
+        setProfile(null);
+        setAddresses([]);
+        setPaymentMethods([]);
+        setError(null);
+      } else {
+        setError(
+          err?.response?.data?.error ??
+            err?.message ??
+            "Failed to load user data",
+        );
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  // Re-fetch when user changes or session becomes available
+  // Re-fetch when the auth identity changes — login, logout, or user swap.
+  // Wait for `authLoading` to settle first so we don't fire against the
+  // /auth/me probe that useAuth is still resolving.
   useEffect(() => {
-    if (status === "loading") return;
+    if (authLoading) return;
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, status]);
+  }, [fetchData, authLoading]);
 
   const value: UserDataContextValue = {
     user,
@@ -211,7 +263,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     addresses,
     paymentMethods,
 
-    loading: loading || status === "loading",
+    loading: loading || authLoading,
     error,
     refetch: fetchData,
   };
@@ -227,7 +279,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
  * Standard hook — throws if used outside a UserDataProvider.
  * Use this in authenticated surfaces (profile, dashboard, etc.).
  */
-export function useUserData() {
+export function useUserData(): UserDataContextValue {
   const context = useContext(UserDataContext);
   if (context === undefined) {
     throw new Error("useUserData must be used within a UserDataProvider");

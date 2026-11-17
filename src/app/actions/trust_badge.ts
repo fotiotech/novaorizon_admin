@@ -2,12 +2,15 @@
 "use server";
 import { requireAdmin } from "@/lib/authz";
 
-import { connection } from "@/utils/connection";
-import TrustBadge, { ITrustBadgeDoc } from "@/models/TrustBadge";
-import HeroContent from "@/models/HeroContent";
 import { isValidBadgeLink, BADGE_ICON_VALUES } from "@/lib/trust/badgeIcons";
 import { revalidatePath } from "next/cache";
-import mongoose from "mongoose";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
+
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
+function isValidObjectId(id: unknown): boolean {
+  return typeof id === "string" && OBJECT_ID_RE.test(id);
+}
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -83,33 +86,13 @@ export async function listTrustBadges(opts?: {
 }): Promise<TrustBadgeDTO[]> {
   await requireAdmin();
   try {
-    await connection();
-    const filter = opts?.includeInactive ? {} : { isActive: true };
-    const docs = await TrustBadge.find(filter)
-      .sort({ sortOrder: 1, createdAt: 1 })
-      .lean();
+    const docs = await apiData<any[]>("/trust-badges", {
+      query: opts?.includeInactive ? { includeInactive: "true" } : undefined,
+    });
 
-    if (docs.length === 0) return [];
-
-    // Single aggregation for usage counts
-    const usage = await HeroContent.aggregate([
-      { $unwind: "$trustBadges" },
-      {
-        $match: {
-          "trustBadges.badgeId": {
-            $in: docs.map((d) => d._id),
-          },
-        },
-      },
-      { $group: { _id: "$trustBadges.badgeId", count: { $sum: 1 } } },
-    ]);
-    const usageMap = new Map(
-      usage.map((u) => [String(u._id), u.count as number]),
-    );
-
-    return docs.map((d) => ({
+    return (docs ?? []).map((d) => ({
       ...serialize(d),
-      usageCount: usageMap.get(String(d._id)) ?? 0,
+      usageCount: typeof d.usageCount === "number" ? d.usageCount : 0,
     }));
   } catch (err) {
     console.error("[listTrustBadges] Failed:", err);
@@ -127,14 +110,15 @@ export async function getTrustBadge(
 ): Promise<ActionResult<TrustBadgeDTO>> {
   await requireAdmin();
   try {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return { success: false, error: "Invalid badge id" };
     }
-    await connection();
-    const doc = await TrustBadge.findById(id).lean();
-    if (!doc) return { success: false, error: "Badge not found" };
+    const doc = await apiData<any>(`/trust-badges/${encodeURIComponent(id)}`);
     return { success: true, data: serialize(doc) };
   } catch (err: any) {
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false, error: "Badge not found" };
+    }
     console.error("[getTrustBadge] Failed:", err);
     return { success: false, error: err?.message ?? "Failed to load badge" };
   }
@@ -151,31 +135,18 @@ export async function createTrustBadge(
     const invalid = validate(input);
     if (invalid) return { success: false, error: invalid };
 
-    await connection();
-
-    // Auto-assign sortOrder to top of list
-    const min: any = await TrustBadge.findOne()
-      .sort({ sortOrder: 1 })
-      .select("sortOrder")
-      .lean();
-    const sortOrder =
-      typeof input.sortOrder === "number"
-        ? input.sortOrder
-        : (min?.sortOrder ?? 0) - 1;
-
-    const doc = await TrustBadge.create({
-      name: input.name.trim(),
-      icon: input.icon,
-      title: input.title.trim(),
-      description: (input.description ?? "").trim(),
-      popupText: (input.popupText ?? "").trim(),
-      link: (input.link ?? "").trim(),
-      isActive: input.isActive ?? true,
-      sortOrder,
+    // Sort order is auto-assigned by the backend when not provided.
+    const doc = await apiData<any>("/trust-badges", {
+      method: "POST",
+      body: input,
     });
 
     revalidate();
-    return { success: true, data: serialize(doc), message: "Badge created" };
+    return {
+      success: true,
+      data: serialize(doc),
+      message: "Badge created",
+    };
   } catch (err: any) {
     console.error("[createTrustBadge] Failed:", err);
     return { success: false, error: err?.message ?? "Failed to create badge" };
@@ -191,60 +162,32 @@ export async function updateTrustBadge(
 ): Promise<ActionResult<{ badge: TrustBadgeDTO; syncedHeroes: number }>> {
   await requireAdmin();
   try {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return { success: false, error: "Invalid badge id" };
     }
     const invalid = validate(input);
     if (invalid) return { success: false, error: invalid };
 
-    await connection();
-
-    const updated: any = await TrustBadge.findByIdAndUpdate(
-      id,
-      {
-        $set: {
-          name: input.name.trim(),
-          icon: input.icon,
-          title: input.title.trim(),
-          description: (input.description ?? "").trim(),
-          popupText: (input.popupText ?? "").trim(),
-          link: (input.link ?? "").trim(),
-          ...(input.isActive !== undefined
-            ? { isActive: !!input.isActive }
-            : {}),
-          ...(input.sortOrder !== undefined
-            ? { sortOrder: input.sortOrder }
-            : {}),
-        },
-      },
-      { new: true, runValidators: true },
-    ).lean();
-
-    if (!updated) return { success: false, error: "Badge not found" };
-
-    // Snapshot resync: propagate fresh fields into every hero that
-    // references this badge. Ad-hoc badges (badgeId: null) are untouched.
-    const res = await HeroContent.updateMany(
-      { "trustBadges.badgeId": updated._id },
-      {
-        $set: {
-          "trustBadges.$[b].icon": updated.icon,
-          "trustBadges.$[b].title": updated.title,
-          "trustBadges.$[b].description": updated.description ?? "",
-          "trustBadges.$[b].popupText": updated.popupText ?? "",
-          "trustBadges.$[b].link": updated.link ?? "",
-        },
-      },
-      { arrayFilters: [{ "b.badgeId": updated._id }] },
+    // The backend snapshots fresh fields into every hero that references
+    // this badge and reports how many documents it touched.
+    const res = await apiData<{ badge: any; syncedHeroes: number }>(
+      `/trust-badges/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: input },
     );
 
     revalidate();
     return {
       success: true,
-      data: { badge: serialize(updated), syncedHeroes: res.modifiedCount ?? 0 },
+      data: {
+        badge: serialize(res?.badge),
+        syncedHeroes: res?.syncedHeroes ?? 0,
+      },
       message: "Badge updated",
     };
   } catch (err: any) {
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false, error: "Badge not found" };
+    }
     console.error("[updateTrustBadge] Failed:", err);
     return { success: false, error: err?.message ?? "Failed to update badge" };
   }
@@ -259,46 +202,29 @@ export async function deleteTrustBadge(
 ): Promise<ActionResult<{ affectedHeroes: number }>> {
   await requireAdmin();
   try {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return { success: false, error: "Invalid badge id" };
     }
-    await connection();
 
-    const badge = await TrustBadge.findById(id);
-    if (!badge) return { success: false, error: "Badge not found" };
+    const res = await apiData<{ affectedHeroes: number }>(
+      `/trust-badges/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        query: opts?.force ? { force: "true" } : undefined,
+      },
+    );
 
-    const usage = await HeroContent.countDocuments({
-      "trustBadges.badgeId": id,
-    });
-
-    if (usage > 0 && !opts?.force) {
-      return {
-        success: false,
-        error: `This badge is used in ${usage} hero${
-          usage === 1 ? "" : "es"
-        }. Archive it or force-delete to detach it.`,
-      };
-    }
-
-    if (usage > 0) {
-      // Force delete: detach refs, keep snapshot fields intact so heroes
-      // still render (they simply become ad-hoc).
-      await HeroContent.updateMany(
-        { "trustBadges.badgeId": badge._id },
-        { $set: { "trustBadges.$[b].badgeId": null } },
-        { arrayFilters: [{ "b.badgeId": badge._id }] },
-      );
-    }
-
-    await badge.deleteOne();
     revalidate();
     return {
       success: true,
-      data: { affectedHeroes: usage },
+      data: { affectedHeroes: res?.affectedHeroes ?? 0 },
       message: "Badge deleted",
     };
   } catch (err: any) {
     console.error("[deleteTrustBadge] Failed:", err);
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false, error: "Badge not found" };
+    }
     return { success: false, error: err?.message ?? "Failed to delete badge" };
   }
 }
@@ -314,20 +240,13 @@ export async function reorderTrustBadges(
     if (!Array.isArray(orderedIds)) {
       return { success: false, error: "orderedIds must be an array" };
     }
-    const valid = orderedIds.filter((id) =>
-      mongoose.Types.ObjectId.isValid(id),
-    );
+    const valid = orderedIds.filter((id) => isValidObjectId(id));
     if (valid.length === 0) return { success: true, data: null };
 
-    await connection();
-    await TrustBadge.bulkWrite(
-      valid.map((id, i) => ({
-        updateOne: {
-          filter: { _id: id },
-          update: { $set: { sortOrder: i } },
-        },
-      })),
-    );
+    await apiFetch("/trust-badges/reorder", {
+      method: "POST",
+      body: { orderedIds: valid },
+    });
     revalidate();
     return { success: true, data: null, message: "Order updated" };
   } catch (err: any) {
@@ -344,34 +263,25 @@ export async function resyncTrustBadgeInHeroes(
 ): Promise<ActionResult<{ syncedHeroes: number }>> {
   await requireAdmin();
   try {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return { success: false, error: "Invalid badge id" };
     }
-    await connection();
-    const badge: any = await TrustBadge.findById(id).lean();
-    if (!badge) return { success: false, error: "Badge not found" };
 
-    const res = await HeroContent.updateMany(
-      { "trustBadges.badgeId": badge._id },
-      {
-        $set: {
-          "trustBadges.$[b].icon": badge.icon,
-          "trustBadges.$[b].title": badge.title,
-          "trustBadges.$[b].description": badge.description ?? "",
-          "trustBadges.$[b].popupText": badge.popupText ?? "",
-          "trustBadges.$[b].link": badge.link ?? "",
-        },
-      },
-      { arrayFilters: [{ "b.badgeId": badge._id }] },
+    const res = await apiData<{ syncedHeroes: number }>(
+      `/trust-badges/${encodeURIComponent(id)}/resync`,
+      { method: "POST" },
     );
 
     revalidate();
     return {
       success: true,
-      data: { syncedHeroes: res.modifiedCount ?? 0 },
+      data: { syncedHeroes: res?.syncedHeroes ?? 0 },
       message: "Heroes synced",
     };
   } catch (err: any) {
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false, error: "Badge not found" };
+    }
     console.error("[resyncTrustBadgeInHeroes] Failed:", err);
     return { success: false, error: err?.message ?? "Failed to sync" };
   }

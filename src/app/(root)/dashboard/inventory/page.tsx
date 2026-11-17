@@ -3,6 +3,8 @@
 
 import { useEffect, useMemo, useState, memo } from "react";
 import Link from "next/link";
+import api from "@/lib/api";
+import axios from "axios";
 import {
   Inventory2,
   CheckCircle,
@@ -11,7 +13,6 @@ import {
   ArrowForward,
   Refresh,
 } from "@mui/icons-material";
-import { getProductAnalytics } from "@/app/actions/analytic";
 
 interface ProductAnalytics {
   totalProducts: number;
@@ -212,11 +213,25 @@ export default function InventoryReportsPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await getProductAnalytics();
-      setData(result);
-    } catch (err: any) {
+      const res = await api.get<{ data: ProductAnalytics }>(
+        "/analytics/products",
+      );
+      setData(res.data.data);
+    } catch (err) {
       console.error("Failed to load product analytics:", err);
-      setError(err?.message || "Failed to load inventory analytics");
+      if (axios.isAxiosError(err)) {
+        if (err.response?.status === 401) {
+          setError("Your session expired. Please sign in again.");
+        } else if (err.response?.status === 403) {
+          setError("You do not have permission to view inventory analytics.");
+        } else if (err.response?.data?.error) {
+          setError(err.response.data.error);
+        } else {
+          setError("Failed to load inventory analytics");
+        }
+      } else {
+        setError("Network error. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -377,6 +392,16 @@ export default function InventoryReportsPage() {
               {data.recentProducts.map((product: any) => {
                 const qty = Number(product.quantity ?? 0);
                 const threshold = Number(product.lowStockThreshold ?? 5);
+
+                // `mainImage` (legacy shape) OR `images[0]` (backend shape).
+                // Backend currently returns `images: string[]`, so we fall
+                // back to the first entry when `mainImage` is absent.
+                const imageUrl: string | null =
+                  product.mainImage ??
+                  (Array.isArray(product.images) && product.images.length > 0
+                    ? product.images[0]
+                    : null);
+
                 const badge =
                   qty === 0
                     ? {
@@ -399,10 +424,10 @@ export default function InventoryReportsPage() {
                     className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
-                      {product.mainImage ? (
+                      {imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={product.mainImage}
+                          src={imageUrl}
                           alt={product.name || "Product"}
                           loading="lazy"
                           className="h-full w-full object-cover"

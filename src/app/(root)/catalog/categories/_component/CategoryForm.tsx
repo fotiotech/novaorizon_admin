@@ -1,16 +1,17 @@
+// app/catalog/categories/_component/CategoryForm.tsx
 "use client";
 
 import React, { ChangeEvent, useEffect, useState, useRef } from "react";
 import FilesUploader from "@/components/FilesUploader";
 import {
-  getCategory,
-  createCategory,
+  getCategoryById,
+  saveCategory,
   deleteCategoryImage,
-} from "@/app/actions/category";
+} from "@/lib/api/category";
+import { fetchCategoryProperties } from "@/lib/api/category-property";
 import { Category as Cat } from "@/constant/types";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import { toast } from "react-toastify";
-import { getCategoryProperty } from "@/app/actions/category_property";
 
 // Simple inline validation
 const validateCategory = (data: Partial<Cat>) => {
@@ -62,7 +63,6 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   const parentDropdownRef = useRef<HTMLDivElement>(null);
 
   // Inheritance is only meaningful for non-root categories.
-  // Derived from the *current* parent selection so the toggle stays honest.
   const canInherit = !!categoryData.parentId;
 
   // File uploader
@@ -79,16 +79,18 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
   const handleRemoveImage = async (index: number, fileUrl: string) => {
     if (mode === "edit" && categoryId) {
-      const result = await deleteCategoryImage(categoryId, fileUrl);
-      if (!result.success) {
-        toast.error(result.error || "Failed to remove image");
-        return;
+      try {
+        const result = await deleteCategoryImage(categoryId, fileUrl);
+        if (result.success) {
+          setFiles((prev) => prev.filter((_, i) => i !== index));
+          setCategoryData((prev) => ({
+            ...prev,
+            imageUrl: prev.imageUrl?.filter((url) => url !== fileUrl) || [],
+          }));
+        }
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || "Failed to remove image");
       }
-      setFiles((prev) => prev.filter((_, i) => i !== index));
-      setCategoryData((prev) => ({
-        ...prev,
-        imageUrl: prev.imageUrl?.filter((url) => url !== fileUrl) || [],
-      }));
     } else {
       setFiles((prev) => prev.filter((_, i) => i !== index));
     }
@@ -98,7 +100,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        const props = await getCategoryProperty();
+        const props = await fetchCategoryProperties();
         setProperties(props || []);
       } catch (err) {
         console.error("Failed to fetch category properties:", err);
@@ -113,7 +115,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       if (mode === "edit" && categoryId) {
         try {
           setIsLoading(true);
-          const category = await getCategory(categoryId);
+          const category = await getCategoryById(categoryId);
           if (category) {
             setCategoryData({
               _id: category._id || "",
@@ -121,12 +123,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               parentId: category.parentId || "",
               description: category.description || "",
               imageUrl: category.imageUrl || [],
-              property: category.property?._id || category.property || "",
+              property: category.property?._id || "",
             });
-            setSelectedPropertyId(
-              category.property?._id || category.property || "",
-            );
-            // ✅ Load inheritProperty from the fetched category
+            setSelectedPropertyId(category.property?._id || "");
             setInheritProperty(category.inheritProperty ?? false);
             if (category.attributes) setAttributes(category.attributes);
             if (category.imageUrl && category.imageUrl.length > 0) {
@@ -134,7 +133,6 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             } else {
               setFiles([]);
             }
-            // Set search input to the parent name (if any)
             if (category.parentId) {
               const parent: any = categories.find(
                 (c) => c._id === category.parentId,
@@ -144,9 +142,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
           } else {
             setError("Category not found");
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error("Error fetching category:", err);
-          setError("Failed to load category data");
+          setError(
+            err?.response?.data?.message || "Failed to load category data",
+          );
         } finally {
           setIsLoading(false);
         }
@@ -169,9 +169,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // If the category loses its parent (root, or cleared), force inheritance off.
-  // This mirrors the server's `canInherit` guard so the UI never reports a
-  // state the server would silently discard.
+  // If the category loses its parent, force inheritance off.
   useEffect(() => {
     if (!canInherit && inheritProperty) {
       setInheritProperty(false);
@@ -179,13 +177,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   }, [canInherit, inheritProperty]);
 
   // Pre-fill the search box with the parent's name when opened via "Add child".
-  // Runs whenever `categories` becomes available (which may be after mount).
   useEffect(() => {
     if (mode !== "create" || !initialParentId) return;
     const parent: any = categories.find((c) => c._id === initialParentId);
     if (parent) {
       setParentSearch(parent.name);
-      // Make sure the stored parentId is correct even if categories loaded late.
       setCategoryData((prev) =>
         prev.parentId === initialParentId
           ? prev
@@ -213,8 +209,6 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   };
 
   const handleToggleChange = () => {
-    // Block the toggle for root categories so the user can't enable
-    // something the server will discard.
     if (!canInherit) {
       toast.info(
         "Select a parent category first — root categories cannot inherit.",
@@ -247,8 +241,6 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     setCategoryData((prev) => ({ ...prev, parentId: "" }));
     setParentSearch("");
     setIsParentDropdownOpen(false);
-    // Effect above will also turn inheritance off; keep this explicit
-    // so the UI updates in the same tick.
     setInheritProperty(false);
   };
 
@@ -288,38 +280,28 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     setIsLoading(true);
 
     try {
-      // Never send `inheritProperty: true` for a root category — the server
-      // would coerce it to false and the UI would misreport success.
+      // Never send `inheritProperty: true` for a root category.
       const effectiveInherit = inheritProperty && canInherit;
 
-      const formData = {
-        ...categoryData,
-        imageUrl: files || [],
-        attributes: attributes || [],
-        propertyId: selectedPropertyId || undefined,
-        inheritProperty: effectiveInherit,
-      };
-
-      const result = await createCategory(
-        formData,
+      await saveCategory(
+        {
+          _id: categoryData._id,
+          name: categoryData.name || "",
+          parentId: categoryData.parentId || null,
+          description: categoryData.description,
+          imageUrl: files || [],
+          propertyId: selectedPropertyId || null,
+          inheritProperty: effectiveInherit,
+        },
         mode === "edit" ? categoryData._id : undefined,
       );
 
-      if (result && !result.error) {
-        // Surface any server-side warning (e.g. "No ancestor properties")
-        // instead of silently swallowing it.
-        if ((result as any).warning) {
-          toast.info((result as any).warning);
-        }
-        onSuccess();
-      } else {
-        setError(result?.error || "Error while processing category");
-        toast.error(result?.error || "Error while processing category");
-      }
-    } catch (err) {
+      onSuccess();
+    } catch (err: any) {
       console.error("Error saving category:", err);
       const msg =
-        err instanceof Error ? err.message : "Failed to save category";
+        err?.response?.data?.message ||
+        (err instanceof Error ? err.message : "Failed to save category");
       setError(msg);
       toast.error(msg);
     } finally {

@@ -17,9 +17,9 @@ import {
   Lock,
 } from "@mui/icons-material";
 import {
-  getCategoryProperty,
+  fetchCategoryProperties,
   deleteCategoryProperty,
-} from "@/app/actions/category_property";
+} from "@/lib/api/category-property";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { BottomSheet } from "@/components/ux/BottomSheet";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
@@ -178,14 +178,12 @@ export default function CategoryPropertiesPage() {
   const fetchProperties = async () => {
     try {
       setLoading(true);
-      const data = await getCategoryProperty(undefined, {
-        includeReadOnly: true,
-      });
-      setProperties(data || []);
+      const data = await fetchCategoryProperties({ includeReadOnly: true });
+      setProperties(data as unknown as Property[]);
       setError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching category properties:", err);
-      setError("Failed to load properties");
+      setError(err?.response?.data?.message || "Failed to load properties");
     } finally {
       setLoading(false);
     }
@@ -277,12 +275,6 @@ export default function CategoryPropertiesPage() {
 
   // ------------------------------------------------------------------
   // Menu items
-  //
-  // Inherited (readOnly) properties are now editable/deletable like any
-  // other. Editing them overrides the snapshot in place. Note that a
-  // subsequent "Re-run inheritance" from the category side WILL
-  // regenerate (and therefore overwrite) those manual edits — that's
-  // the admin's explicit signal they want the snapshot refreshed.
   // ------------------------------------------------------------------
   const getMenuItems = (prop: Property): PopoverMenuItem[] => {
     const items: PopoverMenuItem[] = [];
@@ -292,7 +284,6 @@ export default function CategoryPropertiesPage() {
         key: "managed-info",
         label: "System-managed snapshot",
         icon: <Lock fontSize="small" />,
-        // No-op informational entry — clicking does nothing.
         onClick: () => {},
       });
     }

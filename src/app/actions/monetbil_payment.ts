@@ -1,46 +1,26 @@
 "use server";
 
-import { connection } from "@/utils/connection";
 import { MonetbilPaymentRequest } from "@/constant/types";
-import axios from "axios";
 import { NextResponse } from "next/server";
-import User from "@/models/User";
-import Order from "@/models/Order"; // Adjust the path based on your project structure
-import Shipping from "@/models/Shipping";
 import { requireAdmin } from "@/lib/authz";
+import { apiData, apiFetch } from "@/lib/server-api";
 
 export async function generatePaymentLink(
   paymentData: MonetbilPaymentRequest,
 ): Promise<string | null> {
   await requireAdmin();
   try {
-    const response = await axios.post(
-      `https://api.monetbil.com/widget/v2.1/${paymentData.serviceKey}`,
-      {
-        amount: paymentData.amount,
-        phone: paymentData.phone,
-        locale: paymentData.locale || "en",
-        operator: paymentData.operator || "CM_MTNMOBILEMONEY",
-        country: "CM",
-        currency: "XAF",
-        item_ref: paymentData.itemRef,
-        payment_ref: paymentData.itemRef,
-        user: paymentData.user,
-        first_name: paymentData.firstName,
-        last_name: paymentData.lastName,
-        email: paymentData.email,
-        return_url: paymentData.returnUrl,
-        notify_url: paymentData.notifyUrl,
-        logo: paymentData.logo,
-      },
-    );
+    const data = await apiData<{ paymentUrl?: string }>("/monetbil/link", {
+      method: "POST",
+      body: paymentData,
+    });
 
-    if (response.data.success) {
-      return response.data.payment_url;
-    } else {
-      console.error("Payment link generation failed:", response.data);
-      return null;
+    if (data?.paymentUrl) {
+      return data.paymentUrl;
     }
+
+    console.error("Payment link generation failed:", data);
+    return null;
   } catch (error) {
     console.error("Error generating payment link:", error);
     return null;
@@ -123,33 +103,12 @@ export async function updateOrderStatus(
   await requireAdmin();
   if (!payment_ref || !transaction_id || !status) return null;
   try {
-    await connection();
-    const savedOrder = await Order.findOneAndUpdate(
-      { orderNumber: payment_ref },
-      { transaction_id, paymentStatus: status },
-      { new: true },
-    );
-    if (!savedOrder) {
-      throw new Error("Order not found");
-    }
-    if (savedOrder && savedOrder.paymentStatus === "cancelled") {
-      const createShipping = new Shipping({
-        orderId: savedOrder._id,
-        userId: savedOrder.userId,
-        address: {
-          street: savedOrder.shippingAddress.street,
-          city: savedOrder.shippingAddress.city,
-          region: savedOrder.shippingAddress.region,
-          address: savedOrder.shippingAddress.address,
-          country: savedOrder.shippingAddress.country,
-          carrier: savedOrder.shippingAddress.carrier || "Novaorizon",
-        },
-        trackingNumber: savedOrder.orderNumber,
-        shippingCost: savedOrder.shippingCost || 2,
-        status: "pending",
-      });
-      await createShipping.save();
-    }
+    // The backend owns the payment-status transition (including the status
+    // mapping and shipping creation) — see POST /api/monetbil/notify.
+    await apiFetch("/monetbil/notify", {
+      method: "POST",
+      body: { payment_ref, transaction_id, status },
+    });
   } catch (error) {
     console.error("Error updating order status:", error);
   }

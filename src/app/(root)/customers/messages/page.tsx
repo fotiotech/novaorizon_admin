@@ -3,10 +3,12 @@
 
 import React, { useCallback, useEffect, useMemo, useState, memo } from "react";
 import {
-  getContactMessages,
+  fetchContactMessages,
   updateContactStatus,
   deleteContactMessage,
-} from "@/app/actions/contact";
+  type ContactMessage,
+  type ContactStatus,
+} from "@/lib/api/contact";
 import {
   Search,
   SearchOff,
@@ -23,20 +25,8 @@ import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 import { toast } from "react-hot-toast";
 
 // ------------------------------------------------------------------
-// Types
+// Tabs
 // ------------------------------------------------------------------
-type ContactMessage = {
-  _id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  subject: string;
-  message: string;
-  status: "new" | "read" | "replied" | "archived";
-  createdAt: string;
-  updatedAt: string;
-};
-
 const STATUS_TABS: { key: string; label: string }[] = [
   { key: "all", label: "All" },
   { key: "new", label: "New" },
@@ -167,18 +157,22 @@ const AdminMessagesPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getContactMessages({
+      const data = await fetchContactMessages({
         status,
-        search: debouncedSearch,
+        search: debouncedSearch.trim() || undefined,
         page,
         limit: 10,
       });
-      setMessages(data.messages as ContactMessage[]);
+      setMessages(data.messages);
       setCounts(data.counts);
       setTotalPages(data.totalPages || 1);
       setTotal(data.total);
     } catch (err: any) {
-      setError(err.message || "Failed to load messages.");
+      setError(
+        err?.response?.data?.message ??
+          err?.message ??
+          "Failed to load messages.",
+      );
     } finally {
       setLoading(false);
     }
@@ -193,25 +187,26 @@ const AdminMessagesPage = () => {
     setSelected(msg);
     if (msg.status !== "new") return;
 
-    const result = await updateContactStatus(msg._id, "read");
-    if (result.success) {
-      setMessages((prev) =>
-        prev.map((m) => (m._id === msg._id ? { ...m, status: "read" } : m)),
-      );
-      setCounts((prev) => ({
-        ...prev,
-        new: Math.max(0, (prev.new || 0) - 1),
-        read: (prev.read || 0) + 1,
-      }));
-      setSelected({ ...msg, status: "read" });
+    try {
+      const result = await updateContactStatus(msg._id, "read");
+      if (result.success) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === msg._id ? { ...m, status: "read" } : m)),
+        );
+        setCounts((prev) => ({
+          ...prev,
+          new: Math.max(0, (prev.new || 0) - 1),
+          read: (prev.read || 0) + 1,
+        }));
+        setSelected({ ...msg, status: "read" });
+      }
+    } catch {
+      // Auto-mark failure is non-critical — leave the drawer open.
     }
   };
 
   // -------- Change status --------
-  const handleStatusChange = async (
-    id: string,
-    newStatus: ContactMessage["status"],
-  ) => {
+  const handleStatusChange = async (id: string, newStatus: ContactStatus) => {
     setUpdating(true);
     const toastId = toast.loading("Updating status…");
     try {
@@ -225,13 +220,14 @@ const AdminMessagesPage = () => {
           setSelected({ ...selected, status: newStatus });
         }
         await fetchMessages();
-      } else {
-        toast.error(result.error || "Unable to update status", {
-          id: toastId,
-        });
       }
     } catch (err: any) {
-      toast.error(err?.message || "Unable to update status", { id: toastId });
+      toast.error(
+        err?.response?.data?.message ??
+          err?.message ??
+          "Unable to update status",
+        { id: toastId },
+      );
     } finally {
       setUpdating(false);
     }
@@ -250,15 +246,14 @@ const AdminMessagesPage = () => {
         if (selected?._id === deleteTarget._id) setSelected(null);
         setDeleteTarget(null);
         await fetchMessages();
-      } else {
-        toast.error(result.error || "Unable to delete message", {
-          id: toastId,
-        });
       }
     } catch (err: any) {
-      toast.error(err?.message || "Unable to delete message", {
-        id: toastId,
-      });
+      toast.error(
+        err?.response?.data?.message ??
+          err?.message ??
+          "Unable to delete message",
+        { id: toastId },
+      );
     } finally {
       setIsDeleting(false);
     }
@@ -284,9 +279,7 @@ const AdminMessagesPage = () => {
 
   return (
     <div className="mx-auto w-full max-w-7xl overflow-x-clip">
-      {/* ================================================================= */}
-      {/* Controls row                                                       */}
-      {/* ================================================================= */}
+      {/* Controls row */}
       <div className="mb-4 flex items-center gap-2">
         <div className="relative min-w-0 max-w-sm flex-1">
           <Search
@@ -314,9 +307,7 @@ const AdminMessagesPage = () => {
         )}
       </div>
 
-      {/* ================================================================= */}
-      {/* Status tabs                                                        */}
-      {/* ================================================================= */}
+      {/* Status tabs */}
       <div className="mb-4 flex flex-wrap gap-1.5">
         {STATUS_TABS.map((tab) => {
           const count = counts[tab.key] ?? 0;
@@ -350,9 +341,7 @@ const AdminMessagesPage = () => {
         })}
       </div>
 
-      {/* ================================================================= */}
-      {/* Error banner                                                       */}
-      {/* ================================================================= */}
+      {/* Error banner */}
       {error && !loading && (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <span>
@@ -368,11 +357,8 @@ const AdminMessagesPage = () => {
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* Card                                                               */}
-      {/* ================================================================= */}
+      {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
-        {/* Card header */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
@@ -393,7 +379,7 @@ const AdminMessagesPage = () => {
           )}
         </div>
 
-        {/* ----------------------- DESKTOP TABLE ----------------------- */}
+        {/* DESKTOP TABLE */}
         <div className="hidden md:block">
           <div className="w-full min-w-0 overflow-x-auto">
             <table className="w-full table-fixed text-sm">
@@ -506,7 +492,7 @@ const AdminMessagesPage = () => {
           </div>
         </div>
 
-        {/* ------------------------ MOBILE CARDS ----------------------- */}
+        {/* MOBILE CARDS */}
         <div className="md:hidden">
           {loading && messages.length === 0 ? (
             <div className="flex justify-center py-16">
@@ -614,9 +600,7 @@ const AdminMessagesPage = () => {
         )}
       </div>
 
-      {/* ================================================================= */}
-      {/* Detail drawer                                                      */}
-      {/* ================================================================= */}
+      {/* Detail drawer */}
       {selected && (
         <div
           className="fixed inset-0 z-50 bg-black/50"
@@ -628,7 +612,6 @@ const AdminMessagesPage = () => {
             className="absolute right-0 top-0 flex h-full w-full max-w-lg flex-col bg-card text-card-foreground"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Drawer header */}
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-foreground">
@@ -645,9 +628,7 @@ const AdminMessagesPage = () => {
               </button>
             </div>
 
-            {/* Drawer body */}
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
-              {/* Sender */}
               <div className="rounded-lg border border-border bg-background/50 p-3">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                   From
@@ -676,7 +657,6 @@ const AdminMessagesPage = () => {
                 </p>
               </div>
 
-              {/* Subject */}
               <div>
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                   Subject
@@ -686,7 +666,6 @@ const AdminMessagesPage = () => {
                 </p>
               </div>
 
-              {/* Message */}
               <div>
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                   Message
@@ -697,7 +676,6 @@ const AdminMessagesPage = () => {
               </div>
             </div>
 
-            {/* Drawer actions */}
             <div className="border-t border-border bg-card px-4 py-3">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                 Actions

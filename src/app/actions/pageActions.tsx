@@ -5,8 +5,7 @@ import { requireAdmin } from "@/lib/authz";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import PageModel, { IPage } from "@/models/Page";
-import { connection } from "@/utils/connection";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
 
 // ----------------------------------------------
 // 1. Zod validation schema (rich)
@@ -53,7 +52,6 @@ function formDataToObject(formData: FormData): Record<string, any> {
 // ----------------------------------------------
 export async function createPage(formData: FormData) {
   await requireAdmin();
-  await connection();
 
   const raw = formDataToObject(formData);
   // Coerce publishedAt to Date or null
@@ -67,25 +65,11 @@ export async function createPage(formData: FormData) {
   const data = result.data;
 
   try {
-    // Check if slug already exists
-    if (data.slug) {
-      const existing = await PageModel.findOne({ slug: data.slug });
-      if (existing) {
-        return { errors: { slug: ["Slug already exists"] } };
-      }
-    }
-
-    // Convert publishedAt string to Date if present
-    const pageData = { ...data };
-    if (pageData.publishedAt) {
-      pageData.publishedAt = new Date(pageData.publishedAt) as any;
-    } else {
-      pageData.publishedAt = undefined;
-    }
-
-    const page = new PageModel(pageData);
-    await page.save();
+    await apiFetch("/pages", { method: "POST", body: data });
   } catch (error) {
+    if (error instanceof ApiError && error.fieldErrors) {
+      return { errors: error.fieldErrors };
+    }
     console.error("Error creating page:", error);
     return { errors: { _form: ["Failed to create page."] } };
   }
@@ -99,7 +83,6 @@ export async function createPage(formData: FormData) {
 // ----------------------------------------------
 export async function updatePage(id: string, formData: FormData) {
   await requireAdmin();
-  await connection();
 
   const raw = formDataToObject(formData);
   if (raw.publishedAt === "") raw.publishedAt = null;
@@ -112,27 +95,14 @@ export async function updatePage(id: string, formData: FormData) {
   const data = result.data;
 
   try {
-    // Check slug uniqueness (excluding itself)
-    if (data.slug) {
-      const existing = await PageModel.findOne({
-        slug: data.slug,
-        _id: { $ne: id },
-      });
-      if (existing) {
-        return { errors: { slug: ["Slug already exists"] } };
-      }
-    }
-
-    // Prepare update data
-    const updateData = { ...data };
-    if (updateData.publishedAt) {
-      updateData.publishedAt = new Date(updateData.publishedAt) as any;
-    } else {
-      updateData.publishedAt = null;
-    }
-
-    await PageModel.findByIdAndUpdate(id, updateData, { runValidators: true });
+    await apiFetch(`/pages/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: data,
+    });
   } catch (error) {
+    if (error instanceof ApiError && error.fieldErrors) {
+      return { errors: error.fieldErrors };
+    }
     console.error("Error updating page:", error);
     return { errors: { _form: ["Failed to update page."] } };
   }
@@ -147,9 +117,8 @@ export async function updatePage(id: string, formData: FormData) {
 // ----------------------------------------------
 export async function deletePage(id: string): Promise<{ error?: string }> {
   await requireAdmin();
-  await connection();
   try {
-    await PageModel.findByIdAndDelete(id);
+    await apiFetch(`/pages/${encodeURIComponent(id)}`, { method: "DELETE" });
   } catch (error) {
     console.error("Error deleting page:", error);
     return { error: "Failed to delete page." };
@@ -161,43 +130,32 @@ export async function deletePage(id: string): Promise<{ error?: string }> {
 // ----------------------------------------------
 // 6. Fetch helpers (server components)
 // ----------------------------------------------
-export async function getPages(): Promise<Omit<IPage, keyof Document>[]> {
+export async function getPages(): Promise<any[]> {
   await requireAdmin();
-  await connection();
-  const pages = await PageModel.find({}).sort({ createdAt: -1 }).lean();
-  return pages.map((p) => ({
-    ...p,
-    _id: p._id.toString(),
-    publishedAt: p.publishedAt ? p.publishedAt.toISOString() : null,
-    createdAt: p.createdAt.toISOString(),
-    updatedAt: p.updatedAt.toISOString(),
-  })) as any;
+  const pages = await apiData<any[]>("/pages");
+  return pages ?? [];
 }
 
 export async function getPageById(id: string): Promise<any | null> {
   await requireAdmin();
-  await connection();
-  const page = await PageModel.findById(id).lean();
-  if (!page) return null;
-  return {
-    ...page,
-    _id: page._id.toString(),
-    publishedAt: page.publishedAt ? page.publishedAt.toISOString() : null,
-    createdAt: page.createdAt.toISOString(),
-    updatedAt: page.updatedAt.toISOString(),
-  };
+  try {
+    const page = await apiData<any>(`/pages/${encodeURIComponent(id)}`);
+    return page ?? null;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export async function getPageBySlug(slug: string): Promise<any | null> {
   await requireAdmin();
-  await connection();
-  const page = await PageModel.findOne({ slug, status: "published" }).lean();
-  if (!page) return null;
-  return {
-    ...page,
-    _id: page._id.toString(),
-    publishedAt: page.publishedAt ? page.publishedAt.toISOString() : null,
-    createdAt: page.createdAt.toISOString(),
-    updatedAt: page.updatedAt.toISOString(),
-  };
+  try {
+    const page = await apiData<any>(
+      `/pages/by-slug/${encodeURIComponent(slug)}`,
+    );
+    return page ?? null;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
 }

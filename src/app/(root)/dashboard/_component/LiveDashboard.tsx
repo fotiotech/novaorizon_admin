@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLiveEvents, type LiveEvent } from "@/hooks/useLiveEvents";
 import { HotRightNow } from "./HotRightNow";
-import type { HotItem } from "@/lib/events/eventQueries";
+import type { HotItem } from "./HotRightNow";
 import { VisitorHistory } from "./VisitorHistory";
 
 // ─── Constants ────────────────────────────────────────────

@@ -1,9 +1,9 @@
-// components/UserRolePermissionsForm.tsx
+// app/users/_component/UserRolePermissionsForm.tsx
 "use client";
 
 import { useState } from "react";
 import { Shield, Person2, Save, Check, Close } from "@mui/icons-material";
-import { updateUserRoleAndPermissions } from "@/app/actions/users";
+import { updateUserRole } from "@/lib/api/users";
 import { toast } from "react-hot-toast";
 
 // ------------------------------------------------------------------
@@ -45,9 +45,6 @@ const PERMISSIONS: { key: string; label: string; group: string }[] = [
   { key: "manage_settings", label: "Manage settings", group: "Settings" },
   { key: "view_reports", label: "View reports", group: "Analytics" },
 ];
-
-const INPUT_CLASS =
-  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60";
 
 interface UserData {
   _id: string;
@@ -91,11 +88,7 @@ export default function UserRolePermissionsForm({
     setSaving(true);
     const toastId = toast.loading("Updating role & permissions…");
     try {
-      const result = await updateUserRoleAndPermissions(
-        userId,
-        role,
-        permissions,
-      );
+      const result = await updateUserRole(userId, role, permissions);
       if (result.success) {
         toast.success("Role & permissions updated", { id: toastId });
         onSuccess?.();
@@ -103,7 +96,10 @@ export default function UserRolePermissionsForm({
         toast.error(result.message || "Failed to update user", { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err?.message || "Failed to update user", { id: toastId });
+      toast.error(
+        err?.response?.data?.message || err?.message || "Failed to update user",
+        { id: toastId },
+      );
     } finally {
       setSaving(false);
     }

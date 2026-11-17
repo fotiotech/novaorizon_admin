@@ -5,7 +5,7 @@ import {
   deleteAttributeGroup,
   findAllAttributeGroups,
   getAttributeGroupsUsageMap,
-} from "@/app/actions/attributegroup";
+} from "@/lib/api/attribute-group";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Select from "react-select";
 import { AttributeGroupFormModal } from "./_component/AttributeGroupFormModal";

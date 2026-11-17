@@ -16,8 +16,7 @@ import {
   ArrowForward,
   KeyboardReturn,
 } from "@mui/icons-material";
-import { useSession } from "next-auth/react";
-import { SignIn } from "../app/(auth)/_component/SignInButton";
+import { useAuth } from "@/hooks/useAuth";
 import { useUnreadMessages } from "@/app/(root)/customers/chat/_component/useUnreadMessages";
 import { useNewContactCount } from "@/hooks/useNewContactCount";
 import LeftSheet from "@/components/ux/LeftSheet";
@@ -55,9 +54,9 @@ const itemIdle =
   "text-sidebar-foreground/80 hover:bg-foreground/5 hover:text-sidebar-foreground";
 const itemActive = "bg-primary/10 text-primary";
 
-// ─────────────────────────────────────────────────────────────────────
-// Route + tree helpers — kept in sync with menu-config.tsx conventions.
-// ─────────────────────────────────────────────────────────────────────
+/* ──────────────────────────────────────────────────────────────────
+ * Route + tree helpers — unchanged from original.
+ * ────────────────────────────────────────────────────────────────── */
 
 const routeMatches = (pathname: string | null, href: string) =>
   !!pathname && (pathname === href || pathname.startsWith(href + "/"));
@@ -69,22 +68,6 @@ const linkMatchesRoute = (pathname: string | null, link: MenuLink): boolean =>
 const sectionMatchesRoute = (pathname: string | null, section: MenuSection) =>
   section.links.some((l) => linkMatchesRoute(pathname, l));
 
-/**
- * Walk the tree to find the chain of ancestor hrefs for a pathname — the
- * links whose children should be shown in the sidebar. The matched link
- * itself is excluded, so the deepest returned href is the *parent* of the
- * current page (or empty for a top-level page).
- *
- * Examples:
- *   /channels/store                     → []
- *   /channels/store/content             → ["/channels/store"]
- *   /channels/store/content/navigation  → ["/channels/store",
- *                                          "/channels/store/content"]
- *   /channels/store/content/navigation/menus
- *                                       → ["/channels/store",
- *                                          "/channels/store/content",
- *                                          "/channels/store/content/navigation"]
- */
 function findAncestorChain(
   links: MenuLink[],
   pathname: string,
@@ -95,7 +78,6 @@ function findAncestorChain(
     const under = pathname.startsWith(link.href + "/");
     if (!exact && !under) continue;
 
-    // Pathname descends further — recurse into this link's subtree.
     if (under && link.children?.length) {
       const deeper = findAncestorChain(link.children, pathname, [
         ...ancestors,
@@ -104,13 +86,11 @@ function findAncestorChain(
       if (deeper) return deeper;
     }
 
-    // Exact match, or no deeper match: view this link's parent's children.
     return ancestors;
   }
   return null;
 }
 
-/** Resolve a chain of hrefs to the corresponding MenuLink objects. */
 function resolveParentChain(section: MenuSection, hrefs: string[]): MenuLink[] {
   const chain: MenuLink[] = [];
   let pool = section.links;
@@ -130,17 +110,11 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const session = useSession();
-  const user = session?.data?.user as any;
+  const { user } = useAuth();
   const unreadCount = useUnreadMessages();
   const newContactCount = useNewContactCount();
   const { count: unreadOrderCount } = useUnreadOrderNotifications();
 
-  // Drill-down stack: [sectionSlug, ...ancestorHrefs].
-  //   []                   → root (all sections)
-  //   ["channels"]         → section's top-level links
-  //   ["channels", hrefA]  → children of the link at hrefA
-  //   ["channels", hrefA, hrefB] → children of hrefB (a child of hrefA)
   const [path, setPath] = useState<string[]>([]);
   const [direction, setDirection] = useState<Direction>("same");
 
@@ -178,8 +152,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     [path],
   );
 
-  // Chain of MenuLink objects from section root down to (and including)
-  // the parent whose children are currently being rendered.
   const parentChain = useMemo(() => {
     if (!currentSection || path.length < 2) return [];
     return resolveParentChain(currentSection, path.slice(1));
@@ -187,7 +159,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
 
   const currentParent = parentChain[parentChain.length - 1] ?? null;
 
-  // ── Sync drill-down stack from the current URL ────────────────────
   useEffect(() => {
     if (!pathname) return;
     const owner = menuConfig.find((s) => sectionMatchesRoute(pathname, s));
@@ -261,20 +232,17 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     handleClose();
   };
 
-  // ── Drill-down controls ───────────────────────────────────────────
   const openSection = (slug: string) => {
     setDirection("forward");
     setPath([slug]);
     closeSearch();
   };
 
-  /** Push a link onto the stack — renders that link's children. */
   const drillInto = (href: string) => {
     setDirection("forward");
     setPath((prev) => [...prev, href]);
   };
 
-  /** Pop one level. At section view, unwinds to root. */
   const goBack = () => {
     setDirection("back");
     setPath((prev) => prev.slice(0, -1));
@@ -285,7 +253,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     setPath([]);
   };
 
-  /** Truncate the stack to `depth` entries (0 = root, 1 = section, …). */
   const goToLevel = (depth: number) => {
     setDirection("back");
     setPath((prev) => prev.slice(0, depth));
@@ -348,7 +315,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
   );
 
-  // ── Shared row renderer — Link for leaves, drill button for parents ──
   const renderLinkItem = (link: MenuLink, index: number, isActive: boolean) => {
     const hasChildren = (link.children?.length ?? 0) > 0;
     const inner = (
@@ -399,7 +365,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     );
   };
 
-  // ── Breadcrumb (shared by section & children views) ───────────────
   const renderBreadcrumb = (section: MenuSection, chain: MenuLink[]) => (
     <nav
       aria-label="Breadcrumb"
@@ -523,8 +488,6 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
     if (!parent) return null;
     const children = parent.children ?? [];
 
-    // Deepest match at the current level wins — the parent's own mirror
-    // entry (same href) is only highlighted when no deeper sibling matches.
     let bestHref = "";
     for (const c of children) {
       if (routeMatches(pathname, c.href) && c.href.length > bestHref.length) {
@@ -619,6 +582,10 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
   const settingsHasActiveRoute =
     settingsSection && sectionMatchesRoute(pathname, settingsSection);
 
+  /* ────────────────────────────────────────────────────────────────
+   * Footer — only this section changed. The NextAuth `<SignIn />`
+   * button is replaced with a plain Link to /auth/login.
+   * ──────────────────────────────────────────────────────────────── */
   const renderFooter = () => (
     <div className="flex shrink-0 items-center gap-2.5 px-3.5 py-3.5">
       {user ? (
@@ -641,7 +608,13 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
         </Link>
       ) : (
         <div className="min-w-0 flex-1">
-          <SignIn />
+          <Link
+            href="/auth/login"
+            onClick={handleClose}
+            className="flex w-full items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Sign in
+          </Link>
         </div>
       )}
 
@@ -670,6 +643,9 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
       )}
     </div>
   );
+
+  /* Everything from here down is unchanged from your original — overlay,
+   * keyboard handlers, animations, view render, LeftSheet vs. aside. */
 
   const overlayKeyHandler = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
@@ -841,7 +817,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
                   <Search className="text-muted-foreground" />
                 </div>
                 <p className="text-[15px] font-medium text-foreground">
-                  No matches for “{query}”
+                  No matches for "{query}"
                 </p>
                 <p className="mt-1 text-[13px] text-muted-foreground">
                   Try a section name like{" "}

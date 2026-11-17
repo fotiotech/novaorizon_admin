@@ -3,10 +3,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  getCategoryPropertyDraft,
+  fetchCategoryPropertyDraft,
   saveCategoryPropertyDraft,
   deleteCategoryPropertyDraft,
-} from "@/app/actions/category_property_draft";
+} from "@/lib/api/category-property-draft";
 
 const DRAFT_VERSION = 1;
 
@@ -17,32 +17,20 @@ export interface StoredDraft<T> {
 }
 
 interface UseFormDraftArgs<T> {
-  /** Unique key for this form. Include an entity id for edit forms. */
   key: string;
-  /** Optional per-user scoping. Pass the session user id if available. */
   userId?: string | null;
-  /** Current form data. Autosaved (debounced) while `enabled`. */
   data: T;
-  /** Disable autosave (e.g. while loading, saving, or before first edit). */
   enabled: boolean;
-  /** Return true to skip saving an untouched / empty form. */
   isEmpty?: (data: T) => boolean;
-  /** Debounce window in ms. Default 700. */
   debounceMs?: number;
 }
 
 interface UseFormDraftResult<T> {
-  /** True once the initial draft fetch has completed. */
   loaded: boolean;
-  /** A stored draft the user hasn't restored or dismissed yet. */
   pendingDraft: StoredDraft<T> | null;
-  /** Timestamp of the most recent autosave. */
   savedAt: number | null;
-  /** Apply the pending draft to the form and remove it from "pending". */
   consumePendingDraft: () => T | null;
-  /** Discard the pending draft without applying it. */
   dismissPendingDraft: () => Promise<void>;
-  /** Remove the stored draft entirely. Call after a successful submit. */
   clearDraft: () => Promise<void>;
 }
 
@@ -72,14 +60,13 @@ export function useFormDraft<T>({
 
     (async () => {
       try {
-        const stored = await getCategoryPropertyDraft(key, userId);
+        const stored = await fetchCategoryPropertyDraft<T>(key, userId);
         if (cancelled) return;
 
         if (stored && stored.version === DRAFT_VERSION) {
           setPendingDraft(stored);
           setSavedAt(stored.savedAt);
         } else if (stored) {
-          // Schema change — drop incompatible drafts.
           await deleteCategoryPropertyDraft(key, userId);
         }
       } catch {
@@ -96,9 +83,9 @@ export function useFormDraft<T>({
 
   // ---- Debounced autosave. ------------------------------------------
   useEffect(() => {
-    if (!loaded) return; // don't race the initial fetch
+    if (!loaded) return;
     if (!enabled) return;
-    if (pendingDraft) return; // don't clobber an un-reviewed draft
+    if (pendingDraft) return;
     if (isEmpty?.(data)) return;
 
     let serialized: string;
@@ -120,7 +107,6 @@ export function useFormDraft<T>({
           version: DRAFT_VERSION,
           data,
         });
-        // Ignore stale responses from an out-of-order save.
         if (seq === seqRef.current) setSavedAt(res.savedAt);
       } catch {
         /* swallow — the user can still submit; next edit retries */
@@ -136,8 +122,6 @@ export function useFormDraft<T>({
   const consumePendingDraft = useCallback((): T | null => {
     if (!pendingDraft) return null;
     const value = pendingDraft.data;
-    // Keep the row in the DB; the next autosave refreshes it. We only
-    // stop treating it as "pending review" locally.
     setPendingDraft(null);
     return value;
   }, [pendingDraft]);

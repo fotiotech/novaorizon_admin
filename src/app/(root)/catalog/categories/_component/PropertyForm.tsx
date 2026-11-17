@@ -1,3 +1,4 @@
+// app/catalog/categories/_component/PropertyForm.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -7,15 +8,15 @@ import {
   getAllAttributeSets,
   getAllAttributeGroups,
   getAllAttributes,
-} from "@/app/actions/category";
+} from "@/lib/api/category";
 import MappingItem from "./MappingItem";
 import PropertyPreview from "./PropertyPreview";
 import { useFormDraft } from "./hooks/useFormDraft";
 import {
-  getCategoryProperty,
-  updateCategoryPropertyWithMappings,
-  createCategoryPropertyWithMappings,
-} from "@/app/actions/category_property";
+  fetchCategoryProperty,
+  updateCategoryProperty,
+  createCategoryProperty,
+} from "@/lib/api/category-property";
 
 // ------------------------------------------------------------------
 // Types
@@ -57,7 +58,6 @@ export interface AttributeOption {
 interface Props {
   propertyId?: string;
   onSuccess?: () => void;
-  /** Optional: scope drafts per-user. Pass the current session user id. */
   userId?: string | null;
 }
 
@@ -180,9 +180,9 @@ export default function PropertyForm({ propertyId, onSuccess, userId }: Props) {
       getAllAttributes(),
     ])
       .then(([sets, groups, attrs]) => {
-        setAllSets(sets as any);
-        setAllGroups(groups as any);
-        setAllAttributes(attrs as any);
+        setAllSets(sets as unknown as AttributeSetOption[]);
+        setAllGroups(groups as unknown as GroupOption[]);
+        setAllAttributes(attrs as unknown as AttributeOption[]);
         setLoadingData(false);
       })
       .catch(() => {
@@ -195,7 +195,7 @@ export default function PropertyForm({ propertyId, onSuccess, userId }: Props) {
   // ---------------- Load existing property ---------------- //
   useEffect(() => {
     if (!propertyId) return;
-    getCategoryProperty(propertyId)
+    fetchCategoryProperty(propertyId)
       .then((prop) => {
         if (!prop) return;
         setCode(prop.code || "");
@@ -225,9 +225,12 @@ export default function PropertyForm({ propertyId, onSuccess, userId }: Props) {
           setMappings(converted);
         }
       })
-      .catch(() => {
-        setError("Failed to load property data.");
-        toast.error("Failed to load property data.");
+      .catch((err) => {
+        console.error("Failed to load property:", err);
+        const msg =
+          err?.response?.data?.message || "Failed to load property data.";
+        setError(msg);
+        toast.error(msg);
       });
   }, [propertyId]);
 
@@ -418,14 +421,11 @@ export default function PropertyForm({ propertyId, onSuccess, userId }: Props) {
     };
 
     try {
-      let result;
-      if (propertyId) {
-        result = await updateCategoryPropertyWithMappings(propertyId, data);
-      } else {
-        result = await createCategoryPropertyWithMappings(data);
-      }
+      const result = propertyId
+        ? await updateCategoryProperty(propertyId, data)
+        : await createCategoryProperty(data);
+
       if (result.success) {
-        // ✅ Saved — drop the DB-backed draft row.
         await clearDraft();
         setDirty(false);
 
@@ -441,7 +441,7 @@ export default function PropertyForm({ propertyId, onSuccess, userId }: Props) {
         toast.error(errorMsg);
       }
     } catch (err: any) {
-      const errorMsg = err.message || "Failed to save.";
+      const errorMsg = err?.message || "Failed to save.";
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -487,7 +487,6 @@ export default function PropertyForm({ propertyId, onSuccess, userId }: Props) {
               </p>
             </div>
 
-            {/* Draft status pill */}
             {dirty && draftSavedAt && !pendingDraft && (
               <span
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] text-muted-foreground"
@@ -501,7 +500,6 @@ export default function PropertyForm({ propertyId, onSuccess, userId }: Props) {
             )}
           </header>
 
-          {/* Draft restore banner */}
           {pendingDraft && (
             <div
               role="status"

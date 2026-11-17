@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const apiOrigin = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://js.pusher.com",
@@ -7,11 +9,15 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob: https:",
   [
     "connect-src 'self'",
+    // ── Your API ────────────────────────────────────────────────────
+    // Dev: http://localhost:3000 — prod: whatever NEXT_PUBLIC_API_URL
+    // resolves to. Without this, the browser silently blocks every
+    // axios/fetch call to the backend with a CSP violation that never
+    // appears in the Network tab.
+    apiOrigin,
     // S3 presigned PUT uploads (and presigned GETs if you ever use them)
     "https://*.amazonaws.com",
-    // Google Analytics 4 (gtag.js loads from googletagmanager.com;
-    // beacons go to *.google-analytics.com and *.analytics.google.com;
-    // www.google.com is the regional fallback endpoint)
+    // Google Analytics 4
     "https://*.google-analytics.com",
     "https://*.analytics.google.com",
     "https://www.googletagmanager.com",
@@ -19,18 +25,17 @@ const contentSecurityPolicy = [
     // Pusher
     "https://*.pusher.com",
     "wss://*.pusher.com",
-    // MongoDB Atlas Data API (kept from your original config; if you
-    // only talk to Mongo from the server, this can be removed)
+    // MongoDB Atlas Data API (only needed if browser talks to Mongo directly)
     "https://*.mongodb.net",
     // Firebase (chat)
-    "https://*.googleapis.com", // Firestore, Auth token endpoints, Functions
-    "https://identitytoolkit.googleapis.com", // Firebase Auth (sign-in / sign-up)
-    "https://securetoken.googleapis.com", // Firebase Auth token refresh
-    "https://firestore.googleapis.com", // Firestore (redundant with *.googleapis.com)
-    "https://firebasestorage.googleapis.com", // Firebase Storage (chat attachments)
-    "https://*.firebaseio.com", // Realtime DB (presence / typing)
-    "wss://*.firebaseio.com", // Realtime DB websocket
-    "https://*.cloudfunctions.net", // Cloud Functions (if chat calls any)
+    "https://*.googleapis.com",
+    "https://identitytoolkit.googleapis.com",
+    "https://securetoken.googleapis.com",
+    "https://firestore.googleapis.com",
+    "https://firebasestorage.googleapis.com",
+    "https://*.firebaseio.com",
+    "wss://*.firebaseio.com",
+    "https://*.cloudfunctions.net",
   ].join(" "),
   "frame-src 'self' https://www.googletagmanager.com",
   "object-src 'none'",
@@ -67,21 +72,18 @@ const nextConfig = {
   },
   images: {
     remotePatterns: [
-      // Google account avatars (Google Sign-In via NextAuth)
       {
         protocol: "https",
         hostname: "lh3.googleusercontent.com",
         port: "",
         pathname: "/**",
       },
-      // Firebase Storage — chat image attachments rendered via next/image
       {
         protocol: "https",
         hostname: "firebasestorage.googleapis.com",
         port: "",
         pathname: "/**",
       },
-      // S3 — product/editorial images
       {
         protocol: "https",
         hostname: `${process.env.NEXT_PUBLIC_AWS_BUCKET_NAME}.s3.${process.env.NEXT_PUBLIC_AWS_REGION}.amazonaws.com`,

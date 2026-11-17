@@ -3,7 +3,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { getOverviewData } from "@/app/actions/analytic";
+import api from "@/lib/api";
+import axios from "axios";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -280,11 +281,30 @@ export default function AdminOverview() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await getOverviewData();
-        if (!cancelled) setOverviewData(data);
+        // Same endpoint the Next.js server action used, but now hit as a
+        // real HTTP call. Cookie travels automatically
+        // (`withCredentials: true` on the shared `api` client).
+        const res = await api.get<{ data: OverviewData }>(
+          "/analytics/overview",
+        );
+        if (!cancelled) setOverviewData(res.data.data);
       } catch (err) {
+        if (cancelled) return;
         console.error("Failed to fetch overview data:", err);
-        if (!cancelled) setError("Failed to fetch overview data");
+
+        if (axios.isAxiosError(err)) {
+          if (err.response?.status === 401) {
+            setError("Your session expired. Please sign in again.");
+          } else if (err.response?.status === 403) {
+            setError("You do not have permission to view this dashboard.");
+          } else if (err.response?.data?.error) {
+            setError(err.response.data.error);
+          } else {
+            setError("Failed to fetch overview data");
+          }
+        } else {
+          setError("Network error. Please try again.");
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -449,7 +469,6 @@ export default function AdminOverview() {
     ? Math.round((orders.completed / orders.total) * 100)
     : 0;
 
-  /* Quick action definitions */
   const quickActions = [
     {
       href: "/customers/customers",
@@ -474,14 +493,10 @@ export default function AdminOverview() {
     },
   ];
 
-  /* Recent activity icon resolver */
   const activityMeta = (type: string) => {
     switch (type) {
       case "user":
-        return {
-          Icon: Person2,
-          classes: "bg-primary/10 text-primary",
-        };
+        return { Icon: Person2, classes: "bg-primary/10 text-primary" };
       case "product":
         return {
           Icon: Inventory2,
@@ -498,7 +513,6 @@ export default function AdminOverview() {
   return (
     <div className="mx-auto w-full max-w-6xl overflow-x-clip">
       <div className="flex flex-col gap-4">
-        {/* Summary cards */}
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           <StatCard
             title="Users"
@@ -571,7 +585,6 @@ export default function AdminOverview() {
           />
         </section>
 
-        {/* Recent activity */}
         <section className={`${surfaceClass} overflow-hidden`}>
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2">
@@ -624,7 +637,6 @@ export default function AdminOverview() {
           )}
         </section>
 
-        {/* Quick actions */}
         <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {quickActions.map(({ href, title, description, Icon, classes }) => (
             <Link

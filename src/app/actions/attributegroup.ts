@@ -2,12 +2,14 @@
 "use server";
 import { requireAdmin } from "@/lib/authz";
 
-import { connection } from "@/utils/connection";
-import AttributeGroup from "@/models/AttributeGroup";
-import CategoryProperty from "@/models/CategoryProperty";
-import Category from "@/models/Category";
-import mongoose from "mongoose";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
 import { revalidatePath } from "next/cache";
+
+/**
+ * Attribute groups live in the Express backend (`/api/attribute-groups`).
+ * The backend builds the tree and the usage map, so this module only forwards
+ * the calls and re-applies the serialization the UI relies on.
+ */
 
 export interface Group {
   _id: string;
@@ -21,36 +23,21 @@ export interface Group {
 
 function serializeGroup(group: any): Group {
   return {
-    _id: group._id.toString(),
+    _id: String(group._id),
     code: group.code,
     name: group.name,
-    parentId: group.parentId ? group.parentId.toString() : "",
+    parentId: group.parentId ? String(group.parentId) : "",
     createdAt: group.createdAt ? new Date(group.createdAt) : undefined,
     sortOrder: group.sortOrder,
   };
 }
 
-function buildTree(flatGroups: Group[]): Group[] {
-  const map: Record<string, Group & { children: Group[] }> = {};
-  flatGroups.forEach((g) => (map[g._id] = { ...g, children: [] }));
-
-  const roots: (Group & { children: Group[] })[] = [];
-  flatGroups.forEach((g) => {
-    if (g.parentId) {
-      const parent = map[g.parentId];
-      if (parent) parent.children.push(map[g._id]);
-    } else {
-      roots.push(map[g._id]);
-    }
-  });
-
-  const sortTree = (nodes: (Group & { children: Group[] })[]) => {
-    nodes.sort((a, b) => a.sortOrder - b.sortOrder);
-    nodes.forEach((n: any) => sortTree(n.children));
-  };
-
-  sortTree(roots);
-  return roots;
+/** Applies `serializeGroup` to a tree returned by the API. */
+function serializeTree(nodes: any[] | null | undefined): Group[] {
+  return (nodes ?? []).map((node) => ({
+    ...serializeGroup(node),
+    children: serializeTree(node.children),
+  }));
 }
 
 // --- findAllAttributeGroups ---
@@ -58,21 +45,12 @@ export async function findAllAttributeGroups(
   id?: string,
 ): Promise<Group[] | null> {
   await requireAdmin();
-  await connection();
   try {
-    const filter = id ? { _id: new mongoose.Types.ObjectId(id) } : {};
-    const groups = await AttributeGroup.find(filter).lean<any>();
+    const groups = await apiData<any[]>("/attribute-groups", {
+      query: id ? { id } : undefined,
+    });
 
-    const populatedGroups = groups.map((group: any) => ({
-      _id: group._id.toString(),
-      code: group.code,
-      name: group.name,
-      parentId: group.parentId ? group.parentId.toString() : "",
-      createdAt: group.createdAt,
-      sortOrder: group.sortOrder,
-    }));
-
-    return buildTree(populatedGroups);
+    return serializeTree(groups);
   } catch (error) {
     console.error("[AttributeGroup] Error in findAllAttributeGroups:", error);
     return null;
@@ -89,20 +67,18 @@ export async function createAttributeGroup(
   sortOrder: number,
 ) {
   await requireAdmin();
-  await connection();
   try {
     if (!action) return;
     if (action === "create" || action === "edit") {
-      const newGroup = await AttributeGroup.findOneAndUpdate(
-        { name },
-        {
-          code,
+      const newGroup = await apiData<any>("/attribute-groups", {
+        method: "POST",
+        body: {
           name,
+          code,
           parentId: parentId ? parentId : undefined,
           sortOrder: sortOrder ?? null,
         },
-        { upsert: true, new: true, lean: true },
-      );
+      });
       revalidatePath("/catalog/attributes/groups");
       return serializeGroup(newGroup);
     }
@@ -116,62 +92,22 @@ export async function createAttributeGroup(
 export async function findGroup(id?: string) {
   await requireAdmin();
   try {
-    await connection();
+    // `/tree` returns the whole tree, or a single node when `?id=` is given.
+    const data = await apiData<any>("/attribute-groups/tree", {
+      query: id ? { id } : undefined,
+    });
 
-    const buildGroupTreeWithValues = (
-      groups: any[],
-      parentId: string | null = null,
-    ): any[] => {
-      return groups
-        .filter(
-          (group) =>
-            (!parentId && !group.parentId) ||
-            (parentId && group.parentId?.toString() === parentId),
-        )
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((group) => ({
-          _id: group._id?.toString(),
-          code: group.code,
-          name: group.name,
-          parentId: group.parentId?.toString(),
-          sortOrder: group.sortOrder,
-          children: buildGroupTreeWithValues(groups, group?._id?.toString()),
-        }));
-    };
+    // The backend returns `[]` when there are no groups at all.
+    if (Array.isArray(data)) return data;
+    // A single group node was requested and found.
+    if (data) return data;
 
-    const groups = await AttributeGroup.find({})
-      .sort({ sortOrder: 1 })
-      .lean()
-      .exec();
-
-    if (!groups || groups.length === 0) {
-      console.error("No groups found");
-      return [];
-    }
-
-    if (id) {
-      const entireTree = buildGroupTreeWithValues(groups);
-      const findGroupInTree = (tree: any[], targetId: string): any => {
-        for (const node of tree) {
-          if (node._id === targetId) return node;
-          if (node.children) {
-            const found = findGroupInTree(node.children, targetId);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-
-      const groupNode = findGroupInTree(entireTree, id);
-      if (!groupNode) {
-        return { success: false, error: "Group not found" };
-      }
-      return groupNode;
-    }
-
-    return buildGroupTreeWithValues(groups);
+    return { success: false, error: "Group not found" };
   } catch (error) {
     console.error("Error finding groups:", error);
+    if (error instanceof ApiError && error.status === 404) {
+      return { success: false, error: "Group not found" };
+    }
     return { success: false, error: "Failed to fetch groups" };
   }
 }
@@ -187,19 +123,11 @@ export async function updateAttributeGroup(
   }>,
 ) {
   await requireAdmin();
-  await connection();
   try {
-    const updateData: any = { ...updates };
-
-    if (updates.parentId !== undefined) {
-      updateData.parentId = updates.parentId
-        ? new mongoose.Types.ObjectId(updates.parentId)
-        : null;
-    }
-
-    const updated = await AttributeGroup.findByIdAndUpdate(id, updateData, {
-      new: true,
-    }).lean();
+    const updated = await apiData<any>(
+      `/attribute-groups/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: updates },
+    );
 
     revalidatePath("/catalog/attributes/groups");
     return serializeGroup(updated);
@@ -212,35 +140,11 @@ export async function updateAttributeGroup(
 // --- deleteAttributeGroup ---
 export async function deleteAttributeGroup(id: string) {
   await requireAdmin();
-  await connection();
   try {
-    const groupObjectId = new mongoose.Types.ObjectId(id);
+    await apiFetch(`/attribute-groups/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
 
-    // Orphan children — do not cascade delete.
-    await AttributeGroup.updateMany(
-      { parentId: groupObjectId },
-      { $set: { parentId: null } },
-    );
-
-    // Remove this group from any CategoryProperty mappings that referenced it.
-    const categoryProperties = await CategoryProperty.find({});
-    for (const property of categoryProperties) {
-      let changed = false;
-      property.mappings = (property.mappings || []).map((mapping: any) => ({
-        ...mapping,
-        groups: (mapping.groups || []).filter((group: any) => {
-          const matches = group.group?.toString?.() === id;
-          if (matches) changed = true;
-          return !matches;
-        }),
-      }));
-
-      if (changed) {
-        await property.save();
-      }
-    }
-
-    await AttributeGroup.findByIdAndDelete(groupObjectId);
     revalidatePath("/catalog/attributes/groups");
     return { success: true };
   } catch (error) {
@@ -262,62 +166,10 @@ export async function getAttributeGroupsUsageMap(): Promise<
   Record<string, { categories: Array<{ _id: string; name: string }> }>
 > {
   await requireAdmin();
-  await connection();
 
-  const [properties, categories] = await Promise.all([
-    CategoryProperty.find({}).select("_id mappings").lean(),
-    Category.find({}).select("_id name property inheritedProperty").lean(),
-  ]);
+  const result = await apiData<
+    Record<string, { categories: Array<{ _id: string; name: string }> }>
+  >("/attribute-groups/usage");
 
-  // ---- groupId -> Set(propertyId) ----------------------------------
-  const groupToProps = new Map<string, Set<string>>();
-  for (const p of properties as any[]) {
-    const pid = p._id.toString();
-    const mappings: any[] = Array.isArray(p.mappings) ? p.mappings : [];
-    for (const m of mappings) {
-      const groupEntries: any[] = Array.isArray(m?.groups) ? m.groups : [];
-      for (const g of groupEntries) {
-        const gid =
-          g?.group?.toString?.() ??
-          (typeof g?.group === "string" ? g.group : undefined);
-        if (!gid) continue;
-        if (!groupToProps.has(gid)) groupToProps.set(gid, new Set());
-        groupToProps.get(gid)!.add(pid);
-      }
-    }
-  }
-
-  // ---- propertyId -> categories using it (own OR inherited) --------
-  const catsByProp = new Map<string, Array<{ _id: string; name: string }>>();
-  for (const c of categories as any[]) {
-    const cid = c._id.toString();
-    const entry = { _id: cid, name: String(c.name ?? "") };
-    const add = (pid: any) => {
-      if (!pid) return;
-      const key = pid.toString();
-      if (!catsByProp.has(key)) catsByProp.set(key, []);
-      const arr = catsByProp.get(key)!;
-      if (!arr.some((x) => x._id === cid)) arr.push(entry);
-    };
-    add(c.property);
-    add(c.inheritedProperty);
-  }
-
-  // ---- assemble ----------------------------------------------------
-  const result: Record<
-    string,
-    { categories: Array<{ _id: string; name: string }> }
-  > = {};
-
-  for (const [gid, pids] of groupToProps) {
-    const catMap = new Map<string, { _id: string; name: string }>();
-    for (const pid of pids) {
-      for (const cat of catsByProp.get(pid) ?? []) {
-        if (!catMap.has(cat._id)) catMap.set(cat._id, cat);
-      }
-    }
-    result[gid] = { categories: Array.from(catMap.values()) };
-  }
-
-  return result;
+  return result ?? {};
 }

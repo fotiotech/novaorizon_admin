@@ -1,9 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { HotItem } from "@/lib/events/eventQueries";
+import api from "@/lib/api";
+import axios from "axios";
 
 const REFRESH_MS = 20_000;
+
+/**
+ * Inline type — was previously imported from `@/lib/events/eventQueries`
+ * (a mongoose-backed file). The shape matches what the Express endpoint
+ * `/api/analytics/hot` returns.
+ */
+export interface HotItem {
+  _id: string;
+  title: string | null;
+  image: string | null;
+  score: number;
+  counts: { view: number; cart_add: number; purchase: number; like: number };
+  delta: number;
+}
 
 interface Props {
   initial?: HotItem[];
@@ -17,14 +32,15 @@ export function HotRightNow({ initial = [], windowMinutes = 15 }: Props) {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch(
-          `/api/analytics/hot?window=${windowMinutes}&limit=8`,
-          { cache: "no-store" },
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled) setItems(data.items ?? []);
-      } catch {}
+        const res = await api.get<{ items: HotItem[] }>("/analytics/hot", {
+          params: { window: windowMinutes, limit: 8 },
+        });
+        if (!cancelled) setItems(res.data.items ?? []);
+      } catch (err) {
+        // 401 → session expired (middleware will redirect next nav);
+        // other errors → keep the last known good data on screen.
+        if (axios.isAxiosError(err) && err.response?.status === 401) return;
+      }
     };
     load();
     const id = setInterval(load, REFRESH_MS);
@@ -78,10 +94,10 @@ export function HotRightNow({ initial = [], windowMinutes = 15 }: Props) {
                   </div>
 
                   <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <span title="views">👁️ {item.counts.view}</span>
-                    <span title="cart adds">🛒 {item.counts.cart_add}</span>
-                    <span title="purchases">💰 {item.counts.purchase}</span>
-                    <span title="likes">❤️ {item.counts.like}</span>
+                    <span title="views">👁️ {item.counts?.view}</span>
+                    <span title="cart adds">🛒 {item.counts?.cart_add}</span>
+                    <span title="purchases">💰 {item.counts?.purchase}</span>
+                    <span title="likes">❤️ {item.counts?.like}</span>
                   </div>
                 </div>
 

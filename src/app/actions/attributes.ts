@@ -1,15 +1,14 @@
 "use server";
 
-
 import { requireAdmin } from "@/lib/authz";
-import { connection } from "@/utils/connection";
-import Attribute from "@/models/Attribute";
-import AttributeGroup from "@/models/AttributeGroup";
-import CategoryProperty from "@/models/CategoryProperty";
-import Category from "@/models/Category";
-import mongoose, { Types } from "mongoose";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
 import { revalidatePath } from "next/cache";
-import "@/models/UnitFamily";
+
+/**
+ * Attributes live in the Express backend (`/api/attributes`). The backend
+ * resolves `unitFamily`, cleans up references on delete and builds the usage
+ * map, so this module only forwards calls and preserves the old result shapes.
+ */
 
 // Add TypeScript interfaces
 interface AttributeFormData {
@@ -32,73 +31,29 @@ interface AttributeUpdateParams {
   type: string;
 }
 
-function normalizeUnitFamilyId(value: any): string | null {
-  if (!value) return null;
-  if (typeof value === "string") {
-    return mongoose.Types.ObjectId.isValid(value) ? value : null;
-  }
-  if (value instanceof mongoose.Types.ObjectId) {
-    return value.toString();
-  }
-  if (typeof value === "object" && value._id) {
-    return normalizeUnitFamilyId(value._id);
-  }
-  return null;
+/** Mirrors the ObjectId validation the old Mongoose calls performed. */
+function isValidId(id: string): boolean {
+  return /^[0-9a-fA-F]{24}$/.test(id);
 }
 
 export async function findAttributesAndValues(id?: string) {
   await requireAdmin();
   try {
-    await connection();
+    if (id) {
+      try {
+        const attribute = await apiData<any>("/attributes", {
+          query: { id },
+        });
+        return attribute ?? null;
+      } catch (error) {
+        // The backend answers 404 for a missing attribute; old code returned null.
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    }
 
-    const query = id
-      ? Attribute.findById(id)
-      : Attribute.find().sort({ sortOrder: 1, name: 1 });
-    const docs = await query.lean();
-    const items = Array.isArray(docs) ? docs : docs ? [docs] : [];
-
-    const validIds = Array.from(
-      new Set(
-        items
-          .map((item) => normalizeUnitFamilyId(item.unitFamily))
-          .filter((unitFamilyId): unitFamilyId is string =>
-            Boolean(unitFamilyId),
-          ),
-      ),
-    );
-
-    const unitFamilies = validIds.length
-      ? (await mongoose.models.UnitFamily?.find)
-        ? await mongoose.models.UnitFamily.find({
-            _id: {
-              $in: validIds.map(
-                (unitId) => new mongoose.Types.ObjectId(unitId),
-              ),
-            },
-          })
-            .select("_id name")
-            .lean()
-        : []
-      : [];
-
-    const unitFamilyMap = new Map(
-      (unitFamilies as any[]).map((unitFamily) => [
-        unitFamily._id.toString(),
-        unitFamily,
-      ]),
-    );
-
-    const response = items.map((item) => {
-      const normalizedItem = { ...item };
-      const unitFamilyId = normalizeUnitFamilyId(normalizedItem.unitFamily);
-      normalizedItem.unitFamily = unitFamilyId
-        ? (unitFamilyMap.get(unitFamilyId) ?? null)
-        : null;
-      return normalizedItem;
-    });
-
-    if (id && response.length === 0) return null;
-    return id ? response[0] : response;
+    const attributes = await apiData<any[]>("/attributes");
+    return attributes ?? [];
   } catch (error) {
     console.error("Error in findAttributesAndValues:", error);
     throw new Error("Failed to fetch attributes");
@@ -113,42 +68,20 @@ export async function createAttribute(formData: AttributeFormData) {
   if (!Array.isArray(names) || names.length === 0) {
     throw new Error("Missing required fields");
   }
-  await connection();
   try {
-    const attributes = [];
-    const len = Math.max(codes.length, names.length);
-    for (let i = 0; i < len; i++) {
-      const rawCode = (codes[i] || "").trim();
-      const rawName = (names[i] || "").trim();
-      let unitFamilyId = null;
-      if (unitFamilies[i] && unitFamilies[i].trim().length > 0) {
-        unitFamilyId = new Types.ObjectId(unitFamilies[i].trim());
-      }
-      if (!rawCode) throw new Error(`Invalid attribute code at idx ${i}`);
-      if (!rawName) throw new Error(`Invalid attribute name at idx ${i}`);
-      const optionsArr = (option?.[i] || [])
-        .map((o: string) => o.trim())
-        .filter(Boolean);
-      const attrType = (type[i] || "text").trim();
-      const attrIsRequired = Boolean(isRequired[i]);
-      const attrSortOrder = sort_orders[i] || 0;
-      const filter = { code: rawCode };
-      const update = {
-        $set: {
-          name: rawName,
-          unitFamily: unitFamilyId,
-          isRequired: attrIsRequired,
-          option: optionsArr,
-          type: attrType,
-          sortOrder: attrSortOrder,
-        },
-      };
-      const attribute = await Attribute.findOneAndUpdate(filter, update, {
-        upsert: true,
-        new: true,
-      });
-      attributes.push(attribute);
-    }
+    const attributes = await apiData<any[]>("/attributes", {
+      method: "POST",
+      body: {
+        codes,
+        unitFamilies,
+        names,
+        isRequired,
+        sort_orders,
+        option,
+        type,
+      },
+    });
+
     revalidatePath("/admin/attributes");
     return { success: true, attributes };
   } catch (error) {
@@ -162,36 +95,12 @@ export async function updateAttribute(
   params: AttributeUpdateParams,
 ) {
   await requireAdmin();
-  await connection();
 
   try {
-    let optionsArr: string[] = [];
-
-    // Handle option normalization
-    if (params.option !== undefined) {
-      optionsArr = params.option.map((o) => o.trim()).filter(Boolean);
-    }
-
-    // Handle unitFamily conversion only if it's a non-empty string
-    let unitFamilyId = null;
-    if (params.unitFamily && params.unitFamily.trim().length > 0) {
-      unitFamilyId = new Types.ObjectId(params.unitFamily.trim());
-    }
-
-    const updateData = {
-      code: params.code.trim(),
-      unitFamily: unitFamilyId, // Use the conditionally set value
-      name: params.name.trim(),
-      isRequired: params.isRequired,
-      option: optionsArr,
-      type: params.type.trim(),
-      sort_order: params.sort_order,
-    };
-
-    const updated = await Attribute.findByIdAndUpdate(
-      _id,
-      { $set: updateData },
-      { new: true },
+    // The backend normalises `option` and `unitFamily` exactly as before.
+    const updated = await apiData<any>(
+      `/attributes/${encodeURIComponent(_id)}`,
+      { method: "PATCH", body: params },
     );
 
     if (!updated) {
@@ -210,61 +119,14 @@ export async function updateAttribute(
 
 export async function deleteAttribute(id: string) {
   await requireAdmin();
-  await connection();
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isValidId(id)) {
     throw new Error("Invalid attribute ID");
   }
 
-  const session = await mongoose.startSession();
   try {
-    await session.withTransaction(async () => {
-      // 1. Remove attribute from all AttributeGroups
-      await AttributeGroup.updateMany(
-        {},
-        { $pull: { attributes: new mongoose.Types.ObjectId(id) } },
-        { session },
-      );
-
-      // 2. Remove attribute from all CategoryProperty mappings
-      // Fetch properties as plain objects to avoid Mongoose document casting issues
-      const categoryProperties = await CategoryProperty.find({})
-        .lean()
-        .session(session);
-
-      for (const property of categoryProperties) {
-        if (!property.mappings) continue;
-
-        let changed = false;
-        // Build new mappings array, filtering out the attribute
-        const newMappings = property.mappings.map((mapping: any) => ({
-          ...mapping,
-          groups: (mapping.groups || []).map((group: any) => ({
-            ...group,
-            attributes: (group.attributes || []).filter((entry: any) => {
-              const attrId = entry.attribute?.toString?.() ?? entry.attribute;
-              const keep = attrId !== id;
-              if (!keep) changed = true;
-              return keep;
-            }),
-          })),
-        }));
-
-        if (changed) {
-          // Directly update the mappings field to avoid Mongoose validation on the whole document
-          await CategoryProperty.findByIdAndUpdate(
-            property._id,
-            { $set: { mappings: newMappings } },
-            { session },
-          );
-        }
-      }
-
-      // 3. Delete the attribute itself
-      const deleted = await Attribute.findByIdAndDelete(id).session(session);
-      if (!deleted) {
-        throw new Error("Attribute not found");
-      }
+    await apiFetch(`/attributes/${encodeURIComponent(id)}`, {
+      method: "DELETE",
     });
 
     revalidatePath("/admin/attributes");
@@ -272,15 +134,13 @@ export async function deleteAttribute(id: string) {
   } catch (error) {
     console.error("Error in deleteAttribute:", error);
     throw new Error("Failed to delete attribute: " + (error as Error).message);
-  } finally {
-    await session.endSession();
   }
 }
 
 // ========================================================================
 //  getAttributesUsageMap
 //
-//  Walks CategoryProperty.mappings[].groups[].attributes[].attribute
+//  The backend walks CategoryProperty.mappings[].groups[].attributes[].attribute
 //  and resolves:
 //    - the groups those attributes belong to (by group id)
 //    - the categories that use each property (own OR inherited snapshot)
@@ -297,112 +157,16 @@ export async function getAttributesUsageMap(): Promise<
   >
 > {
   await requireAdmin();
-  await connection();
 
-  const [properties, categories, groups] = await Promise.all([
-    CategoryProperty.find({}).select("_id mappings").lean(),
-    Category.find({}).select("_id name property inheritedProperty").lean(),
-    AttributeGroup.find({}).select("_id name code").lean(),
-  ]);
-
-  // ---- groupId -> { _id, name, code } ------------------------------
-  const groupMeta = new Map<
-    string,
-    { _id: string; name: string; code?: string }
-  >();
-  for (const g of groups as any[]) {
-    const gid = g._id.toString();
-    groupMeta.set(gid, { _id: gid, name: g.name, code: g.code });
-  }
-
-  // ---- attributeId -> { groupIds, propertyIds } --------------------
-  const attrInfo = new Map<
-    string,
-    { groupIds: Set<string>; propertyIds: Set<string> }
-  >();
-  const ensure = (aid: string) => {
-    let v = attrInfo.get(aid);
-    if (!v) {
-      v = { groupIds: new Set(), propertyIds: new Set() };
-      attrInfo.set(aid, v);
-    }
-    return v;
-  };
-
-  for (const p of properties as any[]) {
-    const pid = p._id.toString();
-    const mappings: any[] = Array.isArray(p.mappings) ? p.mappings : [];
-
-    for (const m of mappings) {
-      const groupEntries: any[] = Array.isArray(m?.groups) ? m.groups : [];
-      for (const g of groupEntries) {
-        const gid =
-          g?.group?.toString?.() ??
-          (typeof g?.group === "string" ? g.group : undefined);
-        if (!gid) continue;
-
-        const attrEntries: any[] = Array.isArray(g?.attributes)
-          ? g.attributes
-          : [];
-        for (const a of attrEntries) {
-          const aid =
-            a?.attribute?.toString?.() ??
-            (typeof a?.attribute === "string" ? a.attribute : undefined) ??
-            a?.toString?.();
-          if (!aid) continue;
-
-          const info = ensure(aid);
-          info.groupIds.add(gid);
-          info.propertyIds.add(pid);
-        }
+  const result = await apiData<
+    Record<
+      string,
+      {
+        categories: Array<{ _id: string; name: string }>;
+        groups: Array<{ _id: string; name: string; code?: string }>;
       }
-    }
-  }
+    >
+  >("/attributes/usage");
 
-  // ---- propertyId -> categories that use it (own OR inherited) -----
-  const catsByProp = new Map<string, Array<{ _id: string; name: string }>>();
-  for (const c of categories as any[]) {
-    const cid = c._id.toString();
-    const entry = { _id: cid, name: String(c.name ?? "") };
-    const add = (pid: any) => {
-      if (!pid) return;
-      const key = pid.toString();
-      if (!catsByProp.has(key)) catsByProp.set(key, []);
-      const arr = catsByProp.get(key)!;
-      if (!arr.some((x) => x._id === cid)) arr.push(entry);
-    };
-    add(c.property);
-    add(c.inheritedProperty);
-  }
-
-  // ---- assemble final map ------------------------------------------
-  const result: Record<
-    string,
-    {
-      categories: Array<{ _id: string; name: string }>;
-      groups: Array<{ _id: string; name: string; code?: string }>;
-    }
-  > = {};
-
-  for (const [aid, info] of attrInfo) {
-    const groupList: Array<{ _id: string; name: string; code?: string }> = [];
-    for (const gid of info.groupIds) {
-      const meta = groupMeta.get(gid);
-      if (meta) groupList.push(meta);
-    }
-
-    const catMap = new Map<string, { _id: string; name: string }>();
-    for (const pid of info.propertyIds) {
-      for (const cat of catsByProp.get(pid) ?? []) {
-        if (!catMap.has(cat._id)) catMap.set(cat._id, cat);
-      }
-    }
-
-    result[aid] = {
-      categories: Array.from(catMap.values()),
-      groups: groupList,
-    };
-  }
-
-  return result;
+  return result ?? {};
 }

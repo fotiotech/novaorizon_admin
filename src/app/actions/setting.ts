@@ -1,10 +1,9 @@
 // app/actions/setting.ts
 "use server";
 
-import { connection } from "@/utils/connection";
-import Setting, { ISetting } from "@/models/Setting";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/authz";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
 
 const DEFAULT_KEY = "general";
 
@@ -118,8 +117,7 @@ function serialize(doc: any): GeneralSettings {
 export async function getGeneralSettings(): Promise<GeneralSettings> {
   await requireAdmin();
   try {
-    await connection();
-    const doc = await Setting.findOne({ key: DEFAULT_KEY }).lean();
+    const doc = await apiData<any>("/settings/general");
     return serialize(doc);
   } catch (err) {
     console.error("[getGeneralSettings] Failed:", err);
@@ -135,8 +133,6 @@ export async function updateGeneralSettings(
 ): Promise<{ success: boolean; data?: GeneralSettings; error?: string }> {
   await requireAdmin();
   try {
-    await connection();
-
     // Only accept known keys
     const patch: Record<string, any> = {};
     const stringFields: (keyof GeneralSettings)[] = [
@@ -197,22 +193,25 @@ export async function updateGeneralSettings(
       };
     }
 
-    const updated = await Setting.findOneAndUpdate(
-      { key: DEFAULT_KEY },
-      { $set: patch, $setOnInsert: { key: DEFAULT_KEY } },
-      {
-        new: true,
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true,
-      },
-    ).lean();
+    const updated = await apiData<any>("/settings/general", {
+      method: "PATCH",
+      body: patch,
+    });
 
     revalidatePath("/settings/general");
     revalidatePath("/settings");
 
     return { success: true, data: serialize(updated) };
   } catch (err: any) {
+    if (err instanceof ApiError && err.fieldErrors) {
+      return {
+        success: false,
+        error:
+          err.fieldErrors.lowStockThreshold?.[0] ||
+          err.message ||
+          "Failed to save settings",
+      };
+    }
     console.error("[updateGeneralSettings] Failed:", err);
     return { success: false, error: err?.message || "Failed to save settings" };
   }

@@ -3,27 +3,19 @@
 import { requireAdmin } from "@/lib/authz";
 
 import { revalidatePath } from "next/cache";
-import UnitFamily from "@/models/UnitFamily";
-import Unit from "@/models/Unit";
-import Attribute from "@/models/Attribute";
-import { connection } from "@/utils/connection";
+import { apiData, apiFetch } from "@/lib/server-api";
 
 export async function createUnitFamily(formData: FormData) {
   await requireAdmin();
   try {
-    await connection();
-
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
     const baseUnit = formData.get("baseUnit") as string;
 
-    const unitFamily = new UnitFamily({
-      name,
-      description,
-      baseUnit,
+    await apiFetch("/unit-families", {
+      method: "POST",
+      body: { name, description, baseUnit },
     });
-
-    await unitFamily.save();
 
     revalidatePath("/unit-management");
     return { success: true, message: "Unit family created successfully" };
@@ -35,15 +27,16 @@ export async function createUnitFamily(formData: FormData) {
 export async function updateUnitFamily(id: string, formData: FormData) {
   await requireAdmin();
   try {
-    await connection();
-
     const updateData = {
       name: formData.get("name"),
       description: formData.get("description"),
       baseUnit: formData.get("baseUnit"),
     };
 
-    await UnitFamily.findByIdAndUpdate(id, updateData);
+    await apiFetch(`/unit-families/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: updateData,
+    });
 
     revalidatePath("/unit-management");
     return { success: true, message: "Unit family updated successfully" };
@@ -55,15 +48,9 @@ export async function updateUnitFamily(id: string, formData: FormData) {
 export async function deleteUnitFamily(id: string) {
   await requireAdmin();
   try {
-    await connection();
-
-    await Unit.deleteMany({ unitFamily: id });
-    await Attribute.updateMany(
-      { unitFamily: id },
-      { $set: { unitFamily: null } },
-    );
-
-    await UnitFamily.findByIdAndDelete(id);
+    await apiFetch(`/unit-families/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
 
     revalidatePath("/unit-management");
     return { success: true, message: "Unit family deleted successfully" };
@@ -75,9 +62,8 @@ export async function deleteUnitFamily(id: string) {
 export async function getUnitFamilies() {
   await requireAdmin();
   try {
-    await connection();
-    const unitFamilies = await UnitFamily.find().sort({ createdAt: -1 });
-    return JSON.parse(JSON.stringify(unitFamilies));
+    const unitFamilies = await apiData<any[]>("/unit-families");
+    return unitFamilies ?? [];
   } catch (error: any) {
     throw new Error(`Failed to fetch unit families: ${error.message}`);
   }

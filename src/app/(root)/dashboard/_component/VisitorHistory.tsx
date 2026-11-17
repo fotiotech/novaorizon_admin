@@ -1,7 +1,7 @@
-// admin/app/(analytics)/_component/VisitorHistory.tsx
 "use client";
 
 import { useEffect, useState } from "react";
+import api from "@/lib/api";
 
 interface HistoryPoint {
   period: string;
@@ -15,11 +15,7 @@ interface HistoryPoint {
 
 type Period = "day" | "week" | "month";
 
-const RANGES: Record<Period, number> = {
-  day: 30,
-  week: 12,
-  month: 12,
-};
+const RANGES: Record<Period, number> = { day: 30, week: 12, month: 12 };
 
 export function VisitorHistory() {
   const [period, setPeriod] = useState<Period>("day");
@@ -30,12 +26,12 @@ export function VisitorHistory() {
     let cancelled = false;
     setLoading(true);
 
-    fetch(`/api/analytics/history?period=${period}&range=${RANGES[period]}`, {
-      cache: "no-store",
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled) setPoints(data.points ?? []);
+    api
+      .get<{ points: HistoryPoint[] }>("/analytics/history", {
+        params: { period, range: RANGES[period] },
+      })
+      .then((res) => {
+        if (!cancelled) setPoints(res.data.points ?? []);
       })
       .catch(() => {
         if (!cancelled) setPoints([]);

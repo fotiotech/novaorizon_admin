@@ -2,16 +2,13 @@
 "use server";
 import { requireAdmin } from "@/lib/authz";
 
-import { connection } from "@/utils/connection";
-import SeoSetting from "@/models/SeoSetting";
 import { revalidatePath } from "next/cache";
+import { apiData, apiFetch } from "@/lib/server-api";
 import {
   DEFAULT_SEO,
   type SeoForm,
   type RobotsValue,
 } from "@/app/lib/seo-defaults";
-
-const SINGLETON_KEY = "default";
 
 function normalizeRobots(value: unknown): RobotsValue {
   return value === "noindex,nofollow" ? "noindex,nofollow" : "index,follow";
@@ -23,8 +20,7 @@ function asString(value: unknown, fallback = ""): string {
 
 export async function getSeoSetting(): Promise<SeoForm> {
   await requireAdmin();
-  await connection();
-  const doc: any = await SeoSetting.findOne({ key: SINGLETON_KEY }).lean();
+  const doc: any = await apiData<any>("/seo");
 
   if (!doc) return DEFAULT_SEO;
 
@@ -41,7 +37,6 @@ export async function getSeoSetting(): Promise<SeoForm> {
 
 export async function saveSeoSetting(input: SeoForm) {
   await requireAdmin();
-  await connection();
   try {
     const data = {
       siteName: (input.siteName ?? "").trim(),
@@ -53,11 +48,7 @@ export async function saveSeoSetting(input: SeoForm) {
       robots: normalizeRobots(input.robots),
     };
 
-    await SeoSetting.findOneAndUpdate(
-      { key: SINGLETON_KEY },
-      { $set: data, $setOnInsert: { key: SINGLETON_KEY } },
-      { upsert: true, new: true },
-    );
+    await apiFetch("/seo", { method: "PATCH", body: data });
 
     revalidatePath("/marketing/seo");
     revalidatePath("/");

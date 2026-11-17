@@ -84,13 +84,9 @@ function MonetbilPayment({ payment_ref, orderTotal }: MonetbilPaymentProps) {
       return {
         phone: phone,
         firstName:
-          order.billingAddress.firstName ||
-          user?.firstName ||
-          user?.name?.split(" ")[0] ||
-          "",
+          order.billingAddress.firstName || user?.name?.split(" ")[0] || "",
         lastName:
           order.billingAddress.lastName ||
-          user?.lastName ||
           user?.name?.split(" ").slice(1).join(" ") ||
           "",
         email: order.billingAddress.email || user?.email || "",
@@ -100,9 +96,8 @@ function MonetbilPayment({ payment_ref, orderTotal }: MonetbilPaymentProps) {
     // Fallback to user data
     return {
       phone: "",
-      firstName: user?.firstName || user?.name?.split(" ")[0] || "",
-      lastName:
-        user?.lastName || user?.name?.split(" ").slice(1).join(" ") || "",
+      firstName: user?.name?.split(" ")[0] || "",
+      lastName: user?.name?.split(" ").slice(1).join(" ") || "",
       email: user?.email || "",
     };
   };

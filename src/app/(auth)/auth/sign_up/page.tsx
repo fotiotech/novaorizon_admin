@@ -1,25 +1,29 @@
 "use client";
 
-import { signup } from "@/app/lib/actions";
 import { EMAIL_REGEX } from "@/app/lib/definitions";
-import Image from "next/image";
+import { useAuth } from "@/hooks/useAuth";
+import axios from "axios";
 import Link from "next/link";
-import { useFormState, useFormStatus } from "react-dom";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+
+type StaffRole = "seller" | "support" | "admin";
+
+interface FormState {
+  errors?: Record<string, string[]>;
+  error?: string;
+  message?: string;
+}
 
 export default function SignupForm() {
-  const [state, action] = useFormState(signup, undefined);
-  const [errors, setErrors] = useState<{ [key: string]: string[] }>({});
-  const [clientErrors, setClientErrors] = useState<{ [key: string]: string }>(
-    {},
-  );
+  const { adminSignup } = useAuth();
+
+  const [state, setState] = useState<FormState>({});
+  const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  useEffect(() => {
-    if (state?.errors) setErrors(state.errors);
-  }, [state]);
+  const [role, setRole] = useState<StaffRole>("seller");
+  const [pending, setPending] = useState(false);
 
   const clearError = (field: string) => {
     setClientErrors((prev) => {
@@ -28,16 +32,16 @@ export default function SignupForm() {
       delete next[field];
       return next;
     });
-    setErrors((prev) => {
-      if (!prev[field]) return prev;
-      const next = { ...prev };
-      delete next[field];
+    setState((prev) => {
+      if (!prev.errors?.[field]) return prev;
+      const next = { ...prev, errors: { ...prev.errors } };
+      delete next.errors![field];
       return next;
     });
   };
 
-  const validate = () => {
-    const e: { [k: string]: string } = {};
+  const validate = (): boolean => {
+    const e: Record<string, string> = {};
 
     const parts = name.trim().split(/\s+/).filter(Boolean);
     if (!name.trim()) e.name = "Full name is required.";
@@ -60,8 +64,67 @@ export default function SignupForm() {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (ev: React.FormEvent<HTMLFormElement>) => {
-    if (!validate()) ev.preventDefault();
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!validate()) return;
+
+    setPending(true);
+    setState({});
+
+    try {
+      // Uses the shared axios instance (cookie-based auth).
+      // The admin's session cookie is sent automatically.
+      // `role` is explicit — this creates a staff account, not a customer.
+      const created = await adminSignup(
+        name.trim(),
+        email.trim().toLowerCase(),
+        password,
+        role,
+      );
+
+      setState({
+        message: `${created.role} account created for ${created.email}. They can now sign in.`,
+      });
+      setName("");
+      setEmail("");
+      setPassword("");
+      setRole("seller");
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response) {
+        const body = (err.response.data ?? {}) as {
+          error?: string;
+          fieldErrors?: Record<string, string[]>;
+        };
+
+        if (body.fieldErrors && Object.keys(body.fieldErrors).length > 0) {
+          setState({ errors: body.fieldErrors });
+        } else if (err.response.status === 401) {
+          setState({
+            error: "Your admin session expired. Please sign in again.",
+          });
+        } else if (err.response.status === 403) {
+          setState({
+            error:
+              body.error ||
+              "You do not have permission to create staff accounts.",
+          });
+        } else if (err.response.status === 429) {
+          setState({ error: "Rate limit reached. Try again later." });
+        } else {
+          setState({
+            error: body.error || `Signup failed (${err.response.status})`,
+          });
+        }
+      } else {
+        // No response — network / CORS. Include a hint so the user isn't stuck.
+        setState({
+          error:
+            "Network error. Check that the API server is running and CORS is configured for this origin.",
+        });
+      }
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -77,11 +140,15 @@ export default function SignupForm() {
 
       <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
         <div className="pb-6 px-8 pt-8">
-          <h1 className="text-2xl font-bold text-center text-gray-800 dark:text-white mb-6">
-            Create Your Account
+          <h1 className="text-2xl font-bold text-center text-gray-800 dark:text-white mb-2">
+            Create Staff Account
           </h1>
+          <p className="text-sm text-center text-gray-500 dark:text-gray-400 mb-6">
+            Admin-only. The account will be pre-verified and ready to sign in.
+          </p>
 
-          <form action={action} onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Name */}
             <div>
               <label
                 htmlFor="name"
@@ -99,19 +166,21 @@ export default function SignupForm() {
                   setName(e.target.value);
                   clearError("name");
                 }}
+                disabled={pending}
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none ${
-                  errors?.name || clientErrors.name
+                  state.errors?.name || clientErrors.name
                     ? "border-red-500 focus:ring-red-200 dark:focus:ring-red-800"
                     : "border-gray-300 focus:ring-blue-200 dark:focus:ring-blue-800 dark:border-gray-600"
-                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-60`}
               />
-              {(clientErrors.name || errors?.name) && (
+              {(clientErrors.name || state.errors?.name) && (
                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                  {clientErrors.name || errors.name?.[0]}
+                  {clientErrors.name || state.errors!.name![0]}
                 </p>
               )}
             </div>
 
+            {/* Email */}
             <div>
               <label
                 htmlFor="email"
@@ -123,26 +192,28 @@ export default function SignupForm() {
                 id="email"
                 name="email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder="Enter their email"
                 autoComplete="email"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
                   clearError("email");
                 }}
+                disabled={pending}
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none ${
-                  errors?.email || clientErrors.email
+                  state.errors?.email || clientErrors.email
                     ? "border-red-500 focus:ring-red-200 dark:focus:ring-red-800"
                     : "border-gray-300 focus:ring-blue-200 dark:focus:ring-blue-800 dark:border-gray-600"
-                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-60`}
               />
-              {(clientErrors.email || errors?.email) && (
+              {(clientErrors.email || state.errors?.email) && (
                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                  {clientErrors.email || errors.email?.[0]}
+                  {clientErrors.email || state.errors!.email![0]}
                 </p>
               )}
             </div>
 
+            {/* Password */}
             <div>
               <label
                 htmlFor="password"
@@ -161,48 +232,77 @@ export default function SignupForm() {
                   setPassword(e.target.value);
                   clearError("password");
                 }}
+                disabled={pending}
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none ${
-                  errors?.password || clientErrors.password
+                  state.errors?.password || clientErrors.password
                     ? "border-red-500 focus:ring-red-200 dark:focus:ring-red-800"
                     : "border-gray-300 focus:ring-blue-200 dark:focus:ring-blue-800 dark:border-gray-600"
-                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
-                placeholder="Create a strong password"
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-60`}
+                placeholder="At least 8 chars, with letter, number, special"
               />
               {clientErrors.password && (
                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">
                   {clientErrors.password}
                 </p>
               )}
-              {errors?.password && (
+              {state.errors?.password && (
                 <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
                   <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">
                     Password requirements:
                   </p>
                   <ul className="text-sm text-red-700 dark:text-red-300 list-disc pl-5 space-y-1">
-                    {errors.password.map((error, index) => (
-                      <li key={index}>{error}</li>
+                    {state.errors.password.map((err, i) => (
+                      <li key={i}>{err}</li>
                     ))}
                   </ul>
                 </div>
               )}
             </div>
 
+            {/* Role */}
+            <div>
+              <label
+                htmlFor="role"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
+                Role
+              </label>
+              <select
+                id="role"
+                name="role"
+                value={role}
+                onChange={(e) => setRole(e.target.value as StaffRole)}
+                disabled={pending}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-60"
+              >
+                <option value="seller">
+                  Seller — products, orders, inventory
+                </option>
+                <option value="support">
+                  Support — customer issues, read-only orders
+                </option>
+                <option value="admin">
+                  Admin — full access, can create staff
+                </option>
+              </select>
+            </div>
+
             <p className="text-xs text-gray-500 dark:text-gray-400 pt-1">
-              You can add your phone number, language, currency, theme and
-              notification preferences from your profile after signing up.
+              The account will be pre-verified. The staff member can add profile
+              details (phone, language, theme) after signing in.
             </p>
 
             <div className="flex gap-2 mt-6">
-              <SubmitButton />
+              <SubmitButton pending={pending} />
             </div>
 
-            {state?.error && (
+            {state.error && (
               <div className="p-3 mt-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-center text-sm">
                 {state.error}
               </div>
             )}
 
-            {state?.message && !state.errors && (
+            {state.message && !state.errors && (
               <div className="p-3 mt-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-center text-sm">
                 {state.message}
               </div>
@@ -211,43 +311,22 @@ export default function SignupForm() {
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Already have an account?{" "}
+              Are you a customer?{" "}
               <Link
-                href="/auth/login"
+                href="/auth/register"
                 className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
               >
-                Sign in
+                Sign up here
               </Link>
             </p>
           </div>
-        </div>
-
-        <div className="bg-gray-50 dark:bg-gray-700/50 py-4 px-8 border-t border-gray-200 dark:border-gray-600">
-          <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-            By creating an account, you agree to our{" "}
-            <Link
-              href="/terms"
-              className="underline hover:text-gray-700 dark:hover:text-gray-300"
-            >
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link
-              href="/privacy"
-              className="underline hover:text-gray-700 dark:hover:text-gray-300"
-            >
-              Privacy Policy
-            </Link>
-          </p>
         </div>
       </div>
     </div>
   );
 }
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-
+function SubmitButton({ pending }: { pending: boolean }) {
   return (
     <button
       disabled={pending}
@@ -279,7 +358,7 @@ function SubmitButton() {
           Creating Account...
         </>
       ) : (
-        "Create Account"
+        "Create Staff Account"
       )}
     </button>
   );

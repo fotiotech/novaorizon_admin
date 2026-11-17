@@ -1,3 +1,4 @@
+// app/catalog/attributes/groups/_component/AttributeGroupFormModal.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -7,14 +8,14 @@ import {
   createAttributeGroup,
   findGroup,
   updateAttributeGroup,
-} from "@/app/actions/attributegroup";
+} from "@/lib/api/attribute-group";
 import { Save, Cancel } from "@mui/icons-material";
 
 interface AttributeGroupFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  groupId?: string; // if provided, editing mode
+  groupId?: string;
   groups: any[];
 }
 
@@ -56,6 +57,19 @@ const selectStyles = {
   }),
 };
 
+function toMessage(err: any): string {
+  const payload = err?.response?.data;
+  if (payload?.errors) {
+    const flat = Object.entries(payload.errors as Record<string, unknown>)
+      .flatMap(([field, msgs]) =>
+        Array.isArray(msgs) ? msgs.map((m) => `${field}: ${m}`) : [],
+      )
+      .join("; ");
+    if (flat) return flat;
+  }
+  return payload?.message || err?.message || "Failed to save group";
+}
+
 export const AttributeGroupFormModal: React.FC<
   AttributeGroupFormModalProps
 > = ({ isOpen, onClose, onSuccess, groupId, groups }) => {
@@ -81,15 +95,14 @@ export const AttributeGroupFormModal: React.FC<
             setSortOrder(groupData.sortOrder ?? null);
           }
           setError(null);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to load group");
+        } catch (err: any) {
+          setError(toMessage(err));
         } finally {
           setIsLoading(false);
         }
       };
       fetchGroupData();
     } else {
-      // Reset form for create mode
       setName("");
       setCode("");
       setSortOrder(null);
@@ -124,20 +137,18 @@ export const AttributeGroupFormModal: React.FC<
           sortOrder: sortOrder ?? 0,
         });
       } else {
-        await createAttributeGroup(
-          "create",
-          "",
+        await createAttributeGroup({
           name,
           code,
-          parentGroupId,
-          sortOrder ?? 0,
-        );
+          parentId: parentGroupId || null,
+          sortOrder: sortOrder ?? 0,
+        });
       }
 
       onSuccess();
       onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save group");
+    } catch (err: any) {
+      setError(toMessage(err));
     } finally {
       setIsLoading(false);
     }

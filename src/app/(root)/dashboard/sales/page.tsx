@@ -3,6 +3,8 @@
 
 import { useEffect, useMemo, useState, memo } from "react";
 import Link from "next/link";
+import api from "@/lib/api";
+import axios from "axios";
 import {
   Assessment,
   ShoppingBag,
@@ -15,8 +17,6 @@ import {
   Close,
   Refresh,
 } from "@mui/icons-material";
-import { getOrderAnalytics } from "@/app/actions/analytic";
-import { toast } from "react-hot-toast";
 
 interface OrderAnalytics {
   totalOrders: number;
@@ -196,11 +196,26 @@ export default function SalesReportsPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await getOrderAnalytics();
-      setData(result);
-    } catch (err: any) {
+      // Same data the Next.js server action used to compute, now hit as
+      // a real HTTP call. Cookie travels automatically
+      // (`withCredentials: true` on the shared `api` client).
+      const res = await api.get<{ data: OrderAnalytics }>("/analytics/orders");
+      setData(res.data.data);
+    } catch (err) {
       console.error("Failed to load order analytics:", err);
-      setError(err?.message || "Failed to load sales analytics");
+      if (axios.isAxiosError(err)) {
+        if (err.response?.status === 401) {
+          setError("Your session expired. Please sign in again.");
+        } else if (err.response?.status === 403) {
+          setError("You do not have permission to view sales analytics.");
+        } else if (err.response?.data?.error) {
+          setError(err.response.data.error);
+        } else {
+          setError("Failed to load sales analytics");
+        }
+      } else {
+        setError("Network error. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

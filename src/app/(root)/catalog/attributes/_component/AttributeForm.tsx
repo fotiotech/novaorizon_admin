@@ -1,3 +1,4 @@
+// app/catalog/attributes/_component/AttributeForm.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -5,15 +6,15 @@ import {
   createAttribute,
   updateAttribute,
   findAttributesAndValues,
-} from "@/app/actions/attributes";
-import { getUnitFamilies } from "@/app/actions/unitFamilyActions"; // Import unit family actions
+} from "@/lib/api/attribute";
+import { listUnitFamilies as getUnitFamilies } from "@/lib/api/unit-family";
 import { Delete, Edit, Save, Cancel, Add } from "@mui/icons-material";
 
 export type AttributeType = {
   _id?: string;
   id?: string;
   code: string;
-  unitFamily: string; // Changed from unit to unitFamily
+  unitFamily: string;
   name: string;
   option?: string | string[];
   isRequired?: boolean;
@@ -30,7 +31,7 @@ interface AttributeFormProps {
 
 type AttributeFormData = {
   code: string;
-  unitFamily: string; // Changed from unit to unitFamily
+  unitFamily: string;
   name: string;
   type: string;
   option: string;
@@ -54,7 +55,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
   const [formData, setFormData] = useState<AttributeFormData[]>([
     {
       code: "",
-      unitFamily: "", // Changed from unit to unitFamily
+      unitFamily: "",
       name: "",
       type: "text",
       option: "",
@@ -62,22 +63,24 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       sort_order: 0,
     },
   ]);
-  const [unitFamilies, setUnitFamilies] = useState<UnitFamily[]>([]); // State for unit families
+  const [unitFamilies, setUnitFamilies] = useState<UnitFamily[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingFamilies, setIsLoadingFamilies] = useState(true); // Loading state for unit families
+  const [isLoadingFamilies, setIsLoadingFamilies] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isEditing = mode === "edit";
 
-  // Fetch unit families from your Unit Management system
+  // Fetch unit families
   useEffect(() => {
     const fetchUnitFamilies = async () => {
       try {
         setIsLoadingFamilies(true);
         const familiesData = await getUnitFamilies();
-        setUnitFamilies(familiesData);
-      } catch (err) {
+        setUnitFamilies(familiesData as unknown as UnitFamily[]);
+      } catch (err: any) {
         console.error("Error fetching unit families:", err);
-        setError("Failed to load unit families");
+        setError(
+          err?.response?.data?.message || "Failed to load unit families",
+        );
       } finally {
         setIsLoadingFamilies(false);
       }
@@ -93,7 +96,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
         try {
           setIsLoading(true);
           const attributes = await findAttributesAndValues();
-          // Inside the edit fetch block:
           const attribute: any = (
             attributes as unknown as AttributeType[]
           ).find((attr) => attr._id === attributeId || attr.id === attributeId);
@@ -104,38 +106,28 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
             setFormData([
               {
                 code: attribute.code || "",
-                unitFamily: attribute.unitFamily?._id || "", // ← extract ID
+                unitFamily:
+                  (attribute as any).unitFamily?._id ||
+                  (attribute as any).unitFamily ||
+                  "",
                 name: attribute.name || "",
                 type: attribute.type || "text",
                 option: optionString,
                 isRequired: attribute.isRequired || false,
-                sort_order: attribute.sort_order || 0,
-              },
-            ]);
-          }
-
-          if (attribute) {
-            const optionString = Array.isArray(attribute.option)
-              ? attribute.option.join(",")
-              : attribute.option || "";
-
-            setFormData([
-              {
-                code: attribute.code || "",
-                unitFamily: attribute.unitFamily || "", // Changed from unit to unitFamily
-                name: attribute.name || "",
-                type: attribute.type || "text",
-                option: optionString,
-                isRequired: attribute.isRequired || false,
-                sort_order: attribute.sort_order || 0,
+                sort_order:
+                  (attribute as any).sort_order ??
+                  (attribute as any).sortOrder ??
+                  0,
               },
             ]);
           } else {
             setError("Attribute not found");
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error("Error fetching attribute:", err);
-          setError("Failed to load attribute data");
+          setError(
+            err?.response?.data?.message || "Failed to load attribute data",
+          );
         } finally {
           setIsLoading(false);
         }
@@ -151,25 +143,17 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
     value: string | number | boolean,
   ) => {
     setFormData((prev) =>
-      prev.map((attr, i) =>
-        i === index
-          ? {
-              ...attr,
-              [field]: value,
-            }
-          : attr,
-      ),
+      prev.map((attr, i) => (i === index ? { ...attr, [field]: value } : attr)),
     );
   };
 
   const addAttributeField = () => {
     if (isEditing) return;
-
     setFormData((prev) => [
       ...prev,
       {
         code: "",
-        unitFamily: "", // Changed from unit to unitFamily
+        unitFamily: "",
         name: "",
         type: "text",
         option: "",
@@ -181,7 +165,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
 
   const removeAttributeField = (index: number) => {
     if (isEditing) return;
-
     if (formData.length > 1) {
       setFormData((prev) => prev.filter((_, i) => i !== index));
     }
@@ -204,10 +187,10 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       }
 
       if (isEditing && attributeId) {
-        const attributeData = {
+        await updateAttribute(attributeId, {
           code: formData[0].code.trim(),
           name: formData[0].name.trim(),
-          unitFamily: formData[0].unitFamily.trim(), // Changed from unit to unitFamily
+          unitFamily: formData[0].unitFamily.trim(),
           sort_order: formData[0].sort_order,
           option:
             formData[0].option
@@ -216,13 +199,11 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
               .filter((opt) => opt) || [],
           isRequired: formData[0].isRequired,
           type: formData[0].type.trim(),
-        };
-
-        await updateAttribute(attributeId, attributeData);
+        });
       } else {
-        const attributeData = {
+        await createAttribute({
           codes: formData.map((attr) => attr.code.trim()),
-          unitFamilies: formData.map((attr) => attr.unitFamily.trim()), // Changed from units to unitFamilies
+          unitFamilies: formData.map((attr) => attr.unitFamily.trim()),
           names: formData.map((attr) => attr.name.trim()),
           isRequired: formData.map((attr) => attr.isRequired),
           sort_orders: formData.map((attr) => attr.sort_order),
@@ -234,15 +215,16 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
                 .filter((opt) => opt) || [],
           ),
           type: formData.map((attr) => (attr.type.trim() ? attr.type : "text")),
-        };
-
-        await createAttribute(attributeData);
+        });
       }
 
       onSuccess();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving attribute:", err);
-      setError(err instanceof Error ? err.message : "Failed to save attribute");
+      const msg =
+        err?.response?.data?.message ||
+        (err instanceof Error ? err.message : "Failed to save attribute");
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -255,7 +237,7 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       setFormData([
         {
           code: "",
-          unitFamily: "", // Changed from unit to unitFamily
+          unitFamily: "",
           name: "",
           type: "text",
           option: "",

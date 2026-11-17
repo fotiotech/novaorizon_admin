@@ -29,8 +29,6 @@ export default async function Layout({
             style={{ display: "none", visibility: "hidden" }}
           ></iframe>
         </noscript>
-
-        {/* ✅ Wrap everything in Providers, which already includes your ThemeProvider */}
         <MuiThemeBridge>
           <Providers>
             <ThemeProvider

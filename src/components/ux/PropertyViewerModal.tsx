@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "@/components/ux/Modal";
 import { KeyboardArrowRight } from "@mui/icons-material";
-import type { AttributeSetResult } from "@/app/actions/category_property";
+import { AttributeSetResult } from "@/lib/api/category";
 
 interface ViewTarget {
   _id: string;

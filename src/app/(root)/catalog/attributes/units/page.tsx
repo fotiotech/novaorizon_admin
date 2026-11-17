@@ -3,18 +3,13 @@
 
 import FamilyForm from "@/app/(root)/catalog/attributes/_component/unit/FamilyForm";
 import UnitForm from "@/app/(root)/catalog/attributes/_component/unit/UnitForm";
-import {
-  getUnits,
-  updateUnit,
-  createUnit,
-  deleteUnit,
-} from "@/app/actions/unit";
+import { getUnits, updateUnit, createUnit, deleteUnit } from "@/lib/api/unit";
 import {
   getUnitFamilies,
   updateUnitFamily,
   createUnitFamily,
   deleteUnitFamily,
-} from "@/app/actions/unitFamilyActions";
+} from "@/lib/api/unit-family";
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Add,
@@ -33,6 +28,7 @@ import {
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { BottomSheet } from "@/components/ux/BottomSheet";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
+import { toast } from "react-hot-toast";
 
 // ------------------------------------------------------------------
 // Types
@@ -126,6 +122,34 @@ const EmptyState = React.memo(function EmptyState({
   );
 });
 
+// ------------------------------------------------------------------
+// Helpers — FormData → typed payload (kept local to this page)
+// ------------------------------------------------------------------
+function familyPayloadFromForm(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const baseUnit = String(formData.get("baseUnit") ?? "").trim();
+  return {
+    name,
+    description: description || undefined,
+    baseUnit,
+  };
+}
+
+function unitPayloadFromForm(formData: FormData) {
+  const rawConv = String(formData.get("conversionFactor") ?? "").trim();
+  const parsed = rawConv === "" ? 1 : Number(rawConv);
+  return {
+    name: String(formData.get("name") ?? "").trim(),
+    symbol: String(formData.get("symbol") ?? "").trim(),
+    unitFamily: String(formData.get("unitFamily") ?? "").trim(),
+    conversionFactor: Number.isFinite(parsed) ? parsed : 1,
+    // Unchecked checkboxes are absent from FormData → null. Matches
+    // the controller's `body.isBaseUnit === true || body.isBaseUnit === "true"` check.
+    isBaseUnit: formData.get("isBaseUnit") === "on",
+  };
+}
+
 const UnitManagement = () => {
   const [unitFamilies, setUnitFamilies] = useState<UnitFamily[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -153,60 +177,89 @@ const UnitManagement = () => {
   const loadUnitFamilies = async () => {
     try {
       const families = await getUnitFamilies();
-      setUnitFamilies(families);
-    } catch (error) {
+      setUnitFamilies(families as unknown as UnitFamily[]);
+    } catch (error: any) {
       console.error("Failed to load unit families:", error);
+      toast.error(
+        error?.response?.data?.message ?? "Failed to load unit families",
+      );
     }
   };
 
   const loadUnits = async (familyId?: string) => {
     try {
       const unitsData = await getUnits(familyId);
-      setUnits(unitsData as any[]);
-    } catch (error) {
+      setUnits(unitsData as unknown as Unit[]);
+    } catch (error: any) {
       console.error("Failed to load units:", error);
+      toast.error(error?.response?.data?.message ?? "Failed to load units");
     }
   };
 
   const handleFamilySubmit = async (formData: FormData) => {
-    if (editingFamily) {
-      await updateUnitFamily(editingFamily._id, formData);
-    } else {
-      await createUnitFamily(formData);
+    const payload = familyPayloadFromForm(formData);
+    try {
+      if (editingFamily) {
+        await updateUnitFamily(editingFamily._id, payload);
+      } else {
+        await createUnitFamily(payload);
+      }
+      setShowFamilyForm(false);
+      setEditingFamily(null);
+      await loadUnitFamilies();
+    } catch (error: any) {
+      console.error("Failed to save unit family:", error);
+      toast.error(
+        error?.response?.data?.message ?? "Failed to save unit family",
+      );
     }
-    setShowFamilyForm(false);
-    setEditingFamily(null);
-    loadUnitFamilies();
   };
 
   const handleUnitSubmit = async (formData: FormData) => {
-    if (editingUnit) {
-      await updateUnit(editingUnit._id, formData);
-    } else {
-      await createUnit(formData);
+    const payload = unitPayloadFromForm(formData);
+    try {
+      if (editingUnit) {
+        await updateUnit(editingUnit._id, payload);
+      } else {
+        await createUnit(payload);
+      }
+      setShowUnitForm(false);
+      setEditingUnit(null);
+      await loadUnits(selectedFamily ?? undefined);
+    } catch (error: any) {
+      console.error("Failed to save unit:", error);
+      toast.error(error?.response?.data?.message ?? "Failed to save unit");
     }
-    setShowUnitForm(false);
-    setEditingUnit(null);
-    loadUnits(selectedFamily as string);
   };
 
   const confirmDeleteFamily = async () => {
     if (!deleteFamilyTarget) return;
-    await deleteUnitFamily(deleteFamilyTarget._id);
-    setDeleteFamilyTarget(null);
-    loadUnitFamilies();
-    // If the currently selected family was deleted, clear the selection.
-    if (selectedFamily === deleteFamilyTarget._id) {
-      setSelectedFamily(null);
-      loadUnits();
+    try {
+      await deleteUnitFamily(deleteFamilyTarget._id);
+      setDeleteFamilyTarget(null);
+      await loadUnitFamilies();
+      if (selectedFamily === deleteFamilyTarget._id) {
+        setSelectedFamily(null);
+        await loadUnits();
+      }
+    } catch (error: any) {
+      console.error("Failed to delete unit family:", error);
+      toast.error(
+        error?.response?.data?.message ?? "Failed to delete unit family",
+      );
     }
   };
 
   const confirmDeleteUnit = async () => {
     if (!deleteUnitTarget) return;
-    await deleteUnit(deleteUnitTarget._id);
-    setDeleteUnitTarget(null);
-    loadUnits(selectedFamily as string);
+    try {
+      await deleteUnit(deleteUnitTarget._id);
+      setDeleteUnitTarget(null);
+      await loadUnits(selectedFamily ?? undefined);
+    } catch (error: any) {
+      console.error("Failed to delete unit:", error);
+      toast.error(error?.response?.data?.message ?? "Failed to delete unit");
+    }
   };
 
   const filterUnitsByFamily = (familyId: string | null) => {

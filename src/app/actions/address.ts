@@ -1,24 +1,14 @@
 "use server";
 
-
-import { requireAdmin } from "@/lib/authz";
+import { requireUser, requireAdmin } from "@/lib/authz";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { Types } from "mongoose";
-import { auth } from "@/app/auth";
-
-// Import your models and connection utility
-import { connection } from "@/utils/connection"; // Adjust path to your DB connection
-import Address, { IAddress } from "@/models/Address";
-import { PaymentMethod } from "@/models/PaymentMethod";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
 
 // ------------------ Authentication Helper ------------------
-// Replace this with your actual auth logic (NextAuth, Clerk, etc.)
 async function getAuthenticatedUser() {
-  // Example placeholder:
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
+  const user = await requireUser();
+  return user.id;
 }
 
 // ------------------ Validation Schemas (Zod) ------------------
@@ -41,8 +31,7 @@ const addressSchema = z.object({
  */
 export async function createAddress(formData: FormData) {
   await requireAdmin();
-  const userId = await getAuthenticatedUser();
-  await connection();
+  await getAuthenticatedUser();
 
   // Parse form data into an object
   const rawData = {
@@ -59,17 +48,16 @@ export async function createAddress(formData: FormData) {
 
   const validated = addressSchema.parse(rawData);
 
-  const address = new Address({
-    ...validated,
-    userId: new Types.ObjectId(userId),
+  // The backend scopes the address to the authenticated user.
+  const address = await apiData<any>("/addresses", {
+    method: "POST",
+    body: validated,
   });
-
-  await address.save();
 
   revalidatePath("/profile/addresses");
   revalidatePath("/profile/payment-methods");
 
-  return { success: true, address: JSON.parse(JSON.stringify(address)) };
+  return { success: true, address };
 }
 
 /**
@@ -77,24 +65,20 @@ export async function createAddress(formData: FormData) {
  */
 export async function getUserAddresses() {
   await requireAdmin();
-  const userId = await getAuthenticatedUser();
-  await connection();
+  await getAuthenticatedUser();
 
-  const addresses = await Address.find({ userId: new Types.ObjectId(userId) })
-    .sort({ isDefault: -1, createdAt: -1 })
-    .lean();
+  const addresses = await apiData<any[]>("/addresses");
 
-  return JSON.parse(JSON.stringify(addresses)) as IAddress[];
+  return JSON.parse(JSON.stringify(addresses ?? [])) as any[];
 }
 
 /**
- * Update an existing address. If setting it to default, the pre-save hook
- * automatically unsets other defaults for this user.
+ * Update an existing address. If setting it to default, the backend's
+ * pre-save hook automatically unsets other defaults for this user.
  */
 export async function updateAddress(addressId: string, formData: FormData) {
   await requireAdmin();
-  const userId = await getAuthenticatedUser();
-  await connection();
+  await getAuthenticatedUser();
 
   const rawData = {
     label: formData.get("label"),
@@ -110,20 +94,22 @@ export async function updateAddress(addressId: string, formData: FormData) {
 
   const validated = addressSchema.parse(rawData);
 
-  const address = await Address.findOneAndUpdate(
-    { _id: addressId, userId: new Types.ObjectId(userId) }, // Ensure ownership
-    { ...validated },
-    { new: true, runValidators: true },
-  );
+  try {
+    const address = await apiData<any>(
+      `/addresses/${encodeURIComponent(addressId)}`,
+      { method: "PATCH", body: validated },
+    );
 
-  if (!address) {
-    throw new Error("Address not found or unauthorized");
+    revalidatePath("/profile/addresses");
+    revalidatePath("/profile/payment-methods");
+
+    return { success: true, address };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      throw new Error("Address not found or unauthorized");
+    }
+    throw error;
   }
-
-  revalidatePath("/profile/addresses");
-  revalidatePath("/profile/payment-methods");
-
-  return { success: true, address: JSON.parse(JSON.stringify(address)) };
 }
 
 /**
@@ -132,30 +118,24 @@ export async function updateAddress(addressId: string, formData: FormData) {
  */
 export async function deleteAddress(addressId: string) {
   await requireAdmin();
-  const userId = await getAuthenticatedUser();
-  await connection();
+  await getAuthenticatedUser();
 
-  // 1. Check if this address is used by any Credit Card payment method
-  const linkedCard = await PaymentMethod.findOne({
-    userId: new Types.ObjectId(userId),
-    methodType: "CreditCard",
-    "details.billingAddressId": new Types.ObjectId(addressId),
-  });
-
-  if (linkedCard) {
-    throw new Error(
-      "Cannot delete this address because it is linked to an existing credit card. Please remove the card first.",
-    );
-  }
-
-  // 2. Delete the address
-  const result = await Address.findOneAndDelete({
-    _id: addressId,
-    userId: new Types.ObjectId(userId),
-  });
-
-  if (!result) {
-    throw new Error("Address not found or unauthorized");
+  try {
+    await apiFetch(`/addresses/${encodeURIComponent(addressId)}`, {
+      method: "DELETE",
+    });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      if (error.status === 409) {
+        throw new Error(
+          "Cannot delete this address because it is linked to an existing credit card. Please remove the card first.",
+        );
+      }
+      if (error.status === 404) {
+        throw new Error("Address not found or unauthorized");
+      }
+    }
+    throw error;
   }
 
   revalidatePath("/profile/addresses");
@@ -169,24 +149,21 @@ export async function deleteAddress(addressId: string) {
  */
 export async function setDefaultAddress(addressId: string) {
   await requireAdmin();
-  const userId = await getAuthenticatedUser();
-  await connection();
+  await getAuthenticatedUser();
 
-  // Find the address to ensure ownership
-  const address = await Address.findOne({
-    _id: addressId,
-    userId: new Types.ObjectId(userId),
-  });
+  try {
+    const address = await apiData<any>(
+      `/addresses/${encodeURIComponent(addressId)}/default`,
+      { method: "PATCH" },
+    );
 
-  if (!address) {
-    throw new Error("Address not found or unauthorized");
+    revalidatePath("/profile/addresses");
+
+    return { success: true, address };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      throw new Error("Address not found or unauthorized");
+    }
+    throw error;
   }
-
-  // The pre-save hook will handle unsetting other defaults automatically
-  address.isDefault = true;
-  await address.save();
-
-  revalidatePath("/profile/addresses");
-
-  return { success: true, address: JSON.parse(JSON.stringify(address)) };
 }

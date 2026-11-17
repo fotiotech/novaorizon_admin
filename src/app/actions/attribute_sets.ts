@@ -1,74 +1,22 @@
 "use server";
 
-
 import { requireAdmin } from "@/lib/authz";
-import mongoose from "mongoose";
-import AttributeSet from "@/models/AttributeSet";
-import CategoryProperty from "@/models/CategoryProperty";
-import { connection } from "@/utils/connection";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
 import { revalidatePath } from "next/cache";
+
+/**
+ * Attribute sets live in the Express backend (`/api/attribute-sets`). The
+ * backend already returns client-safe JSON (no Mongoose/BSON values), so this
+ * module only forwards calls and keeps the `{ success, data?, error? }`
+ * result shape the UI expects.
+ */
 
 // Update this to the route that actually hosts the Attribute Sets list page.
 const LIST_PATH = "/catalog/attributes/sets";
 
-// ========================================================================
-//  toPlain – deep-convert Mongoose / BSON values into client-safe JSON.
-// ========================================================================
-function toPlain<T>(value: T): T {
-  if (value === null || value === undefined) return value;
-
-  const t = typeof value;
-  if (t === "string" || t === "number" || t === "boolean") return value;
-  if (t === "bigint") return String(value) as any;
-  if (t === "function") return undefined as any;
-
-  if (value instanceof Date) return value.toISOString() as any;
-
-  if (Array.isArray(value)) return value.map((v) => toPlain(v)) as any;
-
-  if (typeof value === "object") {
-    const anyVal = value as any;
-
-    if (
-      anyVal._bsontype === "ObjectId" ||
-      anyVal.constructor?.name === "ObjectId" ||
-      typeof anyVal.toHexString === "function"
-    ) {
-      try {
-        return anyVal.toString() as any;
-      } catch {
-        return null as any;
-      }
-    }
-
-    if (typeof Buffer !== "undefined" && Buffer.isBuffer(anyVal)) {
-      return anyVal.toString("hex") as any;
-    }
-
-    if (
-      anyVal._bsontype &&
-      typeof anyVal.toString === "function" &&
-      anyVal.constructor?.name !== "Object"
-    ) {
-      try {
-        return anyVal.toString() as any;
-      } catch {
-        // fall through
-      }
-    }
-
-    if (typeof anyVal.toObject === "function") {
-      return toPlain(anyVal.toObject()) as any;
-    }
-
-    const out: Record<string, any> = {};
-    for (const [k, v] of Object.entries(anyVal)) {
-      out[k] = toPlain(v);
-    }
-    return out as any;
-  }
-
-  return value;
+/** Mirrors the ObjectId validation the old Mongoose call performed. */
+function isValidId(id: string): boolean {
+  return /^[0-9a-fA-F]{24}$/.test(id);
 }
 
 // ========================================================================
@@ -81,7 +29,6 @@ export async function createAttributeSet(data: {
   sortOrder?: number;
 }) {
   await requireAdmin();
-  await connection();
 
   const title = data.title?.trim() ?? "";
   const code = data.code?.trim() ?? "";
@@ -90,21 +37,18 @@ export async function createAttributeSet(data: {
   if (!code) return { success: false, error: "Code is required" };
 
   try {
-    const existing = await AttributeSet.findOne({ code });
-    if (existing) {
-      return { success: false, error: `Code "${code}" already exists` };
-    }
-
-    const attributeSet = new AttributeSet({
-      title,
-      code,
-      description: data.description?.trim(),
-      sortOrder: data.sortOrder ?? 0,
+    const attributeSet = await apiData<any>("/attribute-sets", {
+      method: "POST",
+      body: {
+        title,
+        code,
+        description: data.description?.trim(),
+        sortOrder: data.sortOrder ?? 0,
+      },
     });
-    await attributeSet.save();
 
     revalidatePath(LIST_PATH);
-    return { success: true, data: toPlain(attributeSet.toObject()) };
+    return { success: true, data: attributeSet };
   } catch (error: any) {
     console.error("[createAttributeSet]", error);
     return {
@@ -119,12 +63,9 @@ export async function createAttributeSet(data: {
 // ========================================================================
 export async function getAttributeSets() {
   await requireAdmin();
-  await connection();
   try {
-    const attributeSets = await AttributeSet.find()
-      .sort({ sortOrder: 1 })
-      .lean();
-    return { success: true, data: toPlain(attributeSets) };
+    const attributeSets = await apiData<any[]>("/attribute-sets");
+    return { success: true, data: attributeSets ?? [] };
   } catch (error: any) {
     console.error("[getAttributeSets]", error);
     return { success: false, error: "Failed to fetch attribute sets" };
@@ -136,16 +77,22 @@ export async function getAttributeSets() {
 // ========================================================================
 export async function getAttributeSet(id: string) {
   await requireAdmin();
-  await connection();
+
+  if (!isValidId(id)) {
+    return { success: false, error: "Invalid attribute set ID" };
+  }
+
   try {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return { success: false, error: "Invalid attribute set ID" };
-    }
-    const set = await AttributeSet.findById(id).lean();
+    const set = await apiData<any>(
+      `/attribute-sets/${encodeURIComponent(id)}`,
+    );
     if (!set) return { success: false, error: "Attribute set not found" };
-    return { success: true, data: toPlain(set) };
+    return { success: true, data: set };
   } catch (error: any) {
     console.error("[getAttributeSet]", error);
+    if (error instanceof ApiError && error.status === 404) {
+      return { success: false, error: "Attribute set not found" };
+    }
     return { success: false, error: "Failed to fetch attribute set" };
   }
 }
@@ -163,7 +110,6 @@ export async function updateAttributeSet(
   },
 ) {
   await requireAdmin();
-  await connection();
 
   const title = data.title?.trim() ?? "";
   const code = data.code?.trim() ?? "";
@@ -171,28 +117,22 @@ export async function updateAttributeSet(
   if (!title) return { success: false, error: "Title is required" };
   if (!code) return { success: false, error: "Code is required" };
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Invalid attribute set ID" };
+  }
+
   try {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return { success: false, error: "Invalid attribute set ID" };
-    }
-
-    const existing = await AttributeSet.findOne({
-      code,
-      _id: { $ne: id },
-    });
-    if (existing) {
-      return { success: false, error: `Code "${code}" already exists` };
-    }
-
-    const updated = await AttributeSet.findByIdAndUpdate(
-      id,
+    const updated = await apiData<any>(
+      `/attribute-sets/${encodeURIComponent(id)}`,
       {
-        title,
-        code,
-        description: data.description,
-        sortOrder: data.sortOrder,
+        method: "PATCH",
+        body: {
+          title,
+          code,
+          description: data.description,
+          sortOrder: data.sortOrder,
+        },
       },
-      { new: true },
     );
 
     if (!updated) {
@@ -200,9 +140,12 @@ export async function updateAttributeSet(
     }
 
     revalidatePath(LIST_PATH);
-    return { success: true, data: toPlain(updated.toObject()) };
+    return { success: true, data: updated };
   } catch (error: any) {
     console.error("[updateAttributeSet]", error);
+    if (error instanceof ApiError && error.status === 404) {
+      return { success: false, error: "Attribute set not found" };
+    }
     return {
       success: false,
       error: error?.message || "Failed to update attribute set",
@@ -213,34 +156,28 @@ export async function updateAttributeSet(
 // ========================================================================
 //  deleteAttributeSet
 //
-//  Detaches this set from every CategoryProperty mapping in one round-trip,
-//  then deletes the set itself.
+//  The backend detaches this set from every CategoryProperty mapping in one
+//  round-trip, then deletes the set itself.
 // ========================================================================
 export async function deleteAttributeSet(id: string) {
   await requireAdmin();
-  await connection();
+
+  if (!isValidId(id)) {
+    return { success: false, error: "Invalid attribute set ID" };
+  }
+
   try {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return { success: false, error: "Invalid attribute set ID" };
-    }
-
-    const setObjectId = new mongoose.Types.ObjectId(id);
-
-    // Single update: pull every mapping whose `set` field matches.
-    await CategoryProperty.updateMany(
-      { "mappings.set": setObjectId },
-      { $pull: { mappings: { set: setObjectId } } },
-    );
-
-    const deleted = await AttributeSet.findByIdAndDelete(setObjectId);
-    if (!deleted) {
-      return { success: false, error: "Attribute set not found" };
-    }
+    await apiFetch(`/attribute-sets/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
 
     revalidatePath(LIST_PATH);
     return { success: true };
   } catch (error: any) {
     console.error("[deleteAttributeSet]", error);
+    if (error instanceof ApiError && error.status === 404) {
+      return { success: false, error: "Attribute set not found" };
+    }
     return {
       success: false,
       error: error?.message || "Failed to delete attribute set",

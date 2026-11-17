@@ -4,9 +4,12 @@
 import { requireAdmin } from "@/lib/authz";
 // app/actions/contact.ts (append)
 import { revalidatePath } from "next/cache";
-import mongoose from "mongoose";
-import { connection } from "@/utils/connection";
-import ContactMessage from "@/models/ContactMessage";
+import { apiData, apiFetch } from "@/lib/server-api";
+
+/**
+ * Contact messages live in the Express backend (`/api/contact`). These actions
+ * are thin, authenticated proxies so the existing UI keeps its call signatures.
+ */
 
 export async function getContactMessages(options?: {
   status?: string;
@@ -21,74 +24,23 @@ export async function getContactMessages(options?: {
   counts: Record<string, number>;
 }> {
   await requireAdmin();
-  await connection();
 
   const { status, search, page = 1, limit = 10 } = options || {};
 
-  const query: any = {};
-
-  if (status && status !== "all") {
-    query.status = status;
-  }
-
-  if (search) {
-    const searchRegex = new RegExp(search, "i");
-    query.$or = [
-      { name: searchRegex },
-      { email: searchRegex },
-      { subject: searchRegex },
-      { message: searchRegex },
-    ];
-  }
-
-  const skip = (page - 1) * limit;
-
-  const [messages, total, newCount, readCount, repliedCount, archivedCount] =
-    await Promise.all([
-      ContactMessage.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      ContactMessage.countDocuments(query),
-      ContactMessage.countDocuments({ status: "new" }),
-      ContactMessage.countDocuments({ status: "read" }),
-      ContactMessage.countDocuments({ status: "replied" }),
-      ContactMessage.countDocuments({ status: "archived" }),
-    ]);
-
-  return {
-    messages: messages.map((m) => ({
-      ...m,
-      _id: m._id.toString(),
-      createdAt: m.createdAt?.toISOString?.() ?? m.createdAt,
-      updatedAt: m.updatedAt?.toISOString?.() ?? m.updatedAt,
-    })),
-    total,
-    totalPages: Math.ceil(total / limit),
-    currentPage: page,
-    counts: {
-      all: newCount + readCount + repliedCount + archivedCount,
-      new: newCount,
-      read: readCount,
-      replied: repliedCount,
-      archived: archivedCount,
-    },
-  };
+  return apiData("/contact", {
+    query: { status, search, page, limit },
+  });
 }
 
 export async function getContactMessageById(id: string) {
   await requireAdmin();
-  await connection();
-  if (!mongoose.Types.ObjectId.isValid(id)) return null;
-  const msg = await ContactMessage.findById(id).lean();
-  if (!msg) return null;
-  return {
-    ...msg,
-    _id: msg._id.toString(),
-    createdAt: msg.createdAt?.toISOString?.() ?? msg.createdAt,
-    updatedAt: msg.updatedAt?.toISOString?.() ?? msg.updatedAt,
-  };
+
+  try {
+    return await apiData(`/contact/${encodeURIComponent(id)}`);
+  } catch {
+    // Invalid id or missing message — the callers treat both as "not found".
+    return null;
+  }
 }
 
 export async function updateContactStatus(
@@ -96,12 +48,12 @@ export async function updateContactStatus(
   status: "new" | "read" | "replied" | "archived",
 ): Promise<{ success: boolean; error?: string }> {
   await requireAdmin();
-  await connection();
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return { success: false, error: "Invalid message id." };
-  }
+
   try {
-    await ContactMessage.findByIdAndUpdate(id, { $set: { status } });
+    await apiFetch(`/contact/${encodeURIComponent(id)}/status`, {
+      method: "PATCH",
+      body: { status },
+    });
     revalidatePath("/admin/messages");
     return { success: true };
   } catch (error: any) {
@@ -112,9 +64,10 @@ export async function updateContactStatus(
 
 export async function getNewContactCount(): Promise<number> {
   await requireAdmin();
-  await connection();
+
   try {
-    return await ContactMessage.countDocuments({ status: "new" });
+    const data = await apiData<{ count: number }>("/contact/new-count");
+    return data?.count ?? 0;
   } catch (error) {
     console.error("[getNewContactCount] Error:", error);
     return 0;
@@ -125,12 +78,11 @@ export async function deleteContactMessage(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
   await requireAdmin();
-  await connection();
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return { success: false, error: "Invalid message id." };
-  }
+
   try {
-    await ContactMessage.findByIdAndDelete(id);
+    await apiFetch(`/contact/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
     revalidatePath("/admin/messages");
     return { success: true };
   } catch (error: any) {

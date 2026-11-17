@@ -3,10 +3,7 @@
 import React, { useState, useEffect, useCallback, Fragment } from "react";
 import { Menu, Transition } from "@headlessui/react";
 import { toast } from "react-hot-toast";
-import {
-  getAttributeSets,
-  deleteAttributeSet,
-} from "@/app/actions/attribute_sets";
+import { getAttributeSets, deleteAttributeSet } from "@/lib/api/attribute-set";
 import AttributeSetForm from "../_component/AttributeSetForm";
 import { Modal } from "@/components/ux/Modal";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";

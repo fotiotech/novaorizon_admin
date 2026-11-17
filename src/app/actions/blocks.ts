@@ -2,13 +2,7 @@
 "use server";
 import { requireAdmin } from "@/lib/authz";
 import { revalidatePath, updateTag } from "next/cache";
-import { connection } from "@/utils/connection";
-import mongoose from "mongoose";
-import { Block } from "@/models/Block";
-import { BannerContent } from "@/models/BannerContent";
-import { Collection } from "@/models/Collection";
-import Category from "@/models/Category";
-import Promotion from "@/models/Promotion";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
 import {
   BLOCK_LOCATIONS,
   BLOCK_DISPLAYS,
@@ -31,6 +25,12 @@ import {
 
 const LIST_PATH = "/channels/store/content/blocks";
 const MAX_BANNERS_PER_BLOCK = 20;
+
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
+function isValidObjectId(id: unknown): boolean {
+  return typeof id === "string" && OBJECT_ID_RE.test(id);
+}
 
 function pickEnum<T extends readonly string[]>(
   raw: unknown,
@@ -76,10 +76,7 @@ function readIdArray(fd: FormData, key: string, limit: number): string[] {
     const parsed = JSON.parse(String(raw));
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .filter(
-        (x): x is string =>
-          typeof x === "string" && mongoose.Types.ObjectId.isValid(x),
-      )
+      .filter((x): x is string => typeof x === "string" && isValidObjectId(x))
       .slice(0, limit);
   } catch {
     return [];
@@ -110,98 +107,34 @@ export type SourcePreviewResult =
   | { success: true; data: SourcePreviewData }
   | { success: false; error: string; missing?: boolean };
 
+const PREVIEW_SOURCE_TYPES = [
+  "collection",
+  "category",
+  "promotion",
+  "banner",
+] as const;
+
 export async function getSourcePreview(
   sourceType: string,
   id: string,
 ): Promise<SourcePreviewResult> {
   await requireAdmin();
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isValidObjectId(id)) {
     return { success: false, error: "Invalid ID" };
   }
-  await connection();
+  if (!(PREVIEW_SOURCE_TYPES as readonly string[]).includes(sourceType)) {
+    return { success: false, error: "Unsupported source type" };
+  }
 
   try {
-    if (sourceType === "collection") {
-      const doc: any = await Collection.findById(id)
-        .select("name imageUrl type targetType status")
-        .lean();
-      if (!doc) return { success: false, error: "Not found", missing: true };
-      return {
-        success: true,
-        data: {
-          _id: String(doc._id),
-          name: doc.name,
-          imageUrl: doc.imageUrl ?? null,
-          meta: {
-            type: doc.type,
-            targetType: doc.targetType,
-            status: doc.status,
-          },
-        },
-      };
-    }
-
-    if (sourceType === "category") {
-      const doc: any = await Category.findById(id)
-        .select("name imageUrl slug status")
-        .lean();
-      if (!doc) return { success: false, error: "Not found", missing: true };
-      const img = Array.isArray(doc.imageUrl)
-        ? (doc.imageUrl[0] ?? null)
-        : (doc.imageUrl ?? null);
-      return {
-        success: true,
-        data: {
-          _id: String(doc._id),
-          name: doc.name,
-          imageUrl: img,
-          meta: { slug: doc.slug, status: doc.status },
-        },
-      };
-    }
-
-    if (sourceType === "promotion") {
-      const doc: any = await Promotion.findById(id)
-        .select(
-          "name imageUrl code isActive startDate endDate promotionType.calculationType",
-        )
-        .lean();
-      if (!doc) return { success: false, error: "Not found", missing: true };
-      return {
-        success: true,
-        data: {
-          _id: String(doc._id),
-          name: doc.name,
-          imageUrl: doc.imageUrl ?? null,
-          meta: {
-            code: doc.code ?? null,
-            isActive: doc.isActive !== false,
-            startDate: doc.startDate ?? null,
-            endDate: doc.endDate ?? null,
-            calculationType: doc.promotionType?.calculationType ?? null,
-          },
-        },
-      };
-    }
-
-    if (sourceType === "banner") {
-      const doc: any = await BannerContent.findById(id)
-        .select("name image heading")
-        .lean();
-      if (!doc) return { success: false, error: "Not found", missing: true };
-      return {
-        success: true,
-        data: {
-          _id: String(doc._id),
-          name: doc.name,
-          imageUrl: doc.image || null,
-          meta: { headline: doc.heading?.title ?? "" },
-        },
-      };
-    }
-
-    return { success: false, error: "Unsupported source type" };
+    const data = await apiData<SourcePreviewData>(
+      `/blocks/source-preview/${encodeURIComponent(sourceType)}/${encodeURIComponent(id)}`,
+    );
+    return { success: true, data };
   } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false, error: "Not found", missing: true };
+    }
     console.error("[getSourcePreview]", err);
     return { success: false, error: "Failed to load preview" };
   }
@@ -287,19 +220,16 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
 
   if (sourceType === "collection") {
     const id = String(fd.get("source.collectionId") ?? "");
-    if (!mongoose.Types.ObjectId.isValid(id))
-      return { error: "Select a collection" };
-    source.collectionId = new mongoose.Types.ObjectId(id);
+    if (!isValidObjectId(id)) return { error: "Select a collection" };
+    source.collectionId = id;
   } else if (sourceType === "category") {
     const id = String(fd.get("source.categoryId") ?? "");
-    if (!mongoose.Types.ObjectId.isValid(id))
-      return { error: "Select a category" };
-    source.categoryId = new mongoose.Types.ObjectId(id);
+    if (!isValidObjectId(id)) return { error: "Select a category" };
+    source.categoryId = id;
   } else if (sourceType === "promotion") {
     const id = String(fd.get("source.promotionId") ?? "");
-    if (!mongoose.Types.ObjectId.isValid(id))
-      return { error: "Select a promotion" };
-    source.promotionId = new mongoose.Types.ObjectId(id);
+    if (!isValidObjectId(id)) return { error: "Select a promotion" };
+    source.promotionId = id;
     source.promotionMode = pickEnum(
       fd.get("source.promotionMode"),
       PROMOTION_MODES,
@@ -310,7 +240,7 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
     if (ids.length === 0) {
       return { error: "Select at least one banner from the library" };
     }
-    source.bannerIds = ids.map((id) => new mongoose.Types.ObjectId(id));
+    source.bannerIds = ids;
   } else if (sourceType === "manual") {
     let raw: any[] = [];
     try {
@@ -327,12 +257,12 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
           typeof i.refModel === "string" &&
           i.refId &&
           (BLOCK_REF_MODELS as readonly string[]).includes(i.refModel) &&
-          mongoose.Types.ObjectId.isValid(i.refId),
+          isValidObjectId(i.refId),
       )
       .slice(0, 50)
       .map((i) => ({
         refModel: i.refModel,
-        refId: new mongoose.Types.ObjectId(i.refId),
+        refId: i.refId,
       }));
 
     if (items.length === 0)
@@ -407,13 +337,10 @@ function parseBlockForm(fd: FormData): ParseOk | ParseErr {
 export async function getAllBlocks(location?: BlockLocation) {
   await requireAdmin();
   try {
-    await connection();
-    const filter: Record<string, any> = {};
-    if (location) filter.location = location;
-    const docs = await Block.find(filter)
-      .sort({ location: 1, order: 1, created_at: -1 })
-      .lean();
-    return { success: true, data: JSON.parse(JSON.stringify(docs)) };
+    const docs = await apiData<any[]>("/blocks", {
+      query: location ? { location } : undefined,
+    });
+    return { success: true, data: docs ?? [] };
   } catch (err: any) {
     console.error("[getAllBlocks]", err);
     return { success: false, error: err?.message ?? "Failed to load blocks" };
@@ -423,13 +350,14 @@ export async function getAllBlocks(location?: BlockLocation) {
 export async function getBlockById(id: string) {
   await requireAdmin();
   try {
-    if (!mongoose.Types.ObjectId.isValid(id))
+    if (!isValidObjectId(id))
       return { success: false, error: "Invalid block ID" };
-    await connection();
-    const doc = await Block.findById(id).lean();
-    if (!doc) return { success: false, error: "Block not found" };
-    return { success: true, data: JSON.parse(JSON.stringify(doc)) };
+    const doc = await apiData<any>(`/blocks/${encodeURIComponent(id)}`);
+    return { success: true, data: doc };
   } catch (err: any) {
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false, error: "Block not found" };
+    }
     console.error("[getBlockById]", err);
     return { success: false, error: "Failed to load block" };
   }
@@ -439,35 +367,21 @@ export async function getBlockById(id: string) {
 /*                                 mutations                                  */
 /* -------------------------------------------------------------------------- */
 
-async function countMissingBanners(ids: any[]): Promise<number> {
-  if (!ids.length) return 0;
-  const found = await BannerContent.countDocuments({ _id: { $in: ids } });
-  return ids.length - found;
-}
-
 export async function createBlock(formData: FormData) {
   await requireAdmin();
   const parsed = parseBlockForm(formData);
   if ("error" in parsed) return { success: false, message: parsed.error };
 
   try {
-    await connection();
-    if (parsed.doc.source.type === "banner") {
-      const missing = await countMissingBanners(parsed.doc.source.bannerIds);
-      if (missing > 0) {
-        return {
-          success: false,
-          message: `${missing} of the selected banners were deleted. Refresh and pick again.`,
-        };
-      }
-    }
-    const doc = new Block(parsed.doc);
-    await doc.save();
+    const doc = await apiData<any>("/blocks", {
+      method: "POST",
+      body: parsed.doc,
+    });
     revalidateBlocks(doc.location as BlockLocation);
     return {
       success: true,
       message: "Block created successfully",
-      data: JSON.parse(JSON.stringify(doc.toObject())),
+      data: doc,
     };
   } catch (err: any) {
     console.error("[createBlock]", err);
@@ -480,36 +394,28 @@ export async function createBlock(formData: FormData) {
 
 export async function updateBlock(id: string, formData: FormData) {
   await requireAdmin();
-  if (!mongoose.Types.ObjectId.isValid(id))
+  if (!isValidObjectId(id))
     return { success: false, message: "Invalid block ID" };
 
   const parsed = parseBlockForm(formData);
   if ("error" in parsed) return { success: false, message: parsed.error };
 
   try {
-    await connection();
-    if (parsed.doc.source.type === "banner") {
-      const missing = await countMissingBanners(parsed.doc.source.bannerIds);
-      if (missing > 0) {
-        return {
-          success: false,
-          message: `${missing} of the selected banners were deleted. Refresh and pick again.`,
-        };
-      }
-    }
-    const updated = await Block.findByIdAndUpdate(id, parsed.doc, {
-      new: true,
-      runValidators: true,
+    const updated = await apiData<any>(`/blocks/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: parsed.doc,
     });
-    if (!updated) return { success: false, message: "Block not found" };
     revalidateBlocks(updated.location as BlockLocation);
     return {
       success: true,
       message: "Block updated successfully",
-      data: JSON.parse(JSON.stringify(updated.toObject())),
+      data: updated,
     };
   } catch (err: any) {
     console.error("[updateBlock]", err);
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false, message: "Block not found" };
+    }
     return {
       success: false,
       message: err?.message ?? "Failed to update block",
@@ -519,16 +425,20 @@ export async function updateBlock(id: string, formData: FormData) {
 
 export async function deleteBlock(id: string) {
   await requireAdmin();
-  if (!mongoose.Types.ObjectId.isValid(id))
+  if (!isValidObjectId(id))
     return { success: false, error: "Invalid block ID" };
 
   try {
-    await connection();
-    const deleted = await Block.findByIdAndDelete(id);
-    if (!deleted) return { success: false, error: "Block not found" };
-    revalidateBlocks(deleted.location as BlockLocation);
+    const deleted = await apiData<any>(`/blocks/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    const location = (deleted?.location ?? "Home") as BlockLocation;
+    revalidateBlocks(location);
     return { success: true, message: "Block deleted successfully" };
   } catch (err: any) {
+    if (err instanceof ApiError && err.status === 404) {
+      return { success: false, error: "Block not found" };
+    }
     console.error("[deleteBlock]", err);
     return { success: false, error: "Failed to delete block" };
   }
@@ -543,19 +453,14 @@ export async function reorderBlocks(
     return { success: false, error: "Invalid location" };
   if (!Array.isArray(orderedIds) || orderedIds.length === 0)
     return { success: false, error: "No ids provided" };
-  if (!orderedIds.every((id) => mongoose.Types.ObjectId.isValid(id)))
+  if (!orderedIds.every((id) => isValidObjectId(id)))
     return { success: false, error: "Invalid ids" };
 
   try {
-    await connection();
-    await Block.bulkWrite(
-      orderedIds.map((id, i) => ({
-        updateOne: {
-          filter: { _id: id, location },
-          update: { order: i },
-        },
-      })),
-    );
+    await apiFetch("/blocks/reorder", {
+      method: "POST",
+      body: { location, orderedIds },
+    });
     revalidateBlocks(location);
     return { success: true, message: "Blocks reordered" };
   } catch (err: any) {

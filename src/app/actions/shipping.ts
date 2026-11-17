@@ -1,100 +1,56 @@
 "use server";
 
-
 import { requireAdmin } from "@/lib/authz";
-import { connection } from "@/utils/connection";
-import Shipping from "@/models/Shipping";
-import Order from "@/models/Order";
-import "@/models/User";
+import { ApiError, apiData, apiFetch } from "@/lib/server-api";
 
-// Define status transition rules
-const statusTransitions: Record<string, string[]> = {
-  pending: ["cancelled", "assigned"],
-  assigned: ["in-transit"],
-  "in-transit": ["delivered"],
-  delivered: ["completed", "returned"],
-  returned: [],
-  completed: [],
-  cancelled: [],
-};
+/**
+ * Shipping records live in the Express backend (`/api/shipping`). Status
+ * transition rules and the order side-effects are enforced server-side.
+ */
 
 // Create a new Shipping entry
 export async function createShipping(data: any) {
   await requireAdmin();
-  await connection();
-  return await Shipping.create(data);
+  return await apiData<any>("/shipping", { method: "POST", body: data });
 }
 
 // Get a single Shipping entry by ID
 export async function getShippingById(id: string) {
   await requireAdmin();
-  await connection();
-  return await Shipping.findById(id).exec();
+
+  try {
+    return await apiData<any>(`/shipping/${encodeURIComponent(id)}`);
+  } catch (error) {
+    // The backend answers 404 for a missing entry; the old code returned null.
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 // Get all Shipping entries
 export async function getAllShippings() {
   await requireAdmin();
-  await connection();
-  return await Shipping.find({}).exec();
+  return (await apiData<any[]>("/shipping")) ?? [];
 }
 
 // Update a Shipping entry by ID
 export async function updateShipping(id: string, data: any) {
   await requireAdmin();
-  await connection();
-
-  const shipping = await Shipping.findById(id).exec();
-  if (!shipping) {
-    return {
-      success: false,
-      error: `Shipping entry with ID ${id} not found`,
-    };
-  }
-
-  // If status is being changed, validate the transition
-  if (data.status && data.status !== shipping.status) {
-    // Check if status transition is valid
-    if (!statusTransitions[shipping.status]?.includes(data.status)) {
-      return {
-        success: false,
-        error: `Invalid status transition from ${shipping.status} to ${data.status}`,
-      };
-    }
-  }
-
-  // Prepare update data
-  const updateData: any = { ...data };
-
-  // Only add returnReason if status is being changed to returned
-  if (data.status === "returned") {
-    updateData.returnReason = data.returnReason;
-  } else if (shipping.status !== "returned" && data.status !== "returned") {
-    // Clear returnReason if not in returned status
-    updateData.returnReason = undefined;
-  }
 
   try {
-    // Update shipping
-    const updatedShipping = await Shipping.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    }).exec();
-
-    // Update order if status changed
-    if (data.status && data.status !== shipping.status) {
-      await Order.findByIdAndUpdate(
-        shipping.orderId,
-        {
-          shippingStatus: data.status,
-          ...(data.status === "completed" && { orderStatus: "completed" }),
-        },
-        { new: true }
-      ).exec();
-    }
+    const updatedShipping = await apiData<any>(
+      `/shipping/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: data },
+    );
 
     return { success: true, data: updatedShipping };
   } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return {
+        success: false,
+        error: `Shipping entry with ID ${id} not found`,
+      };
+    }
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred",
@@ -105,6 +61,14 @@ export async function updateShipping(id: string, data: any) {
 // Delete a Shipping entry by ID
 export async function deleteShipping(id: string) {
   await requireAdmin();
-  await connection();
-  return await Shipping.findByIdAndDelete(id).exec();
+
+  try {
+    return await apiFetch(`/shipping/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  } catch (error) {
+    // The old `findByIdAndDelete` returned null when nothing matched.
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
 }

@@ -1,14 +1,35 @@
 // app/actions/payment-settings.ts
 "use server";
 import { requireAdmin } from "@/lib/authz";
-
-import { connection } from "@/utils/connection";
-import PaymentSettings, {
-  MobileMoneyProviderConfig,
-} from "@/models/PaymentSettings";
 import { revalidatePath } from "next/cache";
+import { apiData } from "@/lib/server-api";
 
-const KEY = "payment";
+/**
+ * Payment settings live in the Express backend (`/api/payment-settings`).
+ * The patch-building/serialisation below is kept so the UI receives exactly
+ * the shape it always did.
+ */
+
+/** Mirrors the backend provider config (the Mongoose model is no longer imported). */
+interface MobileMoneyProviderConfig {
+  enabled: boolean;
+  /** Human-readable merchant / business name shown to customers */
+  merchantName: string;
+  /** Merchant code / short code / paybill number */
+  merchantCode: string;
+  /** Public identifier (API user, client ID) — safe to show in dashboards */
+  clientId: string;
+  /** Secret — API key, client secret, subscription key */
+  clientSecret: string;
+  /** Optional subscription key (MTN MoMo uses this in addition to API user/key) */
+  subscriptionKey: string;
+  /** USSD short code for manual dial-in fallback */
+  ussdCode: string;
+  /** "sandbox" | "production" */
+  environment: "sandbox" | "production";
+  /** Shown on the checkout page under the option */
+  instructions: string;
+}
 
 export interface PaymentSettingsData {
   cashOnDelivery: {
@@ -157,8 +178,7 @@ function serialize(doc: any): PaymentSettingsData {
 export async function getPaymentSettings(): Promise<PaymentSettingsData> {
   await requireAdmin();
   try {
-    await connection();
-    const doc = await PaymentSettings.findOne({ key: KEY }).lean();
+    const doc = await apiData<any>("/payment-settings");
     return serialize(doc);
   } catch (err) {
     console.error("[getPaymentSettings] Failed:", err);
@@ -191,8 +211,6 @@ export async function updatePaymentSettings(
 ): Promise<{ success: boolean; data?: PaymentSettingsData; error?: string }> {
   await requireAdmin();
   try {
-    await connection();
-
     const patch: Record<string, any> = {};
 
     if (input.cashOnDelivery) {
@@ -277,16 +295,10 @@ export async function updatePaymentSettings(
       patch.testMode = !!input.testMode;
     }
 
-    const updated = await PaymentSettings.findOneAndUpdate(
-      { key: KEY },
-      { $set: patch, $setOnInsert: { key: KEY } },
-      {
-        new: true,
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true,
-      },
-    ).lean();
+    const updated = await apiData<any>("/payment-settings", {
+      method: "PATCH",
+      body: patch,
+    });
 
     revalidatePath("/settings/payment");
 

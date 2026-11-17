@@ -3,17 +3,15 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  assignCategoryProperty,
+  assignPropertyToCategory,
   deleteCategory,
-  getCategory,
-  getCategoryAttributeSets,
+  getCategoryProductCounts,
+  listCategories,
   runCategoryInheritance,
-} from "@/app/actions/category";
-import {
-  getCategoryProperty,
+  fetchCategoryAttributeSets,
   type AttributeSetResult,
-} from "@/app/actions/category_property";
-import { getCategoryProductCounts } from "@/app/actions/products";
+} from "@/lib/api/category";
+import { fetchCategoryProperties } from "@/lib/api/category-property";
 import { Category as Cat } from "@/constant/types";
 import CategoryForm from "./_component/CategoryForm";
 import CategoryList from "./_component/CategoryList";
@@ -98,13 +96,14 @@ const Categories = () => {
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const res = await getCategory();
-      setCategories(res || []);
+      const res = await listCategories();
+      setCategories(res as unknown as Cat[]);
       setError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching categories:", err);
-      setError("Failed to load categories");
-      toast.error("Failed to load categories");
+      const msg = err?.response?.data?.message || "Failed to load categories";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -126,19 +125,14 @@ const Categories = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      const result = await deleteCategory(id);
-      if (result.success) {
-        setCategories(categories.filter((cat) => cat._id !== id));
-        setBrowsePath((prev) => (prev.includes(id) ? [] : prev));
-        // Products whose category was unset → refresh counts.
-        fetchProductCounts();
-        toast.success("Category deleted successfully");
-      } else {
-        toast.error(result.error || "Failed to delete category");
-      }
-    } catch (err) {
+      await deleteCategory(id);
+      setCategories(categories.filter((cat) => cat._id !== id));
+      setBrowsePath((prev) => (prev.includes(id) ? [] : prev));
+      fetchProductCounts();
+      toast.success("Category deleted successfully");
+    } catch (err: any) {
       console.error("Error deleting category:", err);
-      toast.error("Failed to delete category");
+      toast.error(err?.response?.data?.message || "Failed to delete category");
     }
   };
 
@@ -197,27 +191,21 @@ const Categories = () => {
 
     try {
       const result = await runCategoryInheritance(category._id as string);
-
-      if (result.success) {
-        await fetchCategories();
-        toast.dismiss(toastId);
-        if (result.warning) {
-          toast.info(result.warning);
-        } else {
-          toast.success(
-            wasEnabled
-              ? "Inheritance re-run — snapshot refreshed"
-              : "Inheritance enabled",
-          );
-        }
+      await fetchCategories();
+      toast.dismiss(toastId);
+      if (result.warning) {
+        toast.info(result.warning);
       } else {
-        toast.dismiss(toastId);
-        toast.error(result.error || "Failed to run inheritance");
+        toast.success(
+          wasEnabled
+            ? "Inheritance re-run — snapshot refreshed"
+            : "Inheritance enabled",
+        );
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error running inheritance:", err);
       toast.dismiss(toastId);
-      toast.error("Failed to run inheritance");
+      toast.error(err?.response?.data?.message || "Failed to run inheritance");
     }
   };
 
@@ -228,11 +216,11 @@ const Categories = () => {
     setViewLoading(true);
 
     try {
-      const sets = await getCategoryAttributeSets(category._id as string);
+      const sets = await fetchCategoryAttributeSets(category._id as string);
       setViewSets(sets || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error loading property:", err);
-      toast.error("Failed to load property");
+      toast.error(err?.response?.data?.message || "Failed to load property");
       setViewSets([]);
     } finally {
       setViewLoading(false);
@@ -262,13 +250,12 @@ const Categories = () => {
     setAssignSearch("");
 
     try {
-      const props = await getCategoryProperty(); // readOnly ones are filtered out
+      const props = await fetchCategoryProperties();
       setAssignProps(props || []);
-      // Focus the search box on next tick once the modal is rendered.
       setTimeout(() => assignSearchRef.current?.focus(), 50);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to load properties:", err);
-      toast.error("Failed to load properties");
+      toast.error(err?.response?.data?.message || "Failed to load properties");
       setAssignProps([]);
     } finally {
       setAssignLoading(false);
@@ -287,21 +274,16 @@ const Categories = () => {
     if (!assignTarget) return;
     setAssignSaving(true);
     try {
-      const result = await assignCategoryProperty(
+      await assignPropertyToCategory(
         assignTarget._id as string,
         assignPropertyId || null,
       );
-
-      if (result.success) {
-        await fetchCategories();
-        toast.success("Property updated");
-        closeAssignProperty();
-      } else {
-        toast.error(result.error || "Failed to assign property");
-      }
-    } catch (err) {
+      await fetchCategories();
+      toast.success("Property updated");
+      closeAssignProperty();
+    } catch (err: any) {
       console.error("Error assigning property:", err);
-      toast.error("Failed to assign property");
+      toast.error(err?.response?.data?.message || "Failed to assign property");
     } finally {
       setAssignSaving(false);
     }
@@ -601,7 +583,7 @@ const Categories = () => {
               </div>
             ) : (
               <div className="flex max-h-80 flex-col gap-1 overflow-y-auto rounded-lg border border-border p-1">
-                {/* None option — always present, always at top */}
+                {/* None option */}
                 {!assignSearch.trim() && (
                   <button
                     type="button"

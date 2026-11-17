@@ -12,7 +12,7 @@ import {
   Refresh,
   MoreVert,
 } from "@mui/icons-material";
-import { findUsers } from "@/app/actions/users";
+import { fetchUsers } from "@/lib/api/users";
 import { Modal } from "@/components/ux/Modal";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 import UserRolePermissionsForm from "../_component/UserRolePermissionsForm";
@@ -137,11 +137,13 @@ export default function PermissionRolePage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await findUsers();
-      setUsers(Array.isArray(data) ? (data as UserRow[]) : []);
+      const data = await fetchUsers();
+      setUsers(data as UserRow[]);
     } catch (err: any) {
       console.error("Failed to load users:", err);
-      setError(err?.message || "Failed to load users");
+      setError(
+        err?.response?.data?.message ?? err?.message ?? "Failed to load users",
+      );
       setUsers([]);
     } finally {
       setLoading(false);

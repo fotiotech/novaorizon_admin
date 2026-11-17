@@ -2,12 +2,16 @@
 
 
 import { requireAdmin } from "@/lib/authz";
-import { connection } from "@/utils/connection";
-import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
-import Product from "@/models/Product";
-import Cart from "@/models/Cart";
-import Order from "@/models/Order";
+import { apiData, apiFetch } from "@/lib/server-api";
+
+/**
+ * Carts live in the Express backend (`/api/cart`).
+ *
+ * The backend derives the cart owner from the forwarded `session` cookie
+ * (signed-in user) or its own cart-session cookie, so the `identifier`
+ * arguments are kept for API compatibility but no longer select the cart.
+ */
 
 // Types
 export interface CartItemInput {
@@ -16,81 +20,16 @@ export interface CartItemInput {
   quantity: number;
 }
 
-function getProductQuantity(product: any) {
-  return Number(product?.quantity ?? 0);
-}
-
-// Helper to calculate totals
-async function recalculateCart(cart: any) {
-  const itemTotals = cart.items.map((item: any) => ({
-    ...item,
-    totalPrice: item.price * item.quantity - (item.discount || 0),
-  }));
-  const subtotal = itemTotals.reduce(
-    (sum: number, item: any) => sum + item.totalPrice,
-    0,
-  );
-  const tax = subtotal * 0;
-  const discount = cart.discount || 0;
-  const shippingCost = cart.shippingCost || 0;
-  const total = subtotal + tax + shippingCost - discount;
-  cart.subtotal = subtotal;
-  cart.tax = tax;
-  cart.total = total;
-  return cart;
-}
-
-// Helper to populate product details and convert to plain object
-async function populateAndLean(cart: any) {
-  await cart.populate("items.productId", "name images slug price");
-  return cart.toObject();
-}
-
 // Retrieve current cart (by userId or sessionId)
 export async function getCart(identifier: {
   userId?: string;
   sessionId?: string;
 }) {
   await requireAdmin();
-  await connection();
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) return null;
 
-  const query: any = {};
-  if (userId) query.userId = userId;
-  else query.sessionId = sessionId;
-
-  let cart: any = await Cart.findOne(query)
-    .populate("items.productId", "name images slug price")
-    .lean();
-
-  if (!cart) {
-    cart = await Cart.create({
-      userId: userId || undefined,
-      sessionId: sessionId || undefined,
-      items: [],
-      subtotal: 0,
-      tax: 0,
-      discount: 0,
-      shippingCost: 0,
-      total: 0,
-    });
-    cart = cart?.toObject();
-  }
-
-  return {
-    ...cart,
-    _id: cart?._id.toString(),
-    userId: cart?.userId?.toString(),
-    items: cart?.items.map((item: any) => ({
-      ...item,
-      _id: item._id.toString(),
-      name: item.productId?.name || item.name || "",
-      image: item.productId?.images?.[0] || item.image || null,
-      price: item.productId?.price || item.price || 0,
-      productId: item.productId?._id?.toString() || item.productId?.toString(),
-    })),
-  };
+  return await apiData<any>("/cart");
 }
 
 export async function mergeGuestSessionData({
@@ -103,7 +42,6 @@ export async function mergeGuestSessionData({
   userId: string;
 }) {
   await requireAdmin();
-  await connection();
 
   const identifiers = Array.from(
     new Set([guestId, sessionId].filter(Boolean) as string[]),
@@ -113,82 +51,16 @@ export async function mergeGuestSessionData({
     return { success: true, merged: false };
   }
 
-  const userObjectId = new mongoose.Types.ObjectId(userId);
-  let targetCart = await Cart.findOne({ userId: userObjectId });
-  const guestCarts = await Cart.find({
-    sessionId: { $in: identifiers },
-  }).exec();
-
-  if (!targetCart && guestCarts.length > 0) {
-    targetCart = guestCarts[0];
-    targetCart.userId = userObjectId;
-    targetCart.sessionId = undefined;
-  }
-
-  if (!targetCart) {
-    targetCart = new Cart({
-      userId: userObjectId,
-      items: [],
-      subtotal: 0,
-      tax: 0,
-      discount: 0,
-      shippingCost: 0,
-      total: 0,
-    });
-  }
-
-  for (const guestCart of guestCarts) {
-    if (guestCart._id.toString() === targetCart._id?.toString()) continue;
-
-    for (const item of guestCart.items) {
-      const existingItem = targetCart.items.find(
-        (cartItem: any) =>
-          cartItem.productId.toString() === item.productId.toString() &&
-          (cartItem.variant || null) === (item.variant || null),
-      );
-
-      if (existingItem) {
-        existingItem.quantity += item.quantity;
-        existingItem.price = item.price;
-      } else {
-        targetCart.items.push({
-          productId: item.productId,
-          variant: item.variant,
-          quantity: item.quantity,
-          name: item.name,
-          image: item.image,
-          price: item.price,
-          taxRate: item.taxRate || 0,
-          discount: item.discount || 0,
-        });
-      }
-    }
-
-    await Cart.deleteOne({ _id: guestCart._id });
-  }
-
-  targetCart.userId = userObjectId;
-  targetCart.sessionId = undefined;
-  await recalculateCart(targetCart);
-  await targetCart.save();
-
-  await Order.updateMany(
+  const result = await apiFetch<{ success?: boolean; merged?: boolean }>(
+    "/cart/merge",
     {
-      $or: [
-        { guestId: { $in: identifiers } },
-        { userId: null, guestId: { $ne: null } },
-      ],
-    },
-    {
-      $set: {
-        userId: userObjectId,
-        guestId: null,
-      },
+      method: "POST",
+      body: { guestId, sessionId, userId },
     },
   );
 
   revalidatePath("/cart");
-  return { success: true, merged: true };
+  return { success: true, merged: Boolean(result?.merged) };
 }
 
 // Add item to cart (upsert)
@@ -197,7 +69,6 @@ export async function addToCart(
   input: CartItemInput,
 ) {
   await requireAdmin();
-  await connection();
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) throw new Error("No identifier provided");
 
@@ -205,68 +76,17 @@ export async function addToCart(
     throw new Error("Quantity must be greater than zero");
   }
 
-  const product: any = await Product.findById(input.productId)
-    .select("price name images quantity lowStockThreshold")
-    .lean();
-  if (!product) throw new Error("Product not found");
-
-  const availableQty = product.quantity || 0;
-  const price = product.price;
-
-  let cart: any = await Cart.findOne({
-    ...(userId ? { userId } : { sessionId }),
+  const cart = await apiData<any>("/cart/items", {
+    method: "POST",
+    body: {
+      productId: input.productId,
+      variant: input.variant,
+      quantity: input.quantity,
+    },
   });
 
-  if (!cart) {
-    cart = new Cart({
-      userId: userId || undefined,
-      sessionId: sessionId || undefined,
-      items: [],
-    });
-  }
-
-  const currentQtyInCart = cart.items.reduce((sum: number, item: any) => {
-    if (item.productId.toString() !== input.productId) return sum;
-    if ((item.variant || null) !== (input.variant || null)) return sum;
-    return sum + Number(item.quantity || 0);
-  }, 0);
-
-  if (availableQty < currentQtyInCart + input.quantity) {
-    const remaining = Math.max(0, availableQty - currentQtyInCart);
-    throw new Error(
-      remaining > 0
-        ? `Only ${remaining} unit${remaining > 1 ? "s" : ""} available in stock.`
-        : "Insufficient stock available.",
-    );
-  }
-
-  const existingItemIndex = cart.items.findIndex(
-    (item: any) =>
-      item.productId.toString() === input.productId &&
-      (item.variant || null) === (input.variant || null),
-  );
-
-  if (existingItemIndex > -1) {
-    cart.items[existingItemIndex].quantity += input.quantity;
-  } else {
-    cart.items.push({
-      productId: new mongoose.Types.ObjectId(input.productId),
-      variant: input.variant || undefined,
-      image: product.images?.[0] || null,
-      name: product.name,
-      quantity: input.quantity,
-      price: price,
-      taxRate: 0,
-      discount: 0,
-    });
-  }
-
-  await recalculateCart(cart);
-  await cart.save();
-
-  const cartObject = await populateAndLean(cart);
   revalidatePath("/pos");
-  return { success: true, cart: cartObject };
+  return { success: true, cart };
 }
 
 // Update item quantity
@@ -276,41 +96,16 @@ export async function updateCartItem(
   quantity: number,
 ) {
   await requireAdmin();
-  await connection();
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) throw new Error("No identifier");
 
-  const cart = await Cart.findOne({
-    ...(userId ? { userId } : { sessionId }),
-  });
-  if (!cart) throw new Error("Cart not found");
+  const cart = await apiData<any>(
+    `/cart/items/${encodeURIComponent(itemId)}`,
+    { method: "PATCH", body: { quantity } },
+  );
 
-  const item = cart.items.id(itemId);
-  if (!item) throw new Error("Item not found");
-
-  if (quantity <= 0) {
-    cart.items.pull(itemId);
-  } else {
-    const product: any = await Product.findById(item.productId)
-      .select("quantity lowStockThreshold")
-      .lean();
-    const availableQty = getProductQuantity(product || {});
-
-    if (quantity > availableQty) {
-      throw new Error(
-        `Only ${availableQty} unit${availableQty > 1 ? "s" : ""} available in stock.`,
-      );
-    }
-
-    item.quantity = quantity;
-  }
-
-  await recalculateCart(cart);
-  await cart.save();
-
-  const cartObject = await populateAndLean(cart);
   revalidatePath("/pos");
-  return { success: true, cart: cartObject };
+  return { success: true, cart };
 }
 
 // Remove item
@@ -328,22 +123,13 @@ export async function clearCart(identifier: {
   sessionId?: string;
 }) {
   await requireAdmin();
-  await connection();
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) throw new Error("No identifier");
 
-  const cart = await Cart.findOne({
-    ...(userId ? { userId } : { sessionId }),
-  });
-  if (!cart) throw new Error("Cart not found");
+  const cart = await apiData<any>("/cart", { method: "DELETE" });
 
-  cart.items = [];
-  await recalculateCart(cart);
-  await cart.save();
-
-  const cartObject = await populateAndLean(cart);
   revalidatePath("/pos");
-  return { success: true, cart: cartObject };
+  return { success: true, cart };
 }
 
 // Apply discount/coupon
@@ -353,30 +139,14 @@ export async function applyDiscount(
   couponCode?: string,
 ) {
   await requireAdmin();
-  await connection();
   const { userId, sessionId } = identifier;
   if (!userId && !sessionId) throw new Error("No identifier");
 
-  const cart = await Cart.findOne({
-    ...(userId ? { userId } : { sessionId }),
+  const cart = await apiData<any>("/cart/discount", {
+    method: "POST",
+    body: { discountValue, couponCode },
   });
-  if (!cart) throw new Error("Cart not found");
 
-  // Recompute subtotal first so we can clamp against it
-  await recalculateCart(cart);
-
-  // Clamp discount between 0 and current subtotal
-  const clamped = Math.max(
-    0,
-    Math.min(Number(discountValue) || 0, cart.subtotal),
-  );
-  cart.discount = clamped;
-  if (couponCode) cart.appliedCoupon = couponCode;
-
-  await recalculateCart(cart);
-  await cart.save();
-
-  const cartObject = await populateAndLean(cart);
   revalidatePath("/pos");
-  return { success: true, cart: cartObject };
+  return { success: true, cart };
 }

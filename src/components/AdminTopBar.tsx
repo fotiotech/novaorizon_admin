@@ -6,8 +6,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ToastContainer } from "react-toastify";
-import axios from "axios";
 import Pusher from "pusher-js";
+import api from "@/lib/api";
 import { ThemeToggle } from "./theme-toggle";
 import { findNavContext } from "@/components/ui/menu-config";
 
@@ -25,11 +25,7 @@ type NotificationType = {
   timestamp: string;
 };
 
-const AdminTopBar = ({
-  sideBarToggle,
-  screenSize,
-  setSideBarToggle,
-}: AdminTopBarProps) => {
+const AdminTopBar = ({ sideBarToggle, setSideBarToggle }: AdminTopBarProps) => {
   const pathname = usePathname();
   const router = useRouter();
   const nav = useMemo(() => findNavContext(pathname), [pathname]);
@@ -38,7 +34,7 @@ const AdminTopBar = ({
   const [titleOpen, setTitleOpen] = useState(false);
   const titleRef = useRef<HTMLDivElement>(null);
 
-  // ── Close title dropdown on outside click / Escape ────────────────
+  /* ── Close title dropdown on outside click / Escape ─────────────── */
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (titleRef.current && !titleRef.current.contains(e.target as Node)) {
@@ -60,15 +56,18 @@ const AdminTopBar = ({
     setTitleOpen(false);
   }, [pathname]);
 
-  // ── Notifications ─────────────────────────────────────────────────
+  /* ── Notifications ──────────────────────────────────────────────────
+   * Previously: axios.get("/api/notify") — a Next.js API route in the
+   * NextAuth era. The Express backend exposes GET /api/notifications
+   * which returns { data: { notifications, total, unreadCount, … } }.
+   * Cookie is sent automatically via `api` (withCredentials: true).
+   * ────────────────────────────────────────────────────────────────── */
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await axios.get("/api/notify", { timeout: 10000 });
-      if (!Array.isArray(res.data)) {
-        setNotifications([]);
-        return;
-      }
-      setNotifications(res.data);
+      const res = await api.get<{
+        data: { notifications: NotificationType[] };
+      }>("/notifications");
+      setNotifications(res.data.data.notifications ?? []);
     } catch (err: any) {
       console.error(
         "[AdminTopBar] Failed to load notifications:",
@@ -83,13 +82,19 @@ const AdminTopBar = ({
     fetchNotifications();
   }, [fetchNotifications]);
 
+  /* ── Pusher — realtime admin notifications ────────────────────────
+   * Env var names unified with `useLiveEvents`:
+   *   NEXT_PUBLIC_PUSHER_KEY
+   *   NEXT_PUBLIC_PUSHER_CLUSTER
+   * Backend channel: "admin-notifications", event: "new-notification"
+   * (see server/utils/notification.service.ts).
+   * ──────────────────────────────────────────────────────────────── */
   useEffect(() => {
-    if (!process.env.NEXT_PUBLIC_PUSHER_APP_KEY) return;
+    const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
+    const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+    if (!key || !cluster) return;
 
-    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_APP_KEY!, {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER!,
-    });
-
+    const pusher = new Pusher(key, { cluster, forceTLS: true });
     const channel = pusher.subscribe("admin-notifications");
     channel.bind(
       "new-notification",
@@ -129,8 +134,8 @@ const AdminTopBar = ({
   const hasMenu = siblingCount > 0;
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between gap-2 bg-background py-2.5 pl-1 pr-3  lg:px-4">
-      {/* Left: menu toggle + page title (dropdown if section has siblings) */}
+    <header className="sticky top-0 z-40 flex items-center justify-between gap-2 bg-background py-2.5 pl-1 pr-3 lg:px-4">
+      {/* Left: menu toggle + page title */}
       <div className="flex min-w-0 items-center gap-2">
         <div>
           <button
