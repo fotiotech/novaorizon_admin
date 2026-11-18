@@ -13,7 +13,7 @@ import {
   MoreVert,
   Close,
 } from "@mui/icons-material";
-import { getPages, deletePage } from "@/app/actions/pageActions";
+import { getPages, deletePage } from "@/lib/api/page";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 import { toast } from "react-hot-toast";

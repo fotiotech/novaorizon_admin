@@ -4,14 +4,15 @@ import { useState, useEffect } from "react";
 import {
   getUserPaymentMethods,
   deletePaymentMethod,
-} from "@/app/actions/payment";
-import { getUserAddresses } from "@/app/actions/address";
+  type ApiPaymentMethod,
+} from "@/lib/api/payment-method";
+import { getUserAddresses } from "@/lib/api/address";
 import PaymentMethodForm from "../_component/PaymentMethodForm";
 
 export default function PaymentMethodsPage() {
   const [showForm, setShowForm] = useState(false);
   const [addresses, setAddresses] = useState([]);
-  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState<ApiPaymentMethod[]>([]);
 
   useEffect(() => {
     const loadData = async () => {

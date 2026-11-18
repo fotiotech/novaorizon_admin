@@ -8,7 +8,7 @@ import React, {
   useRef,
   useCallback,
 } from "react";
-import { getCategories } from "@/app/actions/category";
+import { listCategories } from "@/lib/api/category";
 import {
   Check,
   Close,
@@ -55,7 +55,7 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({
     const load = async () => {
       try {
         setLoading(true);
-        const data = await getCategories();
+        const data = await listCategories();
         setCategories(data);
       } catch {
         setError("Failed to load categories.");

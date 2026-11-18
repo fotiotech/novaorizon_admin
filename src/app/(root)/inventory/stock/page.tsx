@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, memo, useState } from "react";
 import { Edit, Warning, Inventory2 } from "@mui/icons-material";
 import { Snackbar, Alert } from "@mui/material";
-import { findProducts, updateProductStockLevel } from "@/app/actions/products";
+import { findProducts, updateProductStockLevel } from "@/lib/api/product";
 
 interface ProductRow {
   _id: string;

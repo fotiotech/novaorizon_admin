@@ -11,7 +11,7 @@ import {
   Close,
   Person2,
 } from "@mui/icons-material";
-import { getAllCustomers, deleteCustomer } from "@/app/actions/customer";
+import { getAllCustomers, deleteCustomer } from "@/lib/api/customer";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 import { useDebouncedCallback } from "use-debounce";

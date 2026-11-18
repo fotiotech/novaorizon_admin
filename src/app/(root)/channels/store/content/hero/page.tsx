@@ -4,7 +4,7 @@
 import {
   findHeroContent,
   deleteHeroContent,
-} from "@/app/actions/content_management";
+} from "@/lib/api/hero-content";
 import { HeroSection } from "@/constant/types";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState, memo } from "react";

@@ -1,6 +1,6 @@
 "use client";
 
-import { deleteOrder, findOrders } from "@/app/actions/order";
+import { deleteOrder, findOrders } from "@/lib/api/order";
 import { Prices } from "@/components/Prices";
 import { Orders } from "@/constant/types";
 import { Delete } from "@mui/icons-material";

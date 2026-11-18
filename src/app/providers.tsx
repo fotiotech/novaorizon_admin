@@ -2,7 +2,6 @@
 
 import React, { useMemo, ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { SessionProvider } from "next-auth/react";
 import { Provider as ReduxProvider } from "react-redux";
 import { UserDataProvider } from "./context/UserDataContext"; // 👈 Import the new provider
 import { CartProvider } from "./context/CartContext";

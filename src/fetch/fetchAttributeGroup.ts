@@ -1,4 +1,4 @@
-import { findAllAttributeGroups } from "@/app/actions/attributegroup";
+import { findAllAttributeGroups } from "@/lib/api/attribute-group";
 import { normalizeAttributeGroup } from "@/app/store/slices/normalizedData";
 import { setAttributeGroups } from "@/app/store/slices/attributeGroupSlice";
 import { AppDispatch } from "@/app/store/store";

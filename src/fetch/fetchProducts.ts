@@ -4,7 +4,7 @@ import {
   updateProduct,
   findProductById,
   findProducts,
-} from "@/app/actions/products";
+} from "@/lib/api/product";
 import { normalizeProducts } from "@/app/store/slices/normalizedData";
 import { setProducts } from "@/app/store/slices/productSlice";
 import { AppDispatch } from "@/app/store/store";
@@ -32,14 +32,15 @@ export const fetchProducts = (id?: string) => async (dispatch: AppDispatch) => {
   try {
     const data = id ? await findProductById(id) : await findProducts();
 
-    // Check for server error response
+    // Check for server error response (the API client returns `{ error }`
+    // when the fetch fails instead of throwing).
     if (
       data &&
       typeof data === "object" &&
-      "success" in data &&
-      data.success === false
+      (("success" in data && data.success === false) ||
+        ("error" in data && Boolean(data.error)))
     ) {
-      console.error("Server error:", data.error);
+      console.error("Server error:", (data as any).error);
       return;
     }
 

@@ -12,9 +12,9 @@ import {
   updateProductCategory,
   updateProductStatus,
   updateProductQuantity,
-} from "@/app/actions/products";
-import { getCategories } from "@/app/actions/category";
-import { getProductDraft, deleteProductDraft } from "@/app/actions/drafts";
+} from "@/lib/api/product";
+import { listCategories } from "@/lib/api/category";
+import { getProductDraft, deleteProductDraft } from "@/lib/api/product-draft";
 import {
   getOrCreateNewProductDraftKey,
   clearNewProductDraftKey,
@@ -290,7 +290,7 @@ export default function ProductsPage() {
       try {
         const [filterRows, allRows] = await Promise.all([
           getProductFilterCategories(),
-          getCategories(),
+          listCategories(),
         ]);
         setCategories(filterRows);
         setAllCategories(

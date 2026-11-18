@@ -1,19 +1,16 @@
 import { normalizeOffer } from "@/app/store/slices/normalizedData";
 import { AppDispatch } from "@/app/store/store";
-import { readOffers } from "@/app/actions/offers";
+import api from "@/lib/api";
 import { setOffers } from "@/app/store/slices/offerSlice";
 
 export const fetchOffer =
   (id?: string | null) => async (dispatch: AppDispatch) => {
     try {
-      let data;
-
-      // Fetch category data based on the provided parameter
-      if (id) {
-        data = await readOffers(id);
-      } else {
-        data = await readOffers();
-      }
+      // Fetch the offer(s) straight from the backend.
+      const res = await api.get<{ data: any[] | any }>("/offers", {
+        params: id ? { id } : undefined,
+      });
+      const data = res.data?.data;
 
       // Check if data is empty or undefined
       if (!data || (Array.isArray(data) && data.length === 0)) {

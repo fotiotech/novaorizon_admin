@@ -11,7 +11,7 @@ import {
   deleteMenuBackgroundImage,
   deleteMenuImage,
   type MenuRefOptions,
-} from "@/app/actions/menu";
+} from "@/lib/api/menu";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 import FilesUploader from "@/components/FilesUploader";
@@ -49,7 +49,7 @@ import {
   MENU_THEMES,
   type IMenuDisplayConfig,
   type IMenuFeaturedSlot,
-} from "@/models/Menu";
+} from "@/constant/types/menu";
 
 /* -------------------------------------------------------------------------- */
 /*                                    Types                                   */

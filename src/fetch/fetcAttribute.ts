@@ -1,4 +1,4 @@
-import { findAttributesAndValues } from "@/app/actions/attributes";
+import { findAttributesAndValues } from "@/lib/api/attribute";
 import { setAttributes } from "@/app/store/slices/attributeSlice";
 import { normalizeAttribute } from "@/app/store/slices/normalizedData";
 import { AppDispatch } from "@/app/store/store";

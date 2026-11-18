@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { fetchAvailableItems } from "@/app/actions/collection";
+import { fetchAvailableItems } from "@/lib/api/collection";
 import { BLOCK_REF_MODELS, type BlockRefModel } from "@/lib/content/constants";
 
 const inputCls =

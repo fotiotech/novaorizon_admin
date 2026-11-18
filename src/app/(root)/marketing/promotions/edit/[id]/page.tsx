@@ -1,104 +1,79 @@
 // app/marketing/promotions/edit/[id]/page.tsx
-import { PromotionComposer } from "@/app/(root)/marketing/components/PromotionComposer";
-import {
-  getPromotion,
-  getPromotionOptions,
-  updatePromotion,
-} from "@/app/actions/promotion";
+//
+// Server component: the promotion and the composer options are loaded in
+// parallel on the server (BFF -> GET /api/promotions/:id + /promotions/options)
+// and handed to the client composer, which only handles edits/submits.
 import { notFound } from "next/navigation";
+import { apiData } from "@/lib/server-api";
+import type { PromotionOptions } from "@/lib/api/promotion";
+import EditPromotionClient from "./_component/EditPromotionClient";
 
-interface EditPageProps {
+export const dynamic = "force-dynamic";
+
+function normalizeOptions(
+  raw: Partial<PromotionOptions> | null | undefined,
+): PromotionOptions {
+  return {
+    customerGroups: Array.isArray(raw?.customerGroups) ? raw.customerGroups : [],
+    promotions: Array.isArray(raw?.promotions) ? raw.promotions : [],
+    products: Array.isArray(raw?.products) ? raw.products : [],
+    categories: Array.isArray(raw?.categories) ? raw.categories : [],
+    brands: Array.isArray(raw?.brands) ? raw.brands : [],
+  };
+}
+
+interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-/** Coerce an array of ObjectIds OR populated docs → string IDs. */
-function toIdList(arr: any[] | undefined | null): string[] {
-  if (!Array.isArray(arr)) return [];
-  return arr.map((x) =>
-    x && typeof x === "object" && "_id" in x ? String(x._id) : String(x),
-  );
-}
+export default async function EditPromotionPage({ params }: PageProps) {
+  const { id } = await params;
 
-export default async function EditPromotionPage(props: EditPageProps) {
-  const { id } = await props.params;
-
-  const [promotion, options] = await Promise.all([
-    getPromotion(id).catch(() => null),
-    getPromotionOptions(),
+  const [promotionResult, optionsResult] = await Promise.allSettled([
+    apiData<any>("/promotions/" + encodeURIComponent(id), {
+      cache: "no-store",
+    }),
+    apiData<Partial<PromotionOptions>>("/promotions/options", {
+      cache: "no-store",
+    }),
   ]);
 
-  if (!promotion) notFound();
+  const promotion =
+    promotionResult.status === "fulfilled" ? promotionResult.value : null;
+  const options =
+    optionsResult.status === "fulfilled"
+      ? normalizeOptions(optionsResult.value)
+      : null;
 
-  const p: any = promotion;
+  let initialError: string | null = null;
 
-  // Normalise Map → plain object; drop empty entries so the form
-  // doesn't render stray blank inputs.
-  const propertyValues: Record<string, any> = {};
-  if (p.propertyValues) {
-    const entries: Array<[string, any]> =
-      p.propertyValues instanceof Map
-        ? Array.from(p.propertyValues.entries() as Iterable<[string, any]>)
-        : Object.entries(p.propertyValues as Record<string, any>);
-
-    for (const [k, v] of entries) {
-      if (v !== undefined && v !== null && v !== "") {
-        propertyValues[k] = v;
-      }
-    }
+  if (promotionResult.status === "rejected") {
+    console.error(
+      "[promotions edit page] failed to load promotion:",
+      promotionResult.reason,
+    );
   }
 
-  const initialValues = {
-    name: p.name ?? "",
-    code: p.code ?? "",
-    description: p.description ?? "",
-    startDate: p.startDate
-      ? new Date(p.startDate).toISOString().slice(0, 16)
-      : "",
-    endDate: p.endDate ? new Date(p.endDate).toISOString().slice(0, 16) : "",
-    isActive: p.isActive ?? true,
-    priority: p.priority ?? 0,
-    calculationType:
-      p.promotionType?.calculationType ?? ("percentage" as const),
-    propertyValues,
-    scope: {
-      appliesTo: p.scope?.appliesTo ?? "all",
-      productIds: toIdList(p.scope?.productIds),
-      categoryIds: toIdList(p.scope?.categoryIds),
-      brandIds: toIdList(p.scope?.brandIds),
-      excludeProductIds: toIdList(p.scope?.excludeProductIds),
-    },
-    customerEligibility: {
-      allCustomers: p.customerEligibility?.allCustomers ?? true,
-      customerGroupIds: toIdList(p.customerEligibility?.customerGroupIds),
-      minOrderAmount: p.customerEligibility?.minOrderAmount ?? 0,
-    },
-    usageLimits: {
-      totalUses: p.usageLimits?.totalUses ?? null,
-      perCustomer: p.usageLimits?.perCustomer ?? null,
-      perOrder: p.usageLimits?.perOrder ?? 1,
-    },
-    stackable: p.stackable ?? false,
-    exclusiveWith: toIdList(p.exclusiveWith),
-  };
-
-  const otherPromotions = options.promotions.filter((x) => x.value !== id);
-
-  async function handleUpdate(data: any) {
-    "use server";
-    return updatePromotion(id, data);
+  if (optionsResult.status === "rejected") {
+    console.error(
+      "[promotions edit page] failed to load options:",
+      optionsResult.reason,
+    );
+    initialError =
+      optionsResult.reason instanceof Error
+        ? optionsResult.reason.message
+        : "Failed to load promotion options.";
   }
+
+  // Missing promotion + working options → a real not-found page.
+  if (!promotion && !initialError) notFound();
 
   return (
-    <div className="mx-auto w-full max-w-3xl sm:px-6">
-      <PromotionComposer
-        initialValues={initialValues}
-        customerGroups={options.customerGroups}
-        otherPromotions={otherPromotions}
-        products={options.products}
-        categories={options.categories}
-        brands={options.brands}
-        onSubmit={handleUpdate}
-      />
-    </div>
+    <EditPromotionClient
+      promotionId={id}
+      promotion={promotion}
+      options={options}
+      initialError={initialError}
+    />
   );
 }

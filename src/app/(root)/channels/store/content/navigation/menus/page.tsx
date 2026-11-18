@@ -13,7 +13,7 @@ import {
   Search,
   SearchOff,
 } from "@mui/icons-material";
-import { getAllMenus, deleteMenu } from "@/app/actions/menu";
+import { getAllMenus, deleteMenu } from "@/lib/api/menu";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 import { toast } from "react-hot-toast";

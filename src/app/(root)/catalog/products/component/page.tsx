@@ -1,8 +1,7 @@
 // app/verify/page.tsx
 
-import User from "@/models/User";
-import { connection } from "@/utils/connection";
 import Link from "next/link";
+import { apiFetch } from "@/lib/server-api";
 import { SignIn } from "../../../../(auth)/_component/SignInButton";
 
 interface VerifyPageProps {
@@ -20,15 +19,18 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
     );
   }
 
-  await connection();
+  let verified = false;
+  try {
+    await apiFetch("/auth/verify-email", {
+      method: "POST",
+      body: { token },
+    });
+    verified = true;
+  } catch (error) {
+    console.error("[verify] token rejected:", error);
+  }
 
-  // Find user matching token where the current time is less than tokenExpiry
-  const user = await User.findOne({
-    verificationToken: token,
-    tokenExpiry: { $gt: new Date() },
-  });
-
-  if (!user) {
+  if (!verified) {
     return (
       <div className="text-center mt-12">
         <p className="text-red-500 font-semibold">
@@ -43,15 +45,6 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
       </div>
     );
   }
-
-  // Atomically update user validation status and strip tokens to prevent replay attacks
-  await User.updateOne(
-    { _id: user._id },
-    {
-      $set: { isVerified: true, status: "active" },
-      $unset: { verificationToken: "", tokenExpiry: "" },
-    },
-  );
 
   return (
     <div className="text-center mt-12 max-w-md mx-auto p-6 border rounded shadow">

@@ -1,4 +1,4 @@
-import { findUsers } from "@/app/actions/users";
+import { findUsers } from "@/lib/api/users";
 import { normalizeUser } from "@/app/store/slices/normalizedData";
 import { setUser } from "@/app/store/slices/userSlice"; // Correct action for users
 import { AppDispatch } from "@/app/store/store";

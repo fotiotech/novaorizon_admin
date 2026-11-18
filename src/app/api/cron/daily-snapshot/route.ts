@@ -1,69 +1,40 @@
 // admin/app/api/cron/daily-snapshot/route.ts
+//
+// Thin proxy to the Express job (`POST /api/cron/daily-snapshot`). Vercel cron
+// keeps calling this URL; the backend owns the aggregation.
 import { NextRequest, NextResponse } from "next/server";
-import { connection } from "@/utils/connection";
-import { Event } from "@/models/Event";
-import { VisitorDay } from "@/models/VisitorDay";
-import { DailyStats } from "@/models/DailyStats";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const API_BASE = (
+  process.env.SERVER_API_URL ||
+  process.env.NEXT_PUBLIC_SERVER_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:3000"
+).replace(/\/+$/, "");
+
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+  const authorization = req.headers.get("authorization");
+  if (!authorization) {
     return new NextResponse("unauthorized", { status: 401 });
   }
 
-  await connection();
+  try {
+    const res = await fetch(`${API_BASE}/api/cron/daily-snapshot`, {
+      method: "POST",
+      headers: { authorization },
+      cache: "no-store",
+      signal: AbortSignal.timeout(60_000),
+    });
 
-  const yesterday = new Date();
-  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-  yesterday.setUTCHours(0, 0, 0, 0);
-  const day = yesterday.toISOString().slice(0, 10);
-
-  const next = new Date(yesterday);
-  next.setUTCDate(next.getUTCDate() + 1);
-
-  // Recompute from raw events to correct any drift
-  const events = await Event.find({
-    isBot: { $ne: true },
-    timestamp: { $gte: yesterday, $lt: next },
-  })
-    .select("userId eventType metadata")
-    .lean();
-
-  const uniqueUsers = new Set<string>();
-  const eventCounts: Record<string, number> = {};
-  let revenue = 0;
-
-  for (const e of events) {
-    uniqueUsers.add(e.userId);
-    eventCounts[e.eventType] = (eventCounts[e.eventType] ?? 0) + 1;
-    if (e.eventType === "purchase" && (e.metadata as any)?.total) {
-      revenue += Number((e.metadata as any).total) || 0;
-    }
+    const body = await res.text();
+    return new NextResponse(body, {
+      status: res.status,
+      headers: { "content-type": res.headers.get("content-type") ?? "application/json" },
+    });
+  } catch (error) {
+    console.error("[cron/daily-snapshot] proxy failed:", error);
+    return NextResponse.json({ error: "Snapshot failed" }, { status: 502 });
   }
-
-  await DailyStats.updateOne(
-    { day },
-    {
-      $set: {
-        visitors: uniqueUsers.size,
-        events: events.length,
-        eventCounts: {
-          view: eventCounts.view ?? 0,
-          cart_add: eventCounts.cart_add ?? 0,
-          purchase: eventCounts.purchase ?? 0,
-          like: eventCounts.like ?? 0,
-          page_view: eventCounts.page_view ?? 0,
-        },
-        revenue,
-        updatedAt: new Date(),
-      },
-      $setOnInsert: { day, newVisitors: 0, returningVisitors: 0 },
-    },
-    { upsert: true },
-  );
-
-  return NextResponse.json({ ok: true, day, visitors: uniqueUsers.size });
 }

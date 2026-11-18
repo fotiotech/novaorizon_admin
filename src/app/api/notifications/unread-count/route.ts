@@ -1,24 +1,22 @@
-import Notification from "@/models/Notification";
-import { connection } from "@/utils/connection";
 import { NextResponse } from "next/server";
-import { requireAdminApi } from "@/lib/api-auth";
+import { apiFetch } from "@/lib/server-api";
+
+/** GET /api/notifications/unread-count?type=… → backend unread inbox. */
 
 export async function GET(request: Request) {
   try {
-    const auth = await requireAdminApi();
-    if (auth.response) return auth.response;
-
-    await connection();
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type");
 
-    const query: Record<string, unknown> = {
-      userId: auth.user.id,
-      isRead: false,
-    };
-    if (type) query.type = type;
+    const res = await apiFetch<{
+      data?: { notifications?: Array<{ type?: string; isRead?: boolean }> };
+    }>("/notifications", { query: { unread: true, limit: 100 } });
 
-    const count = await Notification.countDocuments(query);
+    const items = res?.data?.notifications ?? [];
+    const count = items.filter(
+      (n) => !n.isRead && (!type || n.type === type),
+    ).length;
+
     return NextResponse.json({ count });
   } catch (error) {
     console.error("Failed to count notifications:", error);

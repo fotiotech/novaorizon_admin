@@ -15,7 +15,7 @@ import {
   getBlockById,
   getSourcePreview,
   type SourcePreviewData,
-} from "@/app/actions/blocks";
+} from "@/lib/api/blocks";
 import {
   BLOCK_LOCATIONS,
   BLOCK_DISPLAYS,
@@ -227,7 +227,7 @@ export default function BlockForm({ id }: { id?: string }) {
     (async () => {
       try {
         setLoading(true);
-        const res = await getBlockById(id);
+        const res: any = await getBlockById(id);
         if (!res.success || !res.data) {
           setError(res.error || "Failed to load block");
           return;

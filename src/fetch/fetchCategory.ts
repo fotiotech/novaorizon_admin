@@ -1,4 +1,4 @@
-import { getCategory } from "@/app/actions/category";
+import { getCategory } from "@/lib/api/category";
 import { normalizeCategory } from "@/app/store/slices/normalizedData";
 import { setCategories } from "@/app/store/slices/categorySlice";
 import { AppDispatch } from "@/app/store/store";

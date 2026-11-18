@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getUserAddresses, deleteAddress } from "@/app/actions/address";
+import { getUserAddresses, deleteAddress } from "@/lib/api/address";
 import AddressForm from "../_component/AddressForm";
 
 export default function AddressesPage() {

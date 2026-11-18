@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import {
-  FacebookAdsConnectionInput,
   loadFacebookAdsSettings,
   saveFacebookAdsSettings,
   validateFacebookAdsConnection,
-} from "@/app/actions/facebookAds";
-import { SECRET_MASK } from "@/lib/facebookAds";
+} from "@/lib/api/facebook-ads";
+import {
+  SECRET_MASK,
+  type FacebookAdsConnectionInput,
+} from "@/lib/facebookAds";
 
 type FacebookAdsForm = {
   accountName: string;
@@ -124,7 +126,7 @@ export default function CampaignSettingsPage() {
 
     setStatus({
       type: "success",
-      message: result.message || validation.message,
+      message: result.message || validation.message || "Settings saved.",
     });
   };
 

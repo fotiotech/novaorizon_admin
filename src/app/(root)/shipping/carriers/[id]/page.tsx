@@ -4,8 +4,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { getCarriersById } from "@/app/actions/carrier";
-import { findOrders } from "@/app/actions/order";
+import { getCarriersById } from "@/lib/api/carrier";
+import { findOrders } from "@/lib/api/order";
 import { OrderStatusUpdater } from "@/app/(root)/orders/components/OrderStatusUpdate";
 import SearchFilter from "@/app/(root)/orders/components/SearchFilter";
 

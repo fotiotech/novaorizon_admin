@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getNewContactCount } from "@/app/actions/contact";
+import { fetchNewContactCount } from "@/lib/api/contact";
 
 /**
  * Polls the server for the number of unread ("new") contact messages.
@@ -16,7 +16,7 @@ export function useNewContactCount() {
 
     const fetchCount = async () => {
       try {
-        const c = await getNewContactCount();
+        const c = await fetchNewContactCount();
         if (mounted) setCount(c);
       } catch {
         // silently ignore network errors

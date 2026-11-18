@@ -5,8 +5,8 @@ import {
   createHeroContent,
   updateHeroContent,
   deleteHeroImage,
-} from "@/app/actions/content_management";
-import { deleteS3Object } from "@/app/actions/s3";
+} from "@/lib/api/hero-content";
+import { deleteS3Object } from "@/lib/api/upload";
 import FilesUploader from "@/components/FilesUploader";
 import Spinner from "@/components/Spinner";
 import BadgePicker, { type BadgeSelection } from "@/components/BadgePicker";
@@ -186,7 +186,7 @@ const HeroForm: React.FC<HeroFormProps> = ({
     try {
       let result;
       if (mode === "create") {
-        result = await createHeroContent(null, data);
+        result = await createHeroContent(data);
       } else {
         if (!initialData?._id) {
           setSubmitStatus({
@@ -196,7 +196,7 @@ const HeroForm: React.FC<HeroFormProps> = ({
           });
           return;
         }
-        result = await updateHeroContent(initialData._id, null, data);
+        result = await updateHeroContent(initialData._id, data);
       }
 
       setSubmitStatus({

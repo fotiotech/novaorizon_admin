@@ -1,16 +1,51 @@
 // app/auth/forgot-password/page.tsx
 "use client";
 
-import { useActionState } from "react";
-import { requestPasswordReset } from "@/app/actions/forgot-password";
-import Link from "next/link";
+import { useState } from "react";
+import api from "@/lib/api";
 import { SignIn } from "@/app/(auth)/_component/SignInButton";
 
+type FormState = { error?: string; success?: string } | null;
+
 export default function ForgotPasswordPage() {
-  const [state, formAction, isPending] = useActionState(
-    requestPasswordReset,
-    null,
-  );
+  const [state, setState] = useState<FormState>(null);
+  const [isPending, setPending] = useState(false);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const email = String(new FormData(form).get("email") ?? "")
+      .trim()
+      .toLowerCase();
+
+    if (!email) {
+      setState({ error: "Please provide an email address." });
+      return;
+    }
+
+    setPending(true);
+    setState(null);
+
+    try {
+      const res = await api.post<{ message?: string }>("/auth/forgot-password", {
+        email,
+      });
+      setState({
+        success:
+          res.data?.message ??
+          "If that account exists, a reset link has been sent!",
+      });
+    } catch (error: any) {
+      setState({
+        error:
+          error?.response?.data?.error ??
+          "An error occurred. Please try again.",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
@@ -24,7 +59,7 @@ export default function ForgotPasswordPage() {
           </p>
         </div>
 
-        <form action={formAction} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="sr-only">
               Email Address

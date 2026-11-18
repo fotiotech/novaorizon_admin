@@ -13,7 +13,7 @@ import {
 import {
   listActiveTrustBadges,
   type TrustBadgeDTO,
-} from "@/app/actions/trust_badge";
+} from "@/lib/api/trust-badge";
 import { BADGE_ICON_OPTIONS, isValidBadgeLink } from "@/lib/trust/badgeIcons";
 import TrustBadgeIcon from "./TrustBadgeIcon";
 

@@ -1,5 +1,5 @@
 // lib/content/recommendationResolvers.ts
-import { getRecommendations, getRecentlyViewed } from "@/app/actions/events";
+import { getRecommendations, getRecentlyViewed } from "@/lib/api/events";
 import type { RegistryKey } from "./entityMetadata";
 
 export interface RecommendationContext {

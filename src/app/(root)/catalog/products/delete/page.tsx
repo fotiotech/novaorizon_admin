@@ -1,6 +1,6 @@
 "use client";
 
-import { deleteProduct } from "@/app/actions/products";
+import { deleteProduct } from "@/lib/api/product";
 import { useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 

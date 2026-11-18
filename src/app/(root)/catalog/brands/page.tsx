@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, FormEvent, ChangeEvent } from "react";
-import { getBrands, createBrand, updateBrand, deleteBrand } from "@/app/actions/brand";
+import { getBrands, createBrand, updateBrand, deleteBrand } from "@/lib/api/brand";
 import { Brand } from "@/constant/types";
 
 const Brands = () => {

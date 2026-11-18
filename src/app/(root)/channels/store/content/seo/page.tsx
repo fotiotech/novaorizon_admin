@@ -3,7 +3,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Close } from "@mui/icons-material";
-import { getSeoSetting, saveSeoSetting } from "@/app/actions/seo";
+import { getSeoSetting, saveSeoSetting } from "@/lib/api/seo";
 
 import {
   DEFAULT_SEO,

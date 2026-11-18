@@ -7,7 +7,7 @@ import {
   getNewsletterSubscribers,
   deleteNewsletterSubscriber,
   exportNewsletterCsv,
-} from "@/app/actions/newsletter";
+} from "@/lib/api/newsletter";
 import Spinner from "@/components/Spinner";
 
 type Subscriber = {

@@ -1,6 +1,6 @@
 // app/sales/orders/[orderNumber]/page.tsx
 
-import { findOrders } from "@/app/actions/order";
+import { apiData } from "@/lib/server-api";
 import { notFound } from "next/navigation";
 import OrderDetailsClient from "../_component/OrderDetailsPage";
 
@@ -14,10 +14,10 @@ export default async function Page(props: PageProps) {
   const params = await props.params;
   const { orderNumber } = params;
 
-  // Fetch the specific order using the updated findOrders
-  const result = await findOrders({
-    orderNumber,
-    limit: 1,
+  // Server Component: call the backend through the server-side client, which
+  // forwards the session cookie. (The browser axios wrapper cannot run here.)
+  const result = await apiData<{ orders: any[] }>("/orders", {
+    query: { orderNumber, limit: 1 },
   });
 
   const order = result.orders?.[0];

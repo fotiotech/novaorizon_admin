@@ -11,8 +11,8 @@ import React, {
 } from "react";
 import Select, { MultiValue } from "react-select";
 import FilesUploader from "../../../../../components/FilesUploader";
-import { getBrands } from "@/app/actions/brand";
-import { getCarriers } from "@/app/actions/carrier";
+import { getBrands } from "@/lib/api/brand";
+import { getCarriers } from "@/lib/api/carrier";
 import { Brand } from "@/constant/types";
 import RichTextEditorWrapper from "./RichTextEditorWrapper";
 import { BottomSheet } from "@/components/ux/DescBottomSheet";

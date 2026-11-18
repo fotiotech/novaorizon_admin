@@ -18,9 +18,17 @@ export interface AttributeGroupUsageEntry {
   categories: Array<{ _id: string; name: string }>;
 }
 
-/** GET /api/attribute-groups — returns the tree, built server-side. */
-export async function findAllAttributeGroups(): Promise<ApiAttributeGroup[]> {
-  const res = await api.get<{ data: ApiAttributeGroup[] }>("/attribute-groups");
+/**
+ * GET /api/attribute-groups — returns the tree, built server-side.
+ * Pass `id` to scope the query to a single group (`?id=`), matching the
+ * backend's optional filter.
+ */
+export async function findAllAttributeGroups(
+  id?: string,
+): Promise<ApiAttributeGroup[]> {
+  const res = await api.get<{ data: ApiAttributeGroup[] }>("/attribute-groups", {
+    params: id ? { id } : undefined,
+  });
   return Array.isArray(res.data?.data) ? res.data.data : [];
 }
 

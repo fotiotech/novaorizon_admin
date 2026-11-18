@@ -1,6 +1,6 @@
 "use client";
 
-import { findProducts, findProductById } from "@/app/actions/products";
+import { findProducts, findProductById } from "@/lib/api/product";
 import Image from "next/image";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import Select from "react-select";

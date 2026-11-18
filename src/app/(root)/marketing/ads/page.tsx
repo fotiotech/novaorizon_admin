@@ -10,7 +10,7 @@ import {
   syncFacebookAdSets,
   syncFacebookCatalogProducts,
   getCampaignInsights,
-} from "@/app/actions/facebookAds";
+} from "@/lib/api/facebook-ads";
 
 type CampaignRow = {
   id?: string;
@@ -89,7 +89,7 @@ export default function CampaignsPage() {
 
     const adSetsResult = await loadAdSets();
     if (adSetsResult.message) {
-      setMessage((current) => current || adSetsResult.message);
+      setMessage((current) => current || adSetsResult.message || "");
     }
 
     if (result.campaigns && result.campaigns.length > 0) {

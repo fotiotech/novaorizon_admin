@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { fetchReferenceOptions } from "@/app/actions/collection";
+import { fetchReferenceOptions } from "@/lib/api/collection";
 import type { RegistryKey } from "@/lib/content/entityMetadata";
 
 const inputCls =

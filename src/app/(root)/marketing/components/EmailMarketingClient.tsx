@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { createTemplate, deleteTemplate } from "@/app/actions/campaigns";
+import { createTemplate, deleteTemplate } from "@/lib/api/campaign";
 
 type Channel = "email" | "sms";
 
@@ -51,6 +51,8 @@ interface Props {
   campaigns: CampaignLite[];
   campaignsTotal: number;
   counts: Counts;
+  /** Called after a template is created or deleted so the parent can refetch. */
+  onChanged?: () => void | Promise<void>;
 }
 
 // ─── Tokens (match the promotion pages) ──────────────────────────────
@@ -86,6 +88,7 @@ export function EmailMarketingClient({
   campaigns,
   campaignsTotal,
   counts,
+  onChanged,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -127,6 +130,7 @@ export function EmailMarketingClient({
         });
         toast.success("Template created");
         resetForm();
+        await onChanged?.();
         router.refresh();
       } catch (err: any) {
         const msg = err?.message ?? "Failed to create template";
@@ -142,6 +146,7 @@ export function EmailMarketingClient({
       try {
         await deleteTemplate(id);
         toast.success("Template deleted");
+        await onChanged?.();
         router.refresh();
       } catch (err: any) {
         toast.error(err?.message ?? "Failed to delete");

@@ -1,7 +1,7 @@
 // components/DeleteButton.tsx
 "use client";
 
-import { deleteCollection } from "@/app/actions/collection";
+import { deleteCollection } from "@/lib/api/collection";
 import { useRouter } from "next/navigation";
 
 interface DeleteButtonProps {

@@ -6,7 +6,7 @@ import { Box, CircularProgress } from "@mui/material";
 import { toast } from "react-hot-toast";
 import CategorySelector from "@/app/(root)/catalog/products/component/CategorySelector";
 import ProductForm from "@/app/(root)/catalog/products/component/ProductForm";
-import { getProductDraft, deleteProductDraft } from "@/app/actions/drafts";
+import { getProductDraft, deleteProductDraft } from "@/lib/api/product-draft";
 import {
   getOrCreateNewProductDraftKey,
   clearNewProductDraftKey,

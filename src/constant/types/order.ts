@@ -1,5 +1,3 @@
-import { OrderDocument } from "@/models/Order";
-
 export interface OrderAnalytics {
   totalOrders: number;
   totalRevenue: number;
@@ -7,5 +5,5 @@ export interface OrderAnalytics {
   ordersByStatus: {
     [key: string]: number;
   };
-  recentOrders: OrderDocument[];
+  recentOrders: any[];
 }

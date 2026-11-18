@@ -9,7 +9,7 @@ import {
   listBanners,
   deleteBanner,
   type BannerListItem,
-} from "@/app/actions/banner-content";
+} from "@/lib/api/banner";
 
 const LIST_PATH = "/channels/store/content/banners";
 

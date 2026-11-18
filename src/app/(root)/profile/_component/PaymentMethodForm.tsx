@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { createPaymentMethod } from "@/app/actions/payment"; // adjust path
-import { IAddress } from "@/models/Address";
+import { createPaymentMethod } from "@/lib/api/payment-method";
+import type { IAddress } from "@/app/context/UserDataContext";
 
 interface PaymentMethodFormProps {
   addresses: IAddress[]; // List of user's addresses for the dropdown (Credit Card only)

@@ -1,7 +1,7 @@
 import { normalizeOrder } from "@/app/store/slices/normalizedData";
 import { AppDispatch } from "@/app/store/store";
 import { setOrders } from "@/app/store/slices/orderSlice";
-import { findOrders } from "@/app/actions/order";
+import { findOrders } from "@/lib/api/order";
 
 export const fetchOrder =
   (orderNumber?: string | null) => async (dispatch: AppDispatch) => {
@@ -10,7 +10,7 @@ export const fetchOrder =
 
       // Fetch order data based on the provided parameter
       if (orderNumber) {
-        data = await findOrders(orderNumber as any);
+        data = await findOrders({ orderNumber });
       } else {
         data = await findOrders();
       }

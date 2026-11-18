@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { findHeroContentById } from "@/app/actions/content_management";
+import { findHeroContentById } from "@/lib/api/hero-content";
 import HeroForm from "../_component/HeroForm";
 import Spinner from "@/components/Spinner";
 import { useEffect, useState } from "react";

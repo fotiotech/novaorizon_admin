@@ -9,7 +9,7 @@ import {
   getCollectionById,
   deleteCollectionImage,
   fetchAvailableItems,
-} from "@/app/actions/collection";
+} from "@/lib/api/collection";
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";

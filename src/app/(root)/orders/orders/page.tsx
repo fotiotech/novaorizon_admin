@@ -5,7 +5,7 @@ import {
   deleteOrder,
   findOrders,
   updateOrderStatus,
-} from "@/app/actions/order";
+} from "@/lib/api/order";
 import {
   Delete,
   FilterList,

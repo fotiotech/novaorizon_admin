@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
-import { getAllBlocks, deleteBlock, reorderBlocks } from "@/app/actions/blocks";
+import { getAllBlocks, deleteBlock, reorderBlocks } from "@/lib/api/blocks";
 import { BLOCK_LOCATIONS, type BlockLocation } from "@/lib/content/constants";
 
 /* -------------------------------------------------------------------------- */

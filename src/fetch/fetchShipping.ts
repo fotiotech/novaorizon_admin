@@ -1,7 +1,7 @@
 import { normalizeShipping } from "@/app/store/slices/normalizedData";
 import { AppDispatch } from "@/app/store/store";
 import { setShippings } from "@/app/store/slices/shippingSlice";
-import { getAllShippings, getShippingById } from "@/app/actions/shipping";
+import { getAllShippings, getShippingById } from "@/lib/api/shipping";
 
 export const fetchShipping =
   (id?: string | null) => async (dispatch: AppDispatch) => {

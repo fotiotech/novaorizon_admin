@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { createAddress, updateAddress } from "@/app/actions/address"; // adjust path
-import { IAddress } from "@/models/Address";
+import {
+  createAddress,
+  updateAddress,
+  addressInputFromFormData,
+} from "@/lib/api/address";
+import type { IAddress } from "@/app/context/UserDataContext";
 
 interface AddressFormProps {
   initialData?: IAddress | null; // if provided, we're in update mode
@@ -30,12 +34,13 @@ export default function AddressForm({
 
     try {
       let result;
+      const input = addressInputFromFormData(formData);
       if (isUpdate && initialData?._id) {
-        // Update mode: pass the address ID and form data
-        result = await updateAddress(initialData._id.toString(), formData);
+        // Update mode: pass the address ID and the parsed payload
+        result = await updateAddress(initialData._id.toString(), input);
       } else {
         // Create mode
-        result = await createAddress(formData);
+        result = await createAddress(input);
       }
 
       if (result.success) {

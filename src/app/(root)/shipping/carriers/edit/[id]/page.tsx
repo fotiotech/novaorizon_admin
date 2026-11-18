@@ -1,38 +1,32 @@
+// app/sales/carriers/edit/[id]/page.tsx
+//
+// Server component: the carrier being edited is rendered on the server
+// (BFF -> GET /api/carriers/:id) and handed to the client form.
+import { notFound } from "next/navigation";
+import { apiData, ApiError } from "@/lib/server-api";
+import type { ApiCarrier } from "@/lib/api/carrier";
+import EditCarrierClient from "./_component/EditCarrierClient";
+
 export const dynamic = "force-dynamic";
 
-import CarrierForm from "@/app/(root)/orders/components/carriers/CarrierForm";
-import { getCarriersById, updateCarrier } from "@/app/actions/carrier";
-
-export default async function EditCarrierPage(props: {
+interface PageProps {
   params: Promise<{ id: string }>;
-}) {
-  const params = await props.params;
-  const carrier = await getCarriersById(params.id);
-  if (!carrier) {
-    return <div className="text-destructive">Carrier not found</div>;
+}
+
+export default async function EditCarrierPage({ params }: PageProps) {
+  const { id } = await params;
+
+  let carrier: ApiCarrier | null = null;
+
+  try {
+    carrier = await apiData<ApiCarrier>(
+      "/carriers/" + encodeURIComponent(id),
+      { cache: "no-store" },
+    );
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    console.error("[carrier edit page] failed to load carrier:", error);
   }
 
-  // Convert _id to string and flatten regions
-  const initialData = {
-    ...carrier,
-    _id: carrier?._id?.toString(),
-    regionsServed: carrier?.regionsServed?.map((r: any) => ({
-      ...r,
-      _id: r?._id?.toString(),
-    })),
-  };
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-foreground">Edit Carrier</h1>
-      <CarrierForm
-        initialData={initialData}
-        onSubmit={async (data) => {
-          "use server";
-          await updateCarrier(params.id, data);
-        }}
-        submitLabel="Update Carrier"
-      />
-    </div>
-  );
+  return <EditCarrierClient carrierId={id} initialCarrier={carrier} />;
 }

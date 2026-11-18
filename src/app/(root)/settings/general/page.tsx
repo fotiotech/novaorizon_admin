@@ -19,7 +19,7 @@ import {
   getGeneralSettings,
   updateGeneralSettings,
   type GeneralSettings,
-} from "@/app/actions/setting";
+} from "@/lib/api/setting";
 import { toast } from "react-hot-toast";
 
 // ------------------------------------------------------------------

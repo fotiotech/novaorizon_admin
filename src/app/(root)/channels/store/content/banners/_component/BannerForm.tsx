@@ -11,7 +11,7 @@ import {
   createBanner,
   updateBanner,
   getBanner,
-} from "@/app/actions/banner-content";
+} from "@/lib/api/banner";
 import { CTA_STYLES } from "@/lib/content/constants";
 
 /* ------------------------------- style tokens ------------------------------ */

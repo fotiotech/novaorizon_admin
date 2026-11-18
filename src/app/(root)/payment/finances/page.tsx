@@ -39,7 +39,7 @@ import {
   getFinancialStats,
   getTransactions,
   updateTransactionStatus,
-} from "@/app/actions/finance";
+} from "@/lib/api/finance";
 import type {
   FinancialStats,
   Transaction,

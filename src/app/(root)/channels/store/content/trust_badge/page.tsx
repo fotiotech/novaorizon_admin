@@ -21,7 +21,7 @@ import {
   reorderTrustBadges,
   type TrustBadgeDTO,
   type TrustBadgeInput,
-} from "@/app/actions/trust_badge";
+} from "@/lib/api/trust-badge";
 import { BADGE_ICON_OPTIONS } from "@/lib/trust/badgeIcons";
 import TrustBadgeIcon from "@/components/TrustBadgeIcon";
 

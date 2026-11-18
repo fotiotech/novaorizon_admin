@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import {
   fetchBannerOptions,
   type BannerOption,
-} from "@/app/actions/banner-content";
+} from "@/lib/api/banner";
 
 const inputCls =
   "w-full min-w-0 rounded-lg border border-border bg-background px-3.5 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground/50 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15";

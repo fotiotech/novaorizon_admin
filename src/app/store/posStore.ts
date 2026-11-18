@@ -7,7 +7,7 @@ import {
   removeFromCart,
   clearCart,
   applyDiscount,
-} from "@/app/actions/cart";
+} from "@/lib/api/cart";
 
 interface CartItem {
   _id: string;

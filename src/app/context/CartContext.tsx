@@ -21,7 +21,7 @@ import {
   clearCart,
   applyDiscount,
   mergeGuestSessionData,
-} from "@/app/actions/cart";
+} from "@/lib/api/cart";
 import { useUserData } from "./UserDataContext";
 import { v4 as uuidv4 } from "uuid";
 

@@ -11,7 +11,7 @@ import {
   ArrowForward,
   Refresh,
 } from "@mui/icons-material";
-import { getUserAnalytics } from "@/app/actions/analytic";
+import { fetchUserAnalytics } from "@/lib/api/analytics";
 
 interface UserAnalytics {
   totalUsers: number;
@@ -215,7 +215,7 @@ export default function CustomerReportsPage() {
     setLoading(true);
     setError(null);
     try {
-      const result: any = await getUserAnalytics();
+      const result: any = await fetchUserAnalytics();
       setData(result);
     } catch (err: any) {
       console.error("Failed to load user analytics:", err);

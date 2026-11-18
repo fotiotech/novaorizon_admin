@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { getReviews, deleteReview } from "@/app/actions/customer";
+import { getReviews, deleteReview } from "@/lib/api/customer";
 import Spinner from "@/components/Spinner";
 import { Trash2, Star, Filter } from "lucide-react";
 

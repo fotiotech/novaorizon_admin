@@ -1,8 +1,9 @@
 "use client";
 
 import { useTransition } from "react";
-import { useActionState } from "react"; // <-- useFormState from react-dom
-import { createPage, updatePage } from "@/app/actions/pageActions";
+import { useActionState } from "react";
+import { useRouter } from "next/navigation";
+import { createPage, updatePage } from "@/lib/api/page";
 
 type ActionState = {
   errors?: Record<string, string[]>;
@@ -11,19 +12,26 @@ type ActionState = {
 
 const initialState: ActionState = { errors: {} };
 
+/** List route this form returns to after a successful save. */
+const LIST_PATH = "/channels/store/pges";
+
 interface PageFormProps {
   initialData?: any;
 }
 
 export default function PageForm({ initialData }: PageFormProps) {
+  const router = useRouter();
   const isEditing = !!initialData;
-  const action = isEditing
-    ? updatePage.bind(null, initialData._id)
-    : createPage;
 
-  // Use useFormState (React 18) instead of useActionState
   const [state, formAction] = useActionState<ActionState, FormData>(
-    action as any,
+    async (_prev: ActionState, formData: FormData) => {
+      const result = isEditing
+        ? await updatePage(initialData._id, formData)
+        : await createPage(formData);
+
+      if (result.success) router.push(LIST_PATH);
+      return result;
+    },
     initialState,
   );
 

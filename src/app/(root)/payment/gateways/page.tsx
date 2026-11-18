@@ -20,8 +20,8 @@ import {
   getPaymentSettings,
   updatePaymentSettings,
   type PaymentSettingsData,
-} from "@/app/actions/payment-settings";
-import type { MobileMoneyProviderConfig } from "@/models/PaymentSettings";
+  type MobileMoneyProviderConfig,
+} from "@/lib/api/payment-settings";
 import { toast } from "react-hot-toast";
 
 // ------------------------------------------------------------------

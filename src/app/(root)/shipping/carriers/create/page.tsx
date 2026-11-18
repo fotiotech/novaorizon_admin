@@ -1,5 +1,7 @@
+"use client";
+
 import CarrierForm from "@/app/(root)/orders/components/carriers/CarrierForm";
-import { createCarrier } from "@/app/actions/carrier";
+import { createCarrier } from "@/lib/api/carrier";
 
 export default function CreateCarrierPage() {
   return (
@@ -7,7 +9,6 @@ export default function CreateCarrierPage() {
       <h1 className="text-3xl font-bold text-foreground">Create Carrier</h1>
       <CarrierForm
         onSubmit={async (data) => {
-          "use server";
           await createCarrier(data);
         }}
         submitLabel="Create Carrier"

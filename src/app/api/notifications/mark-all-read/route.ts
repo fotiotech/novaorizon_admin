@@ -1,27 +1,19 @@
-import Notification from "@/models/Notification";
-import { connection } from "@/utils/connection";
 import { NextResponse } from "next/server";
-import { requireAdminApi } from "@/lib/api-auth";
+import { apiFetch } from "@/lib/server-api";
 
-export async function PATCH(request: Request) {
+/** PATCH /api/notifications/mark-all-read → backend read-all. */
+
+export async function PATCH(_request: Request) {
   try {
-    const auth = await requireAdminApi();
-    if (auth.response) return auth.response;
+    const res = await apiFetch<{ data?: { updated?: number } }>(
+      "/notifications/read-all",
+      { method: "PATCH" },
+    );
 
-    await connection();
-    const body = await request.json().catch(() => ({}));
-    const { type } = body as { type?: string };
-
-    const query: Record<string, unknown> = {
-      userId: auth.user.id,
-      isRead: false,
-    };
-    if (type) query.type = type;
-
-    const result = await Notification.updateMany(query, {
-      $set: { isRead: true },
+    return NextResponse.json({
+      status: "ok",
+      modified: res?.data?.updated ?? 0,
     });
-    return NextResponse.json({ status: "ok", modified: result.modifiedCount });
   } catch (error) {
     console.error("Failed to mark notifications as read:", error);
     return NextResponse.json({ error: "Failed" }, { status: 500 });

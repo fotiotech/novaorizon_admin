@@ -1,6 +1,6 @@
 "use client";
 
-import { updateOrderStatus } from "@/app/actions/order";
+import { updateOrderStatus } from "@/lib/api/order";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 

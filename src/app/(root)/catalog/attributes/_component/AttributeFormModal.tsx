@@ -6,8 +6,8 @@ import {
   createAttribute,
   updateAttribute,
   findAttributesAndValues,
-} from "@/app/actions/attributes";
-import { getUnitFamilies } from "@/app/actions/unitFamilyActions";
+} from "@/lib/api/attribute";
+import { getUnitFamilies } from "@/lib/api/unit-family";
 import { Save, Cancel, Add, Delete as DeleteIcon } from "@mui/icons-material";
 
 export type AttributeType = {
@@ -32,7 +32,7 @@ interface AttributeFormModalProps {
 interface UnitFamily {
   _id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   baseUnit: string;
 }
 

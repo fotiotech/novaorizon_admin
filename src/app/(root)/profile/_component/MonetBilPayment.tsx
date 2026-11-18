@@ -1,7 +1,7 @@
 "use client";
 
-import { findOrders } from "@/app/actions/order";
-import { generatePaymentLink } from "@/app/actions/monetbil_payment";
+import { findOrders } from "@/lib/api/order";
+import { generatePaymentLink } from "@/lib/api/monetbil";
 import { useCart } from "@/app/context/CartContext";
 import { useUserData } from "@/app/context/UserDataContext";
 import { CartItem } from "@/app/reducer/cartReducer";

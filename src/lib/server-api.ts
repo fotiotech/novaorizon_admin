@@ -120,6 +120,10 @@ export async function apiRequest(
     cache,
     // Server-to-server: send the forwarded cookies, never the Next.js ones.
     credentials: "omit",
+    // Never let a build-time or SSR request hang when the API is down.
+    signal: AbortSignal.timeout(
+      Number(process.env.SERVER_API_TIMEOUT_MS) || 10_000,
+    ),
   });
 
   if (!res.ok) {

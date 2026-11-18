@@ -1,11 +1,50 @@
-import CarrierForm from "@/app/(root)/orders/components/carriers/CarrierForm";
-import { getCarriersById, updateCarrier } from "@/app/actions/carrier";
+"use client";
 
-export default async function EditCarrierPage(props: {
-  params: Promise<{ id: string }>;
-}) {
-  const params = await props.params;
-  const carrier = await getCarriersById(params.id);
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import CarrierForm from "@/app/(root)/orders/components/carriers/CarrierForm";
+import { getCarriersById, updateCarrier } from "@/lib/api/carrier";
+
+export default function EditCarrierPage() {
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
+
+  const [carrier, setCarrier] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isActive = true;
+
+    if (!id) {
+      setCarrier(null);
+      setLoading(false);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    setLoading(true);
+    getCarriersById(id)
+      .then((data) => {
+        if (isActive) setCarrier(data);
+      })
+      .catch((error) => {
+        console.error(error);
+        if (isActive) setCarrier(null);
+      })
+      .finally(() => {
+        if (isActive) setLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [id]);
+
+  if (loading) {
+    return <div className="text-muted-foreground">Loading carrier...</div>;
+  }
+
   if (!carrier) {
     return <div className="text-destructive">Carrier not found</div>;
   }
@@ -13,10 +52,10 @@ export default async function EditCarrierPage(props: {
   // Convert _id to string and flatten regions
   const initialData = {
     ...carrier,
-    _id: carrier._id.toString(),
-    regionsServed: carrier.regionsServed.map((r: any) => ({
+    _id: carrier?._id?.toString(),
+    regionsServed: carrier?.regionsServed?.map((r: any) => ({
       ...r,
-      _id: r._id?.toString(),
+      _id: r?._id?.toString(),
     })),
   };
 
@@ -26,8 +65,8 @@ export default async function EditCarrierPage(props: {
       <CarrierForm
         initialData={initialData}
         onSubmit={async (data) => {
-          "use server";
-          await updateCarrier(params.id, data);
+          if (!id) return;
+          await updateCarrier(id, data);
         }}
         submitLabel="Update Carrier"
       />

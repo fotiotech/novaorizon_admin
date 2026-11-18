@@ -21,23 +21,23 @@ import {
 } from "@mui/material";
 import { toast } from "react-hot-toast";
 
-import { getCategoryAttributeSets } from "@/app/actions/category";
-import { getUnits } from "@/app/actions/unit";
+import { fetchCategoryAttributeSets } from "@/lib/api/category";
+import { getUnits } from "@/lib/api/unit";
 import {
   createProduct,
   updateProduct,
   findProductById,
-} from "@/app/actions/products";
+} from "@/lib/api/product";
 import {
   saveProductDraft,
   getProductDraft,
   deleteProductDraft,
-} from "@/app/actions/drafts";
+} from "@/lib/api/product-draft";
 import {
   getSelectablePromotions,
   getProductPromotions,
   syncProductPromotions,
-} from "@/app/actions/promotion";
+} from "@/lib/api/promotion";
 
 import { AttributeField } from "@/app/(root)/catalog/products/component/AttributeFields";
 import ManageRelatedProduct from "./ManageRelatedProduct";
@@ -614,7 +614,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         setIsFetchingAttributes(true);
         setError(null);
 
-        const sets = await getCategoryAttributeSets(productData.categoryId);
+        const sets = await fetchCategoryAttributeSets(productData.categoryId);
 
         const sortedSets: AttributeSetStep[] = [...sets]
           .map((s) => ({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useUserData } from "@/app/context/UserDataContext";
-import { signOut } from "next-auth/react";
+import api from "@/lib/api";
 import { useState } from "react";
 import {
   Logout,
@@ -22,9 +22,8 @@ export default function ProfilePage() {
   const handleSignOut = async () => {
     setIsSigningOut(true);
     try {
-      // `redirect: false` lets us control the destination ourselves,
-      // and passing a safe callbackUrl prevents the nested-callback loop.
-      await signOut({ redirect: false });
+      // Clear the backend session cookie, then reload into the login page.
+      await api.post("/auth/logout");
       // Full reload wipes any in-memory session state, then lands on
       // the login page with a clean callbackUrl of "/".
       window.location.href = "/auth/login?callbackUrl=%2F";

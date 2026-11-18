@@ -2,10 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  getResolvedCollections,
-  deleteCollection,
-} from "@/app/actions/collection";
+import { getResolvedCollections, deleteCollection } from "@/lib/api/collection";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
 
@@ -77,7 +74,7 @@ const formatDate = (dateString?: string) => {
   });
 };
 
-// Must match MANUAL_ITEM_LIMIT in app/actions/collection.ts.
+// Must match COLLECTION_MANUAL_LIMIT in server/config/collection-types.ts.
 const RULE_ITEM_CAP = 50;
 
 // ------------------------------------------------------------------

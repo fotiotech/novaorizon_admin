@@ -3,10 +3,10 @@
 
 import { useCallback, useEffect, useMemo, useState, memo } from "react";
 import { usePOSStore } from "@/app/store/posStore";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/hooks/useAuth";
 import { v4 as uuidv4 } from "uuid";
-import { findProducts } from "@/app/actions/products";
-import { completePOSOrder } from "@/app/actions/order";
+import { findProducts } from "@/lib/api/product";
+import { completePOSOrder } from "@/lib/api/order";
 import Image from "next/image";
 import {
   Add,
@@ -115,7 +115,8 @@ const CartItemRow = memo(function CartItemRow({
 });
 
 export default function Pos() {
-  const { data: session } = useSession();
+  const { user } = useAuth();
+  const session = user ? { user } : null;
   const [sessionId, setSessionId] = useState<string>("");
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -173,7 +174,7 @@ export default function Pos() {
       });
 
       if (result && Array.isArray(result.products)) {
-        setProducts(result.products);
+        setProducts(result.products as unknown as Product[]);
         setTotal(result.total ?? result.products.length);
         setTotalPages(result.totalPages ?? 0);
         if (result.products.length === 0) {

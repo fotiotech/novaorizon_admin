@@ -1,29 +1,39 @@
-"use server";
-
-// /app/api/notifications/[id]/route.ts
-
-import Notification from "@/models/Notification";
-import { connection } from "@/utils/connection";
 import { NextResponse } from "next/server";
-import { requireAdminApi } from "@/lib/api-auth";
+import { apiFetch } from "@/lib/server-api";
+
+/** PATCH /api/notify/:id → backend PATCH /api/notifications/:id/read */
 
 export async function PATCH(
-  request: Request,
+  _request: Request,
   props: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdminApi();
-  if (auth.response) return auth.response;
+  try {
+    const { id } = await props.params;
 
-  await connection();
+    await apiFetch(`/notifications/${encodeURIComponent(id)}/read`, {
+      method: "PATCH",
+    });
 
-  const params = await props.params;
-  const { id } = params;
-  const updated = await Notification.findOneAndUpdate(
-    { _id: id, userId: auth.user.id },
-    { isRead: true },
-  );
-  if (!updated) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ status: "Notification marked as read" });
+  } catch (error: any) {
+    console.error("[api/notify/:id] PATCH failed:", error);
+    const status = error?.status === 404 ? 404 : 500;
+    return NextResponse.json({ error: "Not found" }, { status });
   }
-  return NextResponse.json({ status: "Notification marked as read" });
+}
+
+export async function DELETE(
+  _request: Request,
+  props: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await props.params;
+    await apiFetch(`/notifications/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[api/notify/:id] DELETE failed:", error);
+    return NextResponse.json({ error: "Failed" }, { status: 500 });
+  }
 }

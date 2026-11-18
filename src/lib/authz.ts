@@ -2,7 +2,6 @@ import "server-only";
 
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { auth } from "@/app/auth";
 import { apiFetch } from "@/lib/server-api";
 
 /** Roles accepted by the shared User schema. */
@@ -42,15 +41,8 @@ function readUser(raw: unknown): AuthUser | null {
 }
 
 /**
- * Resolves the signed-in user for Server Actions, Server Components and
- * Route Handlers.
- *
- * Order:
- *  1. The backend session cookie (`session`), verified through
- *     `GET /api/auth/me`. This is the canonical path now that the Express
- *     server owns authentication.
- *  2. NextAuth (Google sign-in), kept as a bridge while the OAuth flow is
- *     still handled by the Next.js app.
+ * Resolves the signed-in user from the backend session cookie (`session`),
+ * verified through `GET /api/auth/me`. The Express server owns auth.
  */
 export const getAuthUser = cache(async (): Promise<AuthUser | null> => {
   let token: string | undefined;
@@ -74,8 +66,7 @@ export const getAuthUser = cache(async (): Promise<AuthUser | null> => {
     }
   }
 
-  const session = await auth();
-  return readUser(session?.user);
+  return null;
 });
 
 export class UnauthorizedError extends Error {

@@ -3,7 +3,7 @@
 import {
   getInvoiceByOrderNumber,
   downloadInvoice,
-} from "@/app/actions/invoice";
+} from "@/lib/api/invoice";
 import { useEffect, useState } from "react";
 
 interface InvoiceDisplayProps {
