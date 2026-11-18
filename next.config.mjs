@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const apiOrigin = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+const apiOrigin = process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:3000";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
