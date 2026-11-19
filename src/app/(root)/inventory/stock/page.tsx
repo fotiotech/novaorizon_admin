@@ -122,7 +122,7 @@ const StatCard = memo(function StatCard({
   } as const;
 
   return (
-    <div className="rounded-xl bg-card p-5">
+    <div className="rounded-xl bg-card p-4 sm:p-5">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
@@ -312,7 +312,7 @@ const InventoryPage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-destructive/10 px-3 py-3 sm:px-4 text-sm text-destructive">
           <div>
             <span className="font-semibold">Error: </span>
             {error}

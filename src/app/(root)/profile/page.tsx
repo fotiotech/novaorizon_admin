@@ -41,7 +41,7 @@ export default function ProfilePage() {
           <div className="h-8 w-48 animate-pulse rounded bg-muted" />
           <div className="h-10 w-28 animate-pulse rounded bg-muted" />
         </div>
-        <div className="space-y-6">
+        <div className="space-y-5 sm:space-y-6">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
@@ -50,7 +50,7 @@ export default function ProfilePage() {
               <div className="border-b border-border px-5 py-4">
                 <div className="h-5 w-40 animate-pulse rounded bg-muted" />
               </div>
-              <div className="space-y-3 p-5">
+              <div className="space-y-3 p-4 sm:p-5">
                 <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
                 <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
               </div>
@@ -64,7 +64,7 @@ export default function ProfilePage() {
   if (error) {
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-4xl items-center justify-center px-4 py-8">
-        <div className="w-full max-w-sm rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-xl border border-destructive/30 bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -123,7 +123,7 @@ export default function ProfilePage() {
             Personal information
           </h2>
         </div>
-        <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 p-4 sm:p-5 md:grid-cols-2">
           <div>
             <label className="block text-xs font-medium text-muted-foreground">
               Name
@@ -275,7 +275,7 @@ export default function ProfilePage() {
           aria-labelledby="signout-title"
         >
           <div
-            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
+            className="w-full rounded-t-2xl border border-border bg-card p-4 sm:p-5 text-card-foreground shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3">

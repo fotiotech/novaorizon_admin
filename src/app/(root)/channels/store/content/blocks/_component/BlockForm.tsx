@@ -1,7 +1,7 @@
 // components/content/blocks/BlockForm.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
 import Notification from "@/components/Notification";
@@ -26,9 +26,8 @@ import {
   PROMOTION_MODES,
   CTA_STYLES,
   CARD_SHAPES,
-  CARD_RATIOS,
+  BLOCK_CARD_RATIOS,
   CARD_SIZES,
-  CARD_LAYOUTS,
   TITLE_POSITIONS,
   IMAGE_POSITIONS,
   BLOCK_COLUMN_COUNTS,
@@ -41,15 +40,24 @@ import {
   type PromotionMode,
 } from "@/lib/content/constants";
 import type { RegistryKey } from "@/lib/content/entityMetadata";
+import { displayFieldsFor } from "@/lib/content/block-fields";
+
+/* -------------------------------------------------------------------------- */
+/*                                    Style                                   */
+/* -------------------------------------------------------------------------- */
 
 const labelCls = "block text-[13px] font-medium text-foreground mb-1.5";
 const inputCls =
   "w-full min-w-0 rounded-lg border border-border bg-background px-3.5 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground/50 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-muted/50 disabled:text-muted-foreground";
 const helperCls = "mt-1.5 text-[12px] text-muted-foreground";
-const fieldsetCls = "rounded-xl border border-border bg-card p-5 space-y-4";
+const fieldsetCls = "rounded-xl border border-border bg-card p-4 sm:p-5 space-y-4";
 const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
 
 const LIST_PATH = "/channels/store/content/blocks";
+
+/* -------------------------------------------------------------------------- */
+/*                                  Constants                                 */
+/* -------------------------------------------------------------------------- */
 
 const SOURCE_LABEL: Record<BlockSourceType, string> = {
   collection: "Collection",
@@ -80,17 +88,43 @@ const SOURCE_REF_TYPE: Record<
   promotion: "Promotion",
 };
 
-const CARD_LAYOUT_LABELS: Record<string, string> = {
-  stacked: "Stacked (image on top)",
-  "image-left": "Image left",
-  "image-right": "Image right",
-};
+/* -------------------------------------------------------------------------- */
+/*                                   Types                                    */
+/* -------------------------------------------------------------------------- */
+
+interface DisplayConfigState {
+  theme: string;
+  columns: number;
+  gap: number;
+  borderless: boolean;
+  rounded: boolean;
+  shadow: boolean;
+  alignment: string;
+  animation: string;
+  cardShape: string;
+  cardRatio: string;
+  cardSize: string;
+  titlePosition: string;
+  imagePosition: string;
+  backgroundColor: string;
+  textColor: string;
+}
+
+interface SourceStylesState {
+  promotionBadgeStyle: string;
+  promotionShowCode: boolean;
+  collectionShowItemCount: boolean;
+  collectionCountPosition: string;
+  manualCardSize: string;
+  manualCardVariant: string;
+  manualShowDescription: boolean;
+}
 
 interface FormState {
   name: string;
+  status: "active" | "inactive";
   location: BlockLocation;
   display: string;
-  status: "active" | "inactive";
   order: number;
   limit: number;
   heading: { title: string; subtitle: string; showHeading: boolean };
@@ -99,56 +133,27 @@ interface FormState {
     collectionId: string;
     categoryId: string;
     promotionId: string;
-    bannerIds: string[];
     promotionMode: PromotionMode;
+    bannerIds: string[];
     items: ManualItem[];
   };
-  displayConfig: {
-    theme: string;
-    columns: number;
-    gap: number;
-    borderless: boolean;
-    rounded: boolean;
-    shadow: boolean;
-    alignment: string;
-    animation: string;
-    cardShape: string;
-    cardRatio: string;
-    cardSize: string;
-    cardLayout: string;
-    titlePosition: string;
-    imagePosition: string;
-    backgroundColor: string;
-    textColor: string;
-  };
-  sourceStyles: {
-    promotionBadgeStyle: string;
-    promotionShowCode: boolean;
-    collectionShowItemCount: boolean;
-    collectionCountPosition: string;
-    manualCardSize: string;
-    manualCardVariant: string;
-    manualShowDescription: boolean;
-  };
-  cta: {
-    text: string;
-    link: string;
-    style: (typeof CTA_STYLES)[number];
-  };
+  displayConfig: DisplayConfigState;
+  sourceStyles: SourceStylesState;
+  cta: { text: string; link: string; style: string };
 }
 
 type PreviewState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "loaded"; data: SourcePreviewData }
+  | { status: "ok"; data: SourcePreviewData }
   | { status: "missing" }
   | { status: "error" };
 
 const INITIAL: FormState = {
   name: "",
+  status: "active",
   location: "Home",
   display: "grid",
-  status: "active",
   order: 0,
   limit: 12,
   heading: { title: "", subtitle: "", showHeading: true },
@@ -157,8 +162,8 @@ const INITIAL: FormState = {
     collectionId: "",
     categoryId: "",
     promotionId: "",
-    bannerIds: [],
     promotionMode: "products",
+    bannerIds: [],
     items: [],
   },
   displayConfig: {
@@ -173,7 +178,6 @@ const INITIAL: FormState = {
     cardShape: "default",
     cardRatio: "1:1",
     cardSize: "md",
-    cardLayout: "stacked",
     titlePosition: "below",
     imagePosition: "center",
     backgroundColor: "",
@@ -191,20 +195,74 @@ const INITIAL: FormState = {
   cta: { text: "", link: "", style: "none" },
 };
 
+/* -------------------------------------------------------------------------- */
+/*                                  Component                                 */
+/* -------------------------------------------------------------------------- */
+
 export default function BlockForm({ id }: { id?: string }) {
   const router = useRouter();
-  const [loading, setLoading] = useState(!!id);
+
+  const [formData, setFormData] = useState<FormState>(INITIAL);
+  const [loading, setLoading] = useState(Boolean(id));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [formData, setFormData] = useState<FormState>(INITIAL);
-
   const [editingSource, setEditingSource] = useState(false);
   const [preview, setPreview] = useState<PreviewState>({ status: "idle" });
   const [presentationOpen, setPresentationOpen] = useState(false);
 
   const sourceType = formData.source.type;
   const isBannerSource = sourceType === "banner";
+
+  /* ------------------------------- load ---------------------------------- */
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+
+    (async () => {
+      const res = await getBlockById(id);
+      if (cancelled) return;
+
+      if (!res.success) {
+        setError(res.error || "Failed to load block");
+        setLoading(false);
+        return;
+      }
+
+      const d = res.data ?? {};
+      setFormData({
+        name: d.name ?? "",
+        status: d.status === "inactive" ? "inactive" : "active",
+        location: (d.location ?? "Home") as BlockLocation,
+        display: d.display ?? "grid",
+        order: Number(d.order) || 0,
+        limit: Number(d.limit) || 12,
+        heading: { ...INITIAL.heading, ...(d.heading ?? {}) },
+        source: {
+          ...INITIAL.source,
+          ...(d.source ?? {}),
+          collectionId: d.source?.collectionId ?? "",
+          categoryId: d.source?.categoryId ?? "",
+          promotionId: d.source?.promotionId ?? "",
+          bannerIds: Array.isArray(d.source?.bannerIds)
+            ? d.source.bannerIds.map(String)
+            : [],
+          items: Array.isArray(d.source?.items) ? d.source.items : [],
+        },
+        displayConfig: { ...INITIAL.displayConfig, ...(d.displayConfig ?? {}) },
+        sourceStyles: { ...INITIAL.sourceStyles, ...(d.sourceStyles ?? {}) },
+        cta: { ...INITIAL.cta, ...(d.cta ?? {}) },
+      });
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  /* ---------------------------- source preview --------------------------- */
 
   const currentSourceId =
     sourceType === "collection"
@@ -215,102 +273,29 @@ export default function BlockForm({ id }: { id?: string }) {
           ? formData.source.promotionId
           : "";
 
-  const hasSelection = isBannerSource
-    ? formData.source.bannerIds.length > 0
-    : currentSourceId !== "";
-
   useEffect(() => {
-    if (!id) {
-      setLoading(false);
-      return;
-    }
-    (async () => {
-      try {
-        setLoading(true);
-        const res: any = await getBlockById(id);
-        if (!res.success || !res.data) {
-          setError(res.error || "Failed to load block");
-          return;
-        }
-        const d: any = res.data;
-        setFormData({
-          name: d.name || "",
-          location: d.location || "Home",
-          display: d.display || "grid",
-          status: d.status === "inactive" ? "inactive" : "active",
-          order: d.order ?? 0,
-          limit: d.limit ?? 12,
-          heading: {
-            title: d.heading?.title ?? "",
-            subtitle: d.heading?.subtitle ?? "",
-            showHeading: d.heading?.showHeading !== false,
-          },
-          source: {
-            type: d.source?.type || "collection",
-            collectionId: d.source?.collectionId
-              ? String(d.source.collectionId)
-              : "",
-            categoryId: d.source?.categoryId ? String(d.source.categoryId) : "",
-            promotionId: d.source?.promotionId
-              ? String(d.source.promotionId)
-              : "",
-            bannerIds: Array.isArray(d.source?.bannerIds)
-              ? d.source.bannerIds.map((bid: any) => String(bid))
-              : [],
-            promotionMode: d.source?.promotionMode || "products",
-            items: Array.isArray(d.source?.items)
-              ? d.source.items.map((it: any) => ({
-                  refModel: it.refModel,
-                  refId: String(it.refId),
-                }))
-              : [],
-          },
-          displayConfig: {
-            ...INITIAL.displayConfig,
-            ...(d.displayConfig ?? {}),
-          },
-          sourceStyles: { ...INITIAL.sourceStyles, ...(d.sourceStyles ?? {}) },
-          cta: {
-            text: d.cta?.text ?? "",
-            link: d.cta?.link ?? "",
-            style: d.cta?.style ?? "none",
-          },
-        });
-      } catch (err) {
-        console.error("[BlockForm] load", err);
-        setError("Failed to load block");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [id]);
-
-  useEffect(() => {
-    if (
-      sourceType === "manual" ||
-      sourceType === "banner" ||
-      !currentSourceId
-    ) {
+    if (isBannerSource || !currentSourceId) {
       setPreview({ status: "idle" });
       return;
     }
+
     let cancelled = false;
     setPreview({ status: "loading" });
-    getSourcePreview(sourceType, currentSourceId)
-      .then((res) => {
-        if (cancelled) return;
-        if (res.success) setPreview({ status: "loaded", data: res.data });
-        else if ("missing" in res && res.missing)
-          setPreview({ status: "missing" });
-        else setPreview({ status: "error" });
-      })
-      .catch(() => {
-        if (!cancelled) setPreview({ status: "error" });
-      });
+
+    (async () => {
+      const res = await getSourcePreview(
+        SOURCE_REF_TYPE[sourceType as Exclude<BlockSourceType, "manual" | "banner">],
+        currentSourceId,
+      );
+      if (cancelled) return;
+      if (res.success) setPreview({ status: "ok", data: res.data });
+      else setPreview(res.missing ? { status: "missing" } : { status: "error" });
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [sourceType, currentSourceId]);
+  }, [sourceType, currentSourceId, isBannerSource]);
 
   useEffect(() => {
     setEditingSource(false);
@@ -322,19 +307,21 @@ export default function BlockForm({ id }: { id?: string }) {
     formData.source.bannerIds,
   ]);
 
+  /* ------------------------------ setters -------------------------------- */
+
   const setField = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setFormData((p) => ({ ...p, [k]: v }));
 
   const setSource = (patch: Partial<FormState["source"]>) =>
     setFormData((p) => ({ ...p, source: { ...p.source, ...patch } }));
 
-  const setDisplayConfig = (patch: Partial<FormState["displayConfig"]>) =>
+  const setDisplayConfig = (patch: Partial<DisplayConfigState>) =>
     setFormData((p) => ({
       ...p,
       displayConfig: { ...p.displayConfig, ...patch },
     }));
 
-  const setSourceStyles = (patch: Partial<FormState["sourceStyles"]>) =>
+  const setSourceStyles = (patch: Partial<SourceStylesState>) =>
     setFormData((p) => ({
       ...p,
       sourceStyles: { ...p.sourceStyles, ...patch },
@@ -349,6 +336,8 @@ export default function BlockForm({ id }: { id?: string }) {
   const handleSourceTypeChange = (nextType: BlockSourceType) => {
     setSource({ type: nextType });
     setEditingSource(false);
+    // A banner source always renders as a banner.
+    if (nextType === "banner") setField("display", "banner");
   };
 
   const handleSourceClear = () => {
@@ -359,51 +348,59 @@ export default function BlockForm({ id }: { id?: string }) {
     setEditingSource(false);
   };
 
+  /* ------------------------------- submit -------------------------------- */
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
+
     try {
-      if (!formData.name.trim()) return setError("Name is required");
+      if (!formData.name.trim()) {
+        setError("Name is required");
+        return;
+      }
 
       if (isBannerSource) {
         if (formData.source.bannerIds.length === 0) {
-          return setError("Select at least one banner from the library");
+          setError("Select at least one banner from the library");
+          return;
         }
       } else {
-        if (!hasSelection) {
-          return setError(`Select a ${SOURCE_LABEL[sourceType].toLowerCase()}`);
+        if (!currentSourceId && sourceType !== "manual") {
+          setError(
+            "Select a " + SOURCE_LABEL[sourceType].toLowerCase(),
+          );
+          return;
         }
         if (sourceType === "manual" && formData.source.items.length === 0) {
-          return setError("Add at least one item");
+          setError("Add at least one item");
+          return;
         }
         if (formData.cta.style !== "none" && !formData.cta.link.trim()) {
-          return setError("CTA requires a link");
+          setError("CTA requires a link");
+          return;
         }
       }
 
       const fd = new FormData();
       fd.append("name", formData.name.trim());
       fd.append("location", formData.location);
-      fd.append("display", formData.display);
+      fd.append("display", isBannerSource ? "banner" : formData.display);
       fd.append("status", formData.status);
       fd.append("order", String(formData.order));
       fd.append("limit", String(formData.limit));
-
       fd.append("source.type", sourceType);
 
-      if (sourceType === "collection")
+      if (sourceType === "collection") {
         fd.append("source.collectionId", formData.source.collectionId);
-      else if (sourceType === "category")
+      } else if (sourceType === "category") {
         fd.append("source.categoryId", formData.source.categoryId);
-      else if (sourceType === "promotion") {
+      } else if (sourceType === "promotion") {
         fd.append("source.promotionId", formData.source.promotionId);
         fd.append("source.promotionMode", formData.source.promotionMode);
       } else if (sourceType === "banner") {
-        fd.append(
-          "source.bannerIds",
-          JSON.stringify(formData.source.bannerIds),
-        );
+        fd.append("source.bannerIds", JSON.stringify(formData.source.bannerIds));
       } else if (sourceType === "manual") {
         fd.append("source.items", JSON.stringify(formData.source.items));
       }
@@ -415,26 +412,18 @@ export default function BlockForm({ id }: { id?: string }) {
           "heading.showHeading",
           formData.heading.showHeading ? "true" : "false",
         );
-
-        (
-          Object.keys(
-            formData.sourceStyles,
-          ) as (keyof typeof formData.sourceStyles)[]
-        ).forEach((k) =>
-          fd.append(`sourceStyles.${k}`, String(formData.sourceStyles[k])),
-        );
-
         fd.append("cta.text", formData.cta.text.trim());
         fd.append("cta.link", formData.cta.link.trim());
         fd.append("cta.style", formData.cta.style);
       }
 
-      (
-        Object.keys(
-          formData.displayConfig,
-        ) as (keyof typeof formData.displayConfig)[]
-      ).forEach((k) =>
-        fd.append(`displayConfig.${k}`, String(formData.displayConfig[k])),
+      // Presentation is sent flat; the API normalises it into the
+      // per-display/per-source shape and drops fields this block can't use.
+      (Object.keys(formData.displayConfig) as Array<keyof DisplayConfigState>).forEach(
+        (k) => fd.append("displayConfig." + k, String(formData.displayConfig[k])),
+      );
+      (Object.keys(formData.sourceStyles) as Array<keyof SourceStylesState>).forEach(
+        (k) => fd.append("sourceStyles." + k, String(formData.sourceStyles[k])),
       );
 
       const res = id ? await updateBlock(id, fd) : await createBlock(fd);
@@ -444,7 +433,7 @@ export default function BlockForm({ id }: { id?: string }) {
         setTimeout(() => {
           router.push(LIST_PATH);
           router.refresh();
-        }, 1000);
+        }, 900);
       } else {
         setError(res.message || "Failed to save block");
       }
@@ -464,19 +453,19 @@ export default function BlockForm({ id }: { id?: string }) {
     );
   }
 
-  const columnsDisabled =
-    formData.display === "carousel" || formData.display === "list";
-  const sideLayout = formData.displayConfig.cardLayout !== "stacked";
-
   const dc = formData.displayConfig;
+  const displayFields = displayFieldsFor(isBannerSource ? "banner" : formData.display);
+  const hasDisplayFields = displayFields.size > 0;
+  const hasSurfaceFields = ["borderless", "rounded", "shadow"].some((k) =>
+    displayFields.has(k),
+  );
   const presentationSummary = [
-    `${dc.cardSize} cards`,
-    CARD_LAYOUT_LABELS[dc.cardLayout] ?? dc.cardLayout,
-    dc.cardRatio,
-    `${dc.gap}px gap`,
-    `${dc.theme} theme`,
+    isBannerSource ? "banner" : formData.display,
+    displayFields.has("columns") ? dc.columns + " cols" : null,
+    displayFields.has("cardSize") ? dc.cardSize + " cards" : null,
+    dc.gap + "px gap",
+    dc.theme + " theme",
     dc.backgroundColor ? "custom bg" : null,
-    dc.textColor ? "custom text" : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -485,11 +474,7 @@ export default function BlockForm({ id }: { id?: string }) {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-3xl lg:px-8">
         {error && (
-          <Notification
-            type="error"
-            message={error}
-            onClose={() => setError(null)}
-          />
+          <Notification type="error" message={error} onClose={() => setError(null)} />
         )}
         {success && (
           <Notification
@@ -500,17 +485,17 @@ export default function BlockForm({ id }: { id?: string }) {
         )}
 
         <header className="mb-6">
-          <h1 className="text-xl font-semibold text-foreground">
+          <h1 className="text-lg font-semibold sm:text-xl text-foreground">
             {id ? "Edit block" : "New block"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {isBannerSource
-              ? "Banner blocks reference one or more banners from the library. The block decides how to lay them out."
-              : "Place a collection, category, promotion, or manual list on a page in a specific layout."}
+              ? "Banner blocks reference banners from the library. Only the presentation options that apply to a banner are stored."
+              : "Place a collection, category, promotion or manual list on a page. Only the presentation fields this display and source use are saved."}
           </p>
         </header>
 
-        <form onSubmit={handleSubmit} className="space-y-6 pb-24">
+        <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6 pb-24">
           <fieldset className={fieldsetCls}>
             <legend className={legendCls}>General</legend>
 
@@ -525,7 +510,7 @@ export default function BlockForm({ id }: { id?: string }) {
               />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <Field label="Status">
                 <select
                   className={inputCls}
@@ -561,13 +546,13 @@ export default function BlockForm({ id }: { id?: string }) {
               </Field>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <Field label="Display">
                 <select
                   className={inputCls}
-                  value={formData.display}
+                  value={isBannerSource ? "banner" : formData.display}
                   onChange={(e) => setField("display", e.target.value)}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isBannerSource}
                 >
                   {BLOCK_DISPLAYS.map((d) => (
                     <option key={d} value={d}>
@@ -592,10 +577,7 @@ export default function BlockForm({ id }: { id?: string }) {
             </div>
 
             {!isBannerSource && (
-              <Field
-                label="Item limit"
-                hint={`Maximum ${MAX_BLOCK_LIMIT} items.`}
-              >
+              <Field label="Item limit" hint={"Maximum " + MAX_BLOCK_LIMIT + " items."}>
                 <input
                   type="number"
                   min={1}
@@ -625,16 +607,14 @@ export default function BlockForm({ id }: { id?: string }) {
                 <input
                   type="checkbox"
                   checked={formData.heading.showHeading}
-                  onChange={(e) =>
-                    setHeading({ showHeading: e.target.checked })
-                  }
+                  onChange={(e) => setHeading({ showHeading: e.target.checked })}
                   disabled={isSubmitting}
                   className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
                 />
                 Show heading
               </label>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                 <Field label="Title">
                   <input
                     type="text"
@@ -645,7 +625,6 @@ export default function BlockForm({ id }: { id?: string }) {
                     placeholder="e.g. Trending now"
                   />
                 </Field>
-
                 <Field label="Subtitle">
                   <input
                     type="text"
@@ -684,7 +663,7 @@ export default function BlockForm({ id }: { id?: string }) {
               <Field
                 label="Banners"
                 required
-                hint="Select one or more banners. Order matters — the banner display uses the first as the default slide."
+                hint="Order matters — the first banner is the default slide."
               >
                 <BannerPicker
                   value={formData.source.bannerIds}
@@ -701,38 +680,27 @@ export default function BlockForm({ id }: { id?: string }) {
                 />
               </Field>
             ) : (
-              <Field label={SOURCE_LABEL[sourceType]} required>
-                {!hasSelection || editingSource ? (
-                  <div>
-                    <RefPicker
-                      label=""
-                      refType={
-                        SOURCE_REF_TYPE[
-                          sourceType as "collection" | "category" | "promotion"
-                        ]
-                      }
-                      value={currentSourceId}
-                      onChange={(v) => {
-                        if (sourceType === "collection")
-                          setSource({ collectionId: v });
-                        else if (sourceType === "category")
-                          setSource({ categoryId: v });
-                        else if (sourceType === "promotion")
-                          setSource({ promotionId: v });
-                      }}
-                      disabled={isSubmitting}
-                      required
-                    />
-                    {hasSelection && (
-                      <button
-                        type="button"
-                        onClick={() => setEditingSource(false)}
-                        className="mt-1.5 text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                      >
-                        Cancel — keep current selection
-                      </button>
-                    )}
-                  </div>
+              <Field
+                label={SOURCE_LABEL[sourceType]}
+                required
+              >
+                {!currentSourceId || editingSource ? (
+                  <RefPicker
+                    label=""
+                    refType={
+                      SOURCE_REF_TYPE[
+                        sourceType as "collection" | "category" | "promotion"
+                      ]
+                    }
+                    value={currentSourceId}
+                    onChange={(v) => {
+                      if (sourceType === "collection") setSource({ collectionId: v });
+                      else if (sourceType === "category") setSource({ categoryId: v });
+                      else if (sourceType === "promotion") setSource({ promotionId: v });
+                    }}
+                    disabled={isSubmitting}
+                    required
+                  />
                 ) : (
                   <SourcePreviewCard
                     state={preview}
@@ -745,50 +713,44 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
 
             {sourceType === "promotion" && (
-              <div className="space-y-4 border-t border-border pt-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Promotion mode">
-                    <select
-                      className={inputCls}
-                      value={formData.source.promotionMode}
-                      onChange={(e) =>
-                        setSource({
-                          promotionMode: e.target.value as PromotionMode,
-                        })
-                      }
-                      disabled={isSubmitting}
-                    >
-                      {PROMOTION_MODES.map((m) => (
-                        <option key={m} value={m}>
-                          {m === "products"
-                            ? "Products in scope"
-                            : "The promotion itself (banner)"}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 border-t border-border pt-4">
+                <Field label="Promotion mode">
+                  <select
+                    className={inputCls}
+                    value={formData.source.promotionMode}
+                    onChange={(e) =>
+                      setSource({ promotionMode: e.target.value as PromotionMode })
+                    }
+                    disabled={isSubmitting}
+                  >
+                    {PROMOTION_MODES.map((m) => (
+                      <option key={m} value={m}>
+                        {m === "products"
+                          ? "Products in scope"
+                          : "The promotion itself (banner)"}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-                  <Field label="Badge style">
-                    <select
-                      className={inputCls}
-                      value={formData.sourceStyles.promotionBadgeStyle}
-                      onChange={(e) =>
-                        setSourceStyles({
-                          promotionBadgeStyle: e.target.value,
-                        })
-                      }
-                      disabled={isSubmitting}
-                    >
-                      {PROMOTION_BADGE_STYLES.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                </div>
+                <Field label="Badge style">
+                  <select
+                    className={inputCls}
+                    value={formData.sourceStyles.promotionBadgeStyle}
+                    onChange={(e) =>
+                      setSourceStyles({ promotionBadgeStyle: e.target.value })
+                    }
+                    disabled={isSubmitting}
+                  >
+                    {PROMOTION_BADGE_STYLES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-                <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
+                <label className="flex items-center gap-2.5 text-[14px] text-foreground">
                   <input
                     type="checkbox"
                     checked={formData.sourceStyles.promotionShowCode}
@@ -796,7 +758,7 @@ export default function BlockForm({ id }: { id?: string }) {
                       setSourceStyles({ promotionShowCode: e.target.checked })
                     }
                     disabled={isSubmitting}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+                    className="h-4 w-4 rounded border-border text-primary"
                   />
                   Show promotion code
                 </label>
@@ -804,18 +766,16 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
 
             {sourceType === "collection" && (
-              <div className="space-y-4 border-t border-border pt-4">
-                <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
+              <div className="space-y-3 border-t border-border pt-4">
+                <label className="flex items-center gap-2.5 text-[14px] text-foreground">
                   <input
                     type="checkbox"
                     checked={formData.sourceStyles.collectionShowItemCount}
                     onChange={(e) =>
-                      setSourceStyles({
-                        collectionShowItemCount: e.target.checked,
-                      })
+                      setSourceStyles({ collectionShowItemCount: e.target.checked })
                     }
                     disabled={isSubmitting}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+                    className="h-4 w-4 rounded border-border text-primary"
                   />
                   Show item count
                 </label>
@@ -825,13 +785,10 @@ export default function BlockForm({ id }: { id?: string }) {
                     className={inputCls}
                     value={formData.sourceStyles.collectionCountPosition}
                     onChange={(e) =>
-                      setSourceStyles({
-                        collectionCountPosition: e.target.value,
-                      })
+                      setSourceStyles({ collectionCountPosition: e.target.value })
                     }
                     disabled={
-                      isSubmitting ||
-                      !formData.sourceStyles.collectionShowItemCount
+                      isSubmitting || !formData.sourceStyles.collectionShowItemCount
                     }
                   >
                     {COLLECTION_COUNT_POSITIONS.map((p) => (
@@ -845,7 +802,7 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
 
             {sourceType === "manual" && (
-              <div className="space-y-4 border-t border-border pt-4">
+              <div className="space-y-3 border-t border-border pt-4">
                 <Field label="Card variant">
                   <select
                     className={inputCls}
@@ -855,27 +812,25 @@ export default function BlockForm({ id }: { id?: string }) {
                     }
                     disabled={isSubmitting}
                   >
-                    {CARD_VARIANTS.map((v) => (
-                      <option key={v} value={v}>
-                        {v}
+                    {CARD_VARIANTS.map((variant) => (
+                      <option key={variant} value={variant}>
+                        {variant}
                       </option>
                     ))}
                   </select>
                 </Field>
 
-                <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
+                <label className="flex items-center gap-2.5 text-[14px] text-foreground">
                   <input
                     type="checkbox"
                     checked={formData.sourceStyles.manualShowDescription}
                     onChange={(e) =>
-                      setSourceStyles({
-                        manualShowDescription: e.target.checked,
-                      })
+                      setSourceStyles({ manualShowDescription: e.target.checked })
                     }
                     disabled={isSubmitting}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+                    className="h-4 w-4 rounded border-border text-primary"
                   />
-                  Show description
+                  Show item description
                 </label>
               </div>
             )}
@@ -885,30 +840,23 @@ export default function BlockForm({ id }: { id?: string }) {
             <fieldset className={fieldsetCls}>
               <legend className={legendCls}>Call to action</legend>
 
-              <Field label="Style">
-                <select
-                  className={inputCls}
-                  value={formData.cta.style}
-                  onChange={(e) =>
-                    setCta({
-                      style: e.target.value as FormState["cta"]["style"],
-                    })
-                  }
-                  disabled={isSubmitting}
-                >
-                  {CTA_STYLES.map((s) => (
-                    <option key={s} value={s}>
-                      {s === "none" ? "None" : s === "link" ? "Link" : "Button"}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+                <Field label="Style">
+                  <select
+                    className={inputCls}
+                    value={formData.cta.style}
+                    onChange={(e) => setCta({ style: e.target.value })}
+                    disabled={isSubmitting}
+                  >
+                    {CTA_STYLES.map((s) => (
+                      <option key={s} value={s}>
+                        {s === "none" ? "None" : s === "link" ? "Link" : "Button"}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Text"
-                  hint="Optional. Falls back to a default label."
-                >
+                <Field label="Text" hint="Optional. Falls back to a default label.">
                   <input
                     type="text"
                     className={inputCls}
@@ -918,24 +866,18 @@ export default function BlockForm({ id }: { id?: string }) {
                     placeholder="e.g. See all"
                   />
                 </Field>
-
-                <Field label="Link" required>
-                  <input
-                    type="text"
-                    className={inputCls}
-                    value={formData.cta.link}
-                    onChange={(e) => setCta({ link: e.target.value })}
-                    disabled={isSubmitting || formData.cta.style === "none"}
-                    placeholder="/products"
-                  />
-                </Field>
               </div>
 
-              {formData.cta.style !== "none" && !formData.cta.link.trim() && (
-                <p className="text-[12px] text-amber-700">
-                  A CTA needs a link to render. Add one or set style to None.
-                </p>
-              )}
+              <Field label="Link" hint="Required when a CTA style is selected.">
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={formData.cta.link}
+                  onChange={(e) => setCta({ link: e.target.value })}
+                  disabled={isSubmitting || formData.cta.style === "none"}
+                  placeholder="/collections/summer"
+                />
+              </Field>
             </fieldset>
           )}
 
@@ -945,7 +887,9 @@ export default function BlockForm({ id }: { id?: string }) {
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[14px] font-medium text-foreground">
-                  Layout, cards & colors
+                  {isBannerSource
+                    ? "Colors & spacing"
+                    : "Layout, cards & colors"}
                 </p>
                 <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
                   {presentationSummary}
@@ -960,13 +904,17 @@ export default function BlockForm({ id }: { id?: string }) {
                 Edit
               </button>
             </div>
+            <p className={helperCls}>
+              Only options that this display and source can use are shown and
+              saved.
+            </p>
           </fieldset>
 
-          <div className="sticky bottom-0 -mx-4 flex items-center justify-end gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div className="sticky bottom-0 -mx-3 flex flex-col-reverse gap-3 sm:-mx-6 sm:flex-row sm:items-center sm:justify-end border-t border-border bg-background/95 px-3 py-3 backdrop-blur sm:px-6 lg:-mx-8 lg:px-8">
             <button
               type="button"
               onClick={() => router.push(LIST_PATH)}
-              className="rounded-lg border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground transition hover:bg-muted"
+              className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground transition hover:bg-muted sm:w-auto"
               disabled={isSubmitting}
             >
               Cancel
@@ -974,7 +922,7 @@ export default function BlockForm({ id }: { id?: string }) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-[14px] font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-[14px] font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 sm:w-auto"
             >
               {isSubmitting ? (
                 <>
@@ -996,42 +944,19 @@ export default function BlockForm({ id }: { id?: string }) {
         onClose={() => setPresentationOpen(false)}
         title="Presentation"
       >
-        <div className="space-y-6">
+        <div className="space-y-5 sm:space-y-6">
           <section>
-            <SheetLabel>Theme</SheetLabel>
-            <Field label="Theme">
-              <select
-                className={inputCls}
-                value={dc.theme}
-                onChange={(e) => setDisplayConfig({ theme: e.target.value })}
-              >
-                {BLOCK_THEMES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </section>
-
-          <section>
-            <SheetLabel>Layout</SheetLabel>
+            <SheetLabel>Common</SheetLabel>
             <div className="grid grid-cols-2 gap-3">
-              <Field
-                label="Columns"
-                hint={columnsDisabled ? "Not used by this layout." : undefined}
-              >
+              <Field label="Theme">
                 <select
                   className={inputCls}
-                  value={dc.columns}
-                  onChange={(e) =>
-                    setDisplayConfig({ columns: Number(e.target.value) })
-                  }
-                  disabled={columnsDisabled}
+                  value={dc.theme}
+                  onChange={(e) => setDisplayConfig({ theme: e.target.value })}
                 >
-                  {BLOCK_COLUMN_COUNTS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
+                  {BLOCK_THEMES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
                     </option>
                   ))}
                 </select>
@@ -1046,38 +971,17 @@ export default function BlockForm({ id }: { id?: string }) {
                   value={dc.gap}
                   onChange={(e) =>
                     setDisplayConfig({
-                      gap: Math.min(
-                        64,
-                        Math.max(0, Number(e.target.value) || 0),
-                      ),
+                      gap: Math.min(64, Math.max(0, Number(e.target.value) || 0)),
                     })
                   }
                 />
-              </Field>
-
-              <Field label="Alignment">
-                <select
-                  className={inputCls}
-                  value={dc.alignment}
-                  onChange={(e) =>
-                    setDisplayConfig({ alignment: e.target.value })
-                  }
-                >
-                  {BLOCK_ALIGNMENTS.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
               </Field>
 
               <Field label="Animation">
                 <select
                   className={inputCls}
                   value={dc.animation}
-                  onChange={(e) =>
-                    setDisplayConfig({ animation: e.target.value })
-                  }
+                  onChange={(e) => setDisplayConfig({ animation: e.target.value })}
                 >
                   {BLOCK_ANIMATIONS.map((a) => (
                     <option key={a} value={a}>
@@ -1087,135 +991,8 @@ export default function BlockForm({ id }: { id?: string }) {
                 </select>
               </Field>
             </div>
-          </section>
 
-          <section>
-            <SheetLabel>Card</SheetLabel>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Ratio">
-                <select
-                  className={inputCls}
-                  value={dc.cardRatio}
-                  onChange={(e) =>
-                    setDisplayConfig({ cardRatio: e.target.value })
-                  }
-                  disabled={sideLayout}
-                >
-                  {CARD_RATIOS.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Size">
-                <select
-                  className={inputCls}
-                  value={dc.cardSize}
-                  onChange={(e) =>
-                    setDisplayConfig({ cardSize: e.target.value })
-                  }
-                >
-                  {CARD_SIZES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Shape">
-                <select
-                  className={inputCls}
-                  value={dc.cardShape}
-                  onChange={(e) =>
-                    setDisplayConfig({ cardShape: e.target.value })
-                  }
-                >
-                  {CARD_SHAPES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Image position">
-                <select
-                  className={inputCls}
-                  value={dc.imagePosition}
-                  onChange={(e) =>
-                    setDisplayConfig({ imagePosition: e.target.value })
-                  }
-                >
-                  {IMAGE_POSITIONS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-
-            <div className="mt-3">
-              <label className={labelCls}>Card layout</label>
-              <div className="grid grid-cols-3 gap-2">
-                {CARD_LAYOUTS.map((layout) => {
-                  const selected = dc.cardLayout === layout;
-                  return (
-                    <button
-                      key={layout}
-                      type="button"
-                      onClick={() => setDisplayConfig({ cardLayout: layout })}
-                      className={`rounded-lg border px-3 py-2 text-left text-[12px] transition ${
-                        selected
-                          ? "border-primary/50 bg-primary/5 text-foreground"
-                          : "border-border bg-background text-foreground/80 hover:bg-muted/40"
-                      }`}
-                    >
-                      <span className="block font-medium">
-                        {CARD_LAYOUT_LABELS[layout]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-1.5 text-[12px] text-muted-foreground">
-                Side layouts use a fixed image width and ignore the aspect ratio
-                and title-overlay settings.
-              </p>
-            </div>
-
-            <div className="mt-3">
-              <Field label="Title position">
-                <select
-                  className={inputCls}
-                  value={dc.titlePosition}
-                  onChange={(e) =>
-                    setDisplayConfig({ titlePosition: e.target.value })
-                  }
-                  disabled={sideLayout}
-                >
-                  {TITLE_POSITIONS.map((p) => (
-                    <option key={p} value={p}>
-                      {p === "below"
-                        ? "Below image"
-                        : p === "overlay-top"
-                          ? "Overlay top"
-                          : p === "overlay-bottom"
-                            ? "Overlay bottom"
-                            : "Hidden"}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-          </section>
-
-          <section>
-            <SheetLabel>Colors</SheetLabel>
-            <div className="space-y-3">
+            <div className="mt-3 space-y-3">
               <ColorField
                 label="Background"
                 value={dc.backgroundColor}
@@ -1230,29 +1007,179 @@ export default function BlockForm({ id }: { id?: string }) {
             </div>
           </section>
 
-          <section>
-            <SheetLabel>Style</SheetLabel>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <ToggleCard
-                label="Borderless"
-                checked={dc.borderless}
-                onChange={(v) => setDisplayConfig({ borderless: v })}
-              />
-              <ToggleCard
-                label="Rounded"
-                checked={dc.rounded}
-                onChange={(v) => setDisplayConfig({ rounded: v })}
-              />
-              <ToggleCard
-                label="Shadow"
-                checked={dc.shadow}
-                onChange={(v) => setDisplayConfig({ shadow: v })}
-              />
-            </div>
-          </section>
+          {hasDisplayFields && (
+            <section>
+              <SheetLabel>{"Layout · " + (isBannerSource ? "banner" : formData.display)}</SheetLabel>
+              <div className="grid grid-cols-2 gap-3">
+                {displayFields.has("columns") && (
+                  <Field label="Columns">
+                    <select
+                      className={inputCls}
+                      value={dc.columns}
+                      onChange={(e) =>
+                        setDisplayConfig({ columns: Number(e.target.value) })
+                      }
+                    >
+                      {BLOCK_COLUMN_COUNTS.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
+                {displayFields.has("alignment") && (
+                  <Field label="Alignment">
+                    <select
+                      className={inputCls}
+                      value={dc.alignment}
+                      onChange={(e) =>
+                        setDisplayConfig({ alignment: e.target.value })
+                      }
+                    >
+                      {BLOCK_ALIGNMENTS.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
+                {displayFields.has("cardShape") && (
+                  <Field label="Card shape">
+                    <select
+                      className={inputCls}
+                      value={dc.cardShape}
+                      onChange={(e) =>
+                        setDisplayConfig({ cardShape: e.target.value })
+                      }
+                    >
+                      {CARD_SHAPES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
+                {displayFields.has("cardSize") && (
+                  <Field label="Card size">
+                    <select
+                      className={inputCls}
+                      value={dc.cardSize}
+                      onChange={(e) =>
+                        setDisplayConfig({ cardSize: e.target.value })
+                      }
+                    >
+                      {CARD_SIZES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
+                {displayFields.has("cardRatio") && (
+                  <Field label="Aspect ratio">
+                    <select
+                      className={inputCls}
+                      value={dc.cardRatio}
+                      onChange={(e) =>
+                        setDisplayConfig({ cardRatio: e.target.value })
+                      }
+                    >
+                      {BLOCK_CARD_RATIOS.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
+                {displayFields.has("imagePosition") && (
+                  <Field label="Image position">
+                    <select
+                      className={inputCls}
+                      value={dc.imagePosition}
+                      onChange={(e) =>
+                        setDisplayConfig({ imagePosition: e.target.value })
+                      }
+                    >
+                      {IMAGE_POSITIONS.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </div>
+
+
+              {displayFields.has("titlePosition") && (
+                <div className="mt-3">
+                  <Field label="Title position">
+                    <select
+                      className={inputCls}
+                      value={dc.titlePosition}
+                      onChange={(e) =>
+                        setDisplayConfig({ titlePosition: e.target.value })
+                      }
+                    >
+                      {TITLE_POSITIONS.map((pos) => (
+                        <option key={pos} value={pos}>
+                          {pos === "below"
+                            ? "Below image"
+                            : pos === "overlay-top"
+                              ? "Overlay top"
+                              : pos === "overlay-bottom"
+                                ? "Overlay bottom"
+                                : "Hidden"}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              )}
+            </section>
+          )}
+
+          {hasSurfaceFields && (
+            <section>
+              <SheetLabel>Surface</SheetLabel>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {displayFields.has("borderless") && (
+                  <ToggleCard
+                    label="Borderless"
+                    checked={dc.borderless}
+                    onChange={(v) => setDisplayConfig({ borderless: v })}
+                  />
+                )}
+                {displayFields.has("rounded") && (
+                  <ToggleCard
+                    label="Rounded"
+                    checked={dc.rounded}
+                    onChange={(v) => setDisplayConfig({ rounded: v })}
+                  />
+                )}
+                {displayFields.has("shadow") && (
+                  <ToggleCard
+                    label="Shadow"
+                    checked={dc.shadow}
+                    onChange={(v) => setDisplayConfig({ shadow: v })}
+                  />
+                )}
+              </div>
+            </section>
+          )}
         </div>
 
-        <div className="sticky bottom-0 -mx-4 mt-6 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5">
+        <div className="sticky bottom-0 -mx-3 mt-6 border-t border-border bg-background/95 px-3 py-3 backdrop-blur sm:-mx-5 sm:px-5">
           <button
             type="button"
             onClick={() => setPresentationOpen(false)}
@@ -1265,6 +1192,10 @@ export default function BlockForm({ id }: { id?: string }) {
     </div>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                  Helpers                                   */
+/* -------------------------------------------------------------------------- */
 
 function Field({
   label,
@@ -1301,25 +1232,23 @@ function ToggleCard({
   label,
   checked,
   onChange,
-  disabled,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
-  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      onClick={() => !disabled && onChange(!checked)}
-      disabled={disabled}
-      className={`flex items-center justify-between rounded-lg border px-3.5 py-2.5 text-left text-[14px] transition ${
-        checked
+      onClick={() => onChange(!checked)}
+      className={
+        "flex items-center justify-between rounded-lg border px-3.5 py-2.5 text-left text-[14px] transition " +
+        (checked
           ? "border-primary/50 bg-primary/5 text-foreground"
-          : "border-border bg-background text-foreground/80 hover:bg-muted/40"
-      } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+          : "border-border bg-background text-foreground/80 hover:bg-muted/40")
+      }
     >
       <span>{label}</span>
       {checked && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
@@ -1336,35 +1265,17 @@ function ColorField({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const swatchValue =
-    value && value !== "transparent" && value.startsWith("#")
-      ? value.length === 4
-        ? `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`
-        : value.slice(0, 7)
-      : "#ffffff";
-
   return (
     <div>
       <label className={labelCls}>{label}</label>
       <div className="flex items-center gap-2">
-        <label
-          className="relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-border"
-          style={{
-            backgroundColor: value || "transparent",
-            backgroundImage: value
-              ? undefined
-              : "repeating-linear-gradient(45deg, #eee, #eee 4px, #fff 4px, #fff 8px)",
-          }}
-          aria-label={`Pick ${label.toLowerCase()} color`}
-        >
-          <input
-            type="color"
-            value={swatchValue}
-            onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          />
-        </label>
-
+        <input
+          type="color"
+          value={value || "#ffffff"}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-10 w-10 shrink-0 cursor-pointer rounded-lg border border-border bg-background"
+          aria-label={"Pick " + label.toLowerCase() + " color"}
+        />
         <input
           type="text"
           className={inputCls}
@@ -1372,13 +1283,12 @@ function ColorField({
           onChange={(e) => onChange(e.target.value)}
           placeholder="#RRGGBB or transparent"
         />
-
         {value ? (
           <button
             type="button"
             onClick={() => onChange("")}
             className="shrink-0 rounded-lg border border-border bg-background px-2.5 py-2 text-[12px] text-foreground/70 hover:bg-muted"
-            aria-label={`Clear ${label.toLowerCase()} color`}
+            aria-label={"Clear " + label.toLowerCase() + " color"}
           >
             Clear
           </button>
@@ -1449,36 +1359,6 @@ function SourcePreviewCard({
   }
 
   const d = state.data;
-  const warnings: string[] = [];
-
-  if (sourceType === "promotion") {
-    if (!d.imageUrl) {
-      warnings.push(
-        "No banner image — add one in the promotion editor for banner display.",
-      );
-    }
-    if (d.meta.isActive === false) warnings.push("This promotion is inactive.");
-    if (d.meta.endDate && new Date(d.meta.endDate) < new Date()) {
-      warnings.push("This promotion has ended.");
-    }
-  }
-
-  const subline = (() => {
-    if (sourceType === "promotion") {
-      const parts: string[] = [];
-      if (d.meta.calculationType) parts.push(d.meta.calculationType);
-      if (d.meta.code) parts.push(`Code: ${d.meta.code}`);
-      if (d.meta.isActive === false) parts.push("inactive");
-      return parts.join(" · ");
-    }
-    if (sourceType === "collection") {
-      return `${d.meta.type} · ${d.meta.targetType}`;
-    }
-    if (sourceType === "category" && d.meta.slug) {
-      return `/${d.meta.slug}`;
-    }
-    return null;
-  })();
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-background">
@@ -1491,61 +1371,40 @@ function SourcePreviewCard({
             className="h-14 w-14 shrink-0 rounded-lg border border-border bg-muted/40 object-cover"
           />
         ) : (
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-[10px] font-medium text-muted-foreground">
-            No image
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/40 px-1 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
+            {sourceType}
           </div>
         )}
+
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">
+          <p className="truncate text-[14px] font-medium text-foreground">
             {d.name}
           </p>
-          {subline && (
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
-              {subline}
+          {d.meta?.type && (
+            <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+              {d.meta.type}
+              {d.meta.targetType ? " · " + d.meta.targetType : ""}
             </p>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-lg px-2 py-1 text-[12px] font-medium text-foreground/80 hover:bg-muted"
+            className="text-[12px] font-medium text-primary hover:underline"
           >
             Change
           </button>
           <button
             type="button"
             onClick={onRemove}
-            className="rounded-lg p-1 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
-            aria-label="Remove selection"
+            className="text-[12px] text-muted-foreground hover:text-destructive"
           >
-            <svg
-              className="h-4 w-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
+            Remove
           </button>
         </div>
       </div>
-      {warnings.length > 0 && (
-        <div className="space-y-1 border-t border-amber-200 bg-amber-50 px-3 py-2">
-          {warnings.map((w, i) => (
-            <p
-              key={i}
-              className="flex items-start gap-1.5 text-[12px] text-amber-800"
-            >
-              <span aria-hidden>⚠</span>
-              <span>{w}</span>
-            </p>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

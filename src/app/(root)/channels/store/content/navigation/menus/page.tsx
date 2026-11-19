@@ -356,7 +356,7 @@ const MenuPage = () => {
           <div className="h-9 w-32 animate-pulse rounded-lg bg-muted" />
         </div>
         <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="space-y-3 p-5">
+          <div className="space-y-3 p-4 sm:p-5">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="flex items-center gap-4">
                 <div className="h-8 w-8 animate-pulse rounded bg-muted" />
@@ -375,7 +375,7 @@ const MenuPage = () => {
   if (error && menus.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -435,7 +435,7 @@ const MenuPage = () => {
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">All menus</h2>
             {visibleMenus.length > 0 && (
@@ -502,7 +502,7 @@ const MenuPage = () => {
                         key={menu._id}
                         className="group transition-colors hover:bg-muted/40"
                       >
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div className="flex items-center gap-3">
                             <div className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded bg-muted">
                               {menu.image ? (
@@ -536,13 +536,13 @@ const MenuPage = () => {
                           </div>
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div className="truncate text-sm text-foreground">
                             {menu.order}
                           </div>
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div
                             className="truncate text-sm text-foreground"
                             title={getItemsSummary(menu)}
@@ -551,23 +551,23 @@ const MenuPage = () => {
                           </div>
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div className="truncate text-sm text-foreground">
                             {menu.location || "—"}
                           </div>
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <DisplayCell menu={menu} />
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div className="truncate text-sm text-muted-foreground">
                             {formatDate(menu.createdAt ?? menu.created_at)}
                           </div>
                         </td>
 
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-3 py-3 sm:px-4 text-right">
                           <div className="flex justify-end">
                             <PopoverMenu
                               items={getMenuItems(menu)}

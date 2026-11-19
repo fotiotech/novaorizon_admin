@@ -60,13 +60,13 @@ export default function ContentPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
         Content Management
       </h1>
 
       {/* Form */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 space-y-4">
         <div>
           <label
             htmlFor="title"
@@ -129,14 +129,14 @@ export default function ContentPage() {
       {/* List */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow divide-y divide-gray-200 dark:divide-gray-700">
         {items.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 p-6 text-center">
+          <p className="text-gray-500 dark:text-gray-400 p-4 sm:p-6 text-center">
             No content yet. Create your first item!
           </p>
         ) : (
           items.map((item) => (
             <div
               key={item.id}
-              className="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+              className="p-4 sm:p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
             >
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">

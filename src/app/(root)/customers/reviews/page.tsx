@@ -83,7 +83,7 @@ export default function ReviewsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-foreground">
@@ -143,7 +143,7 @@ export default function ReviewsPage() {
           reviews.map((review) => (
             <div
               key={review._id}
-              className="bg-card border border-border rounded-lg p-6 hover:shadow-md transition-shadow"
+              className="bg-card border border-border rounded-lg p-4 sm:p-6 hover:shadow-md transition-shadow"
             >
               <div className="flex justify-between items-start mb-4">
                 <div className="flex-1">

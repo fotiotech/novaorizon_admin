@@ -537,7 +537,7 @@ const AllOrderPage = () => {
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All orders
@@ -638,7 +638,7 @@ const AllOrderPage = () => {
                       key={order._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <button
                           type="button"
                           onClick={() => openOrderDetails(order.orderNumber)}
@@ -647,7 +647,7 @@ const AllOrderPage = () => {
                           #{order.orderNumber}
                         </button>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase text-muted-foreground">
                             {initials(order)}
@@ -662,27 +662,27 @@ const AllOrderPage = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate font-medium text-foreground">
                           CFA {order.total?.toFixed(2) || "0.00"}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate">
                           <PaymentBadge status={order.paymentStatus} />
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate">
                           <StatusBadge status={order.orderStatus} />
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate text-muted-foreground">
                           {formatDate(order.createdAt)}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-3 sm:px-4 text-right">
                         <div className="flex justify-end">
                           <PopoverMenu
                             items={getOrderMenuItems(order)}

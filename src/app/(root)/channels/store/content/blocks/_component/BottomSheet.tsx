@@ -62,7 +62,7 @@ export function BottomSheet({
           />
         </div>
 
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
           <h2
             id="bottom-sheet-title"
             className="text-base font-semibold text-foreground"

@@ -252,7 +252,7 @@ export default function CustomersPage() {
   if (error && customers.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -302,7 +302,7 @@ export default function CustomersPage() {
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All customers
@@ -371,7 +371,7 @@ export default function CustomersPage() {
                       key={customer._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold uppercase text-primary">
                             {initials(customer)}
@@ -386,27 +386,27 @@ export default function CustomersPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate text-sm text-muted-foreground">
                           {customer.billingAddress?.email || "—"}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate text-sm text-muted-foreground">
                           {customer.billingAddress?.phone || "—"}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate text-sm text-muted-foreground">
                           {location(customer)}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate text-xs text-muted-foreground">
                           {formatDate(customer.createdAt)}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-3 sm:px-4 text-right">
                         <div className="flex justify-end">
                           <PopoverMenu
                             items={getMenuItems(customer)}

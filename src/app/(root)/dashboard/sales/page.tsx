@@ -166,7 +166,7 @@ const Skeleton = memo(function Skeleton() {
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
         {[1, 2].map((i) => (
           <div key={i} className="rounded-lg bg-card">
-            <div className="px-4 py-3">
+            <div className="px-3 py-3 sm:px-4">
               <div className="h-4 w-32 animate-pulse rounded bg-muted" />
             </div>
             <div className="space-y-3 p-4">
@@ -248,7 +248,7 @@ export default function SalesReportsPage() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -297,7 +297,7 @@ export default function SalesReportsPage() {
 
         {/* Orders by status */}
         <section className={surfaceClass}>
-          <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center justify-between px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold text-foreground">
               Orders by status
             </h2>
@@ -314,7 +314,7 @@ export default function SalesReportsPage() {
 
         {/* Recent orders */}
         <section className={surfaceClass}>
-          <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center justify-between px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold text-foreground">
               Recent orders
             </h2>
@@ -334,7 +334,7 @@ export default function SalesReportsPage() {
                 return (
                   <li
                     key={order._id}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+                    className="flex items-center gap-3 px-3 py-3 sm:px-4 transition-colors hover:bg-muted/40"
                   >
                     <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                       <ShoppingBag sx={{ fontSize: 16 }} />

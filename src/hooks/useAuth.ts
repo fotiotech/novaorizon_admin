@@ -98,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await api.post<{ data: { user: AuthUser } }>("/auth/login", {
       email,
       password,
+      audience: "admin",
     });
     setUser(res.data.data.user);
     return res.data.data.user;

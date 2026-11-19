@@ -204,19 +204,19 @@ export default function AdminNewsletterPage() {
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <th className="px-3 py-3 sm:px-4 text-left font-medium text-gray-500">
                       Email
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <th className="px-3 py-3 sm:px-4 text-left font-medium text-gray-500">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <th className="px-3 py-3 sm:px-4 text-left font-medium text-gray-500">
                       Source
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <th className="px-3 py-3 sm:px-4 text-left font-medium text-gray-500">
                       Subscribed
                     </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-500">
+                    <th className="px-3 py-3 sm:px-4 text-right font-medium text-gray-500">
                       Actions
                     </th>
                   </tr>
@@ -224,8 +224,8 @@ export default function AdminNewsletterPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {subs.map((s) => (
                     <tr key={s._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-900">{s.email}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4 text-gray-900">{s.email}</td>
+                      <td className="px-3 py-3 sm:px-4">
                         <span
                           className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium capitalize ${badge(
                             s.status,
@@ -234,11 +234,11 @@ export default function AdminNewsletterPage() {
                           {s.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{s.source}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                      <td className="px-3 py-3 sm:px-4 text-gray-600">{s.source}</td>
+                      <td className="px-3 py-3 sm:px-4 text-xs text-gray-500 whitespace-nowrap">
                         {new Date(s.subscribedAt).toLocaleString()}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-3 sm:px-4 text-right">
                         <button
                           onClick={() => handleDelete(s._id)}
                           className="text-red-600 hover:text-red-800 text-xs font-medium"
@@ -253,7 +253,7 @@ export default function AdminNewsletterPage() {
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
+              <div className="flex items-center justify-between border-t border-gray-200 px-3 py-3 sm:px-4">
                 <p className="text-xs text-gray-500">
                   Page {page} of {totalPages}
                 </p>

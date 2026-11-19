@@ -300,7 +300,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+    <section className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-sm">
       <header className="mb-4">
         <h3 className="text-base font-semibold text-foreground">{title}</h3>
         {description ? (
@@ -1172,7 +1172,7 @@ const MenuForm = ({ id }: { id?: string }) => {
     show("shadow");
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6">
       {error && (
         <Notification
           type="error"
@@ -1194,9 +1194,9 @@ const MenuForm = ({ id }: { id?: string }) => {
 
       <form
         onSubmit={handleSubmit}
-        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
+        className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
       >
-        <div className="space-y-6">
+        <div className="space-y-5 sm:space-y-6">
           {/* -------------------- Identity -------------------- */}
           <Section title="Identity">
             <Field label="Name *">
@@ -1280,7 +1280,7 @@ const MenuForm = ({ id }: { id?: string }) => {
 
           {/* -------------------- Placement -------------------- */}
           <Section title="Placement">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-1.5">
                 <Field label="Location">
                   <select
@@ -1331,7 +1331,7 @@ const MenuForm = ({ id }: { id?: string }) => {
 
           {/* -------------------- Display -------------------- */}
           <Section title="Display & layout">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
               <Field
                 label="Menu layout"
                 hint="Options depend on the selected location."
@@ -1410,7 +1410,7 @@ const MenuForm = ({ id }: { id?: string }) => {
                   Panel behaviour
                 </h4>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                   {show("theme") ? (
                     <Field
                       label="Theme"
@@ -1612,7 +1612,7 @@ const MenuForm = ({ id }: { id?: string }) => {
 
         {/* -------------------- Preview -------------------- */}
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-sm">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Live preview
             </h3>

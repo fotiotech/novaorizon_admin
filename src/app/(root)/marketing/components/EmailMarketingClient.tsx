@@ -155,7 +155,7 @@ export function EmailMarketingClient({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       {/* ── Header / overview ─────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px] text-muted-foreground">
@@ -194,9 +194,9 @@ export function EmailMarketingClient({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-5">
         {/* ── Left column — templates list ─────────────────────── */}
-        <div className="space-y-6 lg:col-span-3">
+        <div className="space-y-5 sm:space-y-6 lg:col-span-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>

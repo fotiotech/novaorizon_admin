@@ -105,7 +105,7 @@ function Section({
 }) {
   return (
     <section className="overflow-hidden rounded-lg border border-border bg-card">
-      <div className="flex items-start gap-3 border-b border-border px-4 py-3">
+      <div className="flex items-start gap-3 border-b border-border px-3 py-3 sm:px-4">
         <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           {icon}
         </span>
@@ -165,7 +165,7 @@ const Skeleton = memo(function Skeleton() {
             key={i}
             className="overflow-hidden rounded-lg border border-border bg-card"
           >
-            <div className="border-b border-border px-4 py-3">
+            <div className="border-b border-border px-3 py-3 sm:px-4">
               <div className="h-4 w-32 animate-pulse rounded bg-muted" />
             </div>
             <div className="space-y-3 p-4">
@@ -292,7 +292,7 @@ export default function GeneralSettingsPage() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -731,7 +731,7 @@ export default function GeneralSettingsPage() {
         </Section>
 
         {/* ---------------- Sticky action bar ---------------- */}
-        <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+        <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3 sm:px-4">
           <div className="min-w-0 flex-1 text-xs">
             {isDirty ? (
               <span className="inline-flex items-center gap-1.5 text-muted-foreground">

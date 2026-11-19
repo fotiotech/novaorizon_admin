@@ -328,7 +328,7 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({
 
   if (error) {
     return (
-      <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-center text-sm text-destructive">
+      <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 sm:p-5 text-center text-sm text-destructive">
         {error}
       </div>
     );

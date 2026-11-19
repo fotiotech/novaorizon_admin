@@ -744,7 +744,7 @@ export default function ProductsPage() {
           <div className="h-9 w-64 animate-pulse rounded bg-muted" />
         </div>
         <div className="overflow-hidden rounded-lg bg-card">
-          <div className="space-y-4 p-6">
+          <div className="space-y-4 p-4 sm:p-6">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-4">
                 <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
@@ -764,7 +764,7 @@ export default function ProductsPage() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -946,7 +946,7 @@ export default function ProductsPage() {
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All products
@@ -1038,7 +1038,7 @@ export default function ProductsPage() {
                       key={product._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-lg bg-muted">
                             {product.images?.[0] ? (
@@ -1074,18 +1074,18 @@ export default function ProductsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate font-mono text-xs text-muted-foreground">
                           {product.sku || "—"}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate font-medium text-foreground">
                           CFA{" "}
                           {(product.listPrice || product.price || 0).toFixed(2)}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="flex items-center gap-2">
                           <StockBadge product={product} />
                           <span className="text-xs text-muted-foreground">
@@ -1093,14 +1093,14 @@ export default function ProductsPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate">
                           <span className="inline-flex max-w-full items-center truncate rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                             {getCategoryName(product.categoryId)}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-3 sm:px-4 text-right">
                         <div className="flex justify-end">
                           <PopoverMenu
                             ariaLabel={`Actions for ${product.name}`}
@@ -1273,7 +1273,7 @@ export default function ProductsPage() {
           aria-modal="true"
         >
           <div
-            className="w-full rounded-t-2xl bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
+            className="w-full rounded-t-2xl bg-card p-4 sm:p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight">
@@ -1339,7 +1339,7 @@ export default function ProductsPage() {
           aria-modal="true"
         >
           <div
-            className="w-full rounded-t-2xl bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
+            className="w-full rounded-t-2xl bg-card p-4 sm:p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight">
@@ -1401,7 +1401,7 @@ export default function ProductsPage() {
           aria-modal="true"
         >
           <div
-            className="w-full rounded-t-2xl bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
+            className="w-full rounded-t-2xl bg-card p-4 sm:p-5 text-card-foreground sm:max-w-md sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight">

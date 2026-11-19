@@ -159,7 +159,7 @@ export default function BlocksAdminPage() {
 
   return (
     <div className="min-h-screen bg-card pb-16">
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
         {error && (
           <Notification
             type="error"
@@ -175,9 +175,9 @@ export default function BlocksAdminPage() {
           />
         )}
 
-        <header className="mb-6 flex items-start justify-between gap-4">
+        <header className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">
+            <h1 className="text-lg font-semibold sm:text-xl text-gray-900 sm:text-2xl">
               Content blocks
             </h1>
             <p className="mt-1 text-sm text-gray-600">
@@ -216,7 +216,7 @@ export default function BlocksAdminPage() {
                     {list.map((b, i) => (
                       <div
                         key={b._id}
-                        className={`flex items-center gap-3 px-4 py-3 ${
+                        className={`flex items-center gap-3 px-3 py-3 sm:px-4 ${
                           i > 0 ? "border-t border-gray-100" : ""
                         }`}
                       >

@@ -184,7 +184,7 @@ function GroupUsageModal({
 
       <div className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-card text-card-foreground shadow-xl ring-1 ring-border/60">
         {/* Header */}
-        <header className="flex flex-none items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <header className="flex flex-none items-center justify-between gap-3 border-b border-border/60 px-3 py-3 sm:px-4">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-foreground">
               {groupName ? `Where "${groupName}" is used` : "Group usage"}
@@ -234,7 +234,7 @@ function GroupUsageModal({
         </div>
 
         {/* Footer */}
-        <footer className="flex flex-none justify-end border-t border-border/60 px-4 py-3">
+        <footer className="flex flex-none justify-end border-t border-border/60 px-3 py-3 sm:px-4">
           <button
             type="button"
             onClick={onClose}
@@ -879,7 +879,7 @@ const Group = () => {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-3 sm:px-4 text-sm text-destructive">
           <span>
             <strong className="font-medium">Error:</strong> {error}
           </span>
@@ -895,7 +895,7 @@ const Group = () => {
 
       {/* Success */}
       {success && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-50/60 px-3 py-3 sm:px-4 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
           <span>
             <strong className="font-medium">Success:</strong> {success}
           </span>
@@ -948,7 +948,7 @@ const Group = () => {
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               {browseMode ? "Browse groups" : "All groups"}
@@ -1102,7 +1102,7 @@ const Group = () => {
                       key={row._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div
                           className="flex items-center gap-2"
                           style={{
@@ -1163,15 +1163,15 @@ const Group = () => {
                           )}
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className="whitespace-nowrap px-3 py-3 sm:px-4">
                         <span className="font-mono text-xs text-muted-foreground">
                           {row.code}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-muted-foreground">
+                      <td className="whitespace-nowrap px-3 py-3 sm:px-4 text-sm text-muted-foreground">
                         {row.parentName ?? "—"}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                      <td className="whitespace-nowrap px-3 py-3 sm:px-4 text-right">
                         <div className="flex justify-end">
                           <PopoverMenu
                             items={getMenuItems(row)}

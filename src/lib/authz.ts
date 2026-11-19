@@ -48,7 +48,7 @@ export const getAuthUser = cache(async (): Promise<AuthUser | null> => {
   let token: string | undefined;
   try {
     const store = await cookies();
-    token = store.get("session")?.value;
+    token = store.get("session_admin")?.value;
   } catch {
     token = undefined;
   }

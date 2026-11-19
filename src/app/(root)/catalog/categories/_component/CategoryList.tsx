@@ -535,7 +535,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
                 }) => (
                   <div
                     key={row._id}
-                    className="px-4 py-3 transition-colors hover:bg-muted/40"
+                    className="px-3 py-3 sm:px-4 transition-colors hover:bg-muted/40"
                   >
                     {/* Top row */}
                     <div className="flex items-start gap-2.5">

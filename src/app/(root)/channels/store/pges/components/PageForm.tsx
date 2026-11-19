@@ -48,7 +48,7 @@ export default function PageForm({ initialData }: PageFormProps) {
   return (
     <form
       action={handleSubmit}
-      className="max-w-3xl mx-auto p-6 bg-white shadow rounded"
+      className="max-w-3xl mx-auto p-4 sm:p-6 bg-white shadow rounded"
     >
       <h1 className="text-2xl font-bold mb-6">
         {isEditing ? "Edit Page" : "Create New Page"}

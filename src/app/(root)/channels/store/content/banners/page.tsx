@@ -64,7 +64,7 @@ export default function BannersListPage() {
 
   return (
     <div className="min-h-screen bg-background pb-12">
-      <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-4xl px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
         {error && (
           <Notification
             type="error"
@@ -80,9 +80,9 @@ export default function BannersListPage() {
           />
         )}
 
-        <header className="mb-6 flex items-start justify-between gap-4">
+        <header className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-foreground">Banners</h1>
+            <h1 className="text-lg font-semibold sm:text-xl text-foreground">Banners</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Reusable banner content. Blocks select one or more banners and
               choose how to lay them out.
@@ -111,7 +111,7 @@ export default function BannersListPage() {
             {rows.map((row, i) => (
               <div
                 key={row._id}
-                className={`flex items-center gap-3 px-4 py-3 ${
+                className={`flex items-center gap-3 px-3 py-3 sm:px-4 ${
                   i > 0 ? "border-t border-border" : ""
                 }`}
               >
@@ -126,9 +126,19 @@ export default function BannersListPage() {
                   <div className="h-12 w-16 shrink-0 rounded-md border border-dashed border-border bg-muted/40" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-foreground">
-                    {row.name}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate font-semibold text-foreground">
+                      {row.name}
+                    </p>
+                    <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {row.type ?? "image"}
+                    </span>
+                    {row.status === "inactive" && (
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        inactive
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
                     Updated{" "}
                     {new Date(row.updated_at).toLocaleDateString(undefined, {

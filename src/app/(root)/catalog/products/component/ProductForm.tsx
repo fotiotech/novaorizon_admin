@@ -1139,7 +1139,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     return (
       <div className="mx-auto w-full max-w-4xl overflow-x-clip">
         <div className="overflow-hidden rounded-lg bg-muted/50 dark:bg-card">
-          <div className="px-4 py-3">
+          <div className="px-3 py-3 sm:px-4">
             <div className="h-5 w-40 animate-pulse rounded bg-muted" />
           </div>
           <div className="space-y-3 p-4">
@@ -1175,7 +1175,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         className="flex flex-1 flex-col overflow-clip rounded-lg bg-muted/50 text-foreground dark:bg-card"
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-3 py-3 sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
             <h1 className="text-sm font-semibold text-foreground">
               {initialProductId ? "Edit product" : "New product"}
@@ -1294,7 +1294,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         </div>
 
         {/* Sticky action bar — always pinned to the bottom */}
-        <div className="sticky bottom-0 z-20 mt-auto flex items-center justify-between gap-2 border-t border-border/60 bg-muted/80 px-4 py-3 backdrop-blur-sm dark:bg-card/80">
+        <div className="sticky bottom-0 z-20 mt-auto flex items-center justify-between gap-2 border-t border-border/60 bg-muted/80 px-3 py-3 sm:px-4 backdrop-blur-sm dark:bg-card/80">
           <div className="flex items-center gap-2">
             <button
               type="button"

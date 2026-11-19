@@ -347,7 +347,7 @@ export default function RefundsPage() {
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               Refund requests
@@ -420,12 +420,12 @@ export default function RefundsPage() {
                         key={item._id}
                         className="group transition-colors hover:bg-muted/40"
                       >
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div className="truncate font-medium text-foreground">
                             #{item.orderNumber}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium text-foreground">
                               {item.firstName} {item.lastName}
@@ -435,19 +435,19 @@ export default function RefundsPage() {
                             </p>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div className="truncate text-sm text-muted-foreground">
                             {new Date(
                               item.returnRequestedAt || item.createdAt,
                             ).toLocaleDateString()}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div className="truncate font-medium text-foreground">
                             {item.total} CFA
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div
                             className="truncate text-sm text-muted-foreground"
                             title={item.returnReason || "No reason provided"}
@@ -455,10 +455,10 @@ export default function RefundsPage() {
                             {item.returnReason || "No reason provided"}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <StatusBadge status={itemStatus} />
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-3 py-3 sm:px-4 text-right">
                           {isPending ? (
                             <div className="flex justify-end">
                               <PopoverMenu

@@ -165,7 +165,7 @@ export default function ChatListPage() {
 
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">All chats</h2>
             {visibleRooms.length > 0 && (
@@ -193,7 +193,7 @@ export default function ChatListPage() {
               >
                 <Link
                   href={`/chat/${room.roomId}`}
-                  className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3"
+                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3 sm:px-4"
                 >
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
                     {(room.from?.[0] ?? "?").toUpperCase()}

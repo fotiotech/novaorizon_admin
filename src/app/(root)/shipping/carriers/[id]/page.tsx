@@ -159,7 +159,7 @@ export default function CarrierDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       {/* Header with back button */}
       <div className="flex items-center gap-4">
         <Link
@@ -202,9 +202,9 @@ export default function CarrierDetailPage() {
       />
 
       {/* Orders Table */}
-      <div className="bg-card p-6 rounded-lg shadow-md border border-border">
+      <div className="bg-card p-4 sm:p-6 rounded-lg shadow-md border border-border">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-foreground">
+          <h2 className="text-lg font-semibold sm:text-xl text-foreground">
             Orders ({total})
           </h2>
           {loading && (

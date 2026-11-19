@@ -116,7 +116,7 @@ const AttributeSetForm: React.FC<AttributeSetFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       {error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-3 sm:px-4 text-sm text-destructive">
           {error}
         </div>
       )}

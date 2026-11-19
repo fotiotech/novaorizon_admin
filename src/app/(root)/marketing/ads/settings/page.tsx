@@ -175,15 +175,15 @@ Region      : ${awsRegion}`;
 
   if (loading) {
     return (
-      <main className="p-6 text-sm text-muted-foreground">
+      <main className="p-4 sm:p-6 text-sm text-muted-foreground">
         Loading Facebook Ads settings…
       </main>
     );
   }
 
   return (
-    <main className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <main className="grid gap-4 sm:gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+      <section className="rounded-xl border border-border bg-card p-4 sm:p-6 shadow-sm">
         <div className="mb-6">
           <p className="text-sm font-medium text-primary">Meta integration</p>
           <h2 className="mt-2 text-2xl font-bold">Facebook Ads connection</h2>
@@ -438,8 +438,8 @@ Region      : ${awsRegion}`;
         </div>
       </section>
 
-      <aside className="space-y-6">
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <aside className="space-y-5 sm:space-y-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-6 shadow-sm">
           <h3 className="text-lg font-semibold">Requirements</h3>
           <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
             <li>• Valid Meta Business account</li>

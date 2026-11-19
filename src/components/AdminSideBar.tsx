@@ -707,7 +707,7 @@ const AdminSideBar: React.FC<AdminSideBarProps> = ({
             search-panel-enter
           "
         >
-          <div className="flex items-center gap-2.5 px-4 py-3.5">
+          <div className="flex items-center gap-2.5 px-3 py-3 sm:px-4.5">
             <Search
               sx={{ fontSize: 20 }}
               className="shrink-0 text-muted-foreground"

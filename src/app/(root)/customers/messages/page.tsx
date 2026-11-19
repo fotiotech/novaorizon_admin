@@ -343,7 +343,7 @@ const AdminMessagesPage = () => {
 
       {/* Error banner */}
       {error && !loading && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-3 sm:px-4 text-sm text-destructive">
           <span>
             <strong className="font-medium">Error:</strong> {error}
           </span>
@@ -359,7 +359,7 @@ const AdminMessagesPage = () => {
 
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               {STATUS_TABS.find((t) => t.key === status)?.label ?? "All"}{" "}
@@ -434,7 +434,7 @@ const AdminMessagesPage = () => {
                       className="group cursor-pointer transition-colors hover:bg-muted/40"
                       onClick={() => handleOpen(msg)}
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="flex items-center gap-2.5">
                           <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold uppercase text-primary">
                             {(msg.name?.[0] ?? "?").toUpperCase()}
@@ -455,7 +455,7 @@ const AdminMessagesPage = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <p className="truncate text-sm font-medium text-foreground">
                           {msg.subject || "(no subject)"}
                         </p>
@@ -463,16 +463,16 @@ const AdminMessagesPage = () => {
                           {msg.message}
                         </p>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <StatusBadge status={msg.status} />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate text-xs text-muted-foreground">
                           {formatDate(msg.createdAt)}
                         </div>
                       </td>
                       <td
-                        className="px-4 py-3 text-right"
+                        className="px-3 py-3 sm:px-4 text-right"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex justify-end">
@@ -612,7 +612,7 @@ const AdminMessagesPage = () => {
             className="absolute right-0 top-0 flex h-full w-full max-w-lg flex-col bg-card text-card-foreground"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-foreground">
                   Message details
@@ -676,7 +676,7 @@ const AdminMessagesPage = () => {
               </div>
             </div>
 
-            <div className="border-t border-border bg-card px-4 py-3">
+            <div className="border-t border-border bg-card px-3 py-3 sm:px-4">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                 Actions
               </p>

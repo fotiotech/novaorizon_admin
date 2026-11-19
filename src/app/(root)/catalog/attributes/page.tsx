@@ -223,7 +223,7 @@ function UsageModal({
       {/* Panel */}
       <div className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-card text-card-foreground shadow-xl ring-1 ring-border/60">
         {/* Header */}
-        <header className="flex flex-none items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <header className="flex flex-none items-center justify-between gap-3 border-b border-border/60 px-3 py-3 sm:px-4">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-foreground">
               {attributeName
@@ -311,7 +311,7 @@ function UsageModal({
         </div>
 
         {/* Footer */}
-        <footer className="flex flex-none justify-end border-t border-border/60 px-4 py-3">
+        <footer className="flex flex-none justify-end border-t border-border/60 px-3 py-3 sm:px-4">
           <button
             type="button"
             onClick={onClose}
@@ -492,7 +492,7 @@ const Attributes = () => {
           <div className="h-9 w-32 animate-pulse rounded bg-muted" />
         </div>
         <div className="overflow-hidden rounded-lg bg-card">
-          <div className="space-y-3 p-5">
+          <div className="space-y-3 p-4 sm:p-5">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-4">
                 <div className="h-4 w-1/4 animate-pulse rounded bg-muted" />
@@ -614,7 +614,7 @@ const Attributes = () => {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-destructive/10 px-3 py-3 sm:px-4 text-sm text-destructive">
           <span>
             <strong className="font-medium">Error:</strong> {error}
           </span>
@@ -630,7 +630,7 @@ const Attributes = () => {
 
       {/* Success */}
       {success && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-emerald-50/60 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-emerald-50/60 px-3 py-3 sm:px-4 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
           <span>
             <strong className="font-medium">Success:</strong> {success}
           </span>
@@ -681,7 +681,7 @@ const Attributes = () => {
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               All attributes
@@ -745,34 +745,34 @@ const Attributes = () => {
                       key={attr._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate text-sm font-medium text-foreground">
                           {attr.name}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate font-mono text-xs text-muted-foreground">
                           {attr.code}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate text-sm text-muted-foreground">
                           {attr.unitFamily?.name || "—"}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate">
                           <span className="inline-flex max-w-full items-center truncate rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium capitalize text-muted-foreground">
                             {attr.type}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate text-sm text-muted-foreground">
                           {attr.sort_order}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div
                           className="truncate text-sm text-muted-foreground"
                           title={formatOptions(attr.option)}
@@ -780,7 +780,7 @@ const Attributes = () => {
                           {formatOptions(attr.option)}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-3 sm:px-4 text-right">
                         <div className="flex justify-end">
                           <PopoverMenu
                             items={getMenuItems(attr)}

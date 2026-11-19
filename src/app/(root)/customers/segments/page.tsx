@@ -288,7 +288,7 @@ export default function SegmentationPage() {
   if (error && groups.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -351,7 +351,7 @@ export default function SegmentationPage() {
       {/* -------------------------------------------------------------- */}
       {showForm && (
         <div className="mb-4 overflow-hidden rounded-lg border border-border bg-card">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold text-foreground">
               {editingId ? "Edit group" : "New group"}
             </h2>
@@ -413,7 +413,7 @@ export default function SegmentationPage() {
               </label>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-border bg-card px-4 py-3">
+            <div className="flex justify-end gap-2 border-t border-border bg-card px-3 py-3 sm:px-4">
               <button
                 type="button"
                 onClick={closeForm}

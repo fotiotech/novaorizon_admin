@@ -27,8 +27,8 @@ const FamilyForm: React.FC<FamilyFormProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div className="bg-white p-6 rounded w-96">
-        <h2 className="text-xl font-semibold mb-4">
+      <div className="bg-white p-4 sm:p-6 rounded w-96">
+        <h2 className="text-lg font-semibold sm:text-xl mb-4">
           {family ? "Edit" : "Add"} Unit Family
         </h2>
         <form onSubmit={handleSubmit}>

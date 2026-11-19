@@ -196,3 +196,55 @@ export const DEFAULT_BLOCK_SOURCE_STYLES: BlockSourceStyles = {
   manualCardVariant: "card",
   manualShowDescription: true,
 };
+
+/* -------------------------------------------------------------------------- */
+/*                                  Banners                                   */
+/* -------------------------------------------------------------------------- */
+
+export const BANNER_TYPES = ["image", "video", "html", "compact"] as const;
+export type BannerType = (typeof BANNER_TYPES)[number];
+
+export const BANNER_OVERLAYS = ["none", "light", "dark", "gradient"] as const;
+export type BannerOverlay = (typeof BANNER_OVERLAYS)[number];
+
+export const BANNER_ALIGNS = ["left", "center", "right"] as const;
+export type BannerAlign = (typeof BANNER_ALIGNS)[number];
+
+export const BANNER_POSITIONS = ["top", "center", "bottom"] as const;
+export type BannerPosition = (typeof BANNER_POSITIONS)[number];
+
+export const BANNER_THEMES = ["light", "dark"] as const;
+export type BannerTheme = (typeof BANNER_THEMES)[number];
+
+export const BANNER_STATUSES = ["active", "inactive"] as const;
+export type BannerStatus = (typeof BANNER_STATUSES)[number];
+/* -------------------------------------------------------------------------- */
+/*                          Banner card presentation                          */
+/* -------------------------------------------------------------------------- */
+
+export const BANNER_RATIOS = [
+  "9:16",
+  "2:3",
+  "3:4",
+  "4:5",
+  "1:1",
+  "5:4",
+  "4:3",
+  "3:2",
+  "16:9",
+  "2:1",
+  "21:9",
+] as const;
+export type BannerRatio = (typeof BANNER_RATIOS)[number];
+
+export const BANNER_CARD_SIZES = ["xs", "sm", "md", "lg"] as const;
+export type BannerCardSize = (typeof BANNER_CARD_SIZES)[number];
+/** Curated ratio list shown for content-block cards (kept deliberately short). */
+export const BLOCK_CARD_RATIOS = [
+  "1:1",
+  "4:5",
+  "3:4",
+  "4:3",
+  "16:9",
+  "21:9",
+] as const;

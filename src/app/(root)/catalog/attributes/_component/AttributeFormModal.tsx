@@ -246,13 +246,13 @@ export const AttributeFormModal: React.FC<AttributeFormModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded">
+          <div className="bg-destructive/10 border border-destructive/20 text-destructive px-3 py-3 sm:px-4 rounded">
             {error}
           </div>
         )}
 
         {/* Form Fields */}
-        <div className="max-h-96 overflow-y-auto space-y-6 pr-2">
+        <div className="max-h-96 overflow-y-auto space-y-5 sm:space-y-6 pr-2">
           {formData.map((attr, index) => (
             <div
               key={index}

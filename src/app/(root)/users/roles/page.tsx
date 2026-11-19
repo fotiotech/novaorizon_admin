@@ -187,7 +187,7 @@ export default function PermissionRolePage() {
   if (error && users.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -235,7 +235,7 @@ export default function PermissionRolePage() {
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">
               Staff accounts
@@ -305,7 +305,7 @@ export default function PermissionRolePage() {
                         key={user._id}
                         className="group transition-colors hover:bg-muted/40"
                       >
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div className="flex items-center gap-3">
                             <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold uppercase text-primary">
                               {initials(user)}
@@ -317,12 +317,12 @@ export default function PermissionRolePage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <div className="truncate text-sm text-muted-foreground">
                             {user.email || "—"}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset ${
                               ROLE_STYLES[roleKey] ?? ROLE_STYLES.customer
@@ -331,7 +331,7 @@ export default function PermissionRolePage() {
                             {user.role || "customer"}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 sm:px-4">
                           {perms.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {perms.slice(0, 3).map((p: any) => (
@@ -354,7 +354,7 @@ export default function PermissionRolePage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-3 py-3 sm:px-4 text-right">
                           <div className="flex justify-end">
                             <PopoverMenu
                               items={getMenuItems(user)}

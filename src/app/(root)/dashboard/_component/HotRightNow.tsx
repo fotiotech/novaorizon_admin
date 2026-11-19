@@ -54,7 +54,7 @@ export function HotRightNow({ initial = [], windowMinutes = 15 }: Props) {
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border/60 px-3 py-3 sm:px-4">
         <div className="text-sm font-medium text-foreground">Hot right now</div>
         <div className="text-xs text-muted-foreground/70">
           last {windowMinutes}m

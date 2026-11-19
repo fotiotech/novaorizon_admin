@@ -488,7 +488,7 @@ export default function Pos() {
       {/* ================================================================= */}
       <div className="flex min-h-0 w-full flex-col border-t border-border bg-card lg:h-auto lg:w-1/3 lg:flex-none lg:border-l lg:border-t-0">
         {/* Cart header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">Cart</h2>
             {items.length > 0 && (

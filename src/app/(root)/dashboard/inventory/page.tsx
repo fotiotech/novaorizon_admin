@@ -190,7 +190,7 @@ const Skeleton = memo(function Skeleton() {
         ))}
       </div>
       <div className="mt-4 rounded-lg bg-card">
-        <div className="px-4 py-3">
+        <div className="px-3 py-3 sm:px-4">
           <div className="h-4 w-40 animate-pulse rounded bg-muted" />
         </div>
         <div className="h-40 p-4">
@@ -283,7 +283,7 @@ export default function InventoryReportsPage() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -333,7 +333,7 @@ export default function InventoryReportsPage() {
 
         {/* Monthly additions */}
         <section className={surfaceClass}>
-          <div className="px-4 py-3">
+          <div className="px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold text-foreground">
               Monthly additions
             </h2>
@@ -347,7 +347,7 @@ export default function InventoryReportsPage() {
         {/* Two-column distributions */}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <section className={surfaceClass}>
-            <div className="px-4 py-3">
+            <div className="px-3 py-3 sm:px-4">
               <h2 className="text-sm font-semibold text-foreground">
                 By status
               </h2>
@@ -356,7 +356,7 @@ export default function InventoryReportsPage() {
           </section>
 
           <section className={surfaceClass}>
-            <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center justify-between px-3 py-3 sm:px-4">
               <h2 className="text-sm font-semibold text-foreground">
                 By category
               </h2>
@@ -374,7 +374,7 @@ export default function InventoryReportsPage() {
 
         {/* Recent products */}
         <section className={surfaceClass}>
-          <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center justify-between px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold text-foreground">
               Recent products
             </h2>
@@ -421,7 +421,7 @@ export default function InventoryReportsPage() {
                 return (
                   <li
                     key={product._id}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+                    className="flex items-center gap-3 px-3 py-3 sm:px-4 transition-colors hover:bg-muted/40"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
                       {imageUrl ? (

@@ -94,7 +94,7 @@ export default function CreateProductPage() {
   if (draftState === "found") {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="w-full max-w-md bg-card text-card-foreground rounded-2xl border border-border shadow-xl p-6">
+        <div className="w-full max-w-md bg-card text-card-foreground rounded-2xl border border-border shadow-xl p-4 sm:p-6">
           <h3 className="text-lg font-semibold mb-1">
             Continue with your draft?
           </h3>

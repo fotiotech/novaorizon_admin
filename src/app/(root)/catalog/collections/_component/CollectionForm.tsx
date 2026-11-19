@@ -68,7 +68,7 @@ const labelCls = "block text-[13px] font-medium text-foreground mb-1.5";
 const inputCls =
   "w-full min-w-0 rounded-lg border border-border bg-background px-3.5 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground/50 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-muted/50 disabled:text-muted-foreground";
 const helperCls = "mt-1.5 text-[12px] text-muted-foreground";
-const fieldsetCls = "rounded-xl border border-border bg-card p-5 space-y-4";
+const fieldsetCls = "rounded-xl border border-border bg-card p-4 sm:p-5 space-y-4";
 const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
 
 /* --------------------------------- types ---------------------------------- */
@@ -485,7 +485,7 @@ export default function CollectionForm({ id }: { id?: string }) {
         )}
 
         <header className="mb-6">
-          <h1 className="text-xl font-semibold text-foreground">
+          <h1 className="text-lg font-semibold sm:text-xl text-foreground">
             {id ? "Edit collection" : "New collection"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -497,7 +497,7 @@ export default function CollectionForm({ id }: { id?: string }) {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit} className="space-y-6 pb-24">
+        <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6 pb-24">
           {/* ────────────────────────── BASICS ────────────────────────── */}
           <fieldset className={fieldsetCls}>
             <legend className={legendCls}>Basics</legend>
@@ -527,7 +527,7 @@ export default function CollectionForm({ id }: { id?: string }) {
               />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <Field label="Target entity" required>
                 <select
                   name="targetType"
@@ -563,7 +563,7 @@ export default function CollectionForm({ id }: { id?: string }) {
               </Field>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <Field label="Status">
                 <select
                   name="status"
@@ -609,7 +609,7 @@ export default function CollectionForm({ id }: { id?: string }) {
             <fieldset className={fieldsetCls}>
               <legend className={legendCls}>Recommendation</legend>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                 <Field label="Kind" required>
                   <select
                     name="recommendationType"
@@ -725,7 +725,7 @@ export default function CollectionForm({ id }: { id?: string }) {
 
                 <div className="max-h-80 divide-y divide-border overflow-y-auto rounded-lg border border-border">
                   {availableItems.length === 0 ? (
-                    <p className="p-6 text-center text-sm text-muted-foreground">
+                    <p className="p-4 sm:p-6 text-center text-sm text-muted-foreground">
                       No {cfg.label.toLowerCase()} found.
                     </p>
                   ) : (
@@ -803,7 +803,7 @@ export default function CollectionForm({ id }: { id?: string }) {
               Content Blocks override these with their own display settings.
             </p>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <Field label="Layout">
                 <select
                   name="display.layout"
@@ -837,7 +837,7 @@ export default function CollectionForm({ id }: { id?: string }) {
               </Field>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
               <Field label="Columns">
                 <input
                   type="number"
@@ -925,7 +925,7 @@ export default function CollectionForm({ id }: { id?: string }) {
                 </select>
               </Field>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                 <Field label="CTA text">
                   <input
                     type="text"
@@ -1000,11 +1000,11 @@ export default function CollectionForm({ id }: { id?: string }) {
           </fieldset>
 
           {/* ─────────────────────── ACTIONS ─────────────────────── */}
-          <div className="sticky bottom-0 -mx-4 flex items-center justify-end gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div className="sticky bottom-0 -mx-3 flex flex-col-reverse gap-3 sm:-mx-6 sm:flex-row sm:items-center sm:justify-end border-t border-border bg-background/95 px-3 py-3 backdrop-blur sm:px-6 lg:-mx-8 lg:px-8">
             <button
               type="button"
               onClick={() => router.push(LIST_PATH)}
-              className="rounded-lg border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground transition hover:bg-muted"
+              className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground transition hover:bg-muted sm:w-auto"
               disabled={isSubmitting}
             >
               Cancel
@@ -1012,7 +1012,7 @@ export default function CollectionForm({ id }: { id?: string }) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-[14px] font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-[14px] font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 sm:w-auto"
             >
               {isSubmitting ? (
                 <>

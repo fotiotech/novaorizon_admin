@@ -207,7 +207,7 @@ const Skeleton = memo(function Skeleton() {
             key={i}
             className="overflow-hidden rounded-lg border border-border bg-card"
           >
-            <div className="border-b border-border px-4 py-3">
+            <div className="border-b border-border px-3 py-3 sm:px-4">
               <div className="h-4 w-32 animate-pulse rounded bg-muted" />
             </div>
             <div className="h-72 p-4">
@@ -460,7 +460,7 @@ export default function FinancePage() {
   if (error && transactions.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -622,7 +622,7 @@ export default function FinancePage() {
         <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {/* Revenue vs Expenses */}
           <div className={surfaceClass}>
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
               <div>
                 <h2 className="text-sm font-semibold text-foreground">
                   Revenue vs expenses
@@ -720,7 +720,7 @@ export default function FinancePage() {
 
           {/* Expense distribution */}
           <div className={surfaceClass}>
-            <div className="border-b border-border px-4 py-3">
+            <div className="border-b border-border px-3 py-3 sm:px-4">
               <h2 className="text-sm font-semibold text-foreground">
                 Expense distribution
               </h2>
@@ -783,7 +783,7 @@ export default function FinancePage() {
 
         {/* ---------------- Transactions ---------------- */}
         <section className={surfaceClass}>
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-foreground">
                 Transactions
@@ -870,17 +870,17 @@ export default function FinancePage() {
                           key={tx._id}
                           className="group transition-colors hover:bg-muted/40"
                         >
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3 sm:px-4">
                             <div className="truncate font-mono text-xs text-foreground">
                               #{String(tx.orderId ?? "").slice(-8)}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3 sm:px-4">
                             <div className="truncate text-xs text-muted-foreground">
                               {formatDate(tx.date)}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3 sm:px-4">
                             <div className="truncate text-sm text-foreground">
                               {customerName}
                             </div>
@@ -890,20 +890,20 @@ export default function FinancePage() {
                               </div>
                             )}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3 sm:px-4">
                             <div className="truncate text-sm font-medium tabular-nums text-foreground">
                               {formatMoney(tx.amount)}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3 sm:px-4">
                             <div className="truncate text-xs capitalize text-muted-foreground">
                               {tx.paymentMethod || "—"}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3 sm:px-4">
                             <StatusBadge status={tx.status} />
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-3 py-3 sm:px-4 text-right">
                             {menuItems.length > 0 ? (
                               <div className="flex justify-end">
                                 <PopoverMenu

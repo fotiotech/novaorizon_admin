@@ -98,7 +98,7 @@ export default function SeoPage() {
       <div className="mx-auto w-full max-w-7xl overflow-x-clip">
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <div className="overflow-hidden rounded-lg border border-border bg-card">
-            <div className="border-b border-border px-4 py-3">
+            <div className="border-b border-border px-3 py-3 sm:px-4">
               <div className="h-4 w-40 animate-pulse rounded bg-muted" />
             </div>
             <div className="space-y-4 p-4">
@@ -116,7 +116,7 @@ export default function SeoPage() {
                 key={i}
                 className="overflow-hidden rounded-lg border border-border bg-card"
               >
-                <div className="border-b border-border px-4 py-3">
+                <div className="border-b border-border px-3 py-3 sm:px-4">
                   <div className="h-4 w-32 animate-pulse rounded bg-muted" />
                 </div>
                 <div className="space-y-3 p-4">
@@ -135,7 +135,7 @@ export default function SeoPage() {
     <div className="mx-auto w-full max-w-7xl overflow-x-clip">
       {/* Load error */}
       {loadError && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-3 sm:px-4 text-sm text-destructive">
           <span>
             <strong className="font-medium">Error:</strong> {loadError}
           </span>
@@ -154,7 +154,7 @@ export default function SeoPage() {
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           {/* ---------------- Left: Search metadata ---------------- */}
           <section className="overflow-hidden rounded-lg border border-border bg-card">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
               <h2 className="text-sm font-semibold text-foreground">
                 Search metadata
               </h2>
@@ -237,7 +237,7 @@ export default function SeoPage() {
           {/* ---------------- Right: Social + Preview ---------------- */}
           <aside className="space-y-4">
             <section className="overflow-hidden rounded-lg border border-border bg-card">
-              <div className="border-b border-border px-4 py-3">
+              <div className="border-b border-border px-3 py-3 sm:px-4">
                 <h2 className="text-sm font-semibold text-foreground">
                   Social sharing
                 </h2>
@@ -281,7 +281,7 @@ export default function SeoPage() {
             </section>
 
             <section className="overflow-hidden rounded-lg border border-border bg-card">
-              <div className="border-b border-border px-4 py-3">
+              <div className="border-b border-border px-3 py-3 sm:px-4">
                 <h2 className="text-sm font-semibold text-foreground">
                   Search preview
                 </h2>
@@ -304,7 +304,7 @@ export default function SeoPage() {
         </div>
 
         {/* ---------------- Action bar ---------------- */}
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3 sm:px-4">
           <div className="min-w-0 flex-1 text-sm">
             {saveError && <span className="text-destructive">{saveError}</span>}
             {status === "saved" && !saveError && (

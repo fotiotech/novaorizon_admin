@@ -1,7 +1,17 @@
 // lib/api/banner.ts
 import api from "@/lib/api";
 import { isAxiosError } from "axios";
-import { CTA_STYLES } from "@/lib/content/constants";
+import {
+  BANNER_ALIGNS,
+  BANNER_CARD_SIZES,
+  BANNER_RATIOS,
+  BANNER_OVERLAYS,
+  BANNER_POSITIONS,
+  BANNER_STATUSES,
+  BANNER_THEMES,
+  BANNER_TYPES,
+  CTA_STYLES,
+} from "@/lib/content/constants";
 
 const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
 
@@ -16,7 +26,12 @@ function isValidObjectId(id: unknown): boolean {
 export interface BannerListItem {
   _id: string;
   name: string;
+  type: (typeof BANNER_TYPES)[number];
+  status: (typeof BANNER_STATUSES)[number];
+  order: number;
   imageUrl: string | null;
+  startAt: string | null;
+  endAt: string | null;
   updated_at: string;
 }
 
@@ -24,11 +39,14 @@ export interface BannerOption {
   value: string;
   label: string;
   image: string | null;
+  type: (typeof BANNER_TYPES)[number];
+  status: (typeof BANNER_STATUSES)[number];
 }
 
 export interface BannerPreview {
   _id: string;
   name: string;
+  type: (typeof BANNER_TYPES)[number];
   imageUrl: string | null;
 }
 
@@ -55,36 +73,82 @@ function parseBannerForm(fd: FormData) {
   const name = String(fd.get("name") ?? "").trim();
   if (!name) return { error: "Name is required" as const };
 
+  const type = pickEnum(fd.get("type"), BANNER_TYPES, "image");
+
   const heading = {
     title: String(fd.get("heading.title") ?? "").trim(),
     subtitle: String(fd.get("heading.subtitle") ?? "").trim(),
   };
   const eyebrow = String(fd.get("eyebrow") ?? "").trim();
   const body = String(fd.get("body") ?? "");
+
   const image = String(fd.get("image") ?? "").trim();
+  const imageAlt = String(fd.get("imageAlt") ?? "").trim();
+  const videoUrl = String(fd.get("videoUrl") ?? "").trim();
+  const html = String(fd.get("html") ?? "");
+
+  // The media requirement depends on the banner type.
+  if (type === "image" && !image) {
+    return { error: "Image banners need an image." as const };
+  }
+  if (type === "video" && !videoUrl) {
+    return { error: "Video banners need a video URL." as const };
+  }
+  if (type === "html" && !html.trim()) {
+    return { error: "HTML banners need their markup." as const };
+  }
+  if (type === "compact" && !image) {
+    return { error: "Compact banners need a logo image." as const };
+  }
+  if (type === "compact" && !heading.title) {
+    return { error: "Compact banners need a title." as const };
+  }
 
   const cta = {
     text: String(fd.get("cta.text") ?? "").trim(),
     link: String(fd.get("cta.link") ?? "").trim(),
     style: pickEnum(fd.get("cta.style"), CTA_STYLES, "none"),
   };
-
-  const hasAnyContent =
-    Boolean(heading.title) || Boolean(body) || Boolean(image);
-
-  if (!hasAnyContent) {
-    return {
-      error: "Banner needs at least a headline, body, or image." as const,
-    };
-  }
-
-  // CTA: link is required when a style is chosen; text is optional.
   if (cta.style !== "none" && !cta.link) {
     return { error: "CTA requires a link" as const };
   }
 
+  const date = (key: string): string | null => {
+    const v = String(fd.get(key) ?? "").trim();
+    return v ? v : null;
+  };
+
+  const startAt = date("startAt");
+  const endAt = date("endAt");
+  if (startAt && endAt && new Date(endAt) <= new Date(startAt)) {
+    return { error: "The schedule ends before it starts." as const };
+  }
+
   return {
-    doc: { name, eyebrow, body, image, heading, cta },
+    doc: {
+      type,
+      name,
+      eyebrow,
+      body,
+      heading,
+      image,
+      imageAlt,
+      videoUrl,
+      html,
+      link: String(fd.get("link") ?? "").trim(),
+      openInNewTab: String(fd.get("openInNewTab") ?? "") === "true",
+      overlay: pickEnum(fd.get("overlay"), BANNER_OVERLAYS, "gradient"),
+      ratio: pickEnum(fd.get("ratio"), BANNER_RATIOS, "1:1"),
+      size: pickEnum(fd.get("size"), BANNER_CARD_SIZES, "md"),
+      align: pickEnum(fd.get("align"), BANNER_ALIGNS, "left"),
+      position: pickEnum(fd.get("position"), BANNER_POSITIONS, "center"),
+      theme: pickEnum(fd.get("theme"), BANNER_THEMES, "light"),
+      status: pickEnum(fd.get("status"), BANNER_STATUSES, "active"),
+      order: Math.max(0, Number(fd.get("order")) || 0),
+      startAt,
+      endAt,
+      cta,
+    },
   };
 }
 
@@ -120,7 +184,12 @@ export async function listBanners(): Promise<{
     data: docs.map((d) => ({
       _id: String(d._id),
       name: d.name,
+      type: (d.type ?? "image") as BannerListItem["type"],
+      status: (d.status ?? "active") as BannerListItem["status"],
+      order: Number(d.order) || 0,
       imageUrl: d.imageUrl || d.image || null,
+      startAt: d.startAt ?? null,
+      endAt: d.endAt ?? null,
       updated_at: d.updated_at ? new Date(d.updated_at).toISOString() : "",
     })),
   };
@@ -158,6 +227,8 @@ export async function fetchBannerOptions(
     value: String(d.value),
     label: d.label,
     image: d.image || null,
+    type: (d.type ?? "image") as BannerOption["type"],
+    status: (d.status ?? "active") as BannerOption["status"],
   }));
 }
 

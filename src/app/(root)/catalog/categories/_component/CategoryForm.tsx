@@ -344,10 +344,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-6 max-h-[75vh] overflow-y-auto pr-2"
+      className="space-y-5 sm:space-y-6 max-h-[75vh] overflow-y-auto pr-2"
     >
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-3 sm:px-4 rounded relative">
           <strong className="font-bold">Error:</strong>
           <span className="block sm:inline"> {error}</span>
         </div>

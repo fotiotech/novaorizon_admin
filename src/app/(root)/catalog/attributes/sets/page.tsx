@@ -123,9 +123,9 @@ export default function SetsPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">
+          <h1 className="text-lg font-semibold sm:text-xl text-foreground">
             Attribute Sets
           </h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -166,7 +166,7 @@ export default function SetsPage() {
             {sets.map((set) => (
               <li
                 key={set._id}
-                className="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-muted/30"
+                className="flex items-center justify-between gap-4 px-3 py-3 sm:px-4 transition hover:bg-muted/30"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">

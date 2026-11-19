@@ -20,7 +20,7 @@ export const CollapsibleSection = ({
         className="flex justify-between items-center w-full text-left focus:outline-none"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <h2 className="text-lg sm:text-xl font-semibold text-muted-foreground">
+        <h2 className="text-lg sm:text-lg font-semibold sm:text-xl text-muted-foreground">
           {title}
         </h2>
         <span className="text-lg">{isOpen ? "−" : "+"}</span>

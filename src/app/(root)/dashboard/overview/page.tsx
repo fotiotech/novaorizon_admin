@@ -447,7 +447,7 @@ export default function AdminOverview() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-5 text-center text-destructive shadow-sm">
+        <div className="w-full max-w-sm rounded-lg bg-destructive/10 p-4 sm:p-5 text-center text-destructive shadow-sm">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
         </div>
@@ -586,7 +586,7 @@ export default function AdminOverview() {
         </section>
 
         <section className={`${surfaceClass} overflow-hidden`}>
-          <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center justify-between px-3 py-3 sm:px-4">
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-foreground">
                 Recent activity
@@ -608,7 +608,7 @@ export default function AdminOverview() {
                 return (
                   <li
                     key={index}
-                    className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+                    className="flex items-start gap-3 px-3 py-3 sm:px-4 transition-colors hover:bg-muted/40"
                   >
                     <span
                       className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${classes}`}

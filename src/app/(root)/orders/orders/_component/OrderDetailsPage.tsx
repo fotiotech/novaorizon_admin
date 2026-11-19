@@ -82,7 +82,7 @@ export const OrderDetailsContent = memo(function OrderDetailsContent({
     <div className="flex flex-col gap-4">
       {/* Order Header */}
       <header className="flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">
+        <h2 className="text-lg font-semibold sm:text-xl tracking-tight text-foreground">
           Order #{order.orderNumber}
         </h2>
         <Badge status={order.orderStatus} map={statusStyles} />

@@ -64,8 +64,8 @@ const EditHeroPage = () => {
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+      <div className="max-w-4xl mx-auto p-4 sm:p-6">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-3 sm:px-4 rounded">
           <h2 className="font-bold text-lg mb-2">Error</h2>
           <p>{error}</p>
           <button
@@ -81,8 +81,8 @@ const EditHeroPage = () => {
 
   if (!heroData) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+      <div className="max-w-4xl mx-auto p-4 sm:p-6">
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-3 py-3 sm:px-4 rounded">
           <h2 className="font-bold text-lg mb-2">Not Found</h2>
           <p>No hero content found with the provided ID.</p>
           <button

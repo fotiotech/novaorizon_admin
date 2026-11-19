@@ -27,7 +27,7 @@ export default async function EditPagePage({ params }: PageProps) {
   }
 
   if (!page) {
-    return <div className="p-6 text-red-500">Page not found</div>;
+    return <div className="p-4 sm:p-6 text-red-500">Page not found</div>;
   }
 
   return <PageForm initialData={page} />;

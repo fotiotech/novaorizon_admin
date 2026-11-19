@@ -150,7 +150,7 @@ function Stat({
     (typeof value === "string" && value === "$0.00");
 
   return (
-    <div className="rounded-lg border border-border bg-card px-4 py-3">
+    <div className="rounded-lg border border-border bg-card px-3 py-3 sm:px-4">
       <div className="flex items-baseline justify-between">
         <div className="text-xs text-muted-foreground">{label}</div>
         {hint && (
@@ -173,7 +173,7 @@ function ActivityFeed({ events }: { events: LiveEvent[] }) {
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border/60 px-3 py-3 sm:px-4">
         <div className="text-sm font-medium text-foreground">Live activity</div>
         <div className="text-xs text-muted-foreground/70">newest first</div>
       </div>
@@ -258,7 +258,7 @@ function EventBreakdown({
 }) {
   return (
     <div className="rounded-lg border border-border bg-card">
-      <div className="border-b border-border/60 px-4 py-3 text-sm font-medium text-foreground">
+      <div className="border-b border-border/60 px-3 py-3 sm:px-4 text-sm font-medium text-foreground">
         Event mix
       </div>
       <div className="space-y-3 p-4">

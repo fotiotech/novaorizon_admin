@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify, type JWTPayload } from "jose";
 
-const SESSION_COOKIE = "session";
+const SESSION_COOKIE = "session_admin";
 
 /**
  * Paths that render without any authentication check.

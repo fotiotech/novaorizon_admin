@@ -61,11 +61,11 @@ export function BannerPicker({
 
       <div className="max-h-80 divide-y divide-border overflow-y-auto rounded-lg border border-border">
         {loading ? (
-          <p className="p-6 text-center text-sm text-muted-foreground">
+          <p className="p-4 sm:p-6 text-center text-sm text-muted-foreground">
             Loading…
           </p>
         ) : options.length === 0 ? (
-          <p className="p-6 text-center text-sm text-muted-foreground">
+          <p className="p-4 sm:p-6 text-center text-sm text-muted-foreground">
             No banners found.
           </p>
         ) : (

@@ -386,7 +386,7 @@ export default function ChatPage(props: ChatPageProps) {
           aria-modal="true"
         >
           <div
-            className="w-full rounded-t-2xl border border-border bg-card p-5 text-card-foreground sm:max-w-md sm:rounded-2xl"
+            className="w-full rounded-t-2xl border border-border bg-card p-4 sm:p-5 text-card-foreground sm:max-w-md sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight">

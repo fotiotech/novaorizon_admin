@@ -12,16 +12,13 @@ import { cookies } from "next/headers";
  */
 
 const BASE = (
-  process.env.SERVER_API_URL ||
-  process.env.NEXT_PUBLIC_SERVER_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:3000"
+  process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000"
 ).replace(/\/+$/, "");
 
 const API_PREFIX = process.env.SERVER_API_PREFIX || "/api";
 
 /** Cookies that the backend understands. */
-const FORWARDED_COOKIES = ["session", "guestId", "cart_sid"];
+const FORWARDED_COOKIES = ["session_admin", "guestId", "cart_sid"];
 
 export class ApiError extends Error {
   readonly status: number;
@@ -99,7 +96,11 @@ export async function apiRequest(
     query,
   } = options;
 
-  const finalHeaders: Record<string, string> = { Accept: "application/json", ...headers };
+  const finalHeaders: Record<string, string> = {
+    Accept: "application/json",
+    "x-auth-audience": "admin",
+    ...headers,
+  };
 
   const cookieHeader = await buildCookieHeader();
   if (cookieHeader) finalHeaders.Cookie = cookieHeader;

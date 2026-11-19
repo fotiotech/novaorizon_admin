@@ -171,9 +171,9 @@ export function ManualPicker({
 
       <div className="max-h-72 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200">
         {loading ? (
-          <div className="p-6 text-center text-sm text-gray-500">Loading…</div>
+          <div className="p-4 sm:p-6 text-center text-sm text-gray-500">Loading…</div>
         ) : options.length === 0 ? (
-          <div className="p-6 text-center text-sm text-gray-500">
+          <div className="p-4 sm:p-6 text-center text-sm text-gray-500">
             No results.
           </div>
         ) : (

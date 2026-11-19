@@ -47,7 +47,7 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
   }
 
   return (
-    <div className="text-center mt-12 max-w-md mx-auto p-6 border rounded shadow">
+    <div className="text-center mt-12 max-w-md mx-auto p-4 sm:p-6 border rounded shadow">
       <h1 className="text-2xl font-bold text-green-600">Account Verified!</h1>
       <p className="text-gray-600 mt-2">
         Your email has been successfully confirmed.

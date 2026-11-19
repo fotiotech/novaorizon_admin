@@ -96,7 +96,7 @@ export default function CarrierForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
+    <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6 max-w-2xl">
       <div className="space-y-2">
         <label className="block text-sm font-medium text-muted-foreground">
           Carrier Name

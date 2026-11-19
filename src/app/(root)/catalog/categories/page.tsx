@@ -438,7 +438,7 @@ const Categories = () => {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-destructive/10 px-3 py-3 sm:px-4 text-sm text-destructive">
           <span>
             <strong className="font-medium">Error:</strong> {error}
           </span>
@@ -455,12 +455,12 @@ const Categories = () => {
       {/* Loading skeleton */}
       {loading && (
         <div className="overflow-hidden rounded-lg bg-card">
-          <div className="px-4 py-3">
+          <div className="px-3 py-3 sm:px-4">
             <div className="h-5 w-32 animate-pulse rounded bg-muted" />
           </div>
           <div className="divide-y divide-border/60">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center gap-4 px-4 py-3">
+              <div key={i} className="flex items-center gap-4 px-3 py-3 sm:px-4">
                 <div className="h-9 w-9 flex-none animate-pulse rounded-lg bg-muted" />
                 <div className="flex-1 space-y-2">
                   <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />

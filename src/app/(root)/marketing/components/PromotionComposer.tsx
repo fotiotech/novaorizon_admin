@@ -81,7 +81,7 @@ const labelCls = "block text-[13px] font-medium text-foreground mb-1.5";
 const inputCls =
   "w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground/50 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15";
 const errorCls = "mt-1.5 text-[13px] text-destructive";
-const fieldsetCls = "rounded-xl border border-border bg-card p-5 space-y-4";
+const fieldsetCls = "rounded-xl border border-border bg-card p-4 sm:p-5 space-y-4";
 const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
 const helperCls = "mt-1.5 text-[12px] text-muted-foreground";
 
@@ -419,10 +419,10 @@ export function PromotionComposer({
   return (
     <form
       onSubmit={handleSubmit(handleSubmitForm)}
-      className="mx-auto w-full max-w-3xl space-y-6 pb-24"
+      className="mx-auto w-full max-w-3xl space-y-5 sm:space-y-6 pb-24"
     >
       {submitError && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-3 sm:px-4 text-[14px] text-destructive">
           {submitError}
         </div>
       )}
@@ -431,7 +431,7 @@ export function PromotionComposer({
       <fieldset className={fieldsetCls}>
         <legend className={legendCls}>Promotion details</legend>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
           <div className="sm:col-span-2">
             <label className={labelCls}>
               Name <span className="text-destructive">*</span>
@@ -490,7 +490,7 @@ export function PromotionComposer({
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
           <div>
             <label className={labelCls}>
               Start <span className="text-destructive">*</span>
@@ -733,7 +733,7 @@ export function PromotionComposer({
       {/* Limits */}
       <fieldset className={fieldsetCls}>
         <legend className={legendCls}>Usage limits</legend>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
           <div>
             <label className={labelCls}>Total uses</label>
             <input
@@ -796,11 +796,11 @@ export function PromotionComposer({
         </div>
       </fieldset>
 
-      <div className="sticky bottom-0 -mx-4 flex items-center justify-end gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+      <div className="sticky bottom-0 -mx-3 flex flex-col-reverse gap-3 sm:-mx-6 sm:flex-row sm:items-center sm:justify-end border-t border-border bg-background/95 px-3 py-3 sm:px-4 backdrop-blur sm:-mx-6 sm:px-6">
         <button
           type="button"
           onClick={() => router.back()}
-          className="rounded-lg border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground transition hover:bg-muted"
+          className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground transition hover:bg-muted sm:w-auto"
         >
           Cancel
         </button>

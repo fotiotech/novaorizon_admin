@@ -241,7 +241,7 @@ export default function PagesList() {
   if (error && pages.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center text-destructive">
+        <div className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 p-4 sm:p-5 text-center text-destructive">
           <p className="font-semibold">Something went wrong</p>
           <p className="mt-1 text-sm">{error}</p>
           <button
@@ -301,7 +301,7 @@ export default function PagesList() {
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">All pages</h2>
             {visiblePages.length > 0 && (
@@ -364,7 +364,7 @@ export default function PagesList() {
                       key={page._id}
                       className="group transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <Link
                           href={`/channels/store/pages/${page._id}/edit`}
                           className="block truncate text-sm font-medium text-foreground transition hover:text-primary"
@@ -372,20 +372,20 @@ export default function PagesList() {
                           {page.title || "Untitled"}
                         </Link>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate font-mono text-xs text-muted-foreground">
                           {page.slug || "—"}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <StatusBadge status={page.status} />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <div className="truncate text-sm text-muted-foreground">
                           {formatDate(page.publishedAt)}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-3 sm:px-4 text-right">
                         <div className="flex justify-end">
                           <PopoverMenu
                             items={getMenuItems(page)}

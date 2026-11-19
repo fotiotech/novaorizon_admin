@@ -239,7 +239,7 @@ export default function CampaignsPage() {
   }, []);
 
   return (
-    <main className="space-y-6">
+    <main className="space-y-5 sm:space-y-6">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {(() => {
           const totalSpend = Object.values(campaignInsights).reduce(
@@ -300,7 +300,7 @@ export default function CampaignsPage() {
         ))}
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <section className="rounded-xl border border-border bg-card p-4 sm:p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">Facebook Ads overview</h2>

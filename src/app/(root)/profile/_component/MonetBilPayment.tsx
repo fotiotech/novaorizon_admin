@@ -143,7 +143,7 @@ function MonetbilPayment({ payment_ref, orderTotal }: MonetbilPaymentProps) {
   if (!billing.phone) {
     return (
       <div className="flex justify-center items-center mt-8 bg-muted p-4">
-        <div className="max-w-md w-full bg-card rounded-2xl shadow-md p-6 text-center border border-border">
+        <div className="max-w-md w-full bg-card rounded-2xl shadow-md p-4 sm:p-6 text-center border border-border">
           <p className="text-destructive">
             Phone number is required for mobile money payment. Please update
             your profile.
@@ -155,7 +155,7 @@ function MonetbilPayment({ payment_ref, orderTotal }: MonetbilPaymentProps) {
 
   return (
     <div className="flex justify-center items-center mt-8 bg-muted p-4">
-      <div className="max-w-md w-full bg-card rounded-2xl shadow-md p-6 border border-border">
+      <div className="max-w-md w-full bg-card rounded-2xl shadow-md p-4 sm:p-6 border border-border">
         <h2 className="text-2xl font-semibold text-center mb-6 text-foreground">
           Pay with Mobile Money
         </h2>
