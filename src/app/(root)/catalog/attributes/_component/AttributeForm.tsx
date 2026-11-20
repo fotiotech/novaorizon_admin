@@ -17,7 +17,6 @@ export type AttributeType = {
   unitFamily: string;
   name: string;
   option?: string | string[];
-  isRequired?: boolean;
   type: string;
   sort_order: number;
 };
@@ -35,7 +34,6 @@ type AttributeFormData = {
   name: string;
   type: string;
   option: string;
-  isRequired: boolean;
   sort_order: number;
 };
 
@@ -59,7 +57,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
       name: "",
       type: "text",
       option: "",
-      isRequired: false,
       sort_order: 0,
     },
   ]);
@@ -113,7 +110,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
                 name: attribute.name || "",
                 type: attribute.type || "text",
                 option: optionString,
-                isRequired: attribute.isRequired || false,
                 sort_order:
                   (attribute as any).sort_order ??
                   (attribute as any).sortOrder ??
@@ -157,7 +153,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
         name: "",
         type: "text",
         option: "",
-        isRequired: false,
         sort_order: 0,
       },
     ]);
@@ -197,7 +192,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
               ?.split(",")
               .map((opt) => opt.trim())
               .filter((opt) => opt) || [],
-          isRequired: formData[0].isRequired,
           type: formData[0].type.trim(),
         });
       } else {
@@ -205,7 +199,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
           codes: formData.map((attr) => attr.code.trim()),
           unitFamilies: formData.map((attr) => attr.unitFamily.trim()),
           names: formData.map((attr) => attr.name.trim()),
-          isRequired: formData.map((attr) => attr.isRequired),
           sort_orders: formData.map((attr) => attr.sort_order),
           option: formData.map(
             (attr) =>
@@ -241,7 +234,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
           name: "",
           type: "text",
           option: "",
-          isRequired: false,
           sort_order: 0,
         },
       ]);
@@ -381,24 +373,6 @@ const AttributeForm: React.FC<AttributeFormProps> = ({
                   }
                   className="w-full p-2 rounded-lg bg-[#eee] dark:bg-sec-dark"
                   required
-                />
-              </div>
-
-              <div className="flex items-center">
-                <label
-                  htmlFor={`isRequired-${index}`}
-                  className="block mb-1 text-sm mr-2"
-                >
-                  Is required:
-                </label>
-                <input
-                  id={`isRequired-${index}`}
-                  type="checkbox"
-                  checked={attr.isRequired}
-                  onChange={(e) =>
-                    handleInputChange(index, "isRequired", e.target.checked)
-                  }
-                  className="w-4 h-4 rounded-lg bg-[#eee] dark:bg-sec-dark"
                 />
               </div>
 

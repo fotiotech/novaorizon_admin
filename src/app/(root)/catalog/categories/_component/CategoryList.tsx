@@ -11,7 +11,6 @@ import {
   KeyboardArrowRight,
   MoreVert,
   SubdirectoryArrowRight,
-  AccountTree,
   Visibility,
   Add,
   Inventory2,
@@ -46,7 +45,6 @@ interface CategoryListProps {
   emptyMessage?: string;
   onEditCategory: (category: CategoryNode) => void;
   onDeleteCategory: (category: CategoryNode) => void;
-  onRunInheritance: (category: CategoryNode) => void;
   onViewProperty: (category: CategoryNode) => void;
   onAddChild?: (category: CategoryNode) => void;
   onAssignProperty?: (category: CategoryNode) => void;
@@ -96,7 +94,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
   emptyMessage = "No categories found",
   onEditCategory,
   onDeleteCategory,
-  onRunInheritance,
   onViewProperty,
   onAddChild,
   onAssignProperty,
@@ -350,15 +347,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
       icon: <Visibility fontSize="small" />,
       onClick: () => onViewProperty(row),
     });
-
-    if (row.inheritProperty && getParentId(row)) {
-      items.push({
-        key: "run-inheritance",
-        label: "Re-run inheritance",
-        icon: <AccountTree fontSize="small" />,
-        onClick: () => onRunInheritance(row),
-      });
-    }
 
     items.push({
       key: "delete",
@@ -660,7 +648,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
                         {pendingSync && (
                           <span
                             className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                            title="Inheritance is on but no snapshot has been generated yet. Use 'Re-run inheritance'."
+                            title="Inheritance is on. The snapshot is generated automatically."
                           >
                             Pending sync
                           </span>
@@ -855,7 +843,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
                               {pendingSync && (
                                 <span
                                   className="flex-none rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                                  title="Inheritance is on but no snapshot has been generated yet. Use 'Re-run inheritance'."
+                                  title="Inheritance is on. The snapshot is generated automatically."
                                 >
                                   Pending sync
                                 </span>

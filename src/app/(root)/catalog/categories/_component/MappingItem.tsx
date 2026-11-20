@@ -14,6 +14,8 @@ interface Mapping {
       attribute: string;
       isRequired: boolean;
       isHighlight: boolean;
+      isVariant: boolean;
+      isVariantAttribute: boolean;
     }[];
   }[];
 }
@@ -37,7 +39,11 @@ interface AttributeOption {
   type: string;
 }
 
-type AttributeFlag = "isRequired" | "isHighlight";
+type AttributeFlag =
+  | "isRequired"
+  | "isHighlight"
+  | "isVariant"
+  | "isVariantAttribute";
 
 interface MappingItemProps {
   mapping: Mapping;
@@ -241,6 +247,9 @@ export default function MappingItem({
                       ).length;
                       const highlightCount = group.attributes.filter(
                         (a) => a.isHighlight,
+                      ).length;
+                      const variantCount = group.attributes.filter(
+                        (a) => a.isVariant,
                       ).length;
                       const hasAttrs = attrCount > 0;
 

@@ -64,6 +64,8 @@ export type AttributeDetail = {
   type: string;
   isRequired?: boolean;
   isHighlight?: boolean;
+  isVariant?: boolean;
+  isVariantAttribute?: boolean;
   unitFamily?: { id: string; name: string; baseUnit: string } | null;
   sortOrder: number;
 };
@@ -108,6 +110,7 @@ const VARIANT_GROUP_CODES = new Set([
   "variantThemes",
   "variantFields",
   "variants",
+  "inventory",
 ]);
 
 // The set/attribute pair that maps to the promotion write-back UI.
@@ -209,6 +212,10 @@ function stripVariantGroups(groups: GroupNode[]): GroupNode[] {
     .filter((g) => !VARIANT_GROUP_CODES.has(normalizeCode(g.code)))
     .map((g) => ({
       ...g,
+      // Attributes flagged as variant axes only belong in the Variants step.
+      attributes: g.attributes.filter(
+        (a) => a.isVariant !== true && a.isVariantAttribute !== true,
+      ),
       children: stripVariantGroups(g.children || []),
     }))
     .filter((g) => g.attributes.length > 0 || g.children.length > 0);
@@ -667,9 +674,83 @@ const ProductForm: React.FC<ProductFormProps> = ({
     [steps],
   );
 
-  const variantThemes = variantThemesGroup?.attributes ?? [];
-  const variantFields = variantFieldsGroup?.attributes ?? [];
-  const hasVariantConfig = !!variantThemesGroup;
+  const variantThemes = useMemo(() => {
+    const seen = new Set<string>();
+    const flagged: AttributeDetail[] = [];
+
+    const walk = (groups: GroupNode[]) => {
+      for (const group of groups) {
+        for (const attr of group.attributes ?? []) {
+          if (attr.isVariant !== true) continue;
+          const key = normalizeCode(attr.code);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          flagged.push(attr);
+        }
+        walk(group.children ?? []);
+      }
+    };
+    steps.forEach((step) => walk(step.groups));
+
+    // Backwards compatibility: properties authored with a group named
+    // "variantThemes" before the flag existed.
+    if (flagged.length === 0) return variantThemesGroup?.attributes ?? [];
+    return flagged;
+  }, [steps, variantThemesGroup]);
+
+  const inventoryGroup = useMemo(
+    () => findGroupInSteps(steps, "inventory"),
+    [steps],
+  );
+
+  const variantFields = useMemo(() => {
+    const seen = new Set<string>();
+    const out: AttributeDetail[] = [];
+    const add = (attr: AttributeDetail) => {
+      const key = normalizeCode(attr?.code);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      out.push(attr);
+    };
+
+    // Inventory attributes (quantity, lowStockThreshold, …) are per-variant.
+    // Accept the historical misspelling ("lowStockTresholds") too.
+    const INVENTORY_ALIASES: Record<string, string> = {
+      quantity: "quantity",
+      qty: "quantity",
+      lowstockthreshold: "lowStockThreshold",
+      lowstockthresholds: "lowStockThreshold",
+      lowstocktreshold: "lowStockThreshold",
+      lowstocktresholds: "lowStockThreshold",
+    };
+    (inventoryGroup?.attributes ?? []).forEach((attr) => {
+      const canonical =
+        INVENTORY_ALIASES[normalizeCode(attr.code)] ?? attr.code;
+      add({ ...attr, code: canonical });
+    });
+
+    let flagged = 0;
+    const walk = (groups: GroupNode[]) => {
+      for (const group of groups) {
+        for (const attr of group.attributes ?? []) {
+          if (attr.isVariantAttribute !== true) continue;
+          flagged += 1;
+          add(attr);
+        }
+        walk(group.children ?? []);
+      }
+    };
+    steps.forEach((step) => walk(step.groups));
+
+    // Backwards compatibility with the legacy `variantFields` group.
+    if (out.length === 0 && flagged === 0) {
+      (variantFieldsGroup?.attributes ?? []).forEach(add);
+    }
+
+    return out;
+  }, [steps, inventoryGroup, variantFieldsGroup]);
+
+  const hasVariantConfig = variantThemes.length > 0;
 
   // ================================================================== //
   // Promotions — detected inside the "marketing" set                   //

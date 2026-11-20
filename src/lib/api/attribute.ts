@@ -6,7 +6,6 @@ export interface ApiAttribute {
   code: string;
   name: string;
   unitFamily?: { _id: string; name: string; baseUnit: string } | null;
-  isRequired?: boolean;
   option?: string[];
   type: string;
   sortOrder?: number;
@@ -39,7 +38,6 @@ export async function createAttribute(payload: {
   codes: string[];
   unitFamilies: string[];
   names: string[];
-  isRequired: boolean[];
   sort_orders: number[];
   option?: string[][];
   type: string[];
@@ -58,7 +56,6 @@ export async function updateAttribute(
     code: string;
     unitFamily: string;
     name: string;
-    isRequired: boolean;
     sort_order: number;
     option?: string[];
     type: string;

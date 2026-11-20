@@ -7,7 +7,6 @@ import {
   deleteCategory,
   getCategoryProductCounts,
   listCategories,
-  runCategoryInheritance,
   fetchCategoryAttributeSets,
   type AttributeSetResult,
 } from "@/lib/api/category";
@@ -180,33 +179,6 @@ const Categories = () => {
     setParentIdForNew(null);
     setShowForm(false);
     toast.success(editId ? "Category updated" : "Category created");
-  };
-
-  // ---------- Run inheritance ----------
-  const handleRunInheritance = async (category: Cat) => {
-    const wasEnabled = !!category.inheritProperty;
-    const toastId = toast.loading(
-      wasEnabled ? "Re-running inheritance…" : "Enabling inheritance…",
-    );
-
-    try {
-      const result = await runCategoryInheritance(category._id as string);
-      await fetchCategories();
-      toast.dismiss(toastId);
-      if (result.warning) {
-        toast.info(result.warning);
-      } else {
-        toast.success(
-          wasEnabled
-            ? "Inheritance re-run — snapshot refreshed"
-            : "Inheritance enabled",
-        );
-      }
-    } catch (err: any) {
-      console.error("Error running inheritance:", err);
-      toast.dismiss(toastId);
-      toast.error(err?.response?.data?.message || "Failed to run inheritance");
-    }
   };
 
   // ---------- View property ----------
@@ -500,7 +472,6 @@ const Categories = () => {
           emptyMessage="No categories found. Create your first category!"
           onEditCategory={handleEditClick as any}
           onDeleteCategory={handleDeleteClick as any}
-          onRunInheritance={handleRunInheritance as any}
           onViewProperty={handleViewProperty as any}
           onAddChild={handleAddChild as any}
           onAssignProperty={handleAssignProperty as any}

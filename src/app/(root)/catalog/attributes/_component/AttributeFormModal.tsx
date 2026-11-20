@@ -17,7 +17,6 @@ export type AttributeType = {
   unitFamily: string;
   name: string;
   option?: string | string[];
-  isRequired?: boolean;
   type: string;
   sort_order: number;
 };
@@ -50,7 +49,6 @@ export const AttributeFormModal: React.FC<AttributeFormModalProps> = ({
       name: "",
       type: "text",
       option: "",
-      isRequired: false,
       sort_order: 0,
     },
   ]);
@@ -99,7 +97,6 @@ export const AttributeFormModal: React.FC<AttributeFormModalProps> = ({
                 name: attribute.name || "",
                 type: attribute.type || "text",
                 option: optionString,
-                isRequired: attribute.isRequired || false,
                 sort_order: attribute.sort_order || 0,
               },
             ]);
@@ -121,7 +118,6 @@ export const AttributeFormModal: React.FC<AttributeFormModalProps> = ({
             name: "",
             type: "text",
             option: "",
-            isRequired: false,
             sort_order: 0,
           },
         ]);
@@ -161,7 +157,6 @@ export const AttributeFormModal: React.FC<AttributeFormModalProps> = ({
         name: "",
         type: "text",
         option: "",
-        isRequired: false,
         sort_order: 0,
       },
     ]);
@@ -202,7 +197,6 @@ export const AttributeFormModal: React.FC<AttributeFormModalProps> = ({
               ?.split(",")
               .map((opt: string) => opt.trim())
               .filter((opt: string) => opt) || [],
-          isRequired: formData[0].isRequired,
           type: formData[0].type.trim(),
         };
 
@@ -212,7 +206,6 @@ export const AttributeFormModal: React.FC<AttributeFormModalProps> = ({
           codes: formData.map((attr) => attr.code.trim()),
           unitFamilies: formData.map((attr) => attr.unitFamily.trim()),
           names: formData.map((attr) => attr.name.trim()),
-          isRequired: formData.map((attr) => attr.isRequired),
           sort_orders: formData.map((attr) => attr.sort_order),
           option: formData.map(
             (attr) =>
@@ -383,21 +376,6 @@ export const AttributeFormModal: React.FC<AttributeFormModalProps> = ({
                 />
               </div>
 
-              {/* Is Required */}
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={attr.isRequired}
-                    onChange={(e) =>
-                      handleInputChange(index, "isRequired", e.target.checked)
-                    }
-                    disabled={isLoading}
-                    className="w-4 h-4 rounded border-border"
-                  />
-                  <span className="text-sm font-medium">Is Required</span>
-                </label>
-              </div>
             </div>
           ))}
         </div>

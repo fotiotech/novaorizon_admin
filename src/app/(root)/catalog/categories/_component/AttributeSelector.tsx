@@ -5,12 +5,18 @@ import { useMemo } from "react";
 // ------------------------------------------------------------------
 // Types
 // ------------------------------------------------------------------
-export type AttributeFlag = "isRequired" | "isHighlight";
+export type AttributeFlag =
+  | "isRequired"
+  | "isHighlight"
+  | "isVariant"
+  | "isVariantAttribute";
 
 export interface SelectedAttribute {
   attribute: string;
   isRequired: boolean;
   isHighlight: boolean;
+  isVariant: boolean;
+  isVariantAttribute: boolean;
 }
 
 interface AttributeOption {
@@ -66,11 +72,32 @@ const FLAGS: FlagMeta[] = [
     inactiveClasses:
       "border-border bg-background text-muted-foreground hover:text-foreground",
   },
+  {
+    key: "isVariant",
+    label: "Variant",
+    title: "Variant — use this attribute as a variant axis (color, size, …)",
+    activeClasses:
+      "border-violet-400 bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-700",
+    inactiveClasses:
+      "border-border bg-background text-muted-foreground hover:text-foreground",
+  },
+  {
+    key: "isVariantAttribute",
+    label: "Variant field",
+    title:
+      "Variant field — capture this value per variant (price, sku, stock, …)",
+    activeClasses:
+      "border-sky-400 bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-700",
+    inactiveClasses:
+      "border-border bg-background text-muted-foreground hover:text-foreground",
+  },
 ];
 
 const FLAG_DEFAULTS: Record<AttributeFlag, boolean> = {
   isRequired: false,
   isHighlight: false,
+  isVariant: false,
+  isVariantAttribute: false,
 };
 
 // ------------------------------------------------------------------
@@ -152,6 +179,22 @@ export default function AttributeSelector({
                       title="Highlight"
                     >
                       ◆
+                    </span>
+                  )}
+                  {s.isVariant && (
+                    <span
+                      className="text-violet-600 dark:text-violet-400"
+                      title="Variant"
+                    >
+                      ⬢
+                    </span>
+                  )}
+                  {s.isVariantAttribute && (
+                    <span
+                      className="text-sky-600 dark:text-sky-400"
+                      title="Variant field"
+                    >
+                      ◈
                     </span>
                   )}
                   <svg

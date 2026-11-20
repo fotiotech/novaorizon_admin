@@ -7,6 +7,8 @@ export interface ApiCategoryPropertyAttribute {
   attribute: string;
   isRequired?: boolean;
   isHighlight?: boolean;
+  isVariant?: boolean;
+  isVariantAttribute?: boolean;
 }
 
 export interface ApiCategoryPropertyGroup {

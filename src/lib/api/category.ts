@@ -185,18 +185,6 @@ export async function assignPropertyToCategory(
   return res.data;
 }
 
-/* ------------------------- Inheritance ---------------------------- */
-
-/** POST /api/categories/:id/inheritance — admin only */
-export async function runCategoryInheritance(
-  categoryId: string,
-): Promise<{ success: boolean; warning?: string }> {
-  const res = await api.post<{ success: boolean; warning?: string }>(
-    `/categories/${categoryId}/inheritance`,
-  );
-  return res.data;
-}
-
 /* ---------------------- Attribute sets ---------------------------- */
 
 /** GET /api/categories/:id/attribute-sets — admin only */

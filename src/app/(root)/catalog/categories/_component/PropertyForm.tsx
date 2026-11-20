@@ -21,7 +21,11 @@ import {
 // ------------------------------------------------------------------
 // Types
 // ------------------------------------------------------------------
-export type AttributeFlag = "isRequired" | "isHighlight";
+export type AttributeFlag =
+  | "isRequired"
+  | "isHighlight"
+  | "isVariant"
+  | "isVariantAttribute";
 
 export interface Mapping {
   id: string;
@@ -32,6 +36,8 @@ export interface Mapping {
       attribute: string;
       isRequired: boolean;
       isHighlight: boolean;
+      isVariant: boolean;
+      isVariantAttribute: boolean;
     }[];
   }[];
 }
@@ -211,6 +217,8 @@ export default function PropertyForm({ propertyId, onSuccess, userId }: Props) {
                 attribute: a.attribute,
                 isRequired: a.isRequired === true,
                 isHighlight: a.isHighlight === true,
+                isVariant: a.isVariant === true,
+                isVariantAttribute: a.isVariantAttribute === true,
               })),
             })),
             id: generateId(),
@@ -350,6 +358,8 @@ export default function PropertyForm({ propertyId, onSuccess, userId }: Props) {
                   attribute: attrId,
                   isRequired: false,
                   isHighlight: false,
+                  isVariant: false,
+                  isVariantAttribute: false,
                 },
               ];
           const newGroups = [...m.groups];

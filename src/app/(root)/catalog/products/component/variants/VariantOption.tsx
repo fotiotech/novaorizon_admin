@@ -58,6 +58,13 @@ const builtInVariantFields: Attribute[] = [
     type: "number",
     options: [],
   },
+  {
+    id: "lowStockThreshold",
+    code: "lowStockThreshold",
+    name: "Low stock",
+    type: "number",
+    options: [],
+  },
 ];
 
 // ------------------------------------------------------------------

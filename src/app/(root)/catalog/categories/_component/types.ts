@@ -1,6 +1,10 @@
 // app/catalog/categories/_component/types.ts
 
-export type AttributeFlag = "isRequired" | "isHighlight";
+export type AttributeFlag =
+  | "isRequired"
+  | "isHighlight"
+  | "isVariant"
+  | "isVariantAttribute";
 
 export interface Mapping {
   id: string;
