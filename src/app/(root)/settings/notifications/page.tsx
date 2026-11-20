@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import axios from "axios";
+import api from "@/lib/api";
 import Pusher from "pusher-js";
 import {
   Notifications as NotificationsIcon,
@@ -78,16 +78,15 @@ const NotificationPage = () => {
   // ── Fetch ─────────────────────────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await axios.get("/api/notify", { timeout: 10000 });
+      // Express API — returns { data: { notifications, total, unreadCount } }.
+      const res = await api.get<{
+        data: { notifications: NotificationType[] };
+      }>("/notifications", {
+        params: { limit: 100 },
+        timeout: 10000,
+      });
 
-      if (!Array.isArray(res.data)) {
-        console.error("[notifications] Unexpected response shape:", res.data);
-        throw new Error(
-          res.data?.error ?? "Unexpected response from /api/notify",
-        );
-      }
-
-      setNotifications(res.data);
+      setNotifications(res.data.data?.notifications ?? []);
     } catch (err: any) {
       console.error(
         "[notifications] Failed to load:",
@@ -102,6 +101,9 @@ const NotificationPage = () => {
 
   useEffect(() => {
     fetchNotifications();
+    // Poll as a fallback when Pusher credentials are absent.
+    const timer = setInterval(fetchNotifications, 30_000);
+    return () => clearInterval(timer);
   }, [fetchNotifications]);
 
   // ── Real-time ─────────────────────────────────────────────────────
@@ -113,28 +115,9 @@ const NotificationPage = () => {
     });
     const channel = pusher.subscribe("admin-notifications");
 
-    channel.bind(
-      "new-notification",
-      (data: {
-        id?: string;
-        message: string;
-        type?: NotificationType["type"];
-        timestamp?: string;
-      }) => {
-        setNotifications((prev) => [
-          {
-            _id:
-              data.id ??
-              `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            message: data.message,
-            type: data.type ?? "system",
-            isRead: false,
-            timestamp: data.timestamp ?? new Date().toISOString(),
-          },
-          ...prev,
-        ]);
-      },
-    );
+    channel.bind("new-notification", () => {
+      void fetchNotifications();
+    });
 
     return () => {
       channel.unbind_all();
@@ -146,8 +129,7 @@ const NotificationPage = () => {
   // ── Actions ───────────────────────────────────────────────────────
   const markAsRead = async (id: string) => {
     try {
-      // Uses your existing /api/notify/[id]/route.ts
-      await axios.patch(`/api/notify/${id}`);
+      await api.patch(`/notifications/${id}/read`);
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
       );
@@ -158,9 +140,7 @@ const NotificationPage = () => {
 
   const markAllRead = async () => {
     try {
-      // Bulk endpoint lives under /api/notifications to avoid clashing
-      // with the /api/notify/[id] dynamic route.
-      await axios.patch("/api/notifications/mark-all-read");
+      await api.patch("/notifications/read-all");
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch (err) {
       console.error("Failed to mark all as read:", err);

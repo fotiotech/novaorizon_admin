@@ -14,13 +14,16 @@ export type OrderPaymentStatus =
 
 export type OrderStatus =
   | "pending"
+  | "confirmed"
   | "processing"
   | "shipped"
-  | "in transit"
-  | "completed"
+  | "delivered"
   | "return_requested"
+  | "returned"
   | "cancelled"
-  | "returned";
+  // Legacy values from before the lifecycle model.
+  | "in transit"
+  | "completed";
 
 export interface OrderAddressInput {
   street?: string;
@@ -178,6 +181,7 @@ export async function updateOrderStatus(
   updates: {
     paymentStatus?: OrderPaymentStatus;
     orderStatus?: OrderStatus;
+    note?: string;
   },
 ): Promise<OrderActionResult> {
   if (!orderNumber) {
@@ -194,6 +198,7 @@ export async function updateOrderStatus(
       {
         paymentStatus: updates.paymentStatus,
         orderStatus: updates.orderStatus,
+        note: updates.note,
       },
     );
     return { success: true, order: res.data.data };

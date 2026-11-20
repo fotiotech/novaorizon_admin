@@ -123,10 +123,11 @@ export default function SearchFilter({
             >
               <option value="">All</option>
               <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
               <option value="processing">Processing</option>
               <option value="shipped">Shipped</option>
-              <option value="in transit">In Transit</option>
-              <option value="completed">Completed</option>
+              <option value="delivered">Delivered</option>
+              <option value="return_requested">Return requested</option>
               <option value="returned">Returned</option>
               <option value="cancelled">Cancelled</option>
             </select>

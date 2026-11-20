@@ -80,6 +80,10 @@ const AdminTopBar = ({ sideBarToggle, setSideBarToggle }: AdminTopBarProps) => {
 
   useEffect(() => {
     fetchNotifications();
+    // Polling fallback: Pusher is optional (needs server credentials), so the
+    // bell must still refresh on its own.
+    const timer = setInterval(fetchNotifications, 30_000);
+    return () => clearInterval(timer);
   }, [fetchNotifications]);
 
   /* ── Pusher — realtime admin notifications ────────────────────────
@@ -90,32 +94,22 @@ const AdminTopBar = ({ sideBarToggle, setSideBarToggle }: AdminTopBarProps) => {
    * (see server/utils/notification.service.ts).
    * ──────────────────────────────────────────────────────────────── */
   useEffect(() => {
-    const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
-    const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+    const key =
+      process.env.NEXT_PUBLIC_PUSHER_APP_KEY ??
+      process.env.NEXT_PUBLIC_PUSHER_KEY;
+    const cluster =
+      process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER ??
+      process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
     if (!key || !cluster) return;
 
     const pusher = new Pusher(key, { cluster, forceTLS: true });
     const channel = pusher.subscribe("admin-notifications");
     channel.bind(
       "new-notification",
-      (data: {
-        id?: string;
-        message: string;
-        type?: NotificationType["type"];
-        timestamp?: string;
-      }) => {
-        setNotifications((prev) => {
-          const next: NotificationType = {
-            _id:
-              data.id ??
-              `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            message: data.message,
-            type: data.type ?? "system",
-            isRead: false,
-            timestamp: data.timestamp ?? new Date().toISOString(),
-          };
-          return [next, ...prev];
-        });
+      () => {
+        // Broadcast carries one id, but each admin has their own document —
+        // refetch instead of appending a potentially foreign id.
+        void fetchNotifications();
       },
     );
 

@@ -26,16 +26,24 @@ import { BottomSheet } from "@/components/ux/BottomSheet";
 import { PopoverMenu, type PopoverMenuItem } from "@/components/ux/PopoverMenu";
 import { useUnreadOrderNotifications } from "@/app/(root)/settings/notifications/_component/hooks/useUnreadOrderNotifications";
 import { OrderDetailsContent } from "./_component/OrderDetailsPage";
+import {
+  nextStatuses,
+  normalizeOrderStatus,
+  ORDER_STATUS_LABELS,
+  type LifecycleStatus,
+} from "@/lib/order-status";
 
 type OrderStatus =
   | "pending"
+  | "confirmed"
   | "processing"
   | "shipped"
-  | "in transit"
-  | "completed"
+  | "delivered"
   | "return_requested"
+  | "returned"
   | "cancelled"
-  | "returned";
+  | "in transit"
+  | "completed";
 
 type PaymentStatus =
   | "pending"
@@ -53,10 +61,26 @@ interface FilterOptions {
   dateTo: string;
 }
 
+/**
+ * `confirmed` is set automatically by the backend once payment succeeds and
+ * stock is committed. It is only offered manually for offline/cash methods.
+ */
+function manualNextStatuses(order: any): readonly LifecycleStatus[] {
+  const method = String(order?.paymentMethod ?? "").toLowerCase();
+  const isOffline = ["cash", "cod", "cash_on_delivery"].includes(method);
+  return nextStatuses(order?.orderStatus).filter(
+    (status) => status !== "confirmed" || order?.paymentStatus === "paid" || isOffline,
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Module-scope styles + badges                                        */
 /* ------------------------------------------------------------------ */
 const statusStyles: Record<string, string> = {
+  confirmed:
+    "bg-cyan-50 text-cyan-700 ring-cyan-600/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:ring-cyan-500/20",
+  delivered:
+    "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
   completed:
     "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
   processing:
@@ -207,8 +231,10 @@ const AllOrderPage = () => {
 
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [statusUpdateOrder, setStatusUpdateOrder] = useState<any | null>(null);
-  const [selectedNewStatus, setSelectedNewStatus] =
-    useState<OrderStatus>("pending");
+  const [selectedNewStatus, setSelectedNewStatus] = useState<
+    LifecycleStatus | ""
+  >("");
+  const [statusNote, setStatusNote] = useState("");
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   /* Order details popup state */
@@ -318,7 +344,9 @@ const AllOrderPage = () => {
 
   const openStatusModal = (order: any) => {
     setStatusUpdateOrder(order);
-    setSelectedNewStatus((order.orderStatus as OrderStatus) || "pending");
+    const allowed = manualNextStatuses(order);
+    setSelectedNewStatus(allowed[0] ?? "");
+    setStatusNote("");
     setIsStatusModalOpen(true);
   };
 
@@ -328,14 +356,17 @@ const AllOrderPage = () => {
     try {
       const result = await updateOrderStatus(statusUpdateOrder.orderNumber, {
         orderStatus: selectedNewStatus,
+        note: statusNote.trim() || undefined,
       });
       if (result.success) {
         fetchOrders(page, filters);
         setIsStatusModalOpen(false);
         setStatusUpdateOrder(null);
-        setSelectedNewStatus("pending");
+        setSelectedNewStatus("");
+        setStatusNote("");
       } else {
         console.error("Failed to update status:", result.error);
+        window.alert(result.error || "Failed to update status");
       }
     } catch (error) {
       console.error("Error updating status:", error);
@@ -386,9 +417,10 @@ const AllOrderPage = () => {
   const stats = useMemo(() => {
     const counts = {
       pending: 0,
+      confirmed: 0,
       processing: 0,
       shipped: 0,
-      completed: 0,
+      delivered: 0,
       cancelled: 0,
     };
     for (const o of orders) {
@@ -576,8 +608,8 @@ const AllOrderPage = () => {
             dotClass="bg-indigo-500"
           />
           <StatItem
-            label="Completed"
-            value={stats.completed}
+            label="Delivered"
+            value={stats.delivered}
             dotClass="bg-emerald-500"
           />
           <StatItem
@@ -845,34 +877,64 @@ const AllOrderPage = () => {
           <p className="text-sm text-muted-foreground">
             Order #{statusUpdateOrder?.orderNumber} — current status:{" "}
             <span className="font-medium text-foreground">
-              {statusUpdateOrder?.orderStatus || "pending"}
+              {ORDER_STATUS_LABELS[
+                normalizeOrderStatus(statusUpdateOrder?.orderStatus)
+              ] ?? "Pending"}
             </span>
           </p>
-          <div>
-            <label
-              htmlFor="status-select"
-              className="block text-sm font-medium text-foreground"
-            >
-              New Status
-            </label>
-            <select
-              id="status-select"
-              value={selectedNewStatus}
-              onChange={(e) =>
-                setSelectedNewStatus(e.target.value as OrderStatus)
-              }
-              className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-            >
-              <option value="pending">Pending</option>
-              <option value="processing">Processing</option>
-              <option value="shipped">Shipped</option>
-              <option value="in transit">In Transit</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="return_requested">Return Requested</option>
-              <option value="returned">Returned</option>
-            </select>
-          </div>
+
+          {manualNextStatuses(statusUpdateOrder).length === 0 ? (
+            <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              This order is in a terminal status — no further transitions.
+            </p>
+          ) : (
+            <>
+              <div>
+                <label
+                  htmlFor="status-select"
+                  className="block text-sm font-medium text-foreground"
+                >
+                  Next status
+                </label>
+                <select
+                  id="status-select"
+                  value={selectedNewStatus}
+                  onChange={(e) =>
+                    setSelectedNewStatus(e.target.value as LifecycleStatus)
+                  }
+                  className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+                >
+                  {manualNextStatuses(statusUpdateOrder).map((s) => (
+                    <option key={s} value={s}>
+                      {ORDER_STATUS_LABELS[s]}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-[12px] text-muted-foreground">
+                  Only valid transitions are listed. `Confirmed` is applied
+                  automatically after a successful payment; it is offered here
+                  only for cash/COD orders.
+                </p>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="status-note"
+                  className="block text-sm font-medium text-foreground"
+                >
+                  Note (optional)
+                </label>
+                <textarea
+                  id="status-note"
+                  value={statusNote}
+                  onChange={(e) => setStatusNote(e.target.value)}
+                  rows={2}
+                  className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground transition focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  placeholder="e.g. handed to carrier"
+                />
+              </div>
+            </>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"

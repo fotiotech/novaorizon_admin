@@ -22,7 +22,7 @@ export default function AnalyticsPage() {
         // oldest-first before handing them to <LiveDashboard>.
         const since = Date.now() - 24 * 60 * 60 * 1000;
 
-        const [recentRes, hotRes] = await Promise.all([
+        const [recentRes, hotRes] = await Promise.allSettled([
           api.get<{ data: any[] }>("/events/since", {
             params: { since, limit: 200 },
           }),
@@ -32,8 +32,13 @@ export default function AnalyticsPage() {
         ]);
 
         if (cancelled) return;
-        setRecent([...recentRes.data.data].reverse());
-        setHot(hotRes.data.data);
+        if (recentRes.status === "rejected") throw recentRes.reason;
+
+        setRecent([...recentRes.value.data.data].reverse());
+        // Trending is a nice-to-have; never let it blank the live feed.
+        setHot(
+          hotRes.status === "fulfilled" ? hotRes.value.data.data ?? [] : [],
+        );
       } catch (err) {
         if (cancelled) return;
         console.error("Failed to load live analytics:", err);

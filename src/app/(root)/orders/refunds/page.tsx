@@ -64,7 +64,7 @@ const StatusBadge = memo(function StatusBadge({
 function resolveStatus(item: any): "pending" | "approved" | "rejected" {
   if (item.paymentStatus === "refunded") return "approved";
   if (
-    item.orderStatus === "completed" &&
+    ["delivered", "completed"].includes(item.orderStatus) &&
     item.returnReason?.toLowerCase().includes("rejected")
   ) {
     return "rejected";

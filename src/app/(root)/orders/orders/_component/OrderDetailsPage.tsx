@@ -89,6 +89,39 @@ export const OrderDetailsContent = memo(function OrderDetailsContent({
         <Badge status={order.paymentStatus} map={paymentStyles} />
       </header>
 
+      {/* Lifecycle timeline */}
+      {Array.isArray(order.statusHistory) && order.statusHistory.length > 0 && (
+        <section className="rounded-lg border border-border p-4">
+          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+            Lifecycle
+          </h3>
+          <ol className="mt-3 space-y-2.5">
+            {order.statusHistory.map((event: any, index: number) => {
+              const isLast = index === order.statusHistory.length - 1;
+              return (
+                <li key={`${event.status}-${index}`} className="flex items-start gap-3">
+                  <span
+                    className={
+                      "mt-1.5 h-2 w-2 shrink-0 rounded-full " +
+                      (isLast ? "bg-primary" : "bg-muted-foreground/40")
+                    }
+                  />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium capitalize text-foreground">
+                      {String(event.status ?? "").replace(/_/g, " ")}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {event.at ? new Date(event.at).toLocaleString() : "—"}
+                      {event.note ? ` · ${event.note}` : ""}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
+
       {/* Order Info Grid */}
       <section className="rounded-lg bg-muted/40 p-4">
         <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">

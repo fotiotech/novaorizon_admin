@@ -71,6 +71,10 @@ const nextConfig = {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
   images: {
+    // Vercel's image optimizer returns 402 once the plan's transformation
+    // quota is exhausted. Set NEXT_PUBLIC_IMAGE_UNOPTIMIZED=1 to serve the
+    // original S3 URLs instead (no resizing, but images keep working).
+    unoptimized: process.env.NEXT_PUBLIC_IMAGE_UNOPTIMIZED === "1",
     remotePatterns: [
       {
         protocol: "https",

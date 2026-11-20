@@ -4,6 +4,16 @@
 import { useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 
+function pusherConfig(): { key: string; cluster: string } | null {
+  const key =
+    process.env.NEXT_PUBLIC_PUSHER_APP_KEY ??
+    process.env.NEXT_PUBLIC_PUSHER_KEY;
+  const cluster =
+    process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER ??
+    process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+  return key && cluster ? { key, cluster } : null;
+}
+
 export interface LiveEventProduct {
   _id: string;
   title?: string;
@@ -32,7 +42,7 @@ type ConnectionState = "connecting" | "open" | "closed";
  * If you ever add Pusher later, replace the poll with a subscription
  * and keep this as the reconnect fallback.
  */
-const POLL_INTERVAL = 3000;
+const POLL_INTERVAL = pusherConfig() ? 15000 : 3000;
 
 /**
  * How far back to overlap each poll. The last-known cursor is bumped to
@@ -101,6 +111,49 @@ export function useLiveEvents(max = 200, initial: LiveEvent[] = []) {
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+    };
+  }, [max]);
+
+  // Realtime: the backend publishes every tracked event on the "analytics"
+  // channel. Polling stays as a fallback/reconciliation path.
+  useEffect(() => {
+    const config = pusherConfig();
+    if (!config) return;
+
+    let pusher: any = null;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { default: Pusher } = await import("pusher-js");
+        if (cancelled) return;
+        pusher = new Pusher(config.key, {
+          cluster: config.cluster,
+          forceTLS: true,
+        });
+        const channel = pusher.subscribe("analytics");
+        channel.bind("event", (payload: LiveEvent) => {
+          if (!payload?._id || seenIdsRef.current.has(payload._id)) return;
+          seenIdsRef.current.add(payload._id);
+          setStatus("open");
+          setEvents((prev) => {
+            const merged = [...prev, payload];
+            return merged.length > max ? merged.slice(-max) : merged;
+          });
+        });
+      } catch (err) {
+        console.error("[useLiveEvents] pusher failed:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      try {
+        pusher?.unsubscribe?.("analytics");
+        pusher?.disconnect?.();
+      } catch {
+        /* ignore */
+      }
     };
   }, [max]);
 
