@@ -33,7 +33,6 @@ import {
   PROMOTION_BADGE_STYLES,
   COLLECTION_COUNT_POSITIONS,
   CARD_VARIANTS,
-  BLOCK_CARD_STYLES,
   MAX_BLOCK_LIMIT,
   type BlockLocation,
   type BlockSourceType,
@@ -102,7 +101,6 @@ interface DisplayConfigState {
   cardShape: string;
   cardRatio: string;
   cardSize: string;
-  cardStyle: string;
   titlePosition: string;
   imagePosition: string;
   backgroundColor: string;
@@ -175,7 +173,6 @@ const INITIAL: FormState = {
     cardShape: "default",
     cardRatio: "1:1",
     cardSize: "md",
-    cardStyle: "default",
     titlePosition: "below",
     imagePosition: "center",
     backgroundColor: "",
@@ -445,7 +442,6 @@ export default function BlockForm({ id }: { id?: string }) {
     formData.display,
     displayFields.has("columns") ? dc.columns + " cols" : null,
     displayFields.has("cardSize") ? dc.cardSize + " cards" : null,
-    dc.cardStyle === "tile" ? "tile cards" : null,
     dc.gap + "px gap",
     dc.theme + " theme",
     dc.backgroundColor ? "custom bg" : null,
@@ -1057,27 +1053,6 @@ export default function BlockForm({ id }: { id?: string }) {
                       {CARD_SHAPES.map((s) => (
                         <option key={s} value={s}>
                           {s}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                )}
-
-                {displayFields.has("cardStyle") && (
-                  <Field
-                    label="Card style"
-                    hint="Tile renders compact cards with a centred logo and title."
-                  >
-                    <select
-                      className={inputCls}
-                      value={dc.cardStyle}
-                      onChange={(e) =>
-                        setDisplayConfig({ cardStyle: e.target.value })
-                      }
-                    >
-                      {BLOCK_CARD_STYLES.map((style) => (
-                        <option key={style} value={style}>
-                          {style}
                         </option>
                       ))}
                     </select>
