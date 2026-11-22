@@ -41,7 +41,6 @@ export const BLOCK_DISPLAYS = [
   "slides",
   "bento",
   "masonry",
-  "tiles",
 ] as const;
 export type BlockDisplay = (typeof BLOCK_DISPLAYS)[number];
 
@@ -105,6 +104,9 @@ export type CardSize = (typeof CARD_SIZES)[number];
 export const CARD_VARIANTS = ["card", "bare"] as const;
 export type CardVariant = (typeof CARD_VARIANTS)[number];
 
+export const BLOCK_CARD_STYLES = ["default", "tile"] as const;
+export type BlockCardStyle = (typeof BLOCK_CARD_STYLES)[number];
+
 /**
  * Card layout — how image and text relate inside each card.
  *
@@ -139,6 +141,7 @@ export interface BlockDisplayConfig {
   cardShape: CardShape;
   cardRatio: CardRatio;
   cardSize: CardSize;
+  cardStyle: BlockCardStyle;
   cardLayout: CardLayout;
   titlePosition: TitlePosition;
   imagePosition: ImagePosition;
@@ -158,6 +161,7 @@ export const DEFAULT_BLOCK_DISPLAY_CONFIG: BlockDisplayConfig = {
   cardShape: "default",
   cardRatio: "1:1",
   cardSize: "md",
+  cardStyle: "default",
   cardLayout: "stacked",
   titlePosition: "below",
   imagePosition: "center",

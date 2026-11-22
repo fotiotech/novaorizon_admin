@@ -11,6 +11,7 @@ export const DISPLAY_PRESENTATION_FIELDS: Record<BlockDisplay, readonly string[]
     "cardShape",
     "cardRatio",
     "cardSize",
+    "cardStyle",
     "titlePosition",
     "imagePosition",
     "borderless",
@@ -22,6 +23,7 @@ export const DISPLAY_PRESENTATION_FIELDS: Record<BlockDisplay, readonly string[]
     "cardShape",
     "cardRatio",
     "cardSize",
+    "cardStyle",
     "titlePosition",
     "imagePosition",
     "borderless",
@@ -30,6 +32,7 @@ export const DISPLAY_PRESENTATION_FIELDS: Record<BlockDisplay, readonly string[]
     "alignment",
   ],
   list: [
+    "cardStyle",
     "titlePosition",
     "imagePosition",
     "borderless",
@@ -65,14 +68,13 @@ export const DISPLAY_PRESENTATION_FIELDS: Record<BlockDisplay, readonly string[]
   masonry: [
     "columns",
     "cardRatio",
+    "cardStyle",
     "titlePosition",
     "borderless",
     "rounded",
     "shadow",
     "alignment",
   ],
-  // Compact rectangles with a centred logo and title (chips/tiles).
-  tiles: ["columns", "borderless", "rounded", "shadow"],
 };
 
 export const SOURCE_PRESENTATION_FIELDS: Record<BlockSourceType, readonly string[]> = {
