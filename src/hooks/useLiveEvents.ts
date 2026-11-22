@@ -53,28 +53,47 @@ const POLL_INTERVAL = pusherConfig() ? 15000 : 3000;
  */
 const OVERLAP_MS = 5000;
 
+/** First poll looks back a full day, matching the page's initial payload. */
+const INITIAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Every minute, re-read a wider slice to heal dropped polls/clock gaps. */
+const RECONCILE_MS = 60 * 1000;
+const RECONCILE_WINDOW_MS = 5 * 60 * 1000;
+
 export function useLiveEvents(max = 200, initial: LiveEvent[] = []) {
   const [events, setEvents] = useState<LiveEvent[]>(initial);
   // Start as "connecting" — flip to "open" only after the first
   // successful poll, so the UI doesn't show "Live" before we've talked
   // to the server once.
   const [status, setStatus] = useState<ConnectionState>("connecting");
-  const lastCheckRef = useRef<number>(Date.now() - OVERLAP_MS);
+  const lastCheckRef = useRef<number>(Date.now() - INITIAL_WINDOW_MS);
+  const lastReconcileRef = useRef<number>(0);
   const seenIdsRef = useRef<Set<string>>(new Set(initial.map((e) => e._id)));
 
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
-      if (cancelled) return;
+      if (cancelled || inFlight) return;
+      inFlight = true;
       try {
         // Express backend — `/api/events/since` returns
         //   { data: LiveEvent[] }  sorted timestamp ASC
         // `since` is milliseconds since epoch.
-        const res = await api.get<{ data: LiveEvent[] }>("/events/since", {
+        const res = await api.get<{
+          data: LiveEvent[];
+          serverTime?: number;
+        }>("/events/since", {
           params: {
-            since: Math.max(0, lastCheckRef.current - OVERLAP_MS),
+            since: Math.max(
+              0,
+              lastCheckRef.current -
+                (Date.now() - lastReconcileRef.current > RECONCILE_MS
+                  ? RECONCILE_WINDOW_MS
+                  : OVERLAP_MS),
+            ),
             limit: max,
           },
         });
@@ -83,7 +102,9 @@ export function useLiveEvents(max = 200, initial: LiveEvent[] = []) {
         setStatus("open");
 
         const fresh = res.data.data ?? [];
-        lastCheckRef.current = Date.now();
+        // Cursor comes from the server, never the browser clock.
+        lastCheckRef.current = res.data.serverTime ?? Date.now();
+        lastReconcileRef.current = Date.now();
 
         if (fresh.length > 0) {
           const newEvents = fresh.filter((e) => !seenIdsRef.current.has(e._id));
@@ -100,17 +121,28 @@ export function useLiveEvents(max = 200, initial: LiveEvent[] = []) {
       } catch {
         if (!cancelled) setStatus("closed");
       } finally {
+        inFlight = false;
         if (!cancelled) {
           timer = setTimeout(poll, POLL_INTERVAL);
         }
       }
     };
 
+    // Recover immediately when the tab becomes visible again — browsers
+    // throttle timers in background tabs.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
     poll();
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [max]);
 
