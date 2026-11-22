@@ -50,7 +50,8 @@ const labelCls = "block text-[13px] font-medium text-foreground mb-1.5";
 const inputCls =
   "w-full min-w-0 rounded-lg border border-border bg-background px-3.5 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground/50 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-muted/50 disabled:text-muted-foreground";
 const helperCls = "mt-1.5 text-[12px] text-muted-foreground";
-const fieldsetCls = "rounded-xl border border-border bg-card p-4 sm:p-5 space-y-4";
+const fieldsetCls =
+  "rounded-xl border border-border bg-card p-4 sm:p-5 space-y-4";
 const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
 
 const LIST_PATH = "/channels/store/content/blocks";
@@ -282,7 +283,8 @@ export default function BlockForm({ id }: { id?: string }) {
       );
       if (cancelled) return;
       if (res.success) setPreview({ status: "ok", data: res.data });
-      else setPreview(res.missing ? { status: "missing" } : { status: "error" });
+      else
+        setPreview(res.missing ? { status: "missing" } : { status: "error" });
     })();
 
     return () => {
@@ -395,11 +397,15 @@ export default function BlockForm({ id }: { id?: string }) {
 
       // Presentation is sent flat; the API normalises it into the
       // per-display/per-source shape and drops fields this block can't use.
-      (Object.keys(formData.displayConfig) as Array<keyof DisplayConfigState>).forEach(
-        (k) => fd.append("displayConfig." + k, String(formData.displayConfig[k])),
+      (
+        Object.keys(formData.displayConfig) as Array<keyof DisplayConfigState>
+      ).forEach((k) =>
+        fd.append("displayConfig." + k, String(formData.displayConfig[k])),
       );
-      (Object.keys(formData.sourceStyles) as Array<keyof SourceStylesState>).forEach(
-        (k) => fd.append("sourceStyles." + k, String(formData.sourceStyles[k])),
+      (
+        Object.keys(formData.sourceStyles) as Array<keyof SourceStylesState>
+      ).forEach((k) =>
+        fd.append("sourceStyles." + k, String(formData.sourceStyles[k])),
       );
 
       const res = id ? await updateBlock(id, fd) : await createBlock(fd);
@@ -449,9 +455,13 @@ export default function BlockForm({ id }: { id?: string }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-3xl lg:px-8">
+      <div className="mx-auto max-w-3xl px-3 sm:px-6 lg:px-8">
         {error && (
-          <Notification type="error" message={error} onClose={() => setError(null)} />
+          <Notification
+            type="error"
+            message={error}
+            onClose={() => setError(null)}
+          />
         )}
         {success && (
           <Notification
@@ -552,8 +562,11 @@ export default function BlockForm({ id }: { id?: string }) {
               </Field>
             </div>
 
-            {(
-              <Field label="Item limit" hint={"Maximum " + MAX_BLOCK_LIMIT + " items."}>
+            {
+              <Field
+                label="Item limit"
+                hint={"Maximum " + MAX_BLOCK_LIMIT + " items."}
+              >
                 <input
                   type="number"
                   min={1}
@@ -572,10 +585,10 @@ export default function BlockForm({ id }: { id?: string }) {
                   disabled={isSubmitting}
                 />
               </Field>
-            )}
+            }
           </fieldset>
 
-          {(
+          {
             <fieldset className={fieldsetCls}>
               <legend className={legendCls}>Heading</legend>
 
@@ -583,7 +596,9 @@ export default function BlockForm({ id }: { id?: string }) {
                 <input
                   type="checkbox"
                   checked={formData.heading.showHeading}
-                  onChange={(e) => setHeading({ showHeading: e.target.checked })}
+                  onChange={(e) =>
+                    setHeading({ showHeading: e.target.checked })
+                  }
                   disabled={isSubmitting}
                   className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
                 />
@@ -613,7 +628,7 @@ export default function BlockForm({ id }: { id?: string }) {
                 </Field>
               </div>
             </fieldset>
-          )}
+          }
 
           <fieldset className={fieldsetCls}>
             <legend className={legendCls}>Source</legend>
@@ -644,10 +659,7 @@ export default function BlockForm({ id }: { id?: string }) {
                 />
               </Field>
             ) : (
-              <Field
-                label={SOURCE_LABEL[sourceType]}
-                required
-              >
+              <Field label={SOURCE_LABEL[sourceType]} required>
                 {!currentSourceId || editingSource ? (
                   <RefPicker
                     label=""
@@ -658,9 +670,12 @@ export default function BlockForm({ id }: { id?: string }) {
                     }
                     value={currentSourceId}
                     onChange={(v) => {
-                      if (sourceType === "collection") setSource({ collectionId: v });
-                      else if (sourceType === "category") setSource({ categoryId: v });
-                      else if (sourceType === "promotion") setSource({ promotionId: v });
+                      if (sourceType === "collection")
+                        setSource({ collectionId: v });
+                      else if (sourceType === "category")
+                        setSource({ categoryId: v });
+                      else if (sourceType === "promotion")
+                        setSource({ promotionId: v });
                     }}
                     disabled={isSubmitting}
                     required
@@ -683,7 +698,9 @@ export default function BlockForm({ id }: { id?: string }) {
                     className={inputCls}
                     value={formData.source.promotionMode}
                     onChange={(e) =>
-                      setSource({ promotionMode: e.target.value as PromotionMode })
+                      setSource({
+                        promotionMode: e.target.value as PromotionMode,
+                      })
                     }
                     disabled={isSubmitting}
                   >
@@ -736,7 +753,9 @@ export default function BlockForm({ id }: { id?: string }) {
                     type="checkbox"
                     checked={formData.sourceStyles.collectionShowItemCount}
                     onChange={(e) =>
-                      setSourceStyles({ collectionShowItemCount: e.target.checked })
+                      setSourceStyles({
+                        collectionShowItemCount: e.target.checked,
+                      })
                     }
                     disabled={isSubmitting}
                     className="h-4 w-4 rounded border-border text-primary"
@@ -749,10 +768,13 @@ export default function BlockForm({ id }: { id?: string }) {
                     className={inputCls}
                     value={formData.sourceStyles.collectionCountPosition}
                     onChange={(e) =>
-                      setSourceStyles({ collectionCountPosition: e.target.value })
+                      setSourceStyles({
+                        collectionCountPosition: e.target.value,
+                      })
                     }
                     disabled={
-                      isSubmitting || !formData.sourceStyles.collectionShowItemCount
+                      isSubmitting ||
+                      !formData.sourceStyles.collectionShowItemCount
                     }
                   >
                     {COLLECTION_COUNT_POSITIONS.map((p) => (
@@ -789,7 +811,9 @@ export default function BlockForm({ id }: { id?: string }) {
                     type="checkbox"
                     checked={formData.sourceStyles.manualShowDescription}
                     onChange={(e) =>
-                      setSourceStyles({ manualShowDescription: e.target.checked })
+                      setSourceStyles({
+                        manualShowDescription: e.target.checked,
+                      })
                     }
                     disabled={isSubmitting}
                     className="h-4 w-4 rounded border-border text-primary"
@@ -800,7 +824,7 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
           </fieldset>
 
-          {(
+          {
             <fieldset className={fieldsetCls}>
               <legend className={legendCls}>Call to action</legend>
 
@@ -814,13 +838,20 @@ export default function BlockForm({ id }: { id?: string }) {
                   >
                     {CTA_STYLES.map((s) => (
                       <option key={s} value={s}>
-                        {s === "none" ? "None" : s === "link" ? "Link" : "Button"}
+                        {s === "none"
+                          ? "None"
+                          : s === "link"
+                            ? "Link"
+                            : "Button"}
                       </option>
                     ))}
                   </select>
                 </Field>
 
-                <Field label="Text" hint="Optional. Falls back to a default label.">
+                <Field
+                  label="Text"
+                  hint="Optional. Falls back to a default label."
+                >
                   <input
                     type="text"
                     className={inputCls}
@@ -843,7 +874,7 @@ export default function BlockForm({ id }: { id?: string }) {
                 />
               </Field>
             </fieldset>
-          )}
+          }
 
           <fieldset className={fieldsetCls}>
             <legend className={legendCls}>Presentation</legend>
@@ -933,7 +964,10 @@ export default function BlockForm({ id }: { id?: string }) {
                   value={dc.gap}
                   onChange={(e) =>
                     setDisplayConfig({
-                      gap: Math.min(64, Math.max(0, Number(e.target.value) || 0)),
+                      gap: Math.min(
+                        64,
+                        Math.max(0, Number(e.target.value) || 0),
+                      ),
                     })
                   }
                 />
@@ -943,7 +977,9 @@ export default function BlockForm({ id }: { id?: string }) {
                 <select
                   className={inputCls}
                   value={dc.animation}
-                  onChange={(e) => setDisplayConfig({ animation: e.target.value })}
+                  onChange={(e) =>
+                    setDisplayConfig({ animation: e.target.value })
+                  }
                 >
                   {BLOCK_ANIMATIONS.map((a) => (
                     <option key={a} value={a}>
@@ -1102,7 +1138,6 @@ export default function BlockForm({ id }: { id?: string }) {
                   </Field>
                 )}
               </div>
-
 
               {displayFields.has("titlePosition") && (
                 <div className="mt-3">
