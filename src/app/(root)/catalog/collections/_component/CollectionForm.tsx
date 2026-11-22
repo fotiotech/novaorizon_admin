@@ -333,11 +333,8 @@ export default function CollectionForm({ id }: { id?: string }) {
         }
       }
 
-      if (
-        formData.ctaStyle !== "none" &&
-        (!formData.ctaText.trim() || !formData.ctaLink.trim())
-      ) {
-        setError("A CTA requires both text and a link.");
+      if (formData.ctaStyle !== "none" && !formData.ctaLink.trim()) {
+        setError("A CTA requires a link.");
         return;
       }
 
@@ -767,7 +764,10 @@ export default function CollectionForm({ id }: { id?: string }) {
 
             {formData.ctaStyle !== "none" && (
               <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-                <Field label="CTA text" required>
+                <Field
+                  label="CTA text"
+                  hint="Optional — defaults to a sensible label."
+                >
                   <input
                     type="text"
                     name="ctaText"
