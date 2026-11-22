@@ -14,7 +14,6 @@ import {
   MoreVert,
   Add,
   Close,
-  Lock,
 } from "@mui/icons-material";
 import {
   fetchCategoryProperties,
@@ -178,7 +177,8 @@ export default function CategoryPropertiesPage() {
   const fetchProperties = async () => {
     try {
       setLoading(true);
-      const data = await fetchCategoryProperties({ includeReadOnly: true });
+      // Snapshots are an internal cache; the page lists authored properties only.
+      const data = await fetchCategoryProperties();
       setProperties(data as unknown as Property[]);
       setError(null);
     } catch (err: any) {
@@ -279,18 +279,9 @@ export default function CategoryPropertiesPage() {
   const getMenuItems = (prop: Property): PopoverMenuItem[] => {
     const items: PopoverMenuItem[] = [];
 
-    if (prop.readOnly) {
-      items.push({
-        key: "managed-info",
-        label: "System-managed snapshot",
-        icon: <Lock fontSize="small" />,
-        onClick: () => {},
-      });
-    }
-
     items.push({
       key: "edit",
-      label: prop.readOnly ? "Edit (override snapshot)" : "Edit property",
+      label: "Edit property",
       icon: <Edit fontSize="small" />,
       href: `/catalog/categories/property/${prop._id}/edit`,
     });
@@ -530,15 +521,6 @@ export default function CategoryPropertiesPage() {
                         <span className="font-medium text-foreground">
                           {prop.name}
                         </span>
-                        {prop.readOnly && (
-                          <span
-                            className="inline-flex items-center gap-1 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                            title="Auto-generated snapshot from parent categories. Editable, but it is regenerated automatically when an ancestor changes manual edits."
-                          >
-                            <Lock style={{ fontSize: 10 }} />
-                            Inherited
-                          </span>
-                        )}
                       </div>
                       {prop.description && (
                         <div className="mt-0.5 line-clamp-1 max-w-md text-xs text-muted-foreground">
@@ -577,16 +559,8 @@ export default function CategoryPropertiesPage() {
           setDeleteTarget(null);
         }}
         onConfirm={handleConfirmDelete}
-        title={
-          deleteTarget?.readOnly
-            ? "Delete inherited property"
-            : "Delete category property"
-        }
-        message={
-          deleteTarget?.readOnly
-            ? `"${deleteTarget.name}" is an auto-generated snapshot used by one or more categories. Deleting it will detach those categories' inherited properties. This action cannot be undone.`
-            : `Are you sure you want to delete "${deleteTarget?.name || "this property"}"? This action cannot be undone.`
-        }
+        title="Delete category property"
+        message={`Are you sure you want to delete "${deleteTarget?.name || "this property"}"? This action cannot be undone.`}
         confirmLabel={isDeleting ? "Deleting…" : "Delete"}
         danger
       />

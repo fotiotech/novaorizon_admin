@@ -8,7 +8,6 @@ import Notification from "@/components/Notification";
 import { BottomSheet } from "./BottomSheet";
 import { RefPicker } from "./RefPicker";
 import { ManualPicker, type ManualItem } from "./ManualPicker";
-import { BannerPicker } from "./BannerPicker";
 import {
   createBlock,
   updateBlock,
@@ -63,7 +62,6 @@ const SOURCE_LABEL: Record<BlockSourceType, string> = {
   collection: "Collection",
   category: "Category",
   promotion: "Promotion",
-  banner: "Banners",
   manual: "Manual items",
 };
 
@@ -72,15 +70,13 @@ const SOURCE_HELP: Record<BlockSourceType, string> = {
     "Pulls items from the selected collection — respects its own type (rule, manual, recommendation).",
   category: "Shows products that belong to the selected category.",
   promotion:
-    "Renders items from the promotion's scope, or the promotion tile itself (for banners).",
-  banner:
-    "Renders one or more reusable banners. The banner display shows a hero carousel; card displays show one card per banner.",
+    "Renders items from the promotion's scope, or the promotion tile itself.",
   manual:
     "Hand-pick any combination of products, categories, collections, brands, promotions, or pages.",
 };
 
 const SOURCE_REF_TYPE: Record<
-  Exclude<BlockSourceType, "manual" | "banner">,
+  Exclude<BlockSourceType, "manual">,
   RegistryKey
 > = {
   collection: "Collection",
@@ -134,7 +130,6 @@ interface FormState {
     categoryId: string;
     promotionId: string;
     promotionMode: PromotionMode;
-    bannerIds: string[];
     items: ManualItem[];
   };
   displayConfig: DisplayConfigState;
@@ -163,7 +158,6 @@ const INITIAL: FormState = {
     categoryId: "",
     promotionId: "",
     promotionMode: "products",
-    bannerIds: [],
     items: [],
   },
   displayConfig: {
@@ -212,7 +206,6 @@ export default function BlockForm({ id }: { id?: string }) {
   const [presentationOpen, setPresentationOpen] = useState(false);
 
   const sourceType = formData.source.type;
-  const isBannerSource = sourceType === "banner";
 
   /* ------------------------------- load ---------------------------------- */
 
@@ -245,9 +238,6 @@ export default function BlockForm({ id }: { id?: string }) {
           collectionId: d.source?.collectionId ?? "",
           categoryId: d.source?.categoryId ?? "",
           promotionId: d.source?.promotionId ?? "",
-          bannerIds: Array.isArray(d.source?.bannerIds)
-            ? d.source.bannerIds.map(String)
-            : [],
           items: Array.isArray(d.source?.items) ? d.source.items : [],
         },
         displayConfig: { ...INITIAL.displayConfig, ...(d.displayConfig ?? {}) },
@@ -274,7 +264,7 @@ export default function BlockForm({ id }: { id?: string }) {
           : "";
 
   useEffect(() => {
-    if (isBannerSource || !currentSourceId) {
+    if (!currentSourceId) {
       setPreview({ status: "idle" });
       return;
     }
@@ -284,7 +274,7 @@ export default function BlockForm({ id }: { id?: string }) {
 
     (async () => {
       const res = await getSourcePreview(
-        SOURCE_REF_TYPE[sourceType as Exclude<BlockSourceType, "manual" | "banner">],
+        SOURCE_REF_TYPE[sourceType as Exclude<BlockSourceType, "manual">],
         currentSourceId,
       );
       if (cancelled) return;
@@ -295,7 +285,7 @@ export default function BlockForm({ id }: { id?: string }) {
     return () => {
       cancelled = true;
     };
-  }, [sourceType, currentSourceId, isBannerSource]);
+  }, [sourceType, currentSourceId]);
 
   useEffect(() => {
     setEditingSource(false);
@@ -304,7 +294,6 @@ export default function BlockForm({ id }: { id?: string }) {
     formData.source.collectionId,
     formData.source.categoryId,
     formData.source.promotionId,
-    formData.source.bannerIds,
   ]);
 
   /* ------------------------------ setters -------------------------------- */
@@ -336,15 +325,12 @@ export default function BlockForm({ id }: { id?: string }) {
   const handleSourceTypeChange = (nextType: BlockSourceType) => {
     setSource({ type: nextType });
     setEditingSource(false);
-    // A banner source always renders as a banner.
-    if (nextType === "banner") setField("display", "banner");
   };
 
   const handleSourceClear = () => {
     if (sourceType === "collection") setSource({ collectionId: "" });
     else if (sourceType === "category") setSource({ categoryId: "" });
     else if (sourceType === "promotion") setSource({ promotionId: "" });
-    else if (sourceType === "banner") setSource({ bannerIds: [] });
     setEditingSource(false);
   };
 
@@ -361,32 +347,23 @@ export default function BlockForm({ id }: { id?: string }) {
         return;
       }
 
-      if (isBannerSource) {
-        if (formData.source.bannerIds.length === 0) {
-          setError("Select at least one banner from the library");
-          return;
-        }
-      } else {
-        if (!currentSourceId && sourceType !== "manual") {
-          setError(
-            "Select a " + SOURCE_LABEL[sourceType].toLowerCase(),
-          );
-          return;
-        }
-        if (sourceType === "manual" && formData.source.items.length === 0) {
-          setError("Add at least one item");
-          return;
-        }
-        if (formData.cta.style !== "none" && !formData.cta.link.trim()) {
-          setError("CTA requires a link");
-          return;
-        }
+      if (!currentSourceId && sourceType !== "manual") {
+        setError("Select a " + SOURCE_LABEL[sourceType].toLowerCase());
+        return;
+      }
+      if (sourceType === "manual" && formData.source.items.length === 0) {
+        setError("Add at least one item");
+        return;
+      }
+      if (formData.cta.style !== "none" && !formData.cta.link.trim()) {
+        setError("CTA requires a link");
+        return;
       }
 
       const fd = new FormData();
       fd.append("name", formData.name.trim());
       fd.append("location", formData.location);
-      fd.append("display", isBannerSource ? "banner" : formData.display);
+      fd.append("display", formData.display);
       fd.append("status", formData.status);
       fd.append("order", String(formData.order));
       fd.append("limit", String(formData.limit));
@@ -399,23 +376,19 @@ export default function BlockForm({ id }: { id?: string }) {
       } else if (sourceType === "promotion") {
         fd.append("source.promotionId", formData.source.promotionId);
         fd.append("source.promotionMode", formData.source.promotionMode);
-      } else if (sourceType === "banner") {
-        fd.append("source.bannerIds", JSON.stringify(formData.source.bannerIds));
       } else if (sourceType === "manual") {
         fd.append("source.items", JSON.stringify(formData.source.items));
       }
 
-      if (!isBannerSource) {
-        fd.append("heading.title", formData.heading.title);
-        fd.append("heading.subtitle", formData.heading.subtitle);
-        fd.append(
-          "heading.showHeading",
-          formData.heading.showHeading ? "true" : "false",
-        );
-        fd.append("cta.text", formData.cta.text.trim());
-        fd.append("cta.link", formData.cta.link.trim());
-        fd.append("cta.style", formData.cta.style);
-      }
+      fd.append("heading.title", formData.heading.title);
+      fd.append("heading.subtitle", formData.heading.subtitle);
+      fd.append(
+        "heading.showHeading",
+        formData.heading.showHeading ? "true" : "false",
+      );
+      fd.append("cta.text", formData.cta.text.trim());
+      fd.append("cta.link", formData.cta.link.trim());
+      fd.append("cta.style", formData.cta.style);
 
       // Presentation is sent flat; the API normalises it into the
       // per-display/per-source shape and drops fields this block can't use.
@@ -454,13 +427,13 @@ export default function BlockForm({ id }: { id?: string }) {
   }
 
   const dc = formData.displayConfig;
-  const displayFields = displayFieldsFor(isBannerSource ? "banner" : formData.display);
+  const displayFields = displayFieldsFor(formData.display);
   const hasDisplayFields = displayFields.size > 0;
   const hasSurfaceFields = ["borderless", "rounded", "shadow"].some((k) =>
     displayFields.has(k),
   );
   const presentationSummary = [
-    isBannerSource ? "banner" : formData.display,
+    formData.display,
     displayFields.has("columns") ? dc.columns + " cols" : null,
     displayFields.has("cardSize") ? dc.cardSize + " cards" : null,
     dc.gap + "px gap",
@@ -489,9 +462,8 @@ export default function BlockForm({ id }: { id?: string }) {
             {id ? "Edit block" : "New block"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {isBannerSource
-              ? "Banner blocks reference banners from the library. Only the presentation options that apply to a banner are stored."
-              : "Place a collection, category, promotion or manual list on a page. Only the presentation fields this display and source use are saved."}
+            Place a collection, category, promotion or manual list on a page.
+            Only the presentation fields this display and source use are saved.
           </p>
         </header>
 
@@ -550,9 +522,9 @@ export default function BlockForm({ id }: { id?: string }) {
               <Field label="Display">
                 <select
                   className={inputCls}
-                  value={isBannerSource ? "banner" : formData.display}
+                  value={formData.display}
                   onChange={(e) => setField("display", e.target.value)}
-                  disabled={isSubmitting || isBannerSource}
+                  disabled={isSubmitting}
                 >
                   {BLOCK_DISPLAYS.map((d) => (
                     <option key={d} value={d}>
@@ -576,7 +548,7 @@ export default function BlockForm({ id }: { id?: string }) {
               </Field>
             </div>
 
-            {!isBannerSource && (
+            {(
               <Field label="Item limit" hint={"Maximum " + MAX_BLOCK_LIMIT + " items."}>
                 <input
                   type="number"
@@ -599,7 +571,7 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
           </fieldset>
 
-          {!isBannerSource && (
+          {(
             <fieldset className={fieldsetCls}>
               <legend className={legendCls}>Heading</legend>
 
@@ -659,19 +631,7 @@ export default function BlockForm({ id }: { id?: string }) {
               </select>
             </Field>
 
-            {sourceType === "banner" ? (
-              <Field
-                label="Banners"
-                required
-                hint="Order matters — the first banner is the default slide."
-              >
-                <BannerPicker
-                  value={formData.source.bannerIds}
-                  onChange={(ids) => setSource({ bannerIds: ids })}
-                  disabled={isSubmitting}
-                />
-              </Field>
-            ) : sourceType === "manual" ? (
+            {sourceType === "manual" ? (
               <Field label="Items">
                 <ManualPicker
                   value={formData.source.items}
@@ -727,7 +687,7 @@ export default function BlockForm({ id }: { id?: string }) {
                       <option key={m} value={m}>
                         {m === "products"
                           ? "Products in scope"
-                          : "The promotion itself (banner)"}
+                          : "The promotion itself (tile)"}
                       </option>
                     ))}
                   </select>
@@ -836,7 +796,7 @@ export default function BlockForm({ id }: { id?: string }) {
             )}
           </fieldset>
 
-          {!isBannerSource && (
+          {(
             <fieldset className={fieldsetCls}>
               <legend className={legendCls}>Call to action</legend>
 
@@ -887,9 +847,7 @@ export default function BlockForm({ id }: { id?: string }) {
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[14px] font-medium text-foreground">
-                  {isBannerSource
-                    ? "Colors & spacing"
-                    : "Layout, cards & colors"}
+                  Layout, cards & colors
                 </p>
                 <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
                   {presentationSummary}
@@ -1009,7 +967,7 @@ export default function BlockForm({ id }: { id?: string }) {
 
           {hasDisplayFields && (
             <section>
-              <SheetLabel>{"Layout · " + (isBannerSource ? "banner" : formData.display)}</SheetLabel>
+              <SheetLabel>{"Layout · " + formData.display}</SheetLabel>
               <div className="grid grid-cols-2 gap-3">
                 {displayFields.has("columns") && (
                   <Field label="Columns">

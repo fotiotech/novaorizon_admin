@@ -14,14 +14,9 @@ export interface ApiCollection {
   targetType: string;
   rules?: any[];
   items?: any[] | string[];
-  display?: Record<string, any>;
-  ctaText?: string | null;
-  ctaLink?: string | null;
-  ctaStyle?: string;
   status?: string;
   order?: number;
   sort?: { field: string; direction: "asc" | "desc" } | null;
-  showName?: boolean;
   recommendationType?: string | null;
   recommendationLimit?: number | null;
   created_at?: string;
@@ -95,26 +90,11 @@ function formDataToBackendBody(fd: FormData): Record<string, any> {
     type: raw.type,
     targetType: raw.targetType,
     order: raw.order ? Number(raw.order) : 0,
-    showName: raw.showName === "true",
     recommendationType: raw.recommendationType,
     recommendationLimit: raw.recommendationLimit
       ? Number(raw.recommendationLimit)
       : undefined,
-    ctaText: raw.ctaText,
-    ctaLink: raw.ctaLink,
-    ctaStyle: raw.ctaStyle,
   };
-
-  // Dotted `display.*` → nested display object
-  const display: Record<string, any> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (!key.startsWith("display.")) continue;
-    const sub = key.slice("display.".length);
-    if (sub === "columns" || sub === "gap") display[sub] = Number(value) || 0;
-    else if (sub === "showImages") display[sub] = value === "true";
-    else display[sub] = value;
-  }
-  if (Object.keys(display).length > 0) body.display = display;
 
   // Dotted `sort.*` → nested sort object
   const sort: Record<string, string> = {};

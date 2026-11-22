@@ -21,8 +21,6 @@ interface BlockRow {
   order: number;
   source?: {
     type: string;
-    /** Present when `type === "banner"`. Ordered, can be 0..N. */
-    bannerIds?: string[];
   };
 }
 
@@ -34,24 +32,11 @@ const LIST_PATH = "/channels/store/content/blocks";
 
 /** Human label for what this block renders. */
 function describeBlock(b: BlockRow): string {
-  const t = b.source?.type;
-  if (!t) return "source (missing)";
-
-  if (t === "banner") {
-    const n = b.source?.bannerIds?.length ?? 0;
-    if (n === 0) return "banner (empty)";
-    if (n === 1) return "banner";
-    return `${n} banners`;
-  }
-
-  return t;
+  return b.source?.type ?? "source (missing)";
 }
 
 /** Badge color per source family. */
-function badgeClass(b: BlockRow): string {
-  if (b.source?.type === "banner") {
-    return "bg-violet-50 text-violet-700";
-  }
+function badgeClass(_b: BlockRow): string {
   return "bg-blue-50 text-blue-700";
 }
 

@@ -19,7 +19,6 @@ export interface CategoryNode {
   parentId?: string | null;
   imageUrl?: string[];
   property?: CategoryPropertyRef | string | null;
-  hasInheritedSnapshot?: boolean;
   inheritProperty?: boolean;
 }
 

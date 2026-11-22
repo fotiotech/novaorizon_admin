@@ -546,7 +546,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
           )}
           {inheritProperty && canInherit && (
             <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-              ℹ️ A new property will be auto‑generated from ancestor mappings.
+              ℹ️ Attributes are merged from ancestor categories whenever this category is read.
             </p>
           )}
         </div>

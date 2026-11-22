@@ -4,11 +4,7 @@ import { isAxiosError } from "axios";
 
 /* ------------------------------ types ------------------------------ */
 
-/**
- * The backend's `projectForList` strips the raw `inheritedProperty` doc and
- * emits `hasInheritedSnapshot: boolean` in its place. `property` is either
- * populated or `null`.
- */
+/** Category row returned by the API, with its authored property populated. */
 export interface ApiCategory {
   _id: string;
   name: string;
@@ -17,7 +13,6 @@ export interface ApiCategory {
   description?: string | null;
   imageUrl?: string[];
   inheritProperty?: boolean;
-  hasInheritedSnapshot?: boolean;
   sortOrder?: number | null;
   property?: {
     _id: string;

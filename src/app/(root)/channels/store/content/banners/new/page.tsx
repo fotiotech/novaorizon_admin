@@ -1,7 +1,5 @@
-// app/(root)/channels/store/content/banners/new/page.tsx
-
-import BannerForm from "../_component/BannerForm";
+import { notFound } from "next/navigation";
 
 export default function NewBannerPage() {
-  return <BannerForm />;
+  notFound();
 }

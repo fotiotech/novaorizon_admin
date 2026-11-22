@@ -105,7 +105,7 @@ const LABEL_CLASS = "mb-1.5 block text-sm font-medium text-muted-foreground";
 // The input — compact, matching the Facebook Ads form fields.
 const FIELD_INPUT_CLASS = [
   "peer w-full rounded-lg border border-input bg-background",
-  "px-3 py-2 text-sm leading-5 text-foreground",
+  "p-3 text-sm leading-5 text-foreground",
   "outline-none transition placeholder:text-transparent",
   "focus:border-ring focus:ring-1 focus:ring-ring/30",
   "disabled:cursor-not-allowed disabled:opacity-50",

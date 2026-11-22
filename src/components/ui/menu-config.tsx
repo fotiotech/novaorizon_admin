@@ -368,11 +368,6 @@ export const rawMenuConfig = [
                 icon: <MenuIcon />,
               },
               {
-                name: "Banners",
-                href: "/channels/store/content/banners",
-                icon: <MenuIcon />,
-              },
-              {
                 name: "Trust Badges",
                 href: "/channels/store/content/trust_badge",
                 icon: <ImageIcon />,

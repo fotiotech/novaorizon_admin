@@ -20,18 +20,11 @@ import {
 } from "@/lib/content/entityMetadata";
 import {
   TARGET_TYPES,
-  DISPLAY_LAYOUTS,
-  CARD_SHAPES,
-  CTA_STYLES,
   COLLECTION_TYPES,
-  DEFAULT_COLLECTION_DISPLAY,
   COLLECTION_MANUAL_LIMIT,
   COLLECTION_LIST_PATH,
   type TargetType,
-  type CardShape,
-  type CtaStyle,
   type CollectionType,
-  type DisplayLayout,
 } from "@/lib/content/collectionTypes";
 
 const MANUAL_ITEM_LIMIT = COLLECTION_MANUAL_LIMIT;
@@ -51,16 +44,6 @@ const TYPE_SUPPORT: Record<CollectionType, (cfg: EntityMetadata) => boolean> = {
   recommendation: (c) => c.supportsRecommendation,
 };
 
-const CARD_SHAPE_LABELS: Record<CardShape, string> = {
-  default: "Default",
-  circle: "Circle",
-};
-
-const CTA_STYLE_LABELS: Record<CtaStyle, string> = {
-  none: "None",
-  link: "Link",
-  button: "Button",
-};
 
 /* ------------------------------- style tokens ------------------------------ */
 
@@ -112,19 +95,8 @@ export default function CollectionForm({ id }: { id?: string }) {
     targetType: "Product" as TargetType,
     order: 0,
     sort: { field: "", direction: "asc" as "asc" | "desc" },
-    showName: true,
     recommendationType: "",
     recommendationLimit: 10,
-    ctaText: "",
-    ctaLink: "",
-    ctaStyle: "none" as CtaStyle,
-    display: {
-      layout: DEFAULT_COLLECTION_DISPLAY.layout as DisplayLayout,
-      columns: DEFAULT_COLLECTION_DISPLAY.columns,
-      gap: DEFAULT_COLLECTION_DISPLAY.gap,
-      showImages: DEFAULT_COLLECTION_DISPLAY.showImages,
-      cardShape: DEFAULT_COLLECTION_DISPLAY.cardShape as CardShape,
-    },
   });
 
   const cfg = useMemo(
@@ -171,25 +143,8 @@ export default function CollectionForm({ id }: { id?: string }) {
             field: d.sort?.field || "",
             direction: (d.sort?.direction as "asc" | "desc") || "asc",
           },
-          showName: d.showName !== false,
           recommendationType: d.recommendationType || "",
           recommendationLimit: d.recommendationLimit ?? 10,
-          ctaText: d.ctaText || "",
-          ctaLink: d.ctaLink || "",
-          ctaStyle: (d.ctaStyle as CtaStyle) || "none",
-          display: {
-            layout:
-              (d.display?.layout as DisplayLayout) ||
-              DEFAULT_COLLECTION_DISPLAY.layout,
-            columns: d.display?.columns ?? DEFAULT_COLLECTION_DISPLAY.columns,
-            gap: d.display?.gap ?? DEFAULT_COLLECTION_DISPLAY.gap,
-            showImages:
-              d.display?.showImages ?? DEFAULT_COLLECTION_DISPLAY.showImages,
-            cardShape:
-              (d.display?.cardShape as CardShape) ||
-              ENTITY_METADATA[d.targetType as TargetType]?.defaultCardShape ||
-              DEFAULT_COLLECTION_DISPLAY.cardShape,
-          },
         });
 
         setRules(d.rules?.length ? d.rules : [EMPTY_RULE]);
@@ -225,12 +180,6 @@ export default function CollectionForm({ id }: { id?: string }) {
             ? "rule"
             : p.type,
         recommendationType: "",
-        display: {
-          ...p.display,
-          cardShape:
-            ENTITY_METADATA[formData.targetType].defaultCardShape ??
-            DEFAULT_COLLECTION_DISPLAY.cardShape,
-        },
       }));
       setPrevTarget(formData.targetType);
     }
@@ -253,23 +202,6 @@ export default function CollectionForm({ id }: { id?: string }) {
     const { name, value, type } = e.target;
     const v =
       type === "checkbox" ? (e.target as HTMLInputElement).checked : value;
-
-    if (name.startsWith("display.")) {
-      const key = name.split(".")[1];
-      setFormData((p) => ({
-        ...p,
-        display: {
-          ...p.display,
-          [key]:
-            key === "columns" || key === "gap"
-              ? Number(v) || 0
-              : key === "showImages"
-                ? v === true || v === "true"
-                : v,
-        } as any,
-      }));
-      return;
-    }
 
     if (name === "order" || name === "recommendationLimit") {
       setFormData((p) => ({ ...p, [name]: Number(v) || 0 }));
@@ -387,18 +319,6 @@ export default function CollectionForm({ id }: { id?: string }) {
         }
       }
 
-      if (
-        formData.ctaStyle !== "none" &&
-        (!formData.ctaText.trim() || !formData.ctaLink.trim())
-      ) {
-        setError(
-          formData.ctaStyle === "button"
-            ? "A button CTA requires both text and a link."
-            : "A link CTA requires both text and a link.",
-        );
-        return;
-      }
-
       const fd = new FormData();
       fd.append("name", formData.name);
       fd.append("description", formData.description);
@@ -409,7 +329,6 @@ export default function CollectionForm({ id }: { id?: string }) {
       fd.append("order", String(formData.order));
       fd.append("sort.field", formData.sort.field);
       fd.append("sort.direction", formData.sort.direction);
-      fd.append("showName", formData.showName ? "true" : "false");
       fd.append("rules", JSON.stringify(formData.type === "rule" ? rules : []));
       fd.append(
         "items",
@@ -420,17 +339,6 @@ export default function CollectionForm({ id }: { id?: string }) {
         formData.type === "recommendation" ? formData.recommendationType : "",
       );
       fd.append("recommendationLimit", String(formData.recommendationLimit));
-      fd.append("display.layout", formData.display.layout);
-      fd.append("display.columns", String(formData.display.columns));
-      fd.append("display.gap", String(formData.display.gap));
-      fd.append(
-        "display.showImages",
-        formData.display.showImages ? "true" : "false",
-      );
-      fd.append("display.cardShape", formData.display.cardShape);
-      fd.append("ctaText", formData.ctaText);
-      fd.append("ctaLink", formData.ctaLink);
-      fd.append("ctaStyle", formData.ctaStyle);
 
       const res = id
         ? await updateCollection(id, fd)
@@ -590,18 +498,6 @@ export default function CollectionForm({ id }: { id?: string }) {
               </Field>
             </div>
 
-            <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-foreground">
-              <input
-                type="checkbox"
-                checked={formData.showName}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, showName: e.target.checked }))
-                }
-                disabled={isSubmitting}
-                className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
-              />
-              Show collection name in rendered output
-            </label>
           </fieldset>
 
           {/* ──────────────────── RECOMMENDATION (if any) ─────────────────── */}
@@ -761,11 +657,7 @@ export default function CollectionForm({ id }: { id?: string }) {
                             <img
                               src={item.imageUrl}
                               alt=""
-                              className={`h-9 w-9 shrink-0 border border-border bg-background object-cover ${
-                                formData.display.cardShape === "circle"
-                                  ? "rounded-full"
-                                  : "rounded-md"
-                              }`}
+                              className="h-9 w-9 shrink-0 rounded-md border border-border bg-background object-cover"
                             />
                           ) : (
                             <div className="h-9 w-9 shrink-0 rounded-md border border-border bg-muted/40" />
@@ -793,95 +685,12 @@ export default function CollectionForm({ id }: { id?: string }) {
             )}
           </fieldset>
 
-          {/* ─────────────────────── PRESENTATION ─────────────────────── */}
+                    {/* ─────────────────────── SORTING ─────────────────────── */}
           <fieldset className={fieldsetCls}>
-            <legend className={legendCls}>Presentation</legend>
-
-            <p className={helperCls}>
-              Applied when this collection renders on its own (e.g.{" "}
-              <code className="text-foreground">/catalog/collections</code>).
-              Content Blocks override these with their own display settings.
-            </p>
-
-            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-              <Field label="Layout">
-                <select
-                  name="display.layout"
-                  className={inputCls}
-                  value={formData.display.layout}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                >
-                  {DISPLAY_LAYOUTS.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Card shape">
-                <select
-                  name="display.cardShape"
-                  className={inputCls}
-                  value={formData.display.cardShape}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                >
-                  {CARD_SHAPES.map((s) => (
-                    <option key={s} value={s}>
-                      {CARD_SHAPE_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
-              <Field label="Columns">
-                <input
-                  type="number"
-                  name="display.columns"
-                  min={1}
-                  max={6}
-                  className={inputCls}
-                  value={formData.display.columns}
-                  onChange={handleChange}
-                  disabled={
-                    isSubmitting ||
-                    formData.display.layout === "carousel" ||
-                    formData.display.layout === "list"
-                  }
-                />
-              </Field>
-              <Field label="Gap (px)">
-                <input
-                  type="number"
-                  name="display.gap"
-                  min={0}
-                  max={64}
-                  className={inputCls}
-                  value={formData.display.gap}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                />
-              </Field>
-              <Field label="Images">
-                <select
-                  name="display.showImages"
-                  className={inputCls}
-                  value={formData.display.showImages ? "true" : "false"}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                >
-                  <option value="true">Show</option>
-                  <option value="false">Hide</option>
-                </select>
-              </Field>
-            </div>
+            <legend className={legendCls}>Sorting</legend>
 
             {formData.type === "rule" && (
-              <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Sort field">
                   <input
                     type="text"
@@ -907,56 +716,6 @@ export default function CollectionForm({ id }: { id?: string }) {
                 </Field>
               </div>
             )}
-
-            <div className="space-y-4 border-t border-border pt-4">
-              <Field label="CTA style">
-                <select
-                  name="ctaStyle"
-                  className={inputCls}
-                  value={formData.ctaStyle}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                >
-                  {CTA_STYLES.map((s) => (
-                    <option key={s} value={s}>
-                      {CTA_STYLE_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-                <Field label="CTA text">
-                  <input
-                    type="text"
-                    name="ctaText"
-                    className={inputCls}
-                    value={formData.ctaText}
-                    onChange={handleChange}
-                    disabled={isSubmitting || formData.ctaStyle === "none"}
-                    placeholder="e.g. See all"
-                  />
-                </Field>
-                <Field label="CTA link">
-                  <input
-                    type="text"
-                    name="ctaLink"
-                    className={inputCls}
-                    value={formData.ctaLink}
-                    onChange={handleChange}
-                    disabled={isSubmitting || formData.ctaStyle === "none"}
-                    placeholder="/products or https://…"
-                  />
-                </Field>
-              </div>
-
-              {formData.ctaStyle !== "none" &&
-                (!formData.ctaText.trim() || !formData.ctaLink.trim()) && (
-                  <p className="text-[13px] text-destructive">
-                    Both text and link are required for the CTA to render.
-                  </p>
-                )}
-            </div>
 
             <div className="space-y-2 border-t border-border pt-4">
               <label className={labelCls}>Cover image</label>

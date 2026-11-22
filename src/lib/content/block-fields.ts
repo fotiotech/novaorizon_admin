@@ -45,7 +45,34 @@ export const DISPLAY_PRESENTATION_FIELDS: Record<BlockDisplay, readonly string[]
     "rounded",
     "shadow",
   ],
-  banner: [],
+  slides: [
+    "cardRatio",
+    "titlePosition",
+    "imagePosition",
+    "borderless",
+    "rounded",
+    "shadow",
+    "alignment",
+  ],
+  bento: [
+    "titlePosition",
+    "imagePosition",
+    "borderless",
+    "rounded",
+    "shadow",
+    "alignment",
+  ],
+  masonry: [
+    "columns",
+    "cardRatio",
+    "titlePosition",
+    "borderless",
+    "rounded",
+    "shadow",
+    "alignment",
+  ],
+  // Compact rectangles with a centred logo and title (chips/tiles).
+  tiles: ["columns", "borderless", "rounded", "shadow"],
 };
 
 export const SOURCE_PRESENTATION_FIELDS: Record<BlockSourceType, readonly string[]> = {
@@ -53,7 +80,6 @@ export const SOURCE_PRESENTATION_FIELDS: Record<BlockSourceType, readonly string
   collection: ["showItemCount", "countPosition"],
   promotion: ["badgeStyle", "showCode"],
   category: [],
-  banner: [],
 };
 
 export function displayFieldsFor(display: string): Set<string> {

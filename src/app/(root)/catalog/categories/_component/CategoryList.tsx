@@ -33,7 +33,6 @@ interface CategoryNode {
   parentId?: string | null;
   imageUrl?: string[];
   property?: CategoryPropertyRef | string | null;
-  hasInheritedSnapshot?: boolean;
   inheritProperty?: boolean;
   subcategories?: CategoryNode[];
 }
@@ -262,8 +261,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
       const hasChildren = (childrenCountById.get(row._id) ?? 0) > 0;
       const own = asPropertyRef(row.property);
       const inheriting = !!row.inheritProperty && !!getParentId(row);
-      const isInherited = inheriting && !!row.hasInheritedSnapshot;
-      const pendingSync = inheriting && !row.hasInheritedSnapshot;
+      const isInherited = inheriting;
       const productCount = productCounts[row._id] ?? 0;
       const childCount = childrenCountById.get(row._id) ?? 0;
       return {
@@ -271,7 +269,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
         hasChildren,
         own,
         isInherited,
-        pendingSync,
         productCount,
         childCount,
       };
@@ -517,7 +514,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                   hasChildren,
                   own,
                   isInherited,
-                  pendingSync,
                   productCount,
                   childCount,
                 }) => (
@@ -589,8 +585,7 @@ const CategoryList: React.FC<CategoryListProps> = ({
                     hasChildren ||
                     productCount > 0 ||
                     own ||
-                    isInherited ||
-                    pendingSync ? (
+                    isInherited ? (
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-[4.25rem]">
                         {showParentColumn && row.parentName && (
                           <span
@@ -640,17 +635,9 @@ const CategoryList: React.FC<CategoryListProps> = ({
                         {isInherited && (
                           <span
                             className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                            title="Merged from ancestors + own property (own wins)"
+                            title="Merged from ancestor categories + own property (own wins)"
                           >
                             Inherited
-                          </span>
-                        )}
-                        {pendingSync && (
-                          <span
-                            className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                            title="Inheritance is on. The snapshot is generated automatically."
-                          >
-                            Pending sync
                           </span>
                         )}
                       </div>
@@ -704,7 +691,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                       hasChildren,
                       own,
                       isInherited,
-                      pendingSync,
                       productCount,
                       childCount,
                     }) => (
@@ -838,14 +824,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                                   title="Merged from ancestors + own property (own wins)"
                                 >
                                   Inherited
-                                </span>
-                              )}
-                              {pendingSync && (
-                                <span
-                                  className="flex-none rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                                  title="Inheritance is on. The snapshot is generated automatically."
-                                >
-                                  Pending sync
                                 </span>
                               )}
                             </span>

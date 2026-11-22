@@ -1219,8 +1219,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-4xl overflow-x-clip">
-        <div className="overflow-hidden rounded-lg bg-muted/50 dark:bg-card">
-          <div className="px-3 py-3 sm:px-4">
+        <div className="overflow-hidden">
+          <div className="">
             <div className="h-5 w-40 animate-pulse rounded bg-muted" />
           </div>
           <div className="space-y-3 p-4">
@@ -1250,22 +1250,17 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const showVariantsToggle = hasVariantConfig && !isFetchingAttributes;
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-4xl flex-col overflow-x-clip">
+    <div className="mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-2xl flex-col overflow-x-clip">
       <form
         onSubmit={handleSubmit}
-        className="flex flex-1 flex-col overflow-clip rounded-lg bg-muted/50 text-foreground dark:bg-card"
+        className="flex flex-1 flex-col overflow-clip text-foreground"
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-3 py-3 sm:px-4">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <h1 className="text-sm font-semibold text-foreground">
               {initialProductId ? "Edit product" : "New product"}
             </h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {renderSteps.length > 0
-                ? `Step ${currentStep + 1} of ${renderSteps.length}`
-                : "Fill in product details"}
-            </p>
           </div>
           <div className="flex items-center gap-3">
             {!error && (
@@ -1274,29 +1269,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 Auto-saved
               </span>
             )}
-            {showVariantsToggle && (
-              <FormControlLabel
-                control={
-                  <Switch
-                    size="small"
-                    checked={hasVariants}
-                    onChange={(e) => handleToggleVariants(e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label={
-                  <span className="text-xs text-muted-foreground">
-                    Has variants
-                  </span>
-                }
-                sx={{ mr: 0 }}
-              />
-            )}
           </div>
         </div>
 
         {/* Body */}
-        <div className="flex-1 px-4 py-5">
+        <div className="flex-1 py-5">
           {error && (
             <div className="mb-4 rounded-lg bg-destructive/10 p-3.5 text-sm text-destructive">
               {error}
@@ -1395,13 +1372,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 Previous
               </button>
             )}
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {renderSteps.length > 0
+                ? `Step ${currentStep + 1} of ${renderSteps.length}`
+                : "Fill in product details"}
+            </p>
           </div>
-
-          {renderSteps.length > 1 && (
-            <span className="hidden text-xs text-muted-foreground md:inline">
-              Step {currentStep + 1} of {renderSteps.length}
-            </span>
-          )}
 
           {currentStep < renderSteps.length - 1 ? (
             <button

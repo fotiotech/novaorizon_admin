@@ -9,7 +9,6 @@ interface ViewTarget {
   _id: string;
   name: string;
   inheritProperty?: boolean;
-  hasInheritedSnapshot?: boolean;
 }
 
 interface Props {
@@ -108,8 +107,7 @@ export default function PropertyViewerModal({
 
   if (!isOpen || !category) return null;
 
-  const isInherited =
-    !!category.inheritProperty && !!category.hasInheritedSnapshot;
+  const isInherited = !!category.inheritProperty;
 
   const toggleSet = (id: string) => {
     setCollapsed((prev) => {
