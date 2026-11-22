@@ -55,7 +55,7 @@ const LeftSheet: React.FC<LeftSheetProps> = ({
 
       {/* Panel */}
       <div
-        className={`relative ${width} h-full flex flex-col bg-background border-r border-border shadow-2xl ${panelClassName}`}
+        className={`relative ${width} h-full flex flex-col bg-background shadow-2xl ${panelClassName}`}
         style={{ animation: "slideInLeft 0.25s ease-out" }}
       >
         {children}

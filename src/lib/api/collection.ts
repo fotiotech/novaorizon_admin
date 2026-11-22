@@ -17,6 +17,9 @@ export interface ApiCollection {
   status?: string;
   order?: number;
   sort?: { field: string; direction: "asc" | "desc" } | null;
+  ctaText?: string | null;
+  ctaLink?: string | null;
+  ctaStyle?: string;
   recommendationType?: string | null;
   recommendationLimit?: number | null;
   created_at?: string;
@@ -64,13 +67,10 @@ function toMessage(err: any): string {
  * The old server action accepted a FormData built by CollectionForm with
  * dotted keys and JSON-encoded arrays:
  *
- *   display.layout / display.columns / display.gap / display.showImages /
- *   display.cardShape
  *   sort.field / sort.direction
+ *   ctaText / ctaLink / ctaStyle
  *   rules  → JSON string of Rule[]
  *   items  → JSON string of string[]
- *   showName → "true" | "false"
- *   order, recommendationLimit → strings
  *
  * The Express controller reads a plain JSON body with nested `display` /
  * `sort` objects and native arrays / booleans. This adapter bridges the
@@ -90,6 +90,9 @@ function formDataToBackendBody(fd: FormData): Record<string, any> {
     type: raw.type,
     targetType: raw.targetType,
     order: raw.order ? Number(raw.order) : 0,
+    ctaText: raw.ctaText,
+    ctaLink: raw.ctaLink,
+    ctaStyle: raw.ctaStyle,
     recommendationType: raw.recommendationType,
     recommendationLimit: raw.recommendationLimit
       ? Number(raw.recommendationLimit)

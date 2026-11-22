@@ -23,8 +23,10 @@ import {
   COLLECTION_TYPES,
   COLLECTION_MANUAL_LIMIT,
   COLLECTION_LIST_PATH,
+  CTA_STYLES,
   type TargetType,
   type CollectionType,
+  type CtaStyle,
 } from "@/lib/content/collectionTypes";
 
 const MANUAL_ITEM_LIMIT = COLLECTION_MANUAL_LIMIT;
@@ -36,6 +38,12 @@ const TYPE_LABELS: Record<CollectionType, string> = {
   rule: "Rule-based",
   manual: "Manual selection",
   recommendation: "Recommendation",
+};
+
+const CTA_STYLE_LABELS: Record<CtaStyle, string> = {
+  none: "No CTA",
+  link: "Text link",
+  button: "Button",
 };
 
 const TYPE_SUPPORT: Record<CollectionType, (cfg: EntityMetadata) => boolean> = {
@@ -97,6 +105,9 @@ export default function CollectionForm({ id }: { id?: string }) {
     sort: { field: "", direction: "asc" as "asc" | "desc" },
     recommendationType: "",
     recommendationLimit: 10,
+    ctaText: "",
+    ctaLink: "",
+    ctaStyle: "none" as CtaStyle,
   });
 
   const cfg = useMemo(
@@ -145,6 +156,9 @@ export default function CollectionForm({ id }: { id?: string }) {
           },
           recommendationType: d.recommendationType || "",
           recommendationLimit: d.recommendationLimit ?? 10,
+          ctaText: d.ctaText || "",
+          ctaLink: d.ctaLink || "",
+          ctaStyle: (d.ctaStyle as CtaStyle) || "none",
         });
 
         setRules(d.rules?.length ? d.rules : [EMPTY_RULE]);
@@ -319,6 +333,14 @@ export default function CollectionForm({ id }: { id?: string }) {
         }
       }
 
+      if (
+        formData.ctaStyle !== "none" &&
+        (!formData.ctaText.trim() || !formData.ctaLink.trim())
+      ) {
+        setError("A CTA requires both text and a link.");
+        return;
+      }
+
       const fd = new FormData();
       fd.append("name", formData.name);
       fd.append("description", formData.description);
@@ -339,6 +361,9 @@ export default function CollectionForm({ id }: { id?: string }) {
         formData.type === "recommendation" ? formData.recommendationType : "",
       );
       fd.append("recommendationLimit", String(formData.recommendationLimit));
+      fd.append("ctaText", formData.ctaText);
+      fd.append("ctaLink", formData.ctaLink);
+      fd.append("ctaStyle", formData.ctaStyle);
 
       const res = id
         ? await updateCollection(id, fd)
@@ -687,10 +712,9 @@ export default function CollectionForm({ id }: { id?: string }) {
 
                     {/* ─────────────────────── SORTING ─────────────────────── */}
           <fieldset className={fieldsetCls}>
-            <legend className={legendCls}>Sorting</legend>
+            <legend className={legendCls}>Presentation</legend>
 
-            {formData.type === "rule" && (
-              <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Sort field">
                   <input
                     type="text"
@@ -699,7 +723,7 @@ export default function CollectionForm({ id }: { id?: string }) {
                     value={formData.sort.field}
                     onChange={handleChange}
                     placeholder="e.g. trendingRank"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || formData.type !== "rule"}
                   />
                 </Field>
                 <Field label="Direction">
@@ -708,11 +732,62 @@ export default function CollectionForm({ id }: { id?: string }) {
                     className={inputCls}
                     value={formData.sort.direction}
                     onChange={handleChange}
-                    disabled={isSubmitting || !formData.sort.field}
+                    disabled={
+                      isSubmitting ||
+                      formData.type !== "rule" ||
+                      !formData.sort.field
+                    }
                   >
                     <option value="asc">Ascending (1, 2, 3…)</option>
                     <option value="desc">Descending (…, 3, 2, 1)</option>
                   </select>
+                </Field>
+            </div>
+            <p className={helperCls}>
+              Sorting applies to rule-based collections.
+            </p>
+
+            <div className="border-t border-border pt-4">
+              <Field label="CTA style">
+                <select
+                  name="ctaStyle"
+                  className={inputCls}
+                  value={formData.ctaStyle}
+                  onChange={handleChange}
+                  disabled={isSubmitting}
+                >
+                  {CTA_STYLES.map((style) => (
+                    <option key={style} value={style}>
+                      {CTA_STYLE_LABELS[style]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            {formData.ctaStyle !== "none" && (
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+                <Field label="CTA text" required>
+                  <input
+                    type="text"
+                    name="ctaText"
+                    className={inputCls}
+                    value={formData.ctaText}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                    placeholder="e.g. Shop the edit"
+                  />
+                </Field>
+                <Field label="CTA link" required>
+                  <input
+                    type="text"
+                    name="ctaLink"
+                    className={inputCls}
+                    value={formData.ctaLink}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                    placeholder="/products or https://…"
+                  />
                 </Field>
               </div>
             )}
