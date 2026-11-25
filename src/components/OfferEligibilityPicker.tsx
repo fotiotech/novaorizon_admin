@@ -96,3 +96,70 @@ export function OfferEligibilityPicker({
     </section>
   );
 }
+
+/** Controlled offer checklist used before an entity has an id (create mode). */
+export function PendingOfferPicker({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [offers, setOffers] = useState<OfferDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    listOffers()
+      .then((data) => {
+        if (!cancelled) setOffers(data);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("Could not load offers");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggle = (id: string) => {
+    onChange(
+      value.includes(id)
+        ? value.filter((entry) => entry !== id)
+        : [...value, id],
+    );
+  };
+
+  return (
+    <section className="space-y-2 rounded-xl border border-border bg-card p-4">
+      <h3 className="text-sm font-semibold text-foreground">Offers</h3>
+      <p className="text-xs text-muted-foreground">
+        Attach this entity to reusable offers after it is created.
+      </p>
+      {loading ? (
+        <p className="text-xs text-muted-foreground">Loading offers…</p>
+      ) : offers.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No offers yet.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {offers.map((offer) => (
+            <label
+              key={offer._id}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
+            >
+              <input
+                type="checkbox"
+                checked={value.includes(offer._id)}
+                onChange={() => toggle(offer._id)}
+              />
+              {offer.name}
+            </label>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}

@@ -8,7 +8,13 @@ const SESSION_COOKIE = "session_admin";
  * `/auth/sign_up` is deliberately not here — it creates staff accounts
  * and must be admin-gated (bootstrap via curl/mongosh on first run).
  */
-const PUBLIC_PATHS = ["/auth/login", "/auth/error", "/auth/unauthorized"];
+const PUBLIC_PATHS = [
+  "/auth/login",
+  "/auth/error",
+  "/auth/unauthorized",
+  "/auth/verify",
+  "/auth/reset-password",
+];
 
 type AppRole = "customer" | "seller" | "admin" | "support";
 
@@ -65,6 +71,16 @@ export default async function proxy(request: NextRequest) {
 
   const { nextUrl } = request;
   const pathname = nextUrl.pathname;
+
+  // Placements were renamed from "blocks"; keep old links working.
+  if (pathname.startsWith("/channels/store/content/blocks")) {
+    const url = nextUrl.clone();
+    url.pathname = pathname.replace(
+      "/channels/store/content/blocks",
+      "/channels/store/content/placements",
+    );
+    return NextResponse.redirect(url);
+  }
   const cookie = request.cookies.get(SESSION_COOKIE);
 
   console.log(

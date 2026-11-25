@@ -84,13 +84,14 @@ export async function findProductsByBrand(
 /* ---------------------------- mutations ---------------------------- */
 
 /** POST /api/brands — admin only. */
-export async function createBrand(data: BrandInput): Promise<void> {
-  if (!data) return;
-  await api.post("/brands", {
+export async function createBrand(data: BrandInput): Promise<ApiBrand | null> {
+  if (!data) return null;
+  const res = await api.post<{ data: ApiBrand }>("/brands", {
     name: data.name,
     logoUrl: data.logoUrl,
     status: data.status,
   });
+  return res.data?.data ?? null;
 }
 
 /** PATCH /api/brands/:id — admin only. */

@@ -313,7 +313,7 @@ export default function SignupForm() {
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Are you a customer?{" "}
               <Link
-                href="/auth/register"
+                href="/auth/sign_up"
                 className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
               >
                 Sign up here

@@ -697,10 +697,14 @@ export function PromotionComposer({
           ))}
         </select>
         <p className={helperCls}>
-          Offers are created from the product form (percentage, fixed price,
-          BXGY, bundle, free shipping). Selecting one hides the manual
-          calculation below.
+          Offers are created from Marketing → Offers (percentage, fixed price,
+          BXGY, bundle, free shipping). Only active offers are listed.
         </p>
+        {offers.length === 0 && (
+          <p className="text-[12px] text-destructive">
+            No active offers found. Create one in Marketing → Offers first.
+          </p>
+        )}
       </fieldset>
 
       {/* Eligibility */}

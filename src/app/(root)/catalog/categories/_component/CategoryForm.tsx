@@ -11,7 +11,11 @@ import {
 import { fetchCategoryProperties } from "@/lib/api/category-property";
 import { Category as Cat } from "@/constant/types";
 import { useFileUploader } from "@/hooks/useFileUploader";
-import { OfferEligibilityPicker } from "@/components/OfferEligibilityPicker";
+import {
+  OfferEligibilityPicker,
+  PendingOfferPicker,
+} from "@/components/OfferEligibilityPicker";
+import { syncEntityOffers } from "@/lib/api/offer";
 import { toast } from "react-toastify";
 
 // Simple inline validation
@@ -57,6 +61,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   const [inheritProperty, setInheritProperty] = useState<boolean>(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [pendingOfferIds, setPendingOfferIds] = useState<string[]>([]);
 
   // ---------- Searchable parent selector state ----------
   const [parentSearch, setParentSearch] = useState("");
@@ -284,7 +289,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       // Never send `inheritProperty: true` for a root category.
       const effectiveInherit = inheritProperty && canInherit;
 
-      await saveCategory(
+      const saved = await saveCategory(
         {
           _id: categoryData._id,
           name: categoryData.name || "",
@@ -296,6 +301,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         },
         mode === "edit" ? categoryData._id : undefined,
       );
+
+      if (mode === "create" && pendingOfferIds.length > 0) {
+        await syncEntityOffers("category", saved._id, pendingOfferIds);
+      }
 
       onSuccess();
     } catch (err: any) {
@@ -555,7 +564,12 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
       {mode === "edit" && categoryData._id ? (
         <OfferEligibilityPicker kind="category" entityId={categoryData._id} />
-      ) : null}
+      ) : (
+        <PendingOfferPicker
+          value={pendingOfferIds}
+          onChange={setPendingOfferIds}
+        />
+      )}
 
       {/* Media */}
       <fieldset className="space-y-2">

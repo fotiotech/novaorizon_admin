@@ -32,6 +32,22 @@ export async function fetchUsers(): Promise<ApiUser[]> {
   return Array.isArray(res.data?.data) ? res.data.data : [];
 }
 
+/** POST /api/users — admin only */
+export async function createUser(input: {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+}): Promise<ApiUser> {
+  const res = await api.post<{ data: ApiUser }>("/users", input);
+  return res.data.data;
+}
+
+/** DELETE /api/users/:id — admin only */
+export async function deleteUser(id: string): Promise<void> {
+  await api.delete(`/users/${encodeURIComponent(id)}`);
+}
+
 /** GET /api/users/:id — admin only */
 export async function fetchUserById(id: string): Promise<ApiUser> {
   const res = await api.get<{ data: ApiUser }>(`/users/${id}`);

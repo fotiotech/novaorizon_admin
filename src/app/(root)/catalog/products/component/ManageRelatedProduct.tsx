@@ -340,6 +340,16 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
     setRelatedProducts((prev) => prev.filter((rp) => rp.id !== productId));
   };
 
+  const moveRelated = (index: number, delta: number) => {
+    setRelatedProducts((prev) => {
+      const next = [...prev];
+      const target = index + delta;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
   const filteredProducts = useMemo(() => {
     if (!searchTerm.trim()) return products;
     const term = searchTerm.toLowerCase().trim();
@@ -382,8 +392,49 @@ const ManageRelatedProduct: React.FC<ManageRelatedProductProps> = ({
         </div>
       </div>
 
+      {relatedProducts.length > 0 && (
+        <div className="mb-3 rounded-lg border border-border bg-muted/30 p-2">
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+            Display order
+          </p>
+          <ul className="space-y-1">
+            {relatedProducts.map((rp, index) => {
+              const product = products.find((p) => p._id === rp.id);
+              return (
+                <li
+                  key={rp.id}
+                  className="flex items-center gap-2 text-xs text-foreground"
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {index + 1}. {product?.name || rp.id}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => moveRelated(index, -1)}
+                    disabled={index === 0}
+                    className="rounded border border-border px-1.5 py-0.5 disabled:opacity-40"
+                    aria-label="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveRelated(index, 1)}
+                    disabled={index === relatedProducts.length - 1}
+                    className="rounded border border-border px-1.5 py-0.5 disabled:opacity-40"
+                    aria-label="Move down"
+                  >
+                    ↓
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
       {/* Product list */}
-      <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+      <div className="max-h-80 space-y-2 overflow-y-auto p-1">
         {filteredProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-muted/40 py-10 text-center">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">

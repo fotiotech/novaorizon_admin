@@ -14,6 +14,15 @@ import {
 } from "@mui/icons-material";
 import { fetchUserAnalytics, type UserAnalytics } from "@/lib/api/analytics";
 import {
+  createUser,
+  deleteUser,
+  fetchUsers,
+  type ApiUser,
+  type UserRole,
+} from "@/lib/api/users";
+import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
+import { Add, Delete } from "@mui/icons-material";
+import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
@@ -220,13 +229,27 @@ export default function UserDashboard() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "customer" as UserRole,
+  });
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ApiUser | null>(null);
 
   const load = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchUserAnalytics();
+      const [data, list] = await Promise.all([
+        fetchUserAnalytics(),
+        fetchUsers(),
+      ]);
       setUserData(data);
+      setUsers(list);
     } catch (err) {
       console.error("Failed to fetch user data:", err);
       setError(
@@ -245,9 +268,8 @@ export default function UserDashboard() {
 
   // ---------- Filtered list ----------
   const filteredUsers = useMemo(() => {
-    if (!userData?.recentUsers) return [];
     const q = searchQuery.trim().toLowerCase();
-    return userData.recentUsers.filter((user: any) => {
+    return users.filter((user) => {
       const matchesRole = selectedRole === "all" || user.role === selectedRole;
       const matchesStatus =
         selectedStatus === "all" || user.status === selectedStatus;
@@ -257,7 +279,7 @@ export default function UserDashboard() {
         `${user.name ?? user.fullName ?? ""} ${user.email ?? ""}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [userData, selectedRole, selectedStatus, searchQuery]);
+  }, [users, selectedRole, selectedStatus, searchQuery]);
 
   const isFiltering =
     searchQuery.trim() !== "" ||
@@ -317,6 +339,39 @@ export default function UserDashboard() {
     }),
     [userData],
   );
+
+  const submitCreate = async () => {
+    setSaving(true);
+    try {
+      await createUser(createForm);
+      setCreateOpen(false);
+      setCreateForm({
+        name: "",
+        email: "",
+        password: "",
+        role: "customer",
+      });
+      await load();
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message ?? "Could not create the user.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteUser(deleteTarget._id);
+      setDeleteTarget(null);
+      await load();
+    } catch (err: any) {
+      setError(err?.response?.data?.message ?? "Could not delete the user.");
+      setDeleteTarget(null);
+    }
+  };
 
   // ---------- Early states ----------
   if (isLoading) return <Skeleton />;
@@ -412,9 +467,18 @@ export default function UserDashboard() {
           {/* Controls */}
           <div className="flex flex-col gap-3 border-b border-border px-3 py-3 sm:px-4 md:flex-row md:items-center">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-foreground">
-                Recent users
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Users
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setCreateOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground"
+                >
+                  <Add fontSize="inherit" /> New user
+                </button>
+              </div>
               {filteredUsers.length > 0 && (
                 <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                   {filteredUsers.length}
@@ -568,6 +632,14 @@ export default function UserDashboard() {
                                   {displayName}
                                 </p>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(user)}
+                                className="rounded p-1 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                                aria-label={`Delete ${displayName}`}
+                              >
+                                <Delete fontSize="inherit" />
+                              </button>
                             </div>
                           </td>
                           <td className="px-3 py-3 sm:px-4">
@@ -597,7 +669,7 @@ export default function UserDashboard() {
                           </td>
                           <td className="px-3 py-3 sm:px-4">
                             <div className="truncate text-xs text-muted-foreground">
-                              {formatDate(user.joinDate)}
+                              {formatDate(user.createdAt)}
                             </div>
                           </td>
                           <td className="px-3 py-3 sm:px-4">
@@ -670,10 +742,20 @@ export default function UserDashboard() {
                             </span>
                           </div>
 
-                          <p className="mt-2 text-[11px] text-muted-foreground">
-                            Joined {formatDate(user.joinDate)} · Last active{" "}
-                            {formatDate(user.lastActive)}
-                          </p>
+                          <div className="mt-2 flex items-center justify-between">
+                            <p className="text-[11px] text-muted-foreground">
+                              Joined {formatDate(user.createdAt)} · Last active{" "}
+                              {formatDate(user.lastActive)}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(user)}
+                              className="rounded p-1 text-muted-foreground hover:text-destructive"
+                              aria-label={`Delete ${displayName}`}
+                            >
+                              <Delete fontSize="inherit" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </li>
@@ -684,6 +766,88 @@ export default function UserDashboard() {
           </div>
         </section>
       </div>
+
+      {createOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-foreground">
+                Create user
+              </h2>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(false)}
+                className="rounded p-1 text-muted-foreground hover:bg-muted"
+              >
+                <Close fontSize="small" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <input
+                className={INPUT_CLASS}
+                placeholder="Full name"
+                value={createForm.name}
+                onChange={(e) =>
+                  setCreateForm((form) => ({ ...form, name: e.target.value }))
+                }
+              />
+              <input
+                className={INPUT_CLASS}
+                type="email"
+                placeholder="Email"
+                value={createForm.email}
+                onChange={(e) =>
+                  setCreateForm((form) => ({ ...form, email: e.target.value }))
+                }
+              />
+              <input
+                className={INPUT_CLASS}
+                type="password"
+                placeholder="Temporary password (8+ characters)"
+                value={createForm.password}
+                onChange={(e) =>
+                  setCreateForm((form) => ({
+                    ...form,
+                    password: e.target.value,
+                  }))
+                }
+              />
+              <select
+                className={INPUT_CLASS}
+                value={createForm.role}
+                onChange={(e) =>
+                  setCreateForm((form) => ({
+                    ...form,
+                    role: e.target.value as UserRole,
+                  }))
+                }
+              >
+                <option value="customer">Customer</option>
+                <option value="support">Support</option>
+                <option value="seller">Seller</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void submitCreate()}
+                disabled={saving}
+                className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+              >
+                {saving ? "Creating…" : "Create user"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        title="Delete user"
+        message={`Delete ${deleteTarget?.name || deleteTarget?.email || "this user"}? This cannot be undone.`}
+        confirmLabel="Delete"
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }

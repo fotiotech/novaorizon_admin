@@ -3,12 +3,17 @@
 import { useState, useEffect, FormEvent, ChangeEvent } from "react";
 import { getBrands, createBrand, updateBrand, deleteBrand } from "@/lib/api/brand";
 import { Brand } from "@/constant/types";
-import { OfferEligibilityPicker } from "@/components/OfferEligibilityPicker";
+import {
+  OfferEligibilityPicker,
+  PendingOfferPicker,
+} from "@/components/OfferEligibilityPicker";
+import { syncEntityOffers } from "@/lib/api/offer";
 
 const Brands = () => {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [formData, setFormData] = useState<Brand>({ _id: "", name: "", logoUrl: "", status: "active" });
   const [isEditing, setIsEditing] = useState(false);
+  const [pendingOfferIds, setPendingOfferIds] = useState<string[]>([]);
 
   useEffect(() => {
     async function fetchBrands() {
@@ -34,12 +39,16 @@ const Brands = () => {
       if (isEditing) {
         await updateBrand(formData._id as string, formData);
       } else {
-        await createBrand(formData);
+        const created = await createBrand(formData);
+        if (created?._id && pendingOfferIds.length > 0) {
+          await syncEntityOffers("brand", String(created._id), pendingOfferIds);
+        }
       }
       const updatedBrands = await getBrands();
       setBrands(updatedBrands);
       setFormData({ _id: "", name: "", logoUrl: "", status: "active" });
       setIsEditing(false);
+      setPendingOfferIds([]);
     } catch (error) {
       console.error("Error saving brand:", error);
     }
@@ -71,7 +80,14 @@ const Brands = () => {
         <div className="mb-4">
           <OfferEligibilityPicker kind="brand" entityId={String(formData._id)} />
         </div>
-      ) : null}
+      ) : (
+        <div className="mb-4">
+          <PendingOfferPicker
+            value={pendingOfferIds}
+            onChange={setPendingOfferIds}
+          />
+        </div>
+      )}
 
       <ul>
         {brands.map((brand) => (
