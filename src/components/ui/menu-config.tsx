@@ -325,6 +325,11 @@ export const rawMenuConfig = [
         href: "/marketing/promotions",
         icon: <Discount />,
       },
+      {
+        name: "Offers",
+        href: "/marketing/offers",
+        icon: <Discount />,
+      },
       { name: "Coupons", href: "/marketing/coupons", icon: <Discount /> },
       {
         name: "Email/SMS/Push",
@@ -363,8 +368,8 @@ export const rawMenuConfig = [
                 icon: <ImageIcon />,
               },
               {
-                name: "Blocks",
-                href: "/channels/store/content/blocks",
+                name: "Placements",
+                href: "/channels/store/content/placements",
                 icon: <MenuIcon />,
               },
               {
@@ -467,6 +472,7 @@ export const rawMenuConfig = [
     title: "Settings",
     links: [
       { name: "General", href: "/settings/general", icon: <SettingsIcon /> },
+      { name: "Secrets", href: "/settings/secrets", icon: <SettingsIcon /> },
       { name: "Store", href: "/settings/store", icon: <Campaign /> },
       { name: "Checkout", href: "/settings/checkout", icon: <Payment /> },
       {

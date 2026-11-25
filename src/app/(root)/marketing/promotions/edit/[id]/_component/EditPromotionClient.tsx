@@ -68,11 +68,16 @@ export default function EditPromotionClient({
     endDate: p.endDate ? new Date(p.endDate).toISOString().slice(0, 16) : "",
     isActive: p.isActive ?? true,
     priority: p.priority ?? 0,
+    offerId: p.offerId ? String(p.offerId) : "",
     calculationType:
       p.promotionType?.calculationType ?? ("percentage" as const),
     propertyValues,
     scope: {
       appliesTo: p.scope?.appliesTo ?? "all",
+      match: (p.scope?.match === "any" ? "any" : "all") as
+        | "all"
+        | "any",
+      rules: Array.isArray(p.scope?.rules) ? p.scope.rules : [],
       productIds: toIdList(p.scope?.productIds),
       categoryIds: toIdList(p.scope?.categoryIds),
       brandIds: toIdList(p.scope?.brandIds),
@@ -105,6 +110,7 @@ export default function EditPromotionClient({
         products={options.products}
         categories={options.categories}
         brands={options.brands}
+        offers={options.offers}
         onSubmit={(data: any) => updatePromotion(promotionId, data)}
       />
     </div>

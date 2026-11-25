@@ -149,10 +149,11 @@ export default function CampaignSettingsPage() {
   };
 
   const secretName =
-    process.env.NEXT_PUBLIC_FACEBOOK_ADS_SECRET_NAME ||
-    "novaorizon/facebook-ads";
+    process.env.NEXT_PUBLIC_AWS_SECRET_NAME || "novaorizon";
 
-  const awsRegion = process.env.NEXT_PUBLIC_AWS_REGION || "us-east-1";
+  const awsRegion = process.env.NEXT_PUBLIC_AWS_SECRET_REGION ||
+    process.env.NEXT_PUBLIC_AWS_REGION ||
+    "us-east-1";
 
   const secretPanel = `Secret name : ${secretName}
 Region      : ${awsRegion}`;

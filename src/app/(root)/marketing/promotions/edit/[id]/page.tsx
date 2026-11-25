@@ -19,6 +19,8 @@ function normalizeOptions(
     products: Array.isArray(raw?.products) ? raw.products : [],
     categories: Array.isArray(raw?.categories) ? raw.categories : [],
     brands: Array.isArray(raw?.brands) ? raw.brands : [],
+    offers: Array.isArray(raw?.offers) ? raw.offers : [],
+    collections: Array.isArray(raw?.collections) ? raw.collections : [],
   };
 }
 

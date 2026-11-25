@@ -2,7 +2,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import {
+  useForm,
+  Controller,
+  useFieldArray,
+  useWatch,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
@@ -12,6 +17,8 @@ import {
   type CalcFieldDef,
 } from "@/app/lib/validation/calc-fields";
 import { ProductPicker, type ProductOption } from "./ProductPicker";
+import { previewPromotionRules } from "@/lib/api/promotion";
+import { PROMOTION_RULE_FIELDS } from "@/lib/promotion/rule-fields";
 import { EntityPicker, type EntityOption } from "./EntityPicker";
 import FilesUploader from "@/components/FilesUploader";
 import { useFileUploader } from "@/hooks/useFileUploader";
@@ -26,17 +33,36 @@ const schema = z.object({
   endDate: z.string().min(1, "End date is required"),
   isActive: z.boolean().default(true),
   priority: z.number().default(0),
-  calculationType: z.enum([
-    "percentage",
-    "fixed_amount",
-    "buy_x_get_y",
-    "free_shipping",
-    "bundle_discount",
-  ]),
+  offerId: z.string().optional(),
+  calculationType: z
+    .enum([
+      "percentage",
+      "fixed_amount",
+      "buy_x_get_y",
+      "free_shipping",
+      "bundle_discount",
+    ])
+    .optional(),
   propertyValues: z.record(z.string(), z.any()).default({}),
   scope: z
     .object({
-      appliesTo: z.enum(["all", "products", "categories", "brands"]),
+      appliesTo: z.enum([
+        "all",
+        "products",
+        "categories",
+        "brands",
+        "rules",
+      ]),
+      match: z.enum(["all", "any"]).default("all"),
+      rules: z
+        .array(
+          z.object({
+            field: z.string(),
+            operator: z.string(),
+            value: z.any().optional(),
+          }),
+        )
+        .default([]),
       productIds: z.array(z.string()),
       categoryIds: z.array(z.string()),
       brandIds: z.array(z.string()),
@@ -44,6 +70,8 @@ const schema = z.object({
     })
     .default({
       appliesTo: "all",
+      match: "all",
+      rules: [],
       productIds: [],
       categoryIds: [],
       brandIds: [],
@@ -73,6 +101,7 @@ interface Props {
   products?: ProductOption[];
   categories?: EntityOption[];
   brands?: EntityOption[];
+  offers?: { value: string; label: string; sublabel?: string }[];
   onSubmit: (data: FormValues) => Promise<any>;
 }
 
@@ -86,7 +115,7 @@ const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
 const helperCls = "mt-1.5 text-[12px] text-muted-foreground";
 
 const SCOPE_OPTIONS: {
-  value: "all" | "products" | "categories" | "brands";
+  value: "all" | "products" | "categories" | "brands" | "rules";
   label: string;
   hint: string;
 }[] = [
@@ -110,7 +139,75 @@ const SCOPE_OPTIONS: {
     label: "Specific brands",
     hint: "All products from the selected brands.",
   },
+  {
+    value: "rules",
+    label: "Rule-based",
+    hint: "Match products dynamically from product / offer fields.",
+  },
 ];
+
+function RuleValueInput({
+  control,
+  index,
+}: {
+  control: any;
+  index: number;
+}) {
+  const operator = useWatch({
+    control,
+    name: `scope.rules.${index}.operator`,
+  });
+
+  return (
+    <Controller
+      name={`scope.rules.${index}.value`}
+      control={control}
+      render={({ field }) => {
+        if (operator === "$exists") {
+          return (
+            <select
+              className={inputCls}
+              value={field.value === true || field.value === "true" ? "true" : "false"}
+              onChange={(e) => field.onChange(e.target.value === "true")}
+            >
+              <option value="true">Exists</option>
+              <option value="false">Does not exist</option>
+            </select>
+          );
+        }
+
+        if (["$gt", "$gte", "$lt", "$lte"].includes(String(operator))) {
+          return (
+            <input
+              type="number"
+              className={inputCls}
+              placeholder="number"
+              value={field.value ?? ""}
+              onChange={(e) =>
+                field.onChange(
+                  e.target.value === "" ? "" : Number(e.target.value),
+                )
+              }
+            />
+          );
+        }
+
+        return (
+          <input
+            className={inputCls}
+            placeholder={
+              ["$in", "$nin"].includes(String(operator))
+                ? "comma-separated values"
+                : "value"
+            }
+            value={field.value ?? ""}
+            onChange={(e) => field.onChange(e.target.value)}
+          />
+        );
+      }}
+    />
+  );
+}
 
 export function PromotionComposer({
   id,
@@ -120,6 +217,7 @@ export function PromotionComposer({
   products = [],
   categories = [],
   brands = [],
+  offers = [],
   onSubmit,
 }: Props) {
   const router = useRouter();
@@ -145,10 +243,13 @@ export function PromotionComposer({
       endDate: "",
       isActive: true,
       priority: 0,
+      offerId: "",
       calculationType: "percentage",
       propertyValues: {},
       scope: {
         appliesTo: "all",
+        match: "all",
+        rules: [],
         productIds: [],
         categoryIds: [],
         brandIds: [],
@@ -205,7 +306,15 @@ export function PromotionComposer({
   /*                        Existing form logic                          */
   /* ------------------------------------------------------------------ */
 
-  const calcType = watch("calculationType");
+  const calcType = watch("calculationType") ?? "percentage";
+  const selectedOfferId = watch("offerId");
+  const hasOffer = !!selectedOfferId;
+
+  useEffect(() => {
+    if (selectedOfferId) return;
+    const first = offers[0];
+    if (first) setValue("offerId", first.value, { shouldDirty: false });
+  }, [offers, selectedOfferId, setValue]);
   const allCustomers = watch("customerEligibility.allCustomers");
   const scopeAppliesTo = watch("scope.appliesTo");
 
@@ -229,7 +338,7 @@ export function PromotionComposer({
   };
 
   const handleScopeChange = (
-    next: "all" | "products" | "categories" | "brands",
+    next: "all" | "products" | "categories" | "brands" | "rules",
   ) => {
     if (next === scopeAppliesTo) return;
     setValue("scope.appliesTo", next, { shouldDirty: true });
@@ -241,6 +350,37 @@ export function PromotionComposer({
     }
     if (next !== "brands") {
       setValue("scope.brandIds", [], { shouldDirty: true });
+    }
+    if (next !== "rules") {
+      setValue("scope.rules", [], { shouldDirty: true });
+    }
+  };
+
+  const { fields: ruleFields, append: appendRule, remove: removeRule } =
+    useFieldArray({
+      control,
+      name: "scope.rules",
+    });
+  const [rulePreview, setRulePreview] = useState<{
+    count: number;
+    sample: { _id: string; name: string }[];
+  } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  const previewRules = async () => {
+    setPreviewing(true);
+    setRulePreview(null);
+    try {
+      const data = await previewPromotionRules({
+        rules: getValues("scope.rules") ?? [],
+        match: getValues("scope.match") ?? "all",
+        offerId: selectedOfferId || undefined,
+      });
+      setRulePreview({ count: data.count, sample: data.sample });
+    } catch {
+      setSubmitError("Could not preview rules.");
+    } finally {
+      setPreviewing(false);
     }
   };
 
@@ -260,7 +400,12 @@ export function PromotionComposer({
       return;
     }
 
-    if (showScope) {
+    if (!data.offerId) {
+      setSubmitError("Select an offer for this promotion.");
+      return;
+    }
+
+    if (false && showScope) {
       const s = data.scope;
       if (s?.appliesTo === "products" && s.productIds.length === 0) {
         setSubmitError("Select at least one product for this promotion.");
@@ -273,6 +418,13 @@ export function PromotionComposer({
       if (s?.appliesTo === "brands" && s.brandIds.length === 0) {
         setSubmitError("Select at least one brand for this promotion.");
         return;
+      }
+      if (s?.appliesTo === "rules") {
+        const rules = (s.rules ?? []).filter((r: any) => r?.field);
+        if (rules.length === 0) {
+          setSubmitError("Add at least one rule.");
+          return;
+        }
       }
     }
 
@@ -529,161 +681,27 @@ export function PromotionComposer({
         </label>
       </fieldset>
 
-      {/* Calculation */}
+      {/* Offer */}
       <fieldset className={fieldsetCls}>
-        <legend className={legendCls}>Calculation</legend>
-
-        <div>
-          <label className={labelCls}>
-            Discount type <span className="text-destructive">*</span>
-          </label>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {Object.entries(CALC_LABELS).map(([value, label]) => {
-              const selected = calcType === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => handleCalcTypeChange(value)}
-                  className={`flex items-center justify-between rounded-lg border px-3.5 py-2.5 text-left text-[14px] transition ${
-                    selected
-                      ? "border-primary/50 bg-primary/5 text-foreground"
-                      : "border-border bg-background text-foreground/80 hover:bg-muted/40"
-                  }`}
-                >
-                  <span>{label}</span>
-                  {selected && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <input type="hidden" {...register("calculationType")} />
-        </div>
-
-        {activeFields.length > 0 ? (
-          <div className="space-y-4 border-t border-border pt-4">
-            {activeFields.map(renderCalcField)}
-          </div>
-        ) : (
-          <p className={helperCls}>
-            This discount type takes no additional configuration.
-          </p>
-        )}
+        <legend className={legendCls}>Offer</legend>
+        <label className={labelCls}>
+          Reusable offer <span className="text-destructive">*</span>
+        </label>
+        <select className={inputCls} {...register("offerId")}>
+          <option value="">Custom discount (legacy)</option>
+          {offers.map((offer) => (
+            <option key={offer.value} value={offer.value}>
+              {offer.label}
+              {offer.sublabel ? ` — ${offer.sublabel}` : ""}
+            </option>
+          ))}
+        </select>
+        <p className={helperCls}>
+          Offers are created from the product form (percentage, fixed price,
+          BXGY, bundle, free shipping). Selecting one hides the manual
+          calculation below.
+        </p>
       </fieldset>
-
-      {/* Scope */}
-      {showScope && (
-        <fieldset className={fieldsetCls}>
-          <legend className={legendCls}>Applies to</legend>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            {SCOPE_OPTIONS.map((opt) => {
-              const selected = scopeAppliesTo === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => handleScopeChange(opt.value)}
-                  className={`flex items-start justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-left transition ${
-                    selected
-                      ? "border-primary/50 bg-primary/5"
-                      : "border-border bg-background hover:bg-muted/40"
-                  }`}
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span className="text-[14px] font-medium text-foreground">
-                      {opt.label}
-                    </span>
-                    <span className="text-[12px] text-muted-foreground">
-                      {opt.hint}
-                    </span>
-                  </span>
-                  {selected && (
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <input type="hidden" {...register("scope.appliesTo")} />
-
-          {scopeAppliesTo === "products" && (
-            <div>
-              <label className={labelCls}>
-                Products <span className="text-destructive">*</span>
-              </label>
-              <Controller
-                name="scope.productIds"
-                control={control}
-                render={({ field: f }) => (
-                  <ProductPicker
-                    value={Array.isArray(f.value) ? f.value : []}
-                    onChange={(next) => f.onChange(next)}
-                    options={products}
-                    placeholder="Search products…"
-                    emptyMessage="No products match your search."
-                  />
-                )}
-              />
-              <p className={helperCls}>
-                The promotion only applies to the selected products.
-              </p>
-            </div>
-          )}
-
-          {scopeAppliesTo === "categories" && (
-            <div>
-              <label className={labelCls}>
-                Categories <span className="text-destructive">*</span>
-              </label>
-              <Controller
-                name="scope.categoryIds"
-                control={control}
-                render={({ field: f }) => (
-                  <EntityPicker
-                    value={Array.isArray(f.value) ? f.value : []}
-                    onChange={(next) => f.onChange(next)}
-                    options={categories}
-                    placeholder="Search categories…"
-                    emptyMessage="No categories match your search."
-                  />
-                )}
-              />
-              <p className={helperCls}>
-                The promotion applies to every product in the selected
-                categories.
-              </p>
-            </div>
-          )}
-
-          {scopeAppliesTo === "brands" && (
-            <div>
-              <label className={labelCls}>
-                Brands <span className="text-destructive">*</span>
-              </label>
-              <Controller
-                name="scope.brandIds"
-                control={control}
-                render={({ field: f }) => (
-                  <EntityPicker
-                    value={Array.isArray(f.value) ? f.value : []}
-                    onChange={(next) => f.onChange(next)}
-                    options={brands}
-                    placeholder="Search brands…"
-                    emptyMessage="No brands match your search."
-                  />
-                )}
-              />
-              <p className={helperCls}>
-                The promotion applies to every product from the selected brands.
-              </p>
-            </div>
-          )}
-        </fieldset>
-      )}
 
       {/* Eligibility */}
       <fieldset className={fieldsetCls}>

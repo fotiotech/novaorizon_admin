@@ -24,7 +24,7 @@ interface BlockRow {
   };
 }
 
-const LIST_PATH = "/channels/store/content/blocks";
+const LIST_PATH = "/channels/store/content/placements";
 
 /* -------------------------------------------------------------------------- */
 /*                                  Helpers                                   */
@@ -56,7 +56,7 @@ export default function BlocksAdminPage() {
       setLoading(true);
       const res = await getAllBlocks();
       if (res.success) setBlocks(res.data || []);
-      else setError(res.error || "Failed to load blocks");
+      else setError(res.error || "Failed to load placements");
     } catch (err) {
       console.error(err);
       setError("Failed to load blocks");
@@ -92,7 +92,7 @@ export default function BlocksAdminPage() {
       const res = await deleteBlock(id);
       if (res.success) {
         setBlocks((prev) => prev.filter((b) => b._id !== id));
-        setSuccess("Block deleted");
+        setSuccess("Placement deleted");
         setTimeout(() => setSuccess(null), 2000);
       } else {
         setError(res.error || "Failed to delete");
@@ -163,10 +163,10 @@ export default function BlocksAdminPage() {
         <header className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-lg font-semibold sm:text-xl text-gray-900 sm:text-2xl">
-              Content blocks
+              Placements
             </h1>
             <p className="mt-1 text-sm text-gray-600">
-              Blocks are rendered on the storefront in the order shown below.
+              Placements are rendered on the storefront in the order shown below.
             </p>
           </div>
           <Link
@@ -179,7 +179,7 @@ export default function BlocksAdminPage() {
 
         {blocks.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
-            <p className="text-sm text-gray-600">No blocks yet.</p>
+            <p className="text-sm text-gray-600">No placements yet.</p>
             <Link
               href={`${LIST_PATH}/new`}
               className="mt-3 inline-block rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90"

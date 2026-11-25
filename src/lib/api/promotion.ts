@@ -93,6 +93,8 @@ export interface PromotionOptions {
   products: PromotionProductOption[];
   categories: PromotionEntityOption[];
   brands: PromotionEntityOption[];
+  offers: { value: string; label: string; sublabel?: string }[];
+  collections: { value: string; label: string }[];
 }
 
 export interface PromotionListResult {
@@ -115,6 +117,8 @@ export async function getPromotionOptions(): Promise<PromotionOptions> {
     products: Array.isArray(d?.products) ? d.products : [],
     categories: Array.isArray(d?.categories) ? d.categories : [],
     brands: Array.isArray(d?.brands) ? d.brands : [],
+    offers: Array.isArray(d?.offers) ? d.offers : [],
+    collections: Array.isArray(d?.collections) ? d.collections : [],
   };
 }
 
@@ -173,4 +177,22 @@ export async function deletePromotion(
     `/promotions/${encodeURIComponent(id)}`,
   );
   return res.data ?? { success: true };
+}
+
+export interface PromotionRulePreview {
+  count: number;
+  truncated: boolean;
+  sample: { _id: string; name: string; price?: number; image?: string }[];
+}
+
+export async function previewPromotionRules(input: {
+  rules: { field: string; operator: string; value?: any }[];
+  match?: "all" | "any";
+  offerId?: string;
+}): Promise<PromotionRulePreview> {
+  const res = await api.post<{ data: PromotionRulePreview }>(
+    "/promotions/preview",
+    input,
+  );
+  return res.data.data;
 }

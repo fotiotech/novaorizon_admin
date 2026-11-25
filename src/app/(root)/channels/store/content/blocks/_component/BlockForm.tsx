@@ -53,7 +53,7 @@ const fieldsetCls =
   "rounded-xl border border-border bg-card p-4 sm:p-5 space-y-4";
 const legendCls = "px-1.5 text-[13px] font-semibold text-foreground";
 
-const LIST_PATH = "/channels/store/content/blocks";
+const LIST_PATH = "/channels/store/content/placements";
 
 /* -------------------------------------------------------------------------- */
 /*                                  Constants                                 */
@@ -228,7 +228,9 @@ export default function BlockForm({ id }: { id?: string }) {
       setFormData({
         name: d.name ?? "",
         status: d.status === "inactive" ? "inactive" : "active",
-        location: (d.location ?? "Home") as BlockLocation,
+        location: (d.location === "ProductRelated"
+      ? "pdp"
+      : (d.location ?? "Home")) as BlockLocation,
         display: d.display ?? "grid",
         order: Number(d.order) || 0,
         limit: Number(d.limit) || 12,
@@ -408,7 +410,7 @@ export default function BlockForm({ id }: { id?: string }) {
       const res = id ? await updateBlock(id, fd) : await createBlock(fd);
 
       if (res.success) {
-        setSuccess(id ? "Block updated" : "Block created");
+        setSuccess(id ? "Placement updated" : "Placement created");
         setTimeout(() => {
           router.push(LIST_PATH);
           router.refresh();
@@ -469,7 +471,7 @@ export default function BlockForm({ id }: { id?: string }) {
 
         <header className="mb-6">
           <h1 className="text-lg font-semibold sm:text-xl text-foreground">
-            {id ? "Edit block" : "New block"}
+            {id ? "Edit placement" : "New placement"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Place a collection, category, promotion or manual list on a page.
@@ -521,7 +523,7 @@ export default function BlockForm({ id }: { id?: string }) {
                 >
                   {BLOCK_LOCATIONS.map((l) => (
                     <option key={l} value={l}>
-                      {l}
+                      {l === "pdp" ? "PDP (product page)" : l}
                     </option>
                   ))}
                 </select>
@@ -689,7 +691,10 @@ export default function BlockForm({ id }: { id?: string }) {
 
             {sourceType === "promotion" && (
               <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 border-t border-border pt-4">
-                <Field label="Promotion mode">
+                <Field
+                  label="Display"
+                  hint="Choose the products in the promotion, or the promotion itself as a tile."
+                >
                   <select
                     className={inputCls}
                     value={formData.source.promotionMode}
@@ -703,8 +708,8 @@ export default function BlockForm({ id }: { id?: string }) {
                     {PROMOTION_MODES.map((m) => (
                       <option key={m} value={m}>
                         {m === "products"
-                          ? "Products in scope"
-                          : "The promotion itself (tile)"}
+                          ? "Items in promotion scope"
+                          : "Promotion tile"}
                       </option>
                     ))}
                   </select>

@@ -69,9 +69,6 @@ importers:
       '@react-email/components':
         specifier: ^1.0.12
         version: 1.0.12(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@reduxjs/toolkit':
-        specifier: ^2.3.0
-        version: 2.13.0(react-redux@9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1))(react@19.2.8)
       '@tailwindcss/typography':
         specifier: ^0.5.19
         version: 0.5.20(tailwindcss@3.4.19(tsx@4.23.15))
@@ -258,9 +255,6 @@ importers:
       react-i18next:
         specifier: ^15.1.2
         version: 15.7.4(i18next@24.2.3(typescript@5.9.3))(react-dom@19.2.8(react@19.2.8))(react-native@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)(typescript@5.9.3)
-      react-redux:
-        specifier: ^9.1.2
-        version: 9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1)
       react-select:
         specifier: ^5.8.3
         version: 5.10.2(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)
@@ -282,9 +276,6 @@ importers:
       recharts:
         specifier: ^3.1.2
         version: 3.10.1(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react-is@19.3.1)(react@19.2.8)(redux@5.0.1)
-      redux-persist:
-        specifier: ^6.0.0
-        version: 6.0.0(react@19.2.8)(redux@5.0.1)
       resend:
         specifier: ^6.24.0
         version: 6.34.1(@react-email/render@2.0.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
@@ -2471,7 +2462,9 @@ packages:
   '@smithy/core@3.36.0':
     resolution: {integrity: sha512-3hJiwG1F5t1SoXqp/yOCmYXziyx7ZVqF63S5W6YU201e/qwVaHPex+E/3vvyY9a3ORq/b+BydeNZpP2saQ9X2g==}
     engines: {node: '>=18.0.0'}
-    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
+    deprecated: |-
+      Deprecated due to a bug in custom logger data redaction. Upgrade to the latest version. If you used a custom logger with this
+        version, review your logs and rotate any credentials or other secrets. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.5.2':
     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}
@@ -4785,6 +4778,7 @@ packages:
 
   is-recoverable-error@1.0.3:
     resolution: {integrity: sha512-T06goBQXH5WCzWtzuU+kYhT3Ui0d3wgk8n4GR/3n9UjgO6cuphhel+W02ps/Z2PYZB8C+l//XAJk9tR5Txo6/w==}
+    deprecated: This package is archived and deprecated, it will not get any updates.
 
   is-regex@1.2.1:
     resolution: {integrity: sha512-MjYsKHO5O7mCsmRGxWcLWheFqN9DJ/2TmngvjKXihe6efViPqc274+Fx/4fYj/r03+ESvBdTXK0V6tA3rgez1g==}
@@ -5296,6 +5290,7 @@ packages:
 
   mongodb-build-info@1.9.18:
     resolution: {integrity: sha512-QC67WmhbEtLl2r6L/yiwYR2VKMgNrxsCVO6Rx+OD32+gE2bOclGWL7UTOUJqb1c363tHaaGceHtu5WEAnfc6YA==}
+    deprecated: This package is archived and deprecated, it will not get any updates. Use @mongodb-js/mongodb-build-info instead.
 
   mongodb-client-encryption@7.2.1:
     resolution: {integrity: sha512-22N0jk04BFKMvuRNsxts+j5YnbyemV/UPJNp+q55BT0EcTVvoo/ASK71seW300/ryITzyow830HLTsQo0sYf2g==}
@@ -5322,6 +5317,7 @@ packages:
 
   mongodb-redact@1.4.18:
     resolution: {integrity: sha512-Vm0jkxnTgMperlZnp3jaR9rM39xvQ1mOVE9Rx878zJP3zwi5A5wIBpd4xoZVo2fadABVx1tmunmVZsp5TcaS4Q==}
+    deprecated: This package is archived and deprecated, it will not get any updates. Use @mongodb-js/mongodb-redact instead.
 
   mongodb@6.21.0:
     resolution: {integrity: sha512-URyb/VXMjJ4da46OeSXg+puO39XH9DeQpWCslifrRn9JWugy0D+DvvBvkm2WxmHe61O/H19JM66p1z7RHVkZ6A==}
@@ -6260,15 +6256,6 @@ packages:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-is: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-
-  redux-persist@6.0.0:
-    resolution: {integrity: sha512-71LLMbUq2r02ng2We9S215LtPu3fY0KgaGE0k8WRgl6RkqxtGfl7HUozz1Dftwsb0D/5mZ8dwAaPbtnzfvbEwQ==}
-    peerDependencies:
-      react: '>=16'
-      redux: '>4.0.0'
-    peerDependenciesMeta:
-      react:
-        optional: true
 
   redux-thunk@3.1.0:
     resolution: {integrity: sha512-NW2r5T6ksUKXCabzhL9z+h206HQw/NJkcLm1GPImRQ8IzfXwRGqjVhKJGauHirT0DAuyy6hjdnMZaRoAcy0Klw==}
@@ -13968,12 +13955,6 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
       - redux
-
-  redux-persist@6.0.0(react@19.2.8)(redux@5.0.1):
-    dependencies:
-      redux: 5.0.1
-    optionalDependencies:
-      react: 19.2.8
 
   redux-thunk@3.1.0(redux@5.0.1):
     dependencies:

@@ -3,6 +3,7 @@
 import { useState, useEffect, FormEvent, ChangeEvent } from "react";
 import { getBrands, createBrand, updateBrand, deleteBrand } from "@/lib/api/brand";
 import { Brand } from "@/constant/types";
+import { OfferEligibilityPicker } from "@/components/OfferEligibilityPicker";
 
 const Brands = () => {
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -65,6 +66,13 @@ const Brands = () => {
         <input type="url" name="logoUrl" value={formData.logoUrl || ""} onChange={handleInputChange} placeholder="Logo URL" className="p-2 mb-2 rounded-lg w-full bg-transparent" required />
         <button type="submit" className="btn text-sm">{isEditing ? "Update Brand" : "Create Brand"}</button>
       </form>
+
+      {isEditing && formData._id ? (
+        <div className="mb-4">
+          <OfferEligibilityPicker kind="brand" entityId={String(formData._id)} />
+        </div>
+      ) : null}
+
       <ul>
         {brands.map((brand) => (
           <li key={brand._id} className="flex justify-between mb-2">

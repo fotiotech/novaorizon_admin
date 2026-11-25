@@ -11,6 +11,7 @@ import {
 import { fetchCategoryProperties } from "@/lib/api/category-property";
 import { Category as Cat } from "@/constant/types";
 import { useFileUploader } from "@/hooks/useFileUploader";
+import { OfferEligibilityPicker } from "@/components/OfferEligibilityPicker";
 import { toast } from "react-toastify";
 
 // Simple inline validation
@@ -551,6 +552,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
           )}
         </div>
       </fieldset>
+
+      {mode === "edit" && categoryData._id ? (
+        <OfferEligibilityPicker kind="category" entityId={categoryData._id} />
+      ) : null}
 
       {/* Media */}
       <fieldset className="space-y-2">

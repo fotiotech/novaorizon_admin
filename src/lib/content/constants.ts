@@ -5,7 +5,7 @@ export type { CardShape, CtaStyle } from "./collectionTypes";
 
 /* ----------------------------- Block location ---------------------------- */
 
-export const BLOCK_LOCATIONS = ["Home", "ProductRelated"] as const;
+export const BLOCK_LOCATIONS = ["Home", "pdp"] as const;
 export type BlockLocation = (typeof BLOCK_LOCATIONS)[number];
 
 /* ------------------------------ Block source ----------------------------- */

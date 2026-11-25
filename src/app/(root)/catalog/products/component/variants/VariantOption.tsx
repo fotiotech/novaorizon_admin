@@ -52,6 +52,13 @@ const builtInVariantFields: Attribute[] = [
   { id: "sku", code: "sku", name: "SKU", type: "text", options: [] },
   { id: "price", code: "price", name: "Price", type: "number", options: [] },
   {
+    id: "listPrice",
+    code: "listPrice",
+    name: "List price",
+    type: "number",
+    options: [],
+  },
+  {
     id: "quantity",
     code: "quantity",
     name: "Quantity",
@@ -63,6 +70,13 @@ const builtInVariantFields: Attribute[] = [
     code: "lowStockThreshold",
     name: "Low stock",
     type: "number",
+    options: [],
+  },
+  {
+    id: "images",
+    code: "images",
+    name: "Images",
+    type: "file",
     options: [],
   },
 ];
@@ -179,16 +193,9 @@ const ImagePreviewGrid: React.FC<{ files: string[] }> = ({ files }) => {
 };
 
 const VariantsManager: React.FC<VariantsManagerProps> = memo(
-  ({ productId, product, attributes = [], variantFields = [], onUpdate }) => {
-    // ---- Merged variant fields (user-defined + built-ins) --------------
-    const allVariantFields = useMemo(() => {
-      const existing = new Set(variantFields.map((f) => normalizeCode(f.code)));
-      const merged = [...variantFields];
-      builtInVariantFields.forEach((f) => {
-        if (!existing.has(normalizeCode(f.code))) merged.push(f);
-      });
-      return merged;
-    }, [variantFields]);
+  ({ productId, product, attributes = [], onUpdate }) => {
+    // Variant fields are fixed built-ins; specifications only define axes.
+    const allVariantFields = builtInVariantFields;
 
     // ---- Variants straight from the product (no local mirror) ----------
     const savedVariants = useMemo<any[]>(() => {

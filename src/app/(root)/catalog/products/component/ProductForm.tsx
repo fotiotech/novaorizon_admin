@@ -33,14 +33,12 @@ import {
   getProductDraft,
   deleteProductDraft,
 } from "@/lib/api/product-draft";
-import {
-  getSelectablePromotions,
-  getProductPromotions,
-  syncProductPromotions,
-} from "@/lib/api/promotion";
 
 import { AttributeField } from "@/app/(root)/catalog/products/component/AttributeFields";
 import ManageRelatedProduct from "./ManageRelatedProduct";
+import { ProductGeneralFields } from "./ProductGeneralFields";
+import { ProductOffersSection } from "./ProductOffersSection";
+import { ProductMerchandisingPanel } from "./ProductMerchandisingPanel";
 import VariantsManager from "@/app/(root)/catalog/products/component/variants/VariantOption";
 import { isValidBarcode } from "@/app/lib/products/barcode";
 import { ConfirmDialog } from "@/components/ux/ConfirmDialog";
@@ -103,15 +101,53 @@ type VariantsStep = {
   sortOrder: number;
 };
 
-type RenderStep = AttributeStep | VariantsStep;
+type GeneralStep = {
+  kind: "general";
+  id: typeof GENERAL_STEP_ID;
+  title: string;
+  sortOrder: number;
+};
+
+type MarketingStep = {
+  kind: "marketing";
+  id: typeof MARKETING_STEP_ID;
+  title: string;
+  sortOrder: number;
+};
+
+type RenderStep = GeneralStep | MarketingStep | AttributeStep | VariantsStep;
 
 const VARIANTS_STEP_ID = "__variants__";
+/** Dynamic sets rendered in their own steps. */
+const DYNAMIC_SET_CODES = new Set([
+  "identification",
+  "specifications",
+  "inventory",
+]);
+
+const GENERAL_STEP_ID = "__general__";
+const MARKETING_STEP_ID = "__marketing__";
+/** Groups rendered by the Variants step instead of the attribute steps. */
 const VARIANT_GROUP_CODES = new Set([
   "variantThemes",
   "variantFields",
   "variants",
-  "inventory",
 ]);
+
+/** Sets that configure the store, not an individual product. */
+const STORE_LEVEL_SET_CODES = new Set([
+  "logisticsandshipping",
+  "logistics",
+  "shipping",
+]);
+
+/** Explicit order for the product-form set roles. */
+const SET_ROLE_ORDER: Record<string, number> = {
+  identification: 0,
+  specifications: 1,
+  inventory: 2,
+  marketing: 3,
+};
 
 // The set/attribute pair that maps to the promotion write-back UI.
 const MARKETING_SET_CODE = "marketing";
@@ -207,16 +243,29 @@ function getGroupRelevantKeys(group: GroupNode): string[] {
   return keys;
 }
 
-function stripVariantGroups(groups: GroupNode[]): GroupNode[] {
+function stripVariantGroups(
+  groups: GroupNode[],
+  hasVariants = false,
+): GroupNode[] {
   return groups
-    .filter((g) => !VARIANT_GROUP_CODES.has(normalizeCode(g.code)))
+    .filter((g) => {
+      const code = normalizeCode(g.code);
+      if (VARIANT_GROUP_CODES.has(code)) return false;
+      // Inventory is per-variant when variants exist; otherwise it is the
+      // product's own stock section (per-category).
+      if (hasVariants && code === "inventory") return false;
+      return true;
+    })
     .map((g) => ({
       ...g,
-      // Attributes flagged as variant axes only belong in the Variants step.
-      attributes: g.attributes.filter(
-        (a) => a.isVariant !== true && a.isVariantAttribute !== true,
-      ),
-      children: stripVariantGroups(g.children || []),
+      // When variants exist, flagged attributes only belong in the Variants
+      // step. Without variants they are ordinary product fields.
+      attributes: hasVariants
+        ? g.attributes.filter(
+            (a) => a.isVariant !== true && a.isVariantAttribute !== true,
+          )
+        : g.attributes,
+      children: stripVariantGroups(g.children || [], hasVariants),
     }))
     .filter((g) => g.attributes.length > 0 || g.children.length > 0);
 }
@@ -472,9 +521,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [units, setUnits] = useState<any[]>([]);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
 
-  // Promotion picker state
-  const [promotionOptions, setPromotionOptions] = useState<EntityOption[]>([]);
-  const promotionsInitializedRef = useRef(false);
 
   const currentStepRef = useRef(currentStep);
   const stepperViewportRef = useRef<HTMLDivElement | null>(null);
@@ -623,15 +669,74 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
         const sets = await fetchCategoryAttributeSets(productData.categoryId);
 
+        // Product relationships can be mapped from any set. Pull the group out
+        // of its set so the section always renders, regardless of set role.
+        const relationshipGroups: GroupNode[] = [];
         const sortedSets: AttributeSetStep[] = [...sets]
           .map((s) => ({
             id: s.id,
             title: s.title,
             code: s.code,
             sortOrder: typeof s.sortOrder === "number" ? s.sortOrder : 0,
-            groups: s.groups as GroupNode[],
+            groups: (s.groups as GroupNode[]).filter((group) => {
+              if (normalizeCode(group.code) === "productRelationships") {
+                relationshipGroups.push(group);
+                return false;
+              }
+              return true;
+            }),
           }))
-          .sort((a, b) => a.sortOrder - b.sortOrder);
+          // Only these dynamic sets feed the wizard; general and marketing
+          // are structured in the form, not read from category properties.
+          .filter((s) => DYNAMIC_SET_CODES.has(normalizeCode(s.code)))
+          .sort((a, b) => {
+            const ra = SET_ROLE_ORDER[normalizeCode(a.code)] ?? 50;
+            const rb = SET_ROLE_ORDER[normalizeCode(b.code)] ?? 50;
+            return ra - rb || a.sortOrder - b.sortOrder;
+          });
+
+        sortedSets.push({
+          id: "__relationships__",
+          title: "Relationships",
+          code: "relationships",
+          sortOrder: 900,
+          groups:
+            relationshipGroups.length > 0
+              ? relationshipGroups
+              : [
+                  {
+                    id: "__relationships_fallback__",
+                    code: "productRelationships",
+                    name: "Relationships",
+                    parentId: null,
+                    sortOrder: 0,
+                    children: [],
+                    attributes: [
+                      {
+                        id: "__related_products__",
+                        code: "relatedProducts",
+                        name: "Related products",
+                        type: "text",
+                        options: [],
+                        sortOrder: 0,
+                      },
+                      {
+                        id: "__relationship_type__",
+                        code: "relationType",
+                        name: "Relationship type",
+                        type: "select",
+                        options: [
+                          "related",
+                          "upsell",
+                          "cross_sell",
+                          "accessory",
+                        ],
+                        sortOrder: 1,
+                      },
+                    ],
+                  },
+                ],
+        });
 
         setSteps(sortedSets);
         setCurrentStep(0);
@@ -690,10 +795,15 @@ const ProductForm: React.FC<ProductFormProps> = ({
         walk(group.children ?? []);
       }
     };
-    steps.forEach((step) => walk(step.groups));
+    // Variant axes are derived from the *specifications* set only. If a
+    // category has no explicit specifications set, fall back to all sets for
+    // backwards compatibility.
+    const specificationSet = steps.find(
+      (s) => normalizeCode(s.code) === "specifications",
+    );
+    const sources = specificationSet ? [specificationSet] : steps;
+    sources.forEach((step) => walk(step.groups));
 
-    // Backwards compatibility: properties authored with a group named
-    // "variantThemes" before the flag existed.
     if (flagged.length === 0) return variantThemesGroup?.attributes ?? [];
     return flagged;
   }, [steps, variantThemesGroup]);
@@ -753,92 +863,52 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const hasVariantConfig = variantThemes.length > 0;
 
   // ================================================================== //
-  // Promotions — detected inside the "marketing" set                   //
-  // ================================================================== //
-  const promotionAttributeId = useMemo(() => {
-    const marketingSet = steps.find(
-      (s) => normalizeCode(s.code) === MARKETING_SET_CODE,
-    );
-    if (!marketingSet) return null;
-    const attr = findAttributeByCode(marketingSet.groups, PROMOTIONS_ATTR_CODE);
-    return attr?.id ?? null;
-  }, [steps]);
-
-  // Load the selectable promotions once we know the picker is present.
-  useEffect(() => {
-    if (!promotionAttributeId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const options = await getSelectablePromotions();
-        if (!cancelled) setPromotionOptions(options);
-      } catch (err) {
-        console.error("Failed to load promotions", err);
-        if (!cancelled) setPromotionOptions([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [promotionAttributeId]);
-
-  // For existing products, seed the picker from the promotion side.
-  // New products start empty; the draft mechanism preserves the choice.
-  useEffect(() => {
-    if (loading) return;
-    if (!initialProductId) return;
-    if (!promotionAttributeId) return;
-    if (promotionsInitializedRef.current) return;
-
-    // A draft may already carry a promotions array — respect it.
-    if (productData.promotions !== undefined) {
-      promotionsInitializedRef.current = true;
-      return;
-    }
-
-    promotionsInitializedRef.current = true;
-    let cancelled = false;
-    (async () => {
-      try {
-        const ids = await getProductPromotions(initialProductId);
-        if (!cancelled) {
-          setProductData((prev) =>
-            prev.promotions !== undefined ? prev : { ...prev, promotions: ids },
-          );
-        }
-      } catch (err) {
-        console.error("Failed to load product promotions", err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loading, initialProductId, promotionAttributeId, productData.promotions]);
+  // Promotions are managed in the PromotionComposer, not the product form.
+  const promotionAttributeId: string | null = null;
+  const promotionOptions: EntityOption[] = [];
 
   // ------------------------------------------------------------------ //
   // Build renderable steps                                             //
   // ------------------------------------------------------------------ //
   const renderSteps = useMemo<RenderStep[]>(() => {
     const attributeSteps: AttributeStep[] = steps
-      .map<AttributeStep>((step) => ({
+      .filter(
+        (step) =>
+          !(
+            hasVariants && normalizeCode(step.code) === "inventory"
+          ),
+      )
+      .map<AttributeStep>((step, index) => ({
         kind: "attributes",
         id: step.id,
         title: step.title,
-        sortOrder: step.sortOrder ?? 0,
-        groups: stripVariantGroups(step.groups),
+        sortOrder: SET_ROLE_ORDER[normalizeCode(step.code)] ?? 50 + index,
+        groups: stripVariantGroups(step.groups, hasVariants),
       }))
       .filter((s) => s.groups.length > 0);
 
-    const list: RenderStep[] = [...attributeSteps].sort(
-      (a, b) => a.sortOrder - b.sortOrder,
-    );
+    const list: RenderStep[] = ([
+      {
+        kind: "general",
+        id: GENERAL_STEP_ID,
+        title: "General",
+        sortOrder: 0.5,
+      },
+      ...attributeSteps,
+      {
+        kind: "marketing",
+        id: MARKETING_STEP_ID,
+        title: "Marketing",
+        sortOrder: 1000,
+      },
+    ] as RenderStep[]).sort((a, b) => a.sortOrder - b.sortOrder);
 
     if (hasVariants && hasVariantConfig) {
       list.push({
         kind: "variants",
         id: VARIANTS_STEP_ID,
         title: "Variants",
-        sortOrder: Number.MAX_SAFE_INTEGER,
+        sortOrder: 2000,
       });
     }
 
@@ -958,6 +1028,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
           allErrors["variants"] = errs;
           hasErrors = true;
         }
+      } else if (
+        step.kind === "general" ||
+        step.kind === "marketing"
+      ) {
+        continue;
       } else {
         for (const group of step.groups) {
           const errs = validateGroup(group);
@@ -991,6 +1066,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
       } else {
         delete newErrors["variants"];
       }
+    } else if (
+      step.kind === "general" ||
+      step.kind === "marketing"
+    ) {
+      // Structured steps have no attribute groups.
     } else {
       step.groups.forEach((group) => {
         const errs = validateGroup(group);
@@ -1060,11 +1140,18 @@ const ProductForm: React.FC<ProductFormProps> = ({
       return;
     }
 
+    if (!String(productData.name ?? "").trim()) {
+      setError("Product name is required.");
+      setCurrentStep(0);
+      return;
+    }
+
     const { ok, errors } = validateAllSteps();
     if (!ok) {
       let firstErrorStep = 0;
       for (let i = 0; i < renderSteps.length; i++) {
         const step = renderSteps[i];
+        if (step.kind === "general" || step.kind === "marketing") continue;
         const stepHasError =
           step.kind === "variants"
             ? (errors["variants"]?.length ?? 0) > 0
@@ -1091,16 +1178,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
     try {
       const payload = { ...productData };
 
-      // Promotions are promotion-owned. Pull them out of the product
-      // payload and apply them to the promotion side after save.
-      const selectedPromotions = Array.isArray(payload.promotions)
-        ? (payload.promotions as string[])
-        : [];
-      const shouldSyncPromotions = promotionAttributeId !== null;
+      // Promotions are composer-owned; the product form never edits them.
       delete payload.promotions;
 
       delete payload.specifications;
-      payload.status = "active";
+      payload.status =
+        productData.status === "draft" || productData.status === "inactive"
+          ? productData.status
+          : "active";
 
       delete payload._id;
       delete payload.Id;
@@ -1155,26 +1240,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
         : await createProduct(payload);
 
       if (res.success) {
-        // Reconcile promotion scope now that we have a real product ID.
-        if (shouldSyncPromotions) {
-          const savedId =
-            existingId ||
-            (res as any).data?._id?.toString?.() ||
-            (res as any).product?._id?.toString?.() ||
-            (res as any)._id?.toString?.();
-          if (savedId) {
-            try {
-              await syncProductPromotions(savedId, selectedPromotions);
-            } catch (syncErr) {
-              console.error("Promotion sync failed", syncErr);
-              toast.error(
-                "Product saved, but promotion updates failed. Please retry.",
-                { id: toastId, duration: 6000 },
-              );
-            }
-          }
-        }
-
         toast.success(
           isUpdate
             ? "Product updated successfully!"
@@ -1308,7 +1373,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     const hasError =
                       step.kind === "variants"
                         ? (validationErrors["variants"]?.length ?? 0) > 0
-                        : step.groups.some(
+                        : step.kind === "general" ||
+                            step.kind === "marketing"
+                          ? false
+                          : step.groups.some(
                             (g) =>
                               validationErrors[g.id] &&
                               validationErrors[g.id].length > 0,
@@ -1323,7 +1391,41 @@ const ProductForm: React.FC<ProductFormProps> = ({
               </div>
 
               <div className="space-y-4">
-                {activeStep?.kind === "variants" ? (
+                {activeStep?.kind === "general" ? (
+                  <ProductGeneralFields
+                    productId={productId}
+                    productData={productData}
+                    onChange={(patch) =>
+                      setProductData((prev) => ({ ...prev, ...patch }))
+                    }
+                  />
+                ) : activeStep?.kind === "marketing" ? (
+                  <div className="space-y-4">
+                    <ProductMerchandisingPanel
+                      productData={productData}
+                      onChange={(patch) =>
+                        setProductData((prev) => ({ ...prev, ...patch }))
+                      }
+                    />
+
+                    <ProductOffersSection
+                      productId={
+                        initialProductId ||
+                        (typeof productData._id === "string"
+                          ? productData._id
+                          : undefined)
+                      }
+                      offerIds={
+                        Array.isArray(productData.offerIds)
+                          ? productData.offerIds
+                          : []
+                      }
+                      onChange={(ids) =>
+                        setProductData((prev) => ({ ...prev, offerIds: ids }))
+                      }
+                    />
+                  </div>
+                ) : activeStep?.kind === "variants" ? (
                   <VariantsManager
                     productId={productId}
                     product={productData}
@@ -1417,4 +1519,4 @@ const ProductForm: React.FC<ProductFormProps> = ({
   );
 };
 
-export default memo(ProductForm);
+export default ProductForm;

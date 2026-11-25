@@ -36,6 +36,7 @@ export default function CreatePromotionClient({
         products={initialOptions.products}
         categories={initialOptions.categories}
         brands={initialOptions.brands}
+        offers={initialOptions.offers}
         onSubmit={createPromotion}
       />
     </div>

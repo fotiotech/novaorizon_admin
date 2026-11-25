@@ -1,223 +1,136 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+"use client";
+
+import { useEffect, useState } from "react";
 import {
-  getCart,
   addToCart,
-  updateCartItem,
-  removeFromCart,
   clearCart,
-  applyDiscount,
+  getCart,
+  removeFromCart,
+  updateCartItem,
+  type ApiCart,
+  type CartIdentifier,
 } from "@/lib/api/cart";
 
-interface CartItem {
-  _id: string;
-  productId: string;
-  name?: string;
-  image?: string;
-  variant?: string;
-  quantity: number;
-  price: number;
-  taxRate: number;
-  discount: number;
-  totalPrice: number;
-}
-
+/**
+ * Minimal POS cart store. Replaces the removed Redux slice: a module-level
+ * state object with subscriptions, so the POS page keeps its original API.
+ */
 interface POSState {
-  cartId?: string;
-  items: CartItem[];
-  subtotal: number;
-  tax: number;
-  discount: number;
-  shippingCost: number;
-  total: number;
-  currency: string;
-  appliedCoupon?: string;
-  userId?: string;
-  sessionId?: string;
+  cart: ApiCart | null;
   isLoading: boolean;
   error: string | null;
-
-  // Actions
-  loadCart: (identifier: {
-    userId?: string;
-    sessionId?: string;
-  }) => Promise<void>;
-  addItem: (productId: string, variant?: string, qty?: number) => Promise<void>;
-  updateItem: (itemId: string, quantity: number) => Promise<void>;
-  removeItem: (itemId: string) => Promise<void>;
-  clear: () => Promise<void>;
-  applyDiscount: (value: number, coupon?: string) => Promise<void>;
-  reset: () => void;
 }
 
-export const usePOSStore = create<POSState>()(
-  persist(
-    (set, get) => ({
-      cartId: undefined,
-      items: [],
-      subtotal: 0,
-      tax: 0,
-      discount: 0,
-      shippingCost: 0,
-      total: 0,
-      currency: "USD",
-      appliedCoupon: undefined,
-      userId: undefined,
-      sessionId: undefined,
-      isLoading: false,
-      error: null,
+let state: POSState = { cart: null, isLoading: false, error: null };
+let identifier: CartIdentifier = {};
+const listeners = new Set<() => void>();
 
-      loadCart: async (identifier) => {
-        set({
-          isLoading: true,
-          error: null,
-          userId: identifier.userId,
-          sessionId: identifier.sessionId,
-        });
-        try {
-          const cart: any = await getCart(identifier);
-          if (cart) {
-            set({
-              cartId: cart._id,
-              items: cart.items.map((item: any) => ({
-                ...item,
-                totalPrice: item.price * item.quantity,
-              })),
-              subtotal: cart.subtotal,
-              tax: cart.tax,
-              discount: cart.discount || 0,
-              shippingCost: cart.shippingCost || 0,
-              total: cart.total,
-              currency: cart.currency,
-              appliedCoupon: cart.appliedCoupon,
-              userId: cart.userId || identifier.userId,
-              sessionId: cart.sessionId || identifier.sessionId,
-            });
-          }
-        } catch (error: any) {
-          set({ error: error.message });
-        } finally {
-          set({ isLoading: false });
-        }
-      },
+function setState(patch: Partial<POSState>) {
+  state = { ...state, ...patch };
+  listeners.forEach((listener) => listener());
+}
 
-      addItem: async (productId, variant, qty = 1) => {
-        const { userId, sessionId } = get();
-        if (!userId && !sessionId) return; // should have been set
+function applyCart(cart: ApiCart | null | undefined) {
+  setState({ cart: cart ?? null, error: null });
+}
 
-        set({ isLoading: true, error: null });
-        try {
-          const result = await addToCart(
-            { userId, sessionId },
-            { productId, variant, quantity: qty },
-          );
-          if (result.success && result.cart) {
-            // Re-fetch updated cart from server to keep in sync
-            await get().loadCart({ userId, sessionId });
-          }
-        } catch (error: any) {
-          set({ error: error.message });
-        } finally {
-          set({ isLoading: false });
-        }
-      },
+export function usePOSStore() {
+  const [, force] = useState(0);
 
-      updateItem: async (itemId, quantity) => {
-        const { userId, sessionId } = get();
-        if (!userId && !sessionId) return;
-        set({ isLoading: true, error: null });
-        try {
-          const result = await updateCartItem(
-            { userId, sessionId },
-            itemId,
-            quantity,
-          );
-          if (result.success && result.cart) {
-            await get().loadCart({ userId, sessionId });
-          }
-        } catch (error: any) {
-          set({ error: error.message });
-        } finally {
-          set({ isLoading: false });
-        }
-      },
+  useEffect(() => {
+    const listener = () => force((v) => v + 1);
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
 
-      removeItem: async (itemId) => {
-        const { userId, sessionId } = get();
-        if (!userId && !sessionId) return;
-        set({ isLoading: true, error: null });
-        try {
-          const result = await removeFromCart({ userId, sessionId }, itemId);
-          if (result.success && result.cart) {
-            await get().loadCart({ userId, sessionId });
-          }
-        } catch (error: any) {
-          set({ error: error.message });
-        } finally {
-          set({ isLoading: false });
-        }
-      },
+  const loadCart = async (nextIdentifier: CartIdentifier) => {
+    identifier = nextIdentifier;
+    setState({ isLoading: true, error: null });
+    try {
+      applyCart(await getCart(nextIdentifier));
+    } catch (err: any) {
+      setState({ error: err?.message ?? "Failed to load cart" });
+    } finally {
+      setState({ isLoading: false });
+    }
+  };
 
-      clear: async () => {
-        const { userId, sessionId } = get();
-        if (!userId && !sessionId) return;
-        set({ isLoading: true, error: null });
-        try {
-          await clearCart({ userId, sessionId });
-          await get().loadCart({ userId, sessionId });
-        } catch (error: any) {
-          set({ error: error.message });
-        } finally {
-          set({ isLoading: false });
-        }
-      },
+  const addItem = async (
+    productId: string,
+    variant?: string,
+    quantity = 1,
+  ) => {
+    setState({ isLoading: true, error: null });
+    try {
+      const result = await addToCart(identifier, {
+        productId,
+        variant,
+        quantity,
+      });
+      applyCart(result.cart);
+    } catch (err: any) {
+      setState({ error: err?.message ?? "Failed to add item" });
+      throw err;
+    } finally {
+      setState({ isLoading: false });
+    }
+  };
 
-      applyDiscount: async (value, coupon) => {
-        const { userId, sessionId } = get();
-        if (!userId && !sessionId) return;
-        set({ isLoading: true, error: null });
-        try {
-          const result = await applyDiscount(
-            { userId, sessionId },
-            value,
-            coupon,
-          );
-          if (result.success && result.cart) {
-            await get().loadCart({ userId, sessionId });
-          }
-        } catch (error: any) {
-          set({ error: error.message });
-        } finally {
-          set({ isLoading: false });
-        }
-      },
+  const updateItem = async (itemId: string, quantity: number) => {
+    setState({ isLoading: true, error: null });
+    try {
+      const result = await updateCartItem(identifier, itemId, quantity);
+      applyCart(result.cart);
+    } catch (err: any) {
+      setState({ error: err?.message ?? "Failed to update item" });
+      throw err;
+    } finally {
+      setState({ isLoading: false });
+    }
+  };
 
-      reset: () => {
-        set({
-          cartId: undefined,
-          items: [],
-          subtotal: 0,
-          tax: 0,
-          discount: 0,
-          shippingCost: 0,
-          total: 0,
-          appliedCoupon: undefined,
-          error: null,
-        });
-      },
-    }),
-    {
-      name: "pos-cart", // local storage key for offline resilience
-      partialize: (state) => ({
-        // only persist items and totals as a cache; we'll reload from DB on hydration
-        items: state.items,
-        subtotal: state.subtotal,
-        tax: state.tax,
-        discount: state.discount,
-        total: state.total,
-        appliedCoupon: state.appliedCoupon,
-        cartId: state.cartId,
-      }),
-    },
-  ),
-);
+  const removeItem = async (itemId: string) => {
+    setState({ isLoading: true, error: null });
+    try {
+      const result = await removeFromCart(identifier, itemId);
+      applyCart(result.cart);
+    } catch (err: any) {
+      setState({ error: err?.message ?? "Failed to remove item" });
+      throw err;
+    } finally {
+      setState({ isLoading: false });
+    }
+  };
+
+  const clear = async () => {
+    setState({ isLoading: true, error: null });
+    try {
+      const result = await clearCart(identifier);
+      applyCart(result.cart);
+    } catch (err: any) {
+      setState({ error: err?.message ?? "Failed to clear cart" });
+      throw err;
+    } finally {
+      setState({ isLoading: false });
+    }
+  };
+
+  const cart = state.cart;
+
+  return {
+    items: cart?.items ?? [],
+    subtotal: cart?.subtotal ?? 0,
+    tax: cart?.tax ?? 0,
+    discount: cart?.discount ?? 0,
+    total: cart?.total ?? 0,
+    isLoading: state.isLoading,
+    error: state.error,
+    loadCart,
+    addItem,
+    updateItem,
+    removeItem,
+    clear,
+  };
+}
