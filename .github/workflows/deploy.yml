@@ -1,0 +1,98 @@
+name: Deploy Admin
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "**"
+      - ".github/workflows/deploy.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: novaorizon-admin
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      AWS_ECR_REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'default' }}
+      ECS_SERVICE: ${{ vars.ECS_SERVICE_ADMIN || 'novaorizon-admin' }}
+      IMAGE_NAME: novaorizon-admin
+
+      NEXT_PUBLIC_SERVER_URL: ${{ vars.NEXT_PUBLIC_SERVER_URL || 'https://api.novaorizon.com' }}
+      NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'https://api.novaorizon.com' }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL || 'https://admin.novaorizon.com' }}
+      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://admin.novaorizon.com' }}
+      NEXT_PUBLIC_AWS_BUCKET_NAME: ${{ vars.NEXT_PUBLIC_AWS_BUCKET_NAME }}
+      NEXT_PUBLIC_AWS_REGION: ${{ vars.NEXT_PUBLIC_AWS_REGION }}
+      NEXT_PUBLIC_AWS_SECRET_NAME: ${{ vars.NEXT_PUBLIC_AWS_SECRET_NAME || 'novaorizon' }}
+      NEXT_PUBLIC_AWS_SECRET_REGION: ${{ vars.NEXT_PUBLIC_AWS_SECRET_REGION || 'us-east-1' }}
+      NEXT_PUBLIC_IMAGE_UNOPTIMIZED: ${{ vars.NEXT_PUBLIC_IMAGE_UNOPTIMIZED || '0' }}
+      NEXT_PUBLIC_PUSHER_KEY: ${{ vars.NEXT_PUBLIC_PUSHER_KEY }}
+      NEXT_PUBLIC_PUSHER_CLUSTER: ${{ vars.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu' }}
+      NEXT_PUBLIC_PUSHER_APP_KEY: ${{ vars.NEXT_PUBLIC_PUSHER_APP_KEY }}
+      NEXT_PUBLIC_PUSHER_APP_CLUSTER: ${{ vars.NEXT_PUBLIC_PUSHER_APP_CLUSTER || 'eu' }}
+      NEXT_PUBLIC_MONETBIL_KEY: ${{ vars.NEXT_PUBLIC_MONETBIL_KEY }}
+      NEXT_PUBLIC_FIREBASE_API_KEY1: ${{ vars.NEXT_PUBLIC_FIREBASE_API_KEY1 }}
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN1: ${{ vars.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN1 }}
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID1: ${{ vars.NEXT_PUBLIC_FIREBASE_PROJECT_ID1 }}
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET1: ${{ vars.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET1 }}
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID1: ${{ vars.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID1 }}
+      NEXT_PUBLIC_FIREBASE_APP_ID1: ${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID1 }}
+      NEXT_PUBLIC_FIREBASE_DATABASE_URL: ${{ vars.NEXT_PUBLIC_FIREBASE_DATABASE_URL }}
+      NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID1: ${{ vars.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID1 }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build and deploy
+        run: |
+          set -euo pipefail
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "$AWS_ECR_REGISTRY"
+
+          docker build \
+            --build-arg NEXT_PUBLIC_SERVER_URL="$NEXT_PUBLIC_SERVER_URL" \
+            --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            --build-arg NEXT_PUBLIC_APP_URL="$NEXT_PUBLIC_APP_URL" \
+            --build-arg NEXT_PUBLIC_SITE_URL="$NEXT_PUBLIC_SITE_URL" \
+            --build-arg NEXT_PUBLIC_AWS_BUCKET_NAME="$NEXT_PUBLIC_AWS_BUCKET_NAME" \
+            --build-arg NEXT_PUBLIC_AWS_REGION="$NEXT_PUBLIC_AWS_REGION" \
+            --build-arg NEXT_PUBLIC_AWS_SECRET_NAME="$NEXT_PUBLIC_AWS_SECRET_NAME" \
+            --build-arg NEXT_PUBLIC_AWS_SECRET_REGION="$NEXT_PUBLIC_AWS_SECRET_REGION" \
+            --build-arg NEXT_PUBLIC_IMAGE_UNOPTIMIZED="$NEXT_PUBLIC_IMAGE_UNOPTIMIZED" \
+            --build-arg NEXT_PUBLIC_PUSHER_KEY="$NEXT_PUBLIC_PUSHER_KEY" \
+            --build-arg NEXT_PUBLIC_PUSHER_CLUSTER="$NEXT_PUBLIC_PUSHER_CLUSTER" \
+            --build-arg NEXT_PUBLIC_PUSHER_APP_KEY="$NEXT_PUBLIC_PUSHER_APP_KEY" \
+            --build-arg NEXT_PUBLIC_PUSHER_APP_CLUSTER="$NEXT_PUBLIC_PUSHER_APP_CLUSTER" \
+            --build-arg NEXT_PUBLIC_MONETBIL_KEY="$NEXT_PUBLIC_MONETBIL_KEY" \
+            --build-arg NEXT_PUBLIC_FIREBASE_API_KEY1="$NEXT_PUBLIC_FIREBASE_API_KEY1" \
+            --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN1="$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN1" \
+            --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID1="$NEXT_PUBLIC_FIREBASE_PROJECT_ID1" \
+            --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET1="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET1" \
+            --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID1="$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID1" \
+            --build-arg NEXT_PUBLIC_FIREBASE_APP_ID1="$NEXT_PUBLIC_FIREBASE_APP_ID1" \
+            --build-arg NEXT_PUBLIC_FIREBASE_DATABASE_URL="$NEXT_PUBLIC_FIREBASE_DATABASE_URL" \
+            --build-arg NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID1="$NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID1" \
+            -t "$IMAGE_NAME" .
+
+          docker tag "$IMAGE_NAME" "$AWS_ECR_REGISTRY/$IMAGE_NAME:latest"
+          docker push "$AWS_ECR_REGISTRY/$IMAGE_NAME:latest"
+
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --force-new-deployment \
+            --region "$AWS_REGION"

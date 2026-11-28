@@ -57,6 +57,8 @@ export function uploadFile(
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url, true);
     xhr.withCredentials = true;
+    // This request bypasses the axios instance, so carry its audience header.
+    xhr.setRequestHeader("x-auth-audience", "admin");
     xhr.timeout = 120_000;
 
     if (opts.onProgress) {
